@@ -31,6 +31,7 @@ function initUI() {
   const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
   const formNewVoyage = document.getElementById('form-new-voyage');
   const btnBack = document.getElementById('btn-back-voyages');
+  const btnExport = document.getElementById('btn-export-voyage');
 
   const btnUseMapCenter = document.getElementById('btn-use-map-center');
   const displayCoords = document.getElementById('voyage-coords-display');
@@ -124,6 +125,11 @@ function initUI() {
   // Back Button
   if (btnBack) {
     btnBack.addEventListener('click', showVoyageList);
+  }
+
+  // Export Button
+  if (btnExport) {
+    btnExport.addEventListener('click', handleExportVoyage);
   }
 }
 
@@ -581,5 +587,29 @@ function clearMap() {
                 coordinates: []
             }
         });
+    }
+}
+
+async function handleExportVoyage() {
+    if (!currentVoyage) return;
+    
+    const btn = document.getElementById('btn-export-voyage');
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+
+    try {
+        const result = await API.exportVoyage(currentVoyage.id);
+        if (result.doc_url) {
+            window.open(result.doc_url, '_blank');
+        } else {
+            alert('Export finished but no URL returned.');
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Failed to export voyage.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
     }
 }

@@ -18,7 +18,8 @@ type Server struct {
 
 func New(db datastore.Store) (*Server, error) {
 	r := chi.NewRouter()
-	h := handlers.New(db)
+	docsService := handlers.NewGoogleDocsService()
+	h := handlers.New(db, docsService)
 
 	// Standard Middleware
 	r.Use(middleware.Logger)
@@ -45,6 +46,7 @@ func New(db datastore.Store) (*Server, error) {
 		r.Get("/voyages/{id}", h.GetVoyage)
 		r.Put("/voyages/{id}", h.UpdateVoyage)
 		r.Delete("/voyages/{id}", h.DeleteVoyage)
+		r.Post("/voyages/{id}/export", h.ExportVoyage)
 		r.Post("/voyages/{id}/share", h.EnableSharing)
 		r.Delete("/voyages/{id}/share", h.DisableSharing)
 

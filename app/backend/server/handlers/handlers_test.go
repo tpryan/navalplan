@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/api/docs/v1"
 )
 
 type MockStore struct {
@@ -103,9 +105,26 @@ func (m *MockStore) CreateBriefing(b *models.Briefing) error {
 
 var _ datastore.Store = (*MockStore)(nil)
 
+type MockDocsService struct {
+	mock.Mock
+}
+
+func (m *MockDocsService) Create(ctx context.Context, title string) (*docs.Document, error) {
+	args := m.Called(ctx, title)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*docs.Document), args.Error(1)
+}
+
+func (m *MockDocsService) BatchUpdate(ctx context.Context, docID string, requests []*docs.Request) error {
+	args := m.Called(ctx, docID, requests)
+	return args.Error(0)
+}
+
 func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 
 	userID := int64(1)
 	expectedVoyages := []models.Voyage{
@@ -133,7 +152,7 @@ func TestListVoyages(t *testing.T) {
 
 func TestCreateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 
 	// We use strings.NewReader for the body
 	body := `{"title": "New Voyage", "start_date": "2025-07-01T00:00:00Z", "end_date": "2025-07-14T00:00:00Z"}`
@@ -155,7 +174,7 @@ func TestCreateVoyage(t *testing.T) {
 
 func TestGetVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 
 	voyageID := int64(123)
 	expectedVoyage := &models.Voyage{ID: voyageID, Title: "My Voyage"}
@@ -183,7 +202,7 @@ func TestGetVoyage(t *testing.T) {
 
 func TestStopOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Get("/voyages/{id}/stops", handler.ListStops)
 	r.Post("/voyages/{id}/stops", handler.CreateStop)
@@ -214,7 +233,7 @@ func TestStopOperations(t *testing.T) {
 
 func TestUpdateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Put("/voyages/{id}", handler.UpdateVoyage)
 
@@ -234,7 +253,7 @@ func TestUpdateVoyage(t *testing.T) {
 
 func TestDeleteVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Delete("/voyages/{id}", handler.DeleteVoyage)
 
@@ -251,7 +270,7 @@ func TestDeleteVoyage(t *testing.T) {
 
 func TestSharingOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Post("/voyages/{id}/share", handler.EnableSharing)
 	r.Delete("/voyages/{id}/share", handler.DisableSharing)
@@ -282,7 +301,7 @@ func TestSharingOperations(t *testing.T) {
 
 func TestUpdateDeleteStop(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Put("/stops/{id}", handler.UpdateStop)
 	r.Delete("/stops/{id}", handler.DeleteStop)
@@ -312,7 +331,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 
 func TestResearchBriefing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Post("/stops/{id}/research", handler.TriggerResearch)
 	r.Get("/stops/{id}/briefing", handler.GetBriefing)
@@ -338,7 +357,7 @@ func TestResearchBriefing(t *testing.T) {
 
 func TestDisableSharing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Delete("/voyages/{id}/share", handler.DisableSharing)
 
@@ -356,7 +375,7 @@ func TestDisableSharing(t *testing.T) {
 
 func TestGetPublicStops(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore)
+	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
 	r.Get("/public/voyages/{token}/stops", handler.GetPublicStops)
 

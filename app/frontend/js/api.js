@@ -78,5 +78,15 @@ export const API = {
     });
     if (!res.ok) throw new Error('Failed to update stop');
     return res.json();
+  },
+
+  async exportVoyage(voyageId) {
+    const res = await fetch(`${API_BASE}/voyages/${voyageId}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'docs' })
+    });
+    if (!res.ok) throw new Error('Failed to export voyage');
+    return res.json();
   }
 };

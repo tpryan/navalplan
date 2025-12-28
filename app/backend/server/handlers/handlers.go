@@ -1,13 +1,26 @@
 package handlers
 
 import (
+	"context"
+
 	"app/datastore"
+
+	"google.golang.org/api/docs/v1"
 )
 
-type Handler struct {
-	DB datastore.Store
+type DocsService interface {
+	Create(ctx context.Context, title string) (*docs.Document, error)
+	BatchUpdate(ctx context.Context, docID string, requests []*docs.Request) error
 }
 
-func New(db datastore.Store) *Handler {
-	return &Handler{DB: db}
+type Handler struct {
+	DB   datastore.Store
+	Docs DocsService
+}
+
+func New(db datastore.Store, docsService DocsService) *Handler {
+	return &Handler{
+		DB:   db,
+		Docs: docsService,
+	}
 }
