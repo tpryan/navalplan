@@ -36,7 +36,7 @@ db-start:
 		postgres:15-alpine || echo "Container likely already running"
 	@echo "Waiting for DB to accept connections..."
 	@sleep 3
-# 	@make db-schema
+	@make db-schema
 
 db-stop:
 	@echo "Stopping Database..."
@@ -46,9 +46,9 @@ db-stop:
 db-reset: db-stop db-start
 	@echo "Database has been reset and schema applied."
 
-# db-schema:
-# 	@echo "Applying schema..."
-# 	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/schema.sql
+db-schema:
+	@echo "Applying schema..."
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/schema.sql
 
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
