@@ -13,7 +13,7 @@ DB_PORT=5433
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-.PHONY: run db-start db-stop db-reset test build-js clean-static
+.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev
 
 # --- Development ---
 
@@ -40,12 +40,19 @@ run-frontend:
 	@echo "Starting NavalPlan frontend..."
 	cd app/frontend && npm run dev
 
+# --- Agent ---
+
+run-agent:
+	@echo "Starting NavalPlan Researcher Agent..."
+	# Requires GEMINI_API_KEY to be set
+	cd services/researcher && go run main.go
+
 # --- Combined Dev ---
 
 dev:
-	@echo "Starting Backend and Frontend..."
-	@echo "Press Ctrl+C to stop both."
-	@(trap 'kill 0' SIGINT; make run & make run-frontend & wait)
+	@echo "Starting Backend, Frontend, and Agent..."
+	@echo "Press Ctrl+C to stop all."
+	@(trap 'kill 0' SIGINT; make run & make run-frontend & make run-agent & wait)
 
 # --- Database (Podman/Docker) ---
 

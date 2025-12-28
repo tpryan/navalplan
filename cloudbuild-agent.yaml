@@ -1,0 +1,15 @@
+steps:
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - 'run'
+  - 'deploy'
+  - 'navalplan-researcher'          # Service Name
+  - '--source'
+  - '.'
+  - '--region'
+  - 'us-central1'
+  - '--project'
+  - 'navalplan'                     # Your Google Cloud Project ID
+  - '--no-allow-unauthenticated'    # Security: Only backend can call this
+  dir: 'services/researcher'        # Build context
+logsBucket: gs://navalplan-logging-bucket

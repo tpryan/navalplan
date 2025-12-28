@@ -43,7 +43,7 @@ func main() {
 	// 1. Initialize Gemini Model
 	// We use gemini-2.0-flash-exp (or similar) for speed/cost efficiency in research tasks
 	model, err := gemini.NewModel(ctx, "gemini-2.0-flash-exp", &genai.ClientConfig{
-		APIKey: os.Getenv("GOOGLE_API_KEY"),
+		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
@@ -172,7 +172,7 @@ You can run this agent locally and test it with `curl` before wiring it up to th
 
 1. **Run the Agent:**
 ```bash
-export GOOGLE_API_KEY="your_api_key_here"
+export GEMINI_API_KEY="your_api_key_here"
 export PORT=8081
 cd services/researcher
 go run main.go
@@ -181,15 +181,51 @@ go run main.go
 
 
 2. **Query it:**
+
+
 The ADK exposes a standard REST endpoint. You query it by sending a prompt in the JSON body.
+
+
 ```bash
-curl -X POST http://localhost:8081/agent/researcher_agent/generate \
+
+
+curl -X POST http://localhost:8081/run \
+
+
   -H "Content-Type: application/json" \
+
+
   -d '{
-    "prompt": "Research anchorages and weather for 48.75 N, 123.22 W (Poets Cove) for July 15, 2025. Radius 5nm."
+
+
+    "appName": "researcher_agent",
+
+
+    "userId": "test_user",
+
+
+    "sessionId": "test_session",
+
+
+    "newMessage": {
+
+
+      "role": "user",
+
+
+      "parts": [{ "text": "Research anchorages and weather for 48.75 N, 123.22 W (Poets Cove) for July 15, 2025. Radius 5nm." }]
+
+
+    }
+
+
   }'
 
+
 ```
+
+
+
 
 
 
