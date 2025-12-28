@@ -21,7 +21,7 @@ run:
 	@echo "Starting NavalPlan backend..."
 	# We assume .env is sourced or variables are set in your shell
 	# For convenience, you can add a local .env loader here
-	go run app/backend/main.go
+	cd app/backend && go run main.go
 
 # --- Database (Podman/Docker) ---
 
@@ -56,8 +56,7 @@ db-console:
 # --- Testing ---
 
 test:
-	go test ./...
+	cd app/backend && go test ./...
 
 deps:
-	go mod tidy
-	go mod vendor
+	cd app/backend && go mod tidy && go mod vendor

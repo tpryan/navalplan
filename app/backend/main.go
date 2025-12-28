@@ -23,7 +23,7 @@ func main() {
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5432/navalplan?sslmode=disable"
+		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5433/navalplan?sslmode=disable"
 	}
 
 	// 2. Initialize DB
