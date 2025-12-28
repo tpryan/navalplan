@@ -1,5 +1,6 @@
 import mapboxgl from 'mapbox-gl';
 import { API } from './api.js';
+import { exportToGoogleDocs } from './google_export.js';
 
 // Configuration
 const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
@@ -129,7 +130,39 @@ function initUI() {
 
   // Export Button
   if (btnExport) {
-    btnExport.addEventListener('click', handleExportVoyage);
+    btnExport.addEventListener('click', handleShowReport);
+  }
+
+  // Report Modal Close Handler
+  const modalReport = document.getElementById('modal-report');
+  const btnCloseReport = document.getElementById('btn-close-report');
+  const btnCopyReport = document.getElementById('btn-copy-report');
+  
+  const closeReport = () => {
+      modalReport.classList.add('hidden');
+      if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
+          modalOverlay.classList.add('hidden');
+      }
+  };
+  
+  if (btnCloseReport) {
+      btnCloseReport.onclick = closeReport;
+  }
+  
+  if (btnCopyReport) {
+    btnCopyReport.onclick = () => {
+        const content = document.getElementById('report-content');
+        const range = document.createRange();
+        range.selectNode(content);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+        
+        const originalText = btnCopyReport.textContent;
+        btnCopyReport.textContent = 'Copied!';
+        setTimeout(() => btnCopyReport.textContent = originalText, 2000);
+    };
   }
 }
 
@@ -590,7 +623,7 @@ function clearMap() {
     }
 }
 
-async function handleExportVoyage() {
+    async function handleShowReport() {
     if (!currentVoyage) return;
     
     const btn = document.getElementById('btn-export-voyage');
@@ -599,15 +632,90 @@ async function handleExportVoyage() {
     btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
     try {
-        const result = await API.exportVoyage(currentVoyage.id);
-        if (result.doc_url) {
-            window.open(result.doc_url, '_blank');
-        } else {
-            alert('Export finished but no URL returned.');
-        }
+        // 1. Fetch all data
+        // For simplicity, we re-use the currentStops we have, but we need briefings
+        // Sort stops
+        const sortedStops = [...currentStops].sort((a, b) => 
+            new Date(a.target_date) - new Date(b.target_date)
+        );
+        
+        // Fetch Briefings in parallel
+        const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
+        const briefings = await Promise.all(briefingPromises);
+        
+        // 2. Build HTML
+        let html = `
+            <h1 style="text-align:center; border-bottom: 2px solid #333; padding-bottom: 0.5rem;">${currentVoyage.title}</h1>
+            <p style="text-align:center; font-style:italic;">
+                ${new Date(currentVoyage.start_date).toLocaleDateString()} - ${new Date(currentVoyage.end_date).toLocaleDateString()}
+            </p>
+            <hr />
+        `;
+        
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings[idx];
+            html += `
+                <div style="margin-bottom: 2rem;">
+                    <h2 style="background-color: #eee; padding: 0.5rem;">Day ${idx + 1}: ${stop.location_name}</h2>
+                    <p><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString()}</p>
+            `;
+            
+            if (b) {
+                 // Weather
+                if (b.weather_summary) {
+                    const w = b.weather_summary;
+                    html += `
+                        <h3>Weather</h3>
+                        <p>${w.summary || 'No summary available.'}</p>
+                        <ul>
+                            <li>Wind: ${w.wind_direction || '-'} ${w.wind_speed_kt || '-'} kt</li>
+                            <li>Waves: ${w.wave_height_ft || '-'} ft</li>
+                        </ul>
+                    `;
+                }
+                
+                // Tides
+                if (b.tides && b.tides.events) {
+                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'})</h3><ul>`;
+                    b.tides.events.forEach(e => {
+                        html += `<li>${e.time} - ${e.type} (${e.height_ft} ft)</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                
+                // Facilities
+                if (b.facilities && b.facilities.length > 0) {
+                     html += `<h3>Facilities</h3>`;
+                     b.facilities.forEach(f => {
+                         html += `<p><strong>${f.name}</strong> (${f.type})</p>`;
+                         if (f.details) {
+                             html += `<ul style="font-size: 0.9em; color: #555;">`;
+                             for (const [k, v] of Object.entries(f.details)) {
+                                 html += `<li>${k}: ${v}</li>`;
+                             }
+                             html += `</ul>`;
+                         }
+                     });
+                }
+            } else {
+                html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;
+            }
+            
+            html += `</div>`;
+        });
+        
+        // 3. Show Modal
+        const modal = document.getElementById('modal-report');
+        const content = document.getElementById('report-content');
+        const modalOverlay = document.getElementById('modal-overlay');
+        
+        content.innerHTML = html;
+        modal.classList.remove('hidden');
+        modalOverlay.classList.remove('hidden');
+
     } catch (err) {
         console.error(err);
-        alert('Failed to export voyage.');
+        alert('Failed to generate report.');
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalContent;

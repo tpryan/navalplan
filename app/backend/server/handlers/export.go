@@ -1,13 +1,10 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"app/models"
 
@@ -20,8 +17,8 @@ type ExportRequest struct {
 }
 
 type ExportResponse struct {
-	DocURL string `json:"doc_url"`
-	DocID  string `json:"doc_id"`
+	Title    string          `json:"title"`
+	Requests []*docs.Request `json:"requests"`
 }
 
 func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
@@ -53,130 +50,45 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-		// Init Docs API
+	// Build Content
+	var requests []*docs.Request
 
-		ctx := context.Background()
+	// Header
+	requests = append(requests, &docs.Request{
+		InsertText: &docs.InsertTextRequest{
+			Text:                 fmt.Sprintf("%s\n%s - %s\n\n", voyage.Title, voyage.StartDate.Format("Jan 02"), voyage.EndDate.Format("Jan 02, 2006")),
+			EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+		},
+	})
 
-	
-
-		// Create Doc
-
-		title := fmt.Sprintf("Logbook: %s", voyage.Title)
-
-		createdDoc, err := h.Docs.Create(ctx, title)
-
-		if err != nil {
-
-			log.Printf("Failed to create doc: %v", err)
-
-			http.Error(w, "Failed to create Google Doc.", http.StatusInternalServerError)
-
-			return
-
-		}
-
-	
-
-		// Build Content
-
-		var requests []*docs.Request
-
-	
-
-		// Header
-
+	for _, stop := range stops {
+		text := fmt.Sprintf("\n----------------\nStop: %s\nDate: %s\n", stop.LocationName, stop.TargetDate.Format("2006-01-02"))
 		requests = append(requests, &docs.Request{
-
 			InsertText: &docs.InsertTextRequest{
-
-				Text:                 fmt.Sprintf("%s\n%s - %s\n\n", voyage.Title, voyage.StartDate.Format("Jan 02"), voyage.EndDate.Format("Jan 02, 2006")),
-
+				Text:                 text,
 				EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
-
 			},
-
 		})
 
-	
-
-		for _, stop := range stops {
-
-			text := fmt.Sprintf("\n----------------\nStop: %s\nDate: %s\n", stop.LocationName, stop.TargetDate.Format("2006-01-02"))
-
-			requests = append(requests, &docs.Request{
-
-				InsertText: &docs.InsertTextRequest{
-
-					Text:                 text,
-
-					EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
-
-				},
-
-			})
-
-	
-
-			if b, ok := briefings[stop.ID]; ok {
-
-				// Unmarshal briefing parts to string for display
-
-				// Weather
-
-				var w map[string]interface{}
-
-				json.Unmarshal(b.WeatherSummary, &w)
-
-				if summary, ok := w["summary"].(string); ok {
-
-					requests = append(requests, &docs.Request{
-
-						InsertText: &docs.InsertTextRequest{
-
-							Text:                 fmt.Sprintf("Weather: %s\n", summary),
-
-							EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
-
-						},
-
-					})
-
-				}
-
-				// Facilities
-
-				// ... (Simplified for now) ...
-
+		if b, ok := briefings[stop.ID]; ok {
+			// Unmarshal briefing parts to string for display
+			// Weather
+			var w map[string]interface{}
+			json.Unmarshal(b.WeatherSummary, &w)
+			if summary, ok := w["summary"].(string); ok {
+				requests = append(requests, &docs.Request{
+					InsertText: &docs.InsertTextRequest{
+						Text:                 fmt.Sprintf("Weather: %s\n", summary),
+						EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+					},
+				})
 			}
-
 		}
-
-	
-
-		if len(requests) > 0 {
-
-			err = h.Docs.BatchUpdate(ctx, createdDoc.DocumentId, requests)
-
-			if err != nil {
-
-				log.Printf("Failed to populate doc: %v", err)
-
-			}
-
-		}
-
-	// Update DB
-	docIDStr := createdDoc.DocumentId
-	voyage.GoogleDocID = &docIDStr
-	now := time.Now()
-	voyage.LastExportedAt = &now
-	h.DB.UpdateVoyage(voyage)
-
-	docURL := fmt.Sprintf("https://docs.google.com/document/d/%s", createdDoc.DocumentId)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ExportResponse{
-		DocURL: docURL,
-		DocID:  createdDoc.DocumentId,
+		Title:    fmt.Sprintf("Logbook: %s", voyage.Title),
+		Requests: requests,
 	})
 }
