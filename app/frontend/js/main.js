@@ -358,12 +358,71 @@ async function handleResearchClick(stop, button) {
 }
 
 function showBriefing(briefing) {
-    // Simple alert for now, formatted
-    const summary = briefing.weather_summary ? briefing.weather_summary.summary : 'No weather data';
-    const tideEvents = briefing.tides && briefing.tides.events ? briefing.tides.events.map(e => `${e.time} ${e.type}: ${e.height_ft}ft`).join('\n') : 'No tide data';
-    const facilities = briefing.facilities ? briefing.facilities.map(f => `- ${f.name} (${f.type})`).join('\n') : 'No facilities';
+    const modal = document.getElementById('modal-briefing');
+    const content = document.getElementById('briefing-content');
+    const btnClose = document.getElementById('btn-close-briefing');
+    const modalOverlay = document.getElementById('modal-overlay');
 
-    alert(`Briefing for Stop\n----------------\nWeather: ${summary}\n\nTides:\n${tideEvents}\n\nFacilities:\n${facilities}`);
+    // Weather
+    const weather = briefing.weather_summary || {};
+    const weatherHtml = `
+        <div class="briefing-section">
+            <h3>Weather</h3>
+            <div class="weather-box">
+                <p><strong>Summary:</strong> ${weather.summary || 'N/A'}</p>
+                <div class="briefing-grid">
+                    <div><strong>Wind:</strong> ${weather.wind_direction || '-'} ${weather.wind_speed_kt || '-'} kt</div>
+                    <div><strong>Waves:</strong> ${weather.wave_height_ft || '-'} ft</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Tides
+    const tides = briefing.tides || {};
+    const tideEvents = (tides.events || []).map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
+    const tidesHtml = `
+        <div class="briefing-section">
+            <h3>Tides (${tides.station_name || 'Unknown Station'})</h3>
+            <div class="tide-box">
+                <ul style="list-style:none; padding:0; margin:0;">${tideEvents || '<li>No tide data</li>'}</ul>
+            </div>
+        </div>
+    `;
+
+    // Facilities
+    const facilities = briefing.facilities || [];
+    const facilHtml = `
+        <div class="briefing-section">
+            <h3>Facilities</h3>
+            <ul class="facility-list">
+                ${facilities.map(f => `
+                    <li class="facility-item">
+                        <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
+                        <div style="font-size:0.9em">
+                            ${Object.entries(f.details || {}).map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`).join('')}
+                        </div>
+                    </li>
+                `).join('') || '<li>No facilities found</li>'}
+            </ul>
+        </div>
+    `;
+
+    content.innerHTML = weatherHtml + tidesHtml + facilHtml;
+
+    // Show Modal
+    modal.classList.remove('hidden');
+    modalOverlay.classList.remove('hidden');
+
+    const hide = () => {
+        modal.classList.add('hidden');
+        modalOverlay.classList.add('hidden');
+    };
+
+    btnClose.onclick = hide;
+    // Note: Use a separate handler or ensure this doesn't conflict with other overlay usages if multiple modals could be open.
+    // For this flow, we assume single modal.
+    modalOverlay.onclick = hide; 
 }
 
 function selectDate(dateStr) {

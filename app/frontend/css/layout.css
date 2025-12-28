@@ -315,3 +315,47 @@
   display: block;
   transform: rotateZ(225deg); /* Counter-rotate text so it is upright */
 }
+
+/* --- Briefing Styles --- */
+.briefing-body h3 {
+  font-family: var(--font-primary);
+  color: var(--brand-medium);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.3rem;
+  margin-top: 1.5rem;
+}
+
+.briefing-body h4 {
+  margin: 0.5rem 0;
+  color: var(--brand-dark);
+}
+
+.briefing-section {
+  margin-bottom: 1.5rem;
+}
+
+.briefing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.weather-box, .tide-box {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.facility-list {
+  list-style: none;
+  padding: 0;
+}
+
+.facility-item {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 0.8rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 0.5rem;
+  border-left: 3px solid var(--brand-medium);
+}
