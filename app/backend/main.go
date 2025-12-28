@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"app/datastore"
 	"app/server"
 )
 
@@ -20,14 +21,25 @@ func main() {
 		port = "8080"
 	}
 
-	// 2. Initialize Server
-	// We will implement server.New() next, which handles DB connection and Routes
-	srv, err := server.New()
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5432/navalplan?sslmode=disable"
+	}
+
+	// 2. Initialize DB
+	db, err := datastore.New(dsn)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// 3. Initialize Server
+	srv, err := server.New(db)
 	if err != nil {
 		log.Fatalf("Failed to initialize server: %v", err)
 	}
 
-	// 3. Start HTTP Server
+	// 4. Start HTTP Server
 	httpServer := &http.Server{
 		Addr:    ":" + port,
 		Handler: srv.Router,
