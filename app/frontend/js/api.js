@@ -35,6 +35,19 @@ export const API = {
     return res.json();
   },
 
+  async triggerResearch(stopId) {
+    const res = await fetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger research');
+    return res.json();
+  },
+
+  async getBriefing(stopId) {
+    const res = await fetch(`${API_BASE}/stops/${stopId}/briefing`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Failed to get briefing');
+    return res.json();
+  },
+
   async getVoyage(id) {
     const res = await fetch(`${API_BASE}/voyages/${id}`);
     if (!res.ok) throw new Error('Failed to load voyage');

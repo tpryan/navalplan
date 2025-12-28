@@ -320,6 +320,7 @@ func TestResearchBriefing(t *testing.T) {
 	stopID := int64(10)
 	
 	// Trigger
+	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID}, nil)
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
 	wTrigger := httptest.NewRecorder()
 	r.ServeHTTP(wTrigger, reqTrigger)

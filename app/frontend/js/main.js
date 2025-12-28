@@ -156,7 +156,7 @@ function renderVoyageList() {
       <div class="voyage-info">
         <h3>${voyage.title}</h3>
         <p>${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}</p>
-        ${voyage.location_name ? `<p style="font-size:0.8rem; color:#888">📍 ${voyage.location_name}</p>` : ''}
+        ${voyage.location_name ? '<p style="font-size:0.8rem; color:#888">📍 ' + voyage.location_name + '</p>' : ''}
       </div>
       <div class="voyage-actions">
         <button class="btn-icon edit" title="Edit">
@@ -285,15 +285,85 @@ function renderItinerary() {
         
         const el = document.createElement('div');
         el.className = `day-item ${selectedDate === dateStr ? 'selected' : ''}`;
-        el.innerHTML = `
-            <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
-            <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+        
+        // Day Info
+        let html = `
+            <div style="flex:1" class="day-info">
+                <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+            </div>
         `;
-        el.addEventListener('click', () => selectDate(dateStr));
+        
+        // Research Action
+        if (stop) {
+            html += `
+                <div class="day-actions">
+                    <button class="btn-icon research" title="Research">
+                        <span class="material-symbols-outlined">science</span>
+                    </button>
+                </div>
+            `;
+        }
+        
+        el.innerHTML = html;
+        
+        // Handlers
+        el.querySelector('.day-info').addEventListener('click', () => selectDate(dateStr));
+        
+        if (stop) {
+            const btnResearch = el.querySelector('.research');
+            btnResearch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleResearchClick(stop, btnResearch);
+            });
+        }
+
         list.appendChild(el);
         
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
+}
+
+async function handleResearchClick(stop, button) {
+    // Check if briefing exists first
+    button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+    
+    try {
+        const existing = await API.getBriefing(stop.id);
+        if (existing) {
+            showBriefing(existing);
+            button.innerHTML = '<span class="material-symbols-outlined">description</span>';
+            return;
+        }
+
+        // Trigger
+        await API.triggerResearch(stop.id);
+        
+        // Poll
+        const poll = setInterval(async () => {
+            try {
+                const b = await API.getBriefing(stop.id);
+                if (b) {
+                    clearInterval(poll);
+                    button.innerHTML = '<span class="material-symbols-outlined">description</span>';
+                    showBriefing(b);
+                }
+            } catch (ignore) { /* keep polling */ }
+        }, 3000);
+        
+    } catch (err) {
+        console.error(err);
+        button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
+    }
+}
+
+function showBriefing(briefing) {
+    // Simple alert for now, formatted
+    const summary = briefing.weather_summary ? briefing.weather_summary.summary : 'No weather data';
+    const tideEvents = briefing.tides && briefing.tides.events ? briefing.tides.events.map(e => `${e.time} ${e.type}: ${e.height_ft}ft`).join('\n') : 'No tide data';
+    const facilities = briefing.facilities ? briefing.facilities.map(f => `- ${f.name} (${f.type})`).join('\n') : 'No facilities';
+
+    alert(`Briefing for Stop\n----------------\nWeather: ${summary}\n\nTides:\n${tideEvents}\n\nFacilities:\n${facilities}`);
 }
 
 function selectDate(dateStr) {
@@ -317,7 +387,7 @@ function initMap() {
 
   map = new mapboxgl.Map({
     container: 'map-container',
-    style: __MAPBOX_STYLE__, 
+    style: __MAPBOX_STYLE__,
     center: [-123.0, 48.5], // Salish Sea
     zoom: 8
   });
@@ -331,7 +401,7 @@ function initMap() {
   map.on('click', async (e) => {
     if (!currentVoyage || !selectedDate) return;
 
-    const { lng, lat } = e.lngLat;
+    const {lng, lat} = e.lngLat;
     const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
 
     // Get features at click point
