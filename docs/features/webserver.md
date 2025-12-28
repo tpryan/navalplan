@@ -80,7 +80,7 @@ func main() {
 	contentDir := flag.String("content", "./static.min", "Path to static content to serve")
 	flag.Parse()
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("NAVALPLAN_PORT")
 	if port == "" {
 		port = "8080"
 	}

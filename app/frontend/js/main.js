@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 
 // Configuration
 // TODO: Replace with env variable logic in production
-const MAPBOX_TOKEN = 'pk.eyJ1IjoidHByeWFuIiwiYSI6ImNqMDd1bXk2ZzA0MGMzM3FvM3FvM3FvIn0.ABC-123'; 
+const MAPBOX_TOKEN = 'pk.eyJ1IjoidHByeWFuIiwiYSI6ImNsaWF1ZmpzbzAyMGUzY3MxbXYwbzJoY2sifQ.y_T2pI-8jbcchYR9V9qB7g'; 
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -24,7 +24,7 @@ function initMap() {
 
   const map = new mapboxgl.Map({
     container: 'map-container',
-    style: 'mapbox://styles/mapbox/outdoors-v12', 
+    style: 'mapbox://styles/tpryan/cmc9ofgil01hi01r70dnx3n7x', 
     center: [-123.0, 48.5], // Salish Sea
     zoom: 8
   });

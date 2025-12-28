@@ -21,10 +21,10 @@ func TestRun_Config(t *testing.T) {
 	
 	// Mock Env
 	env := func(key string) string {
-		if key == "PORT" {
+		if key == "NAVALPLAN_PORT" {
 			return "8081"
 		}
-		if key == "DATABASE_URL" {
+		if key == "NAVALPLAN_DATABASE_URL" {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		}
 		return ""

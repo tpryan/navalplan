@@ -28,12 +28,12 @@ func main() {
 
 func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDir string) error {
 	// 1. Basic Configuration
-	port := getEnv("PORT")
+	port := getEnv("NAVALPLAN_PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	dsn := getEnv("DATABASE_URL")
+	dsn := getEnv("NAVALPLAN_DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5433/navalplan?sslmode=disable"
 	}
