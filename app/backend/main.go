@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,13 +16,20 @@ import (
 )
 
 func main() {
+	if err := run(context.Background(), os.Stdout, os.Getenv); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, w io.Writer, getEnv func(string) string) error {
 	// 1. Basic Configuration
-	port := os.Getenv("PORT")
+	port := getEnv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := getEnv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5433/navalplan?sslmode=disable"
 	}
@@ -29,14 +37,14 @@ func main() {
 	// 2. Initialize DB
 	db, err := datastore.New(dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
 	// 3. Initialize Server
 	srv, err := server.New(db)
 	if err != nil {
-		log.Fatalf("Failed to initialize server: %v", err)
+		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
 	// 4. Start HTTP Server
@@ -45,23 +53,35 @@ func main() {
 		Handler: srv.Router,
 	}
 
-	// 4. Graceful Shutdown
+	errChan := make(chan error, 1)
 	go func() {
-		fmt.Printf("NavalPlan starting on port %s...\n", port)
+		fmt.Fprintf(w, "NavalPlan starting on port %s...\n", port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Listen: %s\n", err)
+			errChan <- err
 		}
+		close(errChan)
 	}()
 
+	// Wait for interruption or context cancellation
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+	select {
+	case <-quit:
+		log.Println("Shutting down server...")
+	case <-ctx.Done():
+		log.Println("Context cancelled, shutting down...")
+	case err := <-errChan:
+		return fmt.Errorf("server error: %w", err)
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("server forced to shutdown: %w", err)
+	}
+	
 	log.Println("Server exiting")
+	return nil
 }

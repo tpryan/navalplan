@@ -56,7 +56,7 @@ db-console:
 # --- Testing ---
 
 test:
-	cd app/backend && go test ./...
+	cd app/backend && go test ./... -cover
 
 deps:
 	cd app/backend && go mod tidy && go mod vendor
