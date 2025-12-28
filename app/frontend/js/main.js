@@ -227,10 +227,24 @@ function initMap() {
     const { lng, lat } = e.lngLat;
     const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
 
+    // Get features at click point
+    const features = map.queryRenderedFeatures(e.point);
+    console.log('Clicked Features:', features);
+    
+    // Attempt to find a label
+    let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    // Prioritize specific layers or just look for 'name' property
+    const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
+    
+    if (labelFeature) {
+        locationName = labelFeature.properties.name || labelFeature.properties.name_en;
+        console.log('Found Label:', locationName);
+    }
+
     // Create or Update
     const stopData = {
         target_date: selectedDate + 'T00:00:00Z',
-        location_name: `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`, // Placeholder
+        location_name: locationName,
         latitude: lat,
         longitude: lng,
         search_radius: 5,
