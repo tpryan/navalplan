@@ -37,6 +37,7 @@ func NewWeatherTool() (tool.Tool, error) {
 			Longitude(args.Longitude).
 			TemperatureUnit(openmeteogo.Fahrenheit).
 			WindspeedUnit(openmeteogo.KN).
+			// Timezone(*time.UTC). // Defaulting to auto/UTC often safer for daily stats
 			Start(targetDate).
 			End(targetDate).
 			DailyMetrics(openmeteogo.Metrics{
@@ -53,11 +54,13 @@ func NewWeatherTool() (tool.Tool, error) {
 		// 4. Fetch Data
 		weather, err := c.Get(opts)
 		if err != nil {
-			return nil, fmt.Errorf("openmeteogo error: %w", err)
+			fmt.Printf("OpenMeteo Error: %v\n", err)
+			return WeatherResult{"error": fmt.Sprintf("API Error: %v. (Date might be out of 14-day forecast range)", err)}, nil
 		}
 
 		if len(weather.Daily.Time) == 0 {
-			return WeatherResult{"error": "No weather data available for this date."}, nil
+			fmt.Printf("OpenMeteo: No data returned for %s\n", args.Date)
+			return WeatherResult{"error": "No weather data returned. Date might be out of range."}, nil
 		}
 
 		// 5. Format Output

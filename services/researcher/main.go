@@ -80,7 +80,12 @@ func main() {
 			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
 
 			EXECUTION PLAN:
-			1. WEATHER: Call the 'weather_specialist' tool to get precise forecast data.
+			1. WEATHER: 
+			   - Check the requested Date.
+			   - If the Date is within the next 10 days, call 'weather_specialist' with the exact date.
+			   - If the Date is far in the future (>10 days), do NOT call the tool with that future date. Instead, calculate the date for the *same day and month* but in the *previous year* (e.g. if target is 2025-12-28, ask for 2024-12-28) and call 'weather_specialist' with that historical date.
+			   - In your final summary, explicitly state: "Showing historical weather data from [Year] as an estimate."
+
 			2. TIDES & FACILITIES: Call the 'search_specialist' tool to find:
 			   - "Tide table for [Location] on [Date]"
 			   - "Anchorages near [Location] details"
