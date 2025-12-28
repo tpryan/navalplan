@@ -37,6 +37,11 @@ func (m *MockStore) GetVoyage(id int64) (*models.Voyage, error) {
 	return args.Get(0).(*models.Voyage), args.Error(1)
 }
 
+func (m *MockStore) UpdateVoyage(v *models.Voyage) error {
+	args := m.Called(v)
+	return args.Error(0)
+}
+
 func (m *MockStore) UpdateVoyageSharing(id int64, shareToken *string, isPublic bool) error {
 	args := m.Called(id, shareToken, isPublic)
 	return args.Error(0)
@@ -204,6 +209,26 @@ func TestStopOperations(t *testing.T) {
 	})).Return(nil)
 
 	r.ServeHTTP(wCreate, reqCreate)
+	mockStore.AssertExpectations(t)
+}
+
+func TestUpdateVoyage(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := handlers.New(mockStore)
+	r := chi.NewRouter()
+	r.Put("/voyages/{id}", handler.UpdateVoyage)
+
+	voyageID := int64(1)
+	body := `{"title": "Updated Voyage"}`
+	req := httptest.NewRequest("PUT", "/voyages/1", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	mockStore.On("UpdateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
+		return v.ID == voyageID && v.Title == "Updated Voyage"
+	})).Return(nil)
+
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 	mockStore.AssertExpectations(t)
 }
 

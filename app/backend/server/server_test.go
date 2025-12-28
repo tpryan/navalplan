@@ -22,6 +22,7 @@ func (m *MockStore) ListVoyages(userID int64) ([]models.Voyage, error) {
 	return nil, nil
 }
 func (m *MockStore) CreateVoyage(v *models.Voyage) error { return nil }
+func (m *MockStore) UpdateVoyage(v *models.Voyage) error { return nil }
 func (m *MockStore) GetVoyage(id int64) (*models.Voyage, error) { return nil, nil }
 func (m *MockStore) UpdateVoyageSharing(id int64, shareToken *string, isPublic bool) error { return nil }
 func (m *MockStore) GetVoyageByToken(token string) (*models.Voyage, error) { return nil, nil }
