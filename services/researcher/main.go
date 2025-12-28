@@ -74,6 +74,7 @@ func main() {
 							"holding": "Good holding in mud",
 							"vhf": "66A",
 							"phone": "555-0199"
+							"url": "http://marina.com"
 						}
 					}
 				],
