@@ -439,19 +439,27 @@ function showBriefing(briefing) {
                 ${facilities.map(f => {
                     let detailsHtml = '';
                     if (typeof f.details === 'string') {
-                        detailsHtml = `<div>${f.details}</div>`;
+                        detailsHtml = `<p>${f.details}</p>`;
                     } else if (f.details && typeof f.details === 'object') {
-                        detailsHtml = Object.entries(f.details)
-                            .map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`)
-                            .join('');
+                        // Table format for details
+                        const rows = Object.entries(f.details)
+                            .filter(([_, v]) => v && v !== 'N/A' && v !== '')
+                            .map(([k, v]) => `
+                                <tr>
+                                    <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">${k.replace(/_/g, ' ')}</td>
+                                    <td>${v}</td>
+                                </tr>
+                            `).join('');
+                        
+                        if (rows) {
+                            detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
+                        }
                     }
 
                     return `
                         <li class="facility-item">
                             <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
-                            <div style="font-size:0.9em">
-                                ${detailsHtml}
-                            </div>
+                            ${detailsHtml}
                         </li>
                     `;
                 }).join('') || '<li>No facilities found</li>'}
