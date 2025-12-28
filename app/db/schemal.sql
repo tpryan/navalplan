@@ -33,6 +33,8 @@ CREATE TABLE voyage (
     search_radius_unit VARCHAR(10) DEFAULT 'nm',
     google_doc_id VARCHAR(255),
     last_exported_at TIMESTAMP,
+    share_token VARCHAR(64) UNIQUE,
+    is_public BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

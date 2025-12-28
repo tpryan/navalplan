@@ -78,6 +78,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        share_token:
+          type: string
+          nullable: true
+          description: "Unique token for sharing this voyage publicly. Read-only."
+        is_public:
+          type: boolean
+          default: false
+          description: "If true, the voyage is accessible via the share token."
     Stop:
       type: object
       required:
@@ -330,6 +338,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/APIMessage'
+
+  /api/v1/voyages/{id}/share:
+    post:
+      tags: [Voyage]
+      summary: Enable sharing for a voyage
+      description: Generates a share token if one doesn't exist.
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sharing enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+    delete:
+      tags: [Voyage]
+      summary: Disable sharing for a voyage
+      description: Removes the share token.
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sharing disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+
+  /api/v1/public/voyages/{token}:
+    get:
+      tags: [Voyage]
+      summary: Get a shared voyage
+      description: Publicly accessible endpoint for shared voyages.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Voyage details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+        '404':
+          description: Voyage not found or not shared
+
+  /api/v1/public/voyages/{token}/stops:
+    get:
+      tags: [Stop]
+      summary: Get stops for a shared voyage
+      description: Publicly accessible endpoint for stops of a shared voyage.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stop'
 
   # --- Stop Management ---
   /api/v1/voyages/{id}/stops:
