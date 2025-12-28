@@ -27,5 +27,25 @@ export const API = {
     const res = await fetch(`${API_BASE}/voyages/${voyageId}/stops`);
     if (!res.ok) throw new Error('Failed to load stops');
     return res.json();
+  },
+
+  async createStop(voyageId, stop) {
+    const res = await fetch(`${API_BASE}/voyages/${voyageId}/stops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!res.ok) throw new Error('Failed to create stop');
+    return res.json();
+  },
+
+  async updateStop(stopId, stop) {
+    const res = await fetch(`${API_BASE}/stops/${stopId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!res.ok) throw new Error('Failed to update stop');
+    return res.json();
   }
 };

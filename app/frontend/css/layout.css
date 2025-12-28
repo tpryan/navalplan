@@ -100,6 +100,74 @@
   font-size: 0.9rem;
 }
 
+/* --- Itinerary View --- */
+#itinerary-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.voyage-header {
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.voyage-header h2 {
+  margin: 0;
+  font-family: var(--font-primary);
+  color: var(--brand-dark);
+  font-size: 1.2rem;
+}
+
+#itinerary-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.day-item {
+  background-color: var(--surface-bg-dim-light);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 5px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.day-item:hover {
+  background-color: rgba(255, 255, 255, 0.6);
+}
+
+.day-item.selected {
+  border-color: var(--brand-medium);
+  border-width: 2px;
+  background-color: rgba(149, 104, 45, 0.1);
+}
+
+.day-date {
+  font-family: var(--font-primary);
+  font-weight: 900;
+  color: var(--brand-dark);
+}
+
+.day-location {
+  font-family: var(--font-secondary);
+  color: var(--text-light);
+  font-style: italic;
+}
+
+.day-location.set {
+  color: var(--brand-green-dark);
+  font-style: normal;
+  font-weight: bold;
+}
+
 /* --- Modals & Utility --- */
 
 .hidden {
@@ -179,4 +247,23 @@
   display: flex;
   gap: 1rem;
   margin-top: 1.5rem;
+}
+
+/* --- Map Markers --- */
+.marker span {
+  font-family: var(--font-handwriting); /* Sue Ellen Francisco */
+  width: 45px; height: 45px;
+  background: rgba(184, 164, 138, 0.8); /* Paper color */
+  border: solid 2px var(--brand-green-dark); /* Brand Green */
+  border-radius: 0 70% 70%; /* Teardrop shape */
+  transform: rotateZ(-225deg); /* Rotation to point down */
+  display: flex; justify-content: center; align-items: center;
+  font-size: 1.2rem;
+  box-shadow: 0 0 2px black;
+  color: var(--brand-dark);
+}
+
+.marker b {
+  display: block;
+  transform: rotateZ(225deg); /* Counter-rotate text so it is upright */
 }

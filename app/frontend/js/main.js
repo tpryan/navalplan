@@ -6,6 +6,11 @@ const MAPBOX_TOKEN = __MAPBOX_TOKEN__;
 
 // State
 let voyages = [];
+let currentVoyage = null;
+let currentStops = [];
+let selectedDate = null;
+let map = null;
+let markers = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -24,13 +29,13 @@ function initUI() {
   const modalNewVoyage = document.getElementById('modal-new-voyage');
   const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
   const formNewVoyage = document.getElementById('form-new-voyage');
+  const btnBack = document.getElementById('btn-back-voyages');
 
   // Open Modal
   btnNewVoyage.addEventListener('click', () => {
     modalOverlay.classList.remove('hidden');
     modalNewVoyage.classList.remove('hidden');
     // Set default dates (Next Sat to +1 week)
-    // Simple default: Today and Tomorrow
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('voyage-start').value = today;
   });
@@ -77,6 +82,11 @@ function initUI() {
       alert('Failed to create voyage. Check console.');
     }
   });
+
+  // Back Button
+  if (btnBack) {
+    btnBack.addEventListener('click', showVoyageList);
+  }
 }
 
 async function loadVoyages() {
@@ -113,23 +123,92 @@ function renderVoyageList() {
   });
 }
 
-function selectVoyage(voyage) {
-  console.log('Selected Voyage:', voyage);
-  // TODO: Load Itinerary View
-  alert(`Selected: ${voyage.title}`);
+function showVoyageList() {
+    document.getElementById('voyage-list').classList.remove('hidden');
+    document.getElementById('itinerary-view').classList.add('hidden');
+    // Hide/Show "New Voyage" button logic (it's inside sidebar-actions which is inside nav, separate from voyage-list)
+    // Actually, 'sidebar-actions' contains the button. 'itinerary-view' contains the back button.
+    // I need to hide 'sidebar-actions' when in itinerary view?
+    // The HTML structure:
+    // <nav id="sidebar">
+    //   <div class="brand">...</div>
+    //   <div class="sidebar-actions"><button id="btn-new-voyage">...</div>
+    //   <div id="voyage-list">...</div>
+    //   <div id="itinerary-view" class="hidden">...</div>
+    // </nav>
+    
+    // So I should hide .sidebar-actions when showing itinerary.
+    document.querySelector('.sidebar-actions').classList.remove('hidden');
+    
+    currentVoyage = null;
+    selectedDate = null;
+    clearMap();
 }
 
+async function selectVoyage(voyage) {
+    currentVoyage = voyage;
+    document.getElementById('voyage-list').classList.add('hidden');
+    document.getElementById('itinerary-view').classList.remove('hidden');
+    document.querySelector('.sidebar-actions').classList.add('hidden');
+
+    document.getElementById('itinerary-title').textContent = voyage.title;
+    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}`;
+
+    // Load Stops
+    try {
+        currentStops = await API.getStops(voyage.id);
+        renderItinerary();
+        renderMapStops();
+    } catch (err) {
+        console.error(err);
+        alert('Failed to load stops');
+    }
+}
+
+function renderItinerary() {
+    const list = document.getElementById('itinerary-list');
+    list.innerHTML = '';
+    
+    let currentDate = new Date(currentVoyage.start_date);
+    const endDate = new Date(currentVoyage.end_date);
+
+    while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
+        
+        const el = document.createElement('div');
+        el.className = `day-item ${selectedDate === dateStr ? 'selected' : ''}`;
+        el.innerHTML = `
+            <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+            <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+        `;
+        el.addEventListener('click', () => selectDate(dateStr));
+        list.appendChild(el);
+        
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+}
+
+function selectDate(dateStr) {
+    selectedDate = dateStr;
+    renderItinerary(); // Re-render to show selection highlight
+    
+    // Zoom to existing stop if present
+    const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
+    if (stop && map) {
+        map.flyTo({ center: [stop.longitude, stop.latitude], zoom: 10 });
+    }
+}
 
 function initMap() {
   if (!MAPBOX_TOKEN) {
     console.error('Mapbox token is missing. Please set NAVALPLAN_MB_TOKEN environment variable during build.');
-    // Optionally alert the user or show a UI message
     return;
   }
 
   mapboxgl.accessToken = MAPBOX_TOKEN;
 
-  const map = new mapboxgl.Map({
+  map = new mapboxgl.Map({
     container: 'map-container',
     style: __MAPBOX_STYLE__, 
     center: [-123.0, 48.5], // Salish Sea
@@ -140,6 +219,118 @@ function initMap() {
     console.log('NavalPlan: Map Loaded Successfully');
   });
 
-  // Add navigation controls (zoom/rotate)
   map.addControl(new mapboxgl.NavigationControl());
+
+  map.on('click', async (e) => {
+    if (!currentVoyage || !selectedDate) return;
+
+    const { lng, lat } = e.lngLat;
+    const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
+
+    // Create or Update
+    const stopData = {
+        target_date: selectedDate + 'T00:00:00Z',
+        location_name: `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`, // Placeholder
+        latitude: lat,
+        longitude: lng,
+        search_radius: 5,
+        search_radius_unit: 'nm',
+        notes: ''
+    };
+
+    try {
+        if (stop) {
+            const updated = await API.updateStop(stop.id, stopData);
+            const idx = currentStops.findIndex(s => s.id === stop.id);
+            currentStops[idx] = updated;
+        } else {
+            const created = await API.createStop(currentVoyage.id, stopData);
+            currentStops.push(created);
+        }
+        renderItinerary();
+        renderMapStops();
+    } catch (err) {
+        console.error(err);
+        alert('Failed to save stop');
+    }
+  });
+}
+
+function renderMapStops() {
+    clearMap();
+    if (!map) return;
+
+    // Sort stops by date
+    const sortedStops = [...currentStops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    // Add Markers
+    sortedStops.forEach((stop, index) => {
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.innerHTML = `<span><b>${index + 1}</b></span>`;
+
+        const marker = new mapboxgl.Marker(el)
+            .setLngLat([stop.longitude, stop.latitude])
+            .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(`${stop.location_name} (Day ${index + 1})`))
+            .addTo(map);
+        markers.push(marker);
+    });
+
+    // Draw Line
+    const coords = sortedStops.map(s => [s.longitude, s.latitude]);
+    
+    if (map.getSource('route')) {
+        map.getSource('route').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: coords
+            }
+        });
+    } else {
+        map.addSource('route', {
+            type: 'geojson',
+            data: {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: coords
+                }
+            }
+        });
+
+        map.addLayer({
+            id: 'route',
+            type: 'line',
+            source: 'route',
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            paint: {
+                'line-color': '#314c3b', // Brand Green
+                'line-width': 4,
+                'line-dasharray': [2, 1]
+            }
+        });
+    }
+}
+
+function clearMap() {
+    markers.forEach(m => m.remove());
+    markers = [];
+    if (map && map.getSource('route')) {
+        map.getSource('route').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: []
+            }
+        });
+    }
 }

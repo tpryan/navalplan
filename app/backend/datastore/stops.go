@@ -5,7 +5,7 @@ import (
 )
 
 func (db *DB) ListStops(voyageID int64) ([]models.Stop, error) {
-	var stops []models.Stop
+	stops := []models.Stop{}
 	query := `SELECT * FROM stop WHERE voyage_id = $1 ORDER BY target_date ASC`
 	err := db.Select(&stops, query, voyageID)
 	return stops, err
