@@ -5,9 +5,9 @@ import (
 )
 
 type Handler struct {
-	DB *datastore.DB
+	DB datastore.Store
 }
 
-func New(db *datastore.DB) *Handler {
+func New(db datastore.Store) *Handler {
 	return &Handler{DB: db}
 }

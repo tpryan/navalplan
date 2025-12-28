@@ -13,10 +13,10 @@ import (
 
 type Server struct {
 	Router *chi.Mux
-	DB     *datastore.DB
+	DB     datastore.Store
 }
 
-func New(db *datastore.DB) (*Server, error) {
+func New(db datastore.Store) (*Server, error) {
 	r := chi.NewRouter()
 	h := handlers.New(db)
 
