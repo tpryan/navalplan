@@ -3,9 +3,9 @@ FROM postgres:latest
 
 # Set environment variables for the PostgreSQL superuser password
 # It's recommended to use Docker secrets or environment files for production
-ENV POSTGRES_PASSWORD=tsdbadmin
-ENV POSTGRES_DB=tsdb
-ENV POSTGRES_USER=tsdbadmin
+ENV POSTGRES_PASSWORD=navalplan_pass
+ENV POSTGRES_DB=navalplan
+ENV POSTGRES_USER=navalplan_user
 
 # Optional: Copy a SQL script to initialize the database
 # This script will be executed when the container starts for the first time
