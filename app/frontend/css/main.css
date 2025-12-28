@@ -55,6 +55,33 @@ body {
   padding: 0 1rem;
 }
 
+.voyage-item {
+  padding: 1rem;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.voyage-item:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
+.voyage-item h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: var(--primary-color);
+}
+
+.voyage-item p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #666;
+}
+
 /* Map Styles */
 #map-container {
   flex: 1;
@@ -71,6 +98,7 @@ body {
   cursor: pointer;
   font-weight: 600;
   transition: background 0.2s;
+  font-size: 0.9rem;
 }
 
 .btn.primary {
@@ -82,9 +110,87 @@ body {
   background-color: var(--secondary-color);
 }
 
+.btn.secondary {
+  background-color: #eee;
+  color: #333;
+}
+
+.btn.secondary:hover {
+  background-color: #ddd;
+}
+
 .loading-text {
   color: #888;
   font-style: italic;
   text-align: center;
   margin-top: 2rem;
+}
+
+/* Modal Styles */
+.hidden {
+  display: none !important;
+}
+
+#modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  width: 90%;
+  max-width: 400px;
+  z-index: 101;
+}
+
+.modal h2 {
+  margin-top: 0;
+  color: var(--primary-color);
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box; /* Important for padding */
+  font-size: 1rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
 }

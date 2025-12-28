@@ -28,6 +28,35 @@
       <main id="map-container"></main>
     </div>
 
+    <!-- Modals -->
+    <div id="modal-overlay" class="hidden"></div>
+    
+    <div id="modal-new-voyage" class="modal hidden">
+      <h2>Plan a New Voyage</h2>
+      <form id="form-new-voyage">
+        <div class="form-group">
+          <label for="voyage-title">Trip Title</label>
+          <input type="text" id="voyage-title" name="title" required placeholder="e.g. Gulf Islands 2025" />
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="voyage-start">Start Date</label>
+            <input type="date" id="voyage-start" name="start_date" required />
+          </div>
+          <div class="form-group">
+            <label for="voyage-end">End Date</label>
+            <input type="date" id="voyage-end" name="end_date" required />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="btn-cancel-voyage" class="btn secondary">Cancel</button>
+          <button type="submit" class="btn primary">Create Voyage</button>
+        </div>
+      </form>
+    </div>
+
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>
