@@ -1,0 +1,482 @@
+openapi: 3.1.0
+info:
+  title: NavalPlan API
+  description: API for planning sailing voyages, researching destinations via AI, and generating logbooks.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Voyage
+    description: Management of trips and itineraries
+  - name: Stop
+    description: Operations for specific days/locations within a voyage
+  - name: Research
+    description: AI Agent interaction for destination data
+  - name: Export
+    description: Generation of Google Docs logbooks
+
+components:
+  securitySchemes:
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: navalplan_session
+
+  schemas:
+    # --- Shared/Utility ---
+    APIError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid date range"
+    
+    APIMessage:
+      type: object
+      properties:
+        msg:
+          type: string
+          example: "Operation successful"
+
+    # --- Core Entities ---
+    Voyage:
+      type: object
+      required:
+        - title
+        - start_date
+        - end_date
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        title:
+          type: string
+          example: "Gulf Islands Summer 2025"
+        start_date:
+          type: string
+          format: date
+          example: "2025-07-01"
+        end_date:
+          type: string
+          format: date
+          example: "2025-07-14"
+        google_doc_id:
+          type: string
+          nullable: true
+          description: ID of the exported Google Doc, if available.
+        last_exported_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Stop:
+      type: object
+      required:
+        - target_date
+        - latitude
+        - longitude
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        voyage_id:
+          type: integer
+          format: int64
+          readOnly: true
+        target_date:
+          type: string
+          format: date
+          example: "2025-07-01"
+        location_name:
+          type: string
+          example: "Poet's Cove"
+        latitude:
+          type: number
+          format: double
+          example: 48.758
+        longitude:
+          type: number
+          format: double
+          example: -123.223
+        search_radius_nm:
+          type: integer
+          default: 5
+          description: Radius in nautical miles to research around this point.
+        notes:
+          type: string
+          description: Manual skipper notes.
+
+    # --- Agent Data Structures ---
+    Briefing:
+      type: object
+      description: The cached research result from the AI agent.
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        stop_id:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        weather:
+          $ref: '#/components/schemas/WeatherSummary'
+        tides:
+          $ref: '#/components/schemas/TideData'
+        facilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Facility'
+
+    WeatherSummary:
+      type: object
+      properties:
+        summary:
+          type: string
+          example: "Partly cloudy with NW winds."
+        wind_speed_kt:
+          type: integer
+        wind_direction:
+          type: string
+          example: "NW"
+        wave_height_ft:
+          type: number
+
+    TideData:
+      type: object
+      properties:
+        station_name:
+          type: string
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              time:
+                type: string
+                format: date-time
+              type:
+                type: string
+                enum: [High, Low]
+              height_ft:
+                type: number
+
+    Facility:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Anchorage, Marina, Mooring, Hazard]
+        latitude:
+          type: number
+        longitude:
+          type: number
+        details:
+          type: object
+          description: Flexible key-value pairs (e.g. VHF, Phone, Holding Ground)
+          additionalProperties: true
+
+    # --- Requests ---
+    ExportRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [create, append]
+          default: create
+        existing_doc_id:
+          type: string
+          description: Required if mode is 'append'
+
+    ExportResponse:
+      type: object
+      properties:
+        doc_url:
+          type: string
+        doc_id:
+          type: string
+
+paths:
+  # --- System ---
+  /healthz:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  # --- Auth ---
+  /api/v1/session:
+    get:
+      tags: [Auth]
+      summary: Get current user session
+      responses:
+        '200':
+          description: Authenticated
+        '401':
+          description: Not authenticated
+
+  # --- Voyage Management ---
+  /api/v1/voyages:
+    get:
+      tags: [Voyage]
+      summary: List all voyages for the user
+      security:
+        - SessionAuth: []
+      responses:
+        '200':
+          description: List of voyages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Voyage'
+    post:
+      tags: [Voyage]
+      summary: Create a new voyage
+      security:
+        - SessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Voyage'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+
+  /api/v1/voyages/{id}:
+    get:
+      tags: [Voyage]
+      summary: Get a specific voyage
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Voyage details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+    put:
+      tags: [Voyage]
+      summary: Update a voyage (title, dates)
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Voyage'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+    delete:
+      tags: [Voyage]
+      summary: Delete a voyage
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIMessage'
+
+  # --- Stop Management ---
+  /api/v1/voyages/{id}/stops:
+    get:
+      tags: [Stop]
+      summary: Get all stops for a voyage
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stop'
+    post:
+      tags: [Stop]
+      summary: Add a stop to a voyage
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stop'
+      responses:
+        '201':
+          description: Stop Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stop'
+
+  /api/v1/stops/{id}:
+    put:
+      tags: [Stop]
+      summary: Update a stop (move location, change date, add notes)
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stop'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stop'
+    delete:
+      tags: [Stop]
+      summary: Remove a stop
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIMessage'
+
+  # --- Research (Agent) ---
+  /api/v1/stops/{id}/research:
+    post:
+      tags: [Research]
+      summary: Trigger the AI Researcher for a specific stop
+      description: Initiates the async agent process. Client should poll GET /briefing for results.
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '202':
+          description: Research Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIMessage'
+
+  /api/v1/stops/{id}/briefing:
+    get:
+      tags: [Research]
+      summary: Get the research briefing for a stop
+      description: Returns the cached JSON report. Returns 404 if not yet researched.
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Briefing Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Briefing'
+        '404':
+          description: Briefing not found (or research still in progress)
+
+  # --- Export ---
+  /api/v1/voyages/{id}/export:
+    post:
+      tags: [Export]
+      summary: Generate a Google Doc Logbook
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '200':
+          description: Export Successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
