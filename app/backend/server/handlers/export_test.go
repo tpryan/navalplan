@@ -11,8 +11,6 @@ import (
 	"app/server/handlers"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/api/docs/v1"
 )
 
 func TestExportVoyage_Success(t *testing.T) {
@@ -42,14 +40,7 @@ func TestExportVoyage_Success(t *testing.T) {
 	mockStore.On("ListStops", voyageID).Return(stops, nil)
 	mockStore.On("GetBriefing", int64(10)).Return(briefing, nil)
 	
-	// Expect DB update after export
-	mockStore.On("UpdateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
-		return v.ID == voyageID && v.GoogleDocID != nil && *v.GoogleDocID == "doc123"
-	})).Return(nil)
-
-	// Docs Expectations
-	mockDocs.On("Create", mock.Anything, "Logbook: Test Voyage").Return(&docs.Document{DocumentId: "doc123"}, nil)
-	mockDocs.On("BatchUpdate", mock.Anything, "doc123", mock.Anything).Return(nil)
+	// Note: DB is NOT updated in this handler anymore (frontend handles the actual export)
 
 	// Setup Router
 	r := chi.NewRouter()
@@ -64,9 +55,11 @@ func TestExportVoyage_Success(t *testing.T) {
 	
 	var resp handlers.ExportResponse
 	json.NewDecoder(w.Body).Decode(&resp)
-	assert.Equal(t, "doc123", resp.DocID)
-	assert.Contains(t, resp.DocURL, "doc123")
+	
+	assert.Equal(t, "Logbook: Test Voyage", resp.Title)
+	assert.NotEmpty(t, resp.Requests)
+	// We expect at least header + stop + weather requests
+	assert.Greater(t, len(resp.Requests), 2)
 
 	mockStore.AssertExpectations(t)
-	mockDocs.AssertExpectations(t)
 }
