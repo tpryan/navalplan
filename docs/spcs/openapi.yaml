@@ -63,15 +63,21 @@ components:
           type: string
           format: date
           example: "2025-07-14"
+        search_radius:
+          type: integer
+          default: 60
+          description: Broad search radius for finding potential stops along the route.
+        search_radius_unit:
+          type: string
+          default: "nm"
+          enum: ["nm", "km", "mi"]
         google_doc_id:
           type: string
           nullable: true
-          description: ID of the exported Google Doc, if available.
         last_exported_at:
           type: string
           format: date-time
           nullable: true
-
     Stop:
       type: object
       required:
@@ -102,14 +108,18 @@ components:
           type: number
           format: double
           example: -123.223
-        search_radius_nm:
+        search_radius:
           type: integer
           default: 5
-          description: Radius in nautical miles to research around this point.
+          description: Numeric radius to research around this point.
+        search_radius_unit:
+          type: string
+          default: "nm"
+          enum: ["nm", "km", "mi"]
+          description: Unit for the search radius.
         notes:
           type: string
           description: Manual skipper notes.
-
     # --- Agent Data Structures ---
     Briefing:
       type: object
