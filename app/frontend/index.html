@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NavalPlan: Voyage Planner</title>
+    
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+    
+    <link rel="stylesheet" href="/css/main.css" />
+  </head>
+  <body>
+    <div id="app">
+      <nav id="sidebar">
+        <div class="brand">
+          <h1>NavalPlan</h1>
+        </div>
+        
+        <div class="sidebar-actions">
+           <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
+        </div>
+
+        <div id="voyage-list">
+          <p class="loading-text">Loading voyages...</p>
+        </div>
+      </nav>
+
+      <main id="map-container"></main>
+    </div>
+
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

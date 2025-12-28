@@ -1,2 +1,4 @@
 app/db/user.sql
 app/backend/vendor
+app/frontend/dist
+app/frontend/node_modules

@@ -23,6 +23,19 @@ run:
 	# For convenience, you can add a local .env loader here
 	cd app/backend && go run main.go
 
+# --- Frontend ---
+
+run-frontend:
+	@echo "Starting NavalPlan frontend..."
+	cd app/frontend && npm run dev
+
+# --- Combined Dev ---
+
+dev:
+	@echo "Starting Backend and Frontend..."
+	@echo "Press Ctrl+C to stop both."
+	@(trap 'kill 0' SIGINT; make run & make run-frontend & wait)
+
 # --- Database (Podman/Docker) ---
 
 db-start:
