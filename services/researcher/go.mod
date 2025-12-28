@@ -3,6 +3,7 @@ module github.com/tpryan/navalplan/services/researcher
 go 1.25.4
 
 require (
+	github.com/tpryan/openmeteogo v1.0.1
 	google.golang.org/adk v0.3.0
 	google.golang.org/genai v1.40.0
 )
@@ -17,6 +18,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/jsonschema-go v0.3.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

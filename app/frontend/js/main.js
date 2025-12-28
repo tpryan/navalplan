@@ -400,6 +400,7 @@ function showBriefing(briefing) {
     const modal = document.getElementById('modal-briefing');
     const content = document.getElementById('briefing-content');
     const btnClose = document.getElementById('btn-close-briefing');
+    const btnRedo = document.getElementById('btn-redo-briefing');
     const modalOverlay = document.getElementById('modal-overlay');
 
     // Weather
@@ -435,19 +436,35 @@ function showBriefing(briefing) {
         <div class="briefing-section">
             <h3>Facilities</h3>
             <ul class="facility-list">
-                ${facilities.map(f => `
-                    <li class="facility-item">
-                        <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
-                        <div style="font-size:0.9em">
-                            ${Object.entries(f.details || {}).map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`).join('')}
-                        </div>
-                    </li>
-                `).join('') || '<li>No facilities found</li>'}
+                ${facilities.map(f => {
+                    let detailsHtml = '';
+                    if (typeof f.details === 'string') {
+                        detailsHtml = `<div>${f.details}</div>`;
+                    } else if (f.details && typeof f.details === 'object') {
+                        detailsHtml = Object.entries(f.details)
+                            .map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`)
+                            .join('');
+                    }
+
+                    return `
+                        <li class="facility-item">
+                            <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
+                            <div style="font-size:0.9em">
+                                ${detailsHtml}
+                            </div>
+                        </li>
+                    `;
+                }).join('') || '<li>No facilities found</li>'}
             </ul>
         </div>
     `;
 
     content.innerHTML = weatherHtml + tidesHtml + facilHtml;
+    
+    // Redo Handler
+    if (btnRedo) {
+        btnRedo.onclick = () => redoBriefing(briefing, btnRedo);
+    }
 
     // Show Modal
     modal.classList.remove('hidden');
@@ -459,10 +476,47 @@ function showBriefing(briefing) {
     };
 
     btnClose.onclick = hide;
-    // Note: Use a separate handler or ensure this doesn't conflict with other overlay usages if multiple modals could be open.
-    // For this flow, we assume single modal.
     modalOverlay.onclick = hide; 
 }
+
+async function redoBriefing(oldBriefing, btn) {
+    const content = document.getElementById('briefing-content');
+    content.innerHTML = `
+        <div style="text-align:center; padding:3rem; color: #666;">
+            <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
+            <p><strong>Agent is researching...</strong></p>
+            <p style="font-size: 0.9em;">Checking weather, tides, and local charts.</p>
+        </div>
+    `;
+    btn.disabled = true;
+
+    try {
+        await API.triggerResearch(oldBriefing.stop_id);
+        
+        const oldTime = new Date(oldBriefing.created_at).getTime();
+        
+        // Poll
+        const poll = setInterval(async () => {
+            try {
+                const b = await API.getBriefing(oldBriefing.stop_id);
+                if (b) {
+                    const newTime = new Date(b.created_at).getTime();
+                    // Wait for newer timestamp
+                    if (newTime > oldTime) {
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        showBriefing(b); // Re-render with new data
+                    }
+                }
+            } catch (ignore) { }
+        }, 3000);
+    } catch (err) {
+        console.error(err);
+        content.innerHTML = '<div style="text-align:center; padding:2rem; color: red;"><p>Failed to redo research.</p></div>';
+        btn.disabled = false;
+    }
+}
+
 
 function selectDate(dateStr) {
     selectedDate = dateStr;
