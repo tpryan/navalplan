@@ -1,0 +1,20 @@
+# Use the official PostgreSQL image as the base
+FROM postgres:latest
+
+# Set environment variables for the PostgreSQL superuser password
+# It's recommended to use Docker secrets or environment files for production
+ENV POSTGRES_PASSWORD=tsdbadmin
+ENV POSTGRES_DB=tsdb
+ENV POSTGRES_USER=tsdbadmin
+
+# Optional: Copy a SQL script to initialize the database
+# This script will be executed when the container starts for the first time
+COPY pg-shortkey.sql /docker-entrypoint-initdb.d/
+COPY schema.sql /docker-entrypoint-initdb.d/
+COPY user.sql /docker-entrypoint-initdb.d/
+
+# Expose the default PostgreSQL port
+EXPOSE 5432
+
+# The official image's entrypoint handles starting PostgreSQL
+# and executing scripts in /docker-entrypoint-initdb.d/

@@ -59,6 +59,7 @@ CREATE TABLE briefing (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+
 CREATE INDEX idx_session_expires_at ON session(expires_at);
 CREATE INDEX idx_voyage_user_id ON voyage(user_id);
 CREATE INDEX idx_stop_voyage_id ON stop(voyage_id);
