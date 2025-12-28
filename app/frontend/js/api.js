@@ -17,6 +17,24 @@ export const API = {
     return res.json();
   },
 
+  async updateVoyage(id, voyage) {
+    const res = await fetch(`${API_BASE}/voyages/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(voyage),
+    });
+    if (!res.ok) throw new Error('Failed to update voyage');
+    return res.json();
+  },
+
+  async deleteVoyage(id) {
+    const res = await fetch(`${API_BASE}/voyages/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete voyage');
+    return res.json();
+  },
+
   async getVoyage(id) {
     const res = await fetch(`${API_BASE}/voyages/${id}`);
     if (!res.ok) throw new Error('Failed to load voyage');

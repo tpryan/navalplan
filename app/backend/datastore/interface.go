@@ -7,6 +7,7 @@ type Store interface {
 	ListVoyages(userID int64) ([]models.Voyage, error)
 	CreateVoyage(v *models.Voyage) error
 	GetVoyage(id int64) (*models.Voyage, error)
+	UpdateVoyage(v *models.Voyage) error
 	UpdateVoyageSharing(id int64, shareToken *string, isPublic bool) error
 	GetVoyageByToken(token string) (*models.Voyage, error)
 	DeleteVoyage(id int64) error

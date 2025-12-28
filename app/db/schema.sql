@@ -29,6 +29,9 @@ CREATE TABLE voyage (
     title VARCHAR(255) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    location_name VARCHAR(255),
+    latitude FLOAT,
+    longitude FLOAT,
     search_radius INTEGER DEFAULT 60,            -- Default Broad Search (e.g. 60nm)
     search_radius_unit VARCHAR(10) DEFAULT 'nm',
     google_doc_id VARCHAR(255),

@@ -26,6 +26,9 @@ type Voyage struct {
 	Title            string     `json:"title" db:"title"`
 	StartDate        time.Time  `json:"start_date" db:"start_date"`
 	EndDate          time.Time  `json:"end_date" db:"end_date"`
+	LocationName     *string    `json:"location_name" db:"location_name"`
+	Latitude         *float64   `json:"latitude" db:"latitude"`
+	Longitude        *float64   `json:"longitude" db:"longitude"`
 	SearchRadius     int        `json:"search_radius" db:"search_radius"`
 	SearchRadiusUnit string     `json:"search_radius_unit" db:"search_radius_unit"`
 	GoogleDocID      *string    `json:"google_doc_id" db:"google_doc_id"`

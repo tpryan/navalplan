@@ -13,8 +13,8 @@ func (db *DB) ListVoyages(userID int64) ([]models.Voyage, error) {
 
 func (db *DB) CreateVoyage(v *models.Voyage) error {
 	query := `
-		INSERT INTO voyage (user_id, title, start_date, end_date, search_radius, search_radius_unit)
-		VALUES (:user_id, :title, :start_date, :end_date, :search_radius, :search_radius_unit)
+		INSERT INTO voyage (user_id, title, start_date, end_date, location_name, latitude, longitude, search_radius, search_radius_unit)
+		VALUES (:user_id, :title, :start_date, :end_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit)
 		RETURNING id, created_at`
 	
 	rows, err := db.NamedQuery(query, v)
@@ -27,6 +27,16 @@ func (db *DB) CreateVoyage(v *models.Voyage) error {
 		return rows.Scan(&v.ID, &v.CreatedAt)
 	}
 	return nil
+}
+
+func (db *DB) UpdateVoyage(v *models.Voyage) error {
+	query := `
+		UPDATE voyage
+		SET title = :title, start_date = :start_date, end_date = :end_date,
+		    location_name = :location_name, latitude = :latitude, longitude = :longitude
+		WHERE id = :id`
+	_, err := db.NamedExec(query, v)
+	return err
 }
 
 func (db *DB) UpdateVoyageSharing(id int64, shareToken *string, isPublic bool) error {

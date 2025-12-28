@@ -11,6 +11,7 @@ let currentStops = [];
 let selectedDate = null;
 let map = null;
 let markers = [];
+let editingVoyageId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -31,13 +32,29 @@ function initUI() {
   const formNewVoyage = document.getElementById('form-new-voyage');
   const btnBack = document.getElementById('btn-back-voyages');
 
-  // Open Modal
+  const btnUseMapCenter = document.getElementById('btn-use-map-center');
+  const displayCoords = document.getElementById('voyage-coords-display');
+  const inputLat = document.getElementById('voyage-lat');
+  const inputLng = document.getElementById('voyage-lng');
+  const modalTitle = modalNewVoyage.querySelector('h2');
+  const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
+
+  // Open Modal (Create Mode)
   btnNewVoyage.addEventListener('click', () => {
+    editingVoyageId = null;
+    modalTitle.textContent = 'Plan a New Voyage';
+    submitBtn.textContent = 'Create Voyage';
     modalOverlay.classList.remove('hidden');
     modalNewVoyage.classList.remove('hidden');
-    // Set default dates (Next Sat to +1 week)
+    // Set default dates
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('voyage-start').value = today;
+    document.getElementById('voyage-end').value = '';
+    document.getElementById('voyage-title').value = '';
+    document.getElementById('voyage-location-name').value = '';
+    displayCoords.textContent = '';
+    inputLat.value = '';
+    inputLng.value = '';
   });
 
   // Close Modal Helper
@@ -45,6 +62,10 @@ function initUI() {
     modalOverlay.classList.add('hidden');
     modalNewVoyage.classList.add('hidden');
     formNewVoyage.reset();
+    displayCoords.textContent = '';
+    inputLat.value = '';
+    inputLng.value = '';
+    editingVoyageId = null;
   };
 
   btnCancelVoyage.addEventListener('click', closeModal);
@@ -56,12 +77,22 @@ function initUI() {
 
   inputStart.addEventListener('change', () => {
     if (inputStart.value && !inputEnd.value) {
-      // Input date "YYYY-MM-DD" is parsed as UTC midnight
       const d = new Date(inputStart.value);
       d.setUTCDate(d.getUTCDate() + 1);
       inputEnd.value = d.toISOString().split('T')[0];
     }
   });
+
+  // Use Map Center
+  if (btnUseMapCenter) {
+    btnUseMapCenter.addEventListener('click', () => {
+      if (!map) return;
+      const center = map.getCenter();
+      inputLat.value = center.lat;
+      inputLng.value = center.lng;
+      displayCoords.textContent = `Lat: ${center.lat.toFixed(4)}, Lng: ${center.lng.toFixed(4)}`;
+    });
+  }
 
   // Handle Form Submit
   formNewVoyage.addEventListener('submit', async (e) => {
@@ -70,16 +101,23 @@ function initUI() {
     const voyageData = {
       title: formData.get('title'),
       start_date: formData.get('start_date') + 'T00:00:00Z',
-      end_date: formData.get('end_date') + 'T00:00:00Z'
+      end_date: formData.get('end_date') + 'T00:00:00Z',
+      location_name: formData.get('location_name'),
+      latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
+      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
     };
 
     try {
-      await API.createVoyage(voyageData);
+      if (editingVoyageId) {
+        await API.updateVoyage(editingVoyageId, voyageData);
+      } else {
+        await API.createVoyage(voyageData);
+      }
       closeModal();
       loadVoyages(); // Refresh list
     } catch (err) {
       console.error(err);
-      alert('Failed to create voyage. Check console.');
+      alert('Failed to save voyage. Check console.');
     }
   });
 
@@ -115,29 +153,85 @@ function renderVoyageList() {
     const el = document.createElement('div');
     el.className = 'voyage-item';
     el.innerHTML = `
-      <h3>${voyage.title}</h3>
-      <p>${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}</p>
+      <div class="voyage-info">
+        <h3>${voyage.title}</h3>
+        <p>${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}</p>
+        ${voyage.location_name ? `<p style="font-size:0.8rem; color:#888">📍 ${voyage.location_name}</p>` : ''}
+      </div>
+      <div class="voyage-actions">
+        <button class="btn-icon edit" title="Edit">
+          <span class="material-symbols-outlined">edit</span>
+        </button>
+        <button class="btn-icon delete" title="Delete">
+          <span class="material-symbols-outlined">delete</span>
+        </button>
+      </div>
     `;
-    el.addEventListener('click', () => selectVoyage(voyage));
+    
+    // Select Voyage
+    el.querySelector('.voyage-info').addEventListener('click', () => selectVoyage(voyage));
+
+    // Edit Voyage
+    const btnEdit = el.querySelector('.edit');
+    btnEdit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(voyage);
+    });
+
+    // Delete Voyage
+    const btnDelete = el.querySelector('.delete');
+    btnDelete.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm(`Are you sure you want to delete "${voyage.title}"?`)) {
+        try {
+          await API.deleteVoyage(voyage.id);
+          loadVoyages();
+          if (currentVoyage && currentVoyage.id === voyage.id) {
+             showVoyageList(); // Reset view if we deleted the current voyage
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Failed to delete voyage');
+        }
+      }
+    });
+
     listContainer.appendChild(el);
   });
+}
+
+function openEditModal(voyage) {
+    editingVoyageId = voyage.id;
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalNewVoyage = document.getElementById('modal-new-voyage');
+    const modalTitle = modalNewVoyage.querySelector('h2');
+    const submitBtn = document.querySelector('#form-new-voyage button[type="submit"]');
+
+    modalTitle.textContent = 'Edit Voyage';
+    submitBtn.textContent = 'Update Voyage';
+    
+    document.getElementById('voyage-title').value = voyage.title;
+    document.getElementById('voyage-start').value = voyage.start_date.split('T')[0];
+    document.getElementById('voyage-end').value = voyage.end_date.split('T')[0];
+    document.getElementById('voyage-location-name').value = voyage.location_name || '';
+    
+    if (voyage.latitude != null && voyage.longitude != null) {
+        document.getElementById('voyage-lat').value = voyage.latitude;
+        document.getElementById('voyage-lng').value = voyage.longitude;
+        document.getElementById('voyage-coords-display').textContent = `Lat: ${voyage.latitude.toFixed(4)}, Lng: ${voyage.longitude.toFixed(4)}`;
+    } else {
+        document.getElementById('voyage-lat').value = '';
+        document.getElementById('voyage-lng').value = '';
+        document.getElementById('voyage-coords-display').textContent = '';
+    }
+
+    modalOverlay.classList.remove('hidden');
+    modalNewVoyage.classList.remove('hidden');
 }
 
 function showVoyageList() {
     document.getElementById('voyage-list').classList.remove('hidden');
     document.getElementById('itinerary-view').classList.add('hidden');
-    // Hide/Show "New Voyage" button logic (it's inside sidebar-actions which is inside nav, separate from voyage-list)
-    // Actually, 'sidebar-actions' contains the button. 'itinerary-view' contains the back button.
-    // I need to hide 'sidebar-actions' when in itinerary view?
-    // The HTML structure:
-    // <nav id="sidebar">
-    //   <div class="brand">...</div>
-    //   <div class="sidebar-actions"><button id="btn-new-voyage">...</div>
-    //   <div id="voyage-list">...</div>
-    //   <div id="itinerary-view" class="hidden">...</div>
-    // </nav>
-    
-    // So I should hide .sidebar-actions when showing itinerary.
     document.querySelector('.sidebar-actions').classList.remove('hidden');
     
     currentVoyage = null;
@@ -159,6 +253,19 @@ async function selectVoyage(voyage) {
         currentStops = await API.getStops(voyage.id);
         renderItinerary();
         renderMapStops();
+
+        if (map) {
+            if (currentStops.length > 0) {
+                const bounds = new mapboxgl.LngLatBounds();
+                currentStops.forEach(stop => bounds.extend([stop.longitude, stop.latitude]));
+                if (voyage.latitude != null && voyage.longitude != null) {
+                    bounds.extend([voyage.longitude, voyage.latitude]);
+                }
+                map.fitBounds(bounds, { padding: 50, maxZoom: 12 });
+            } else if (voyage.latitude != null && voyage.longitude != null) {
+                map.flyTo({ center: [voyage.longitude, voyage.latitude], zoom: 9 });
+            }
+        }
     } catch (err) {
         console.error(err);
         alert('Failed to load stops');
@@ -233,7 +340,6 @@ function initMap() {
     
     // Attempt to find a label
     let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-    // Prioritize specific layers or just look for 'name' property
     const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
     
     if (labelFeature) {
