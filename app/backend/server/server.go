@@ -68,3 +68,14 @@ func New(db datastore.Store) (*Server, error) {
 		DB:     db,
 	}, nil
 }
+
+func (s *Server) Routes(contentDir string) {
+	// 404 Handler for API
+	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, contentDir+"/index.html")
+	})
+
+	// Static Files
+	fileServer := http.FileServer(http.Dir(contentDir))
+	s.Router.Handle("/*", http.StripPrefix("/", fileServer))
+}

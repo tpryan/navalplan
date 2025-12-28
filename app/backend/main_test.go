@@ -31,7 +31,7 @@ func TestRun_Config(t *testing.T) {
 	}
 
 	// It should return an error because DB is not reachable
-	err := run(ctx, &buf, env)
+	err := run(ctx, &buf, env, ".")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to database")
 }

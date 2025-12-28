@@ -13,15 +13,26 @@ DB_PORT=5433
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-.PHONY: run db-start db-stop db-reset test
+.PHONY: run db-start db-stop db-reset test build-js clean-static
 
 # --- Development ---
 
-run:
-	@echo "Starting NavalPlan backend..."
+# 1. RUN: Builds the frontend first, then runs Go serving that static folder
+run: build-js
+	@echo "Starting NavalPlan backend (Production Mode)..."
 	# We assume .env is sourced or variables are set in your shell
 	# For convenience, you can add a local .env loader here
-	cd app/backend && go run main.go
+	cd app/backend && go run main.go --content=./static.min
+
+# 3. CLEAN: Removes the old static files from the backend
+clean-static:
+	rm -rf app/backend/static.min
+
+# 4. BUILD-JS: Installs deps and runs Vite Build
+build-js: clean-static
+	@echo "Building Frontend..."
+	cd app/frontend && npm install
+	cd app/frontend && npm run build
 
 # --- Frontend ---
 

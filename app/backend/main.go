@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -16,13 +17,16 @@ import (
 )
 
 func main() {
-	if err := run(context.Background(), os.Stdout, os.Getenv); err != nil {
+	contentDir := flag.String("content", "./static.min", "Path to static content to serve")
+	flag.Parse()
+
+	if err := run(context.Background(), os.Stdout, os.Getenv, *contentDir); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, w io.Writer, getEnv func(string) string) error {
+func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDir string) error {
 	// 1. Basic Configuration
 	port := getEnv("PORT")
 	if port == "" {
@@ -47,6 +51,9 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string) error {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
+	// 3.5 Register Routes for static content
+	srv.Routes(contentDir)
+
 	// 4. Start HTTP Server
 	httpServer := &http.Server{
 		Addr:    ":" + port,
@@ -56,6 +63,7 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string) error {
 	errChan := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(w, "NavalPlan starting on port %s...\n", port)
+		fmt.Fprintf(w, "Serving static content from: %s\n", contentDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
