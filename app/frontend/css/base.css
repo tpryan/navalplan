@@ -1,0 +1,38 @@
+:root {
+  /* --- Brand Colors (Earthy/Nautical) --- */
+  --brand-dark: rgb(88, 61, 27);       /* Deep Brown */
+  --brand-darker: rgb(55, 38, 17);     /* Almost Black Brown */
+  --brand-medium: rgb(149, 104, 45);   /* Gold/Bronze */
+  --brand-light: rgb(160, 144, 123);   /* Sand */
+  --brand-green-dark: #314c3b;         /* Forest Green */
+  --brand-green-darker: #253b2e;
+  
+  /* --- UI Colors --- */
+  --color-background: #9f9a84;         /* Sage Green (Page background fallback) */
+  --text-dark: #333333;
+  --text-light: #777777;
+  --text-subtle: rgba(153, 153, 153, 0.5);
+  --border-color: #cccccc;
+  
+  /* --- Surface (Glassmorphism) --- */
+  --surface-bg: rgba(255, 255, 255, 0.8);
+  --surface-bg-dim: rgba(255, 255, 255, 0.8);
+  --surface-bg-dim-light: rgba(255, 255, 255, 0.4);
+
+  /* --- Dimensions & Effects --- */
+  --border-radius: 8px;
+  --shadow-main: 0 3px 10px rgb(0 0 0 / 0.4);
+  
+  /* --- Fonts --- */
+  --font-primary: "Raleway", sans-serif;
+  --font-secondary: "Lato", sans-serif;
+  --font-handwriting: "Sue Ellen Francisco", cursive;
+}
+
+html, body {
+  padding: 0; margin: 0;
+  background-color: var(--color-background);
+  overflow: hidden; /* Prevent scrolling, let map handle it */
+  width: 100%; height: 100%;
+  font-family: var(--font-secondary);
+}

@@ -45,14 +45,27 @@ function initUI() {
   btnCancelVoyage.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', closeModal);
 
+  // Auto-set End Date
+  const inputStart = document.getElementById('voyage-start');
+  const inputEnd = document.getElementById('voyage-end');
+
+  inputStart.addEventListener('change', () => {
+    if (inputStart.value && !inputEnd.value) {
+      // Input date "YYYY-MM-DD" is parsed as UTC midnight
+      const d = new Date(inputStart.value);
+      d.setUTCDate(d.getUTCDate() + 1);
+      inputEnd.value = d.toISOString().split('T')[0];
+    }
+  });
+
   // Handle Form Submit
   formNewVoyage.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(formNewVoyage);
     const voyageData = {
       title: formData.get('title'),
-      start_date: formData.get('start_date'),
-      end_date: formData.get('end_date')
+      start_date: formData.get('start_date') + 'T00:00:00Z',
+      end_date: formData.get('end_date') + 'T00:00:00Z'
     };
 
     try {
@@ -83,7 +96,7 @@ function renderVoyageList() {
   const listContainer = document.getElementById('voyage-list');
   listContainer.innerHTML = '';
 
-  if (voyages.length === 0) {
+  if (!voyages || voyages.length === 0) {
     listContainer.innerHTML = '<p class="loading-text">No voyages yet. Plan your first trip!</p>';
     return;
   }
@@ -93,7 +106,7 @@ function renderVoyageList() {
     el.className = 'voyage-item';
     el.innerHTML = `
       <h3>${voyage.title}</h3>
-      <p>${voyage.start_date} - ${voyage.end_date}</p>
+      <p>${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}</p>
     `;
     el.addEventListener('click', () => selectVoyage(voyage));
     listContainer.appendChild(el);

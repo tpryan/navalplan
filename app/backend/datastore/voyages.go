@@ -5,7 +5,7 @@ import (
 )
 
 func (db *DB) ListVoyages(userID int64) ([]models.Voyage, error) {
-	var voyages []models.Voyage
+	voyages := []models.Voyage{}
 	query := `SELECT * FROM voyage WHERE user_id = $1 ORDER BY start_date DESC`
 	err := db.Select(&voyages, query, userID)
 	return voyages, err

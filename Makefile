@@ -74,6 +74,10 @@ db-schema:
 	@echo "Applying schema..."
 	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/schema.sql
 
+db-seed:
+	@echo "Seeding database..."
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/seed.sql
+
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
 

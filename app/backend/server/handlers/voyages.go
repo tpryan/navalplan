@@ -109,6 +109,13 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 	// TODO: Get userID from context
 	v.UserID = 1
 
+	if v.SearchRadius == 0 {
+		v.SearchRadius = 60
+	}
+	if v.SearchRadiusUnit == "" {
+		v.SearchRadiusUnit = "nm"
+	}
+
 	if err := h.DB.CreateVoyage(&v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

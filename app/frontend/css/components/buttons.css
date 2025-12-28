@@ -1,0 +1,34 @@
+.button-base, .btn {
+  font-family: var(--font-primary);
+  font-weight: 900; /* Heavy weight is key to the look */
+  text-transform: uppercase; /* Often used */
+  background-color: var(--surface-bg-dim);
+  backdrop-filter: blur(10px);
+  border: 1px solid grey;
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s;
+  color: var(--brand-dark);
+}
+
+.button-base:hover, .btn:hover {
+  background-color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.btn.primary {
+  background-color: var(--brand-medium);
+  color: white;
+  border-color: var(--brand-dark);
+}
+
+.btn.primary:hover {
+  background-color: var(--brand-dark);
+}
+
+.btn.secondary {
+  background-color: var(--surface-bg);
+  color: var(--brand-dark);
+}
