@@ -1,11 +1,14 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"app/datastore"
 	"app/server/handlers"
 
+	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -22,7 +25,7 @@ func New(db datastore.Store) (*Server, error) {
 	h := handlers.New(db, docsService)
 
 	// Standard Middleware
-	r.Use(middleware.Logger)
+	r.Use(CustomLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},
@@ -70,6 +73,21 @@ func New(db datastore.Store) (*Server, error) {
 		Router: r,
 		DB:     db,
 	}, nil
+}
+
+func CustomLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+		next.ServeHTTP(ww, r)
+
+		// Calculate duration
+		str := time.Since(start).String()
+
+		// Log
+		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.Status(), str))
+	})
 }
 
 func (s *Server) Routes(contentDir string) {
