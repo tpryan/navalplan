@@ -24,6 +24,12 @@ run: build-js
 	# For convenience, you can add a local .env loader here
 	cd app/backend && go run main.go --content=./static.min
 
+# 2. RUN-BACKEND: Runs the Go backend without rebuilding JS (for dev)
+run-backend:
+	@echo "Starting NavalPlan backend (API Only)..."
+	mkdir -p app/backend/static.min
+	cd app/backend && go run main.go --content=./static.min
+
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
 	rm -rf app/backend/static.min
@@ -52,7 +58,7 @@ run-agent:
 dev:
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
-	@(trap 'kill 0' SIGINT; make run & make run-frontend & make run-agent & wait)
+	@(trap 'kill 0' SIGINT; make run-backend & make run-frontend & make run-agent & wait)
 
 # --- Database (Podman/Docker) ---
 

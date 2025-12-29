@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"app/datastore"
@@ -20,6 +21,7 @@ type Server struct {
 }
 
 func New(db datastore.Store) (*Server, error) {
+	log.SetOutput(os.Stderr)
 	r := chi.NewRouter()
 	docsService := handlers.NewGoogleDocsService()
 	h := handlers.New(db, docsService)
