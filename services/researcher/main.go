@@ -41,8 +41,8 @@ func main() {
 		Description: "Retrieves precise weather forecasts.",
 		Instruction: `
 			You are a Weather Specialist.
-			Your ONLY goal is to use the 'get_weather_forecast' tool to retrieve data for the requested location and date.
-			Return the tool output directly.
+			1. Use the 'get_weather_forecast' tool for the requested location and date.
+			2. You MUST reply to the user with the JSON output from the tool. Do not add conversational text, just the data.
 		`,
 		Tools: []tool.Tool{weatherTool},
 	})
@@ -58,7 +58,7 @@ func main() {
 		Instruction: `
 			You are a Web Search Specialist.
 			Your goal is to find specific information requested by the user using Google Search.
-			Synthesize the search results into a concise answer.
+			Do NOT synthesize or summarize extensively. Return the relevant search snippets or data points directly and concisely.
 		`,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
@@ -80,14 +80,9 @@ func main() {
 			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
 
 			EXECUTION PLAN:
-			1. WEATHER: 
-			   - Check the requested Date.
-			   - If the Date is within the next 10 days, call 'weather_specialist' with the exact date.
-			   - If the Date is far in the future (>10 days), do NOT call the tool with that future date. Instead, calculate the date for the *same day and month* but in the *previous year* (e.g. if target is 2025-12-28, ask for 2024-12-28) and call 'weather_specialist' with that historical date.
-			   - In your final summary, explicitly state: "Showing historical weather data from [Year] as an estimate."
-
+			1. WEATHER: Call the 'weather_specialist' tool to get precise forecast data.
 			2. TIDES & FACILITIES: Call the 'search_specialist' tool to find:
-			   - "Tide table for [Location] on [Date]"
+			   - "Tide table for [Location] for [Date], [Date - 1 day], and [Date + 1 day]" (We need surrounding days for context).
 			   - "Anchorages near [Location] details"
 			   - "Marina contact info [Location]"
 
@@ -102,8 +97,11 @@ func main() {
 					"wave_height_ft": 0
 				},
 				"tides": {
-					"station_name": "...",
-					"events": [{"time": "...", "type": "...", "height_ft": 0}]
+					"station_name": "Name of Tide Station",
+					"events": [
+						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5},
+						{"time": "2025-05-01 12:45", "type": "Low", "height_ft": 1.2}
+					]
 				},
 				"facilities": [
 					{
@@ -132,6 +130,13 @@ func main() {
 	config := &launcher.Config{
 		AgentLoader: agent.NewSingleLoader(researchAgent),
 	}
+
+	// Recovery for main process
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered from panic in main: %v", r)
+		}
+	}()
 
 	// Port handling for Cloud Run compatibility
 	port := os.Getenv("PORT")

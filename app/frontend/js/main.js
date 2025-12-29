@@ -1,4 +1,5 @@
 import mapboxgl from 'mapbox-gl';
+import Chart from 'chart.js/auto';
 import { API } from './api.js';
 import { exportToGoogleDocs } from './google_export.js';
 
@@ -396,6 +397,99 @@ async function handleResearchClick(stop, button) {
     }
 }
 
+function renderTideChart(canvasId, tideData, targetDateStr) {
+    if (!tideData || !tideData.events) return;
+
+    // Target Date Midnight
+    const targetDate = new Date(targetDateStr);
+    const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
+    const targetEnd = new Date(targetDate).setUTCHours(24,0,0,0);
+
+    // Parse Events
+    // Data: { time: "YYYY-MM-DD HH:MM", height_ft: 1.2 }
+    const points = [];
+    tideData.events.forEach(e => {
+        // Try parsing ISO or loose format
+        let d = new Date(e.time);
+        if (isNaN(d.getTime())) {
+            // Fallback for simple "HH:MM" (assume target date)
+            const parts = e.time.split(':');
+            if (parts.length >= 2) {
+                d = new Date(targetDate);
+                d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0);
+            }
+        }
+        
+        if (!isNaN(d.getTime())) {
+            // Calculate relative hour (-24 to +48 range is fine)
+            // But for chart logic, simple float hours relative to midnight is best
+            const diffMs = d.getTime() - targetStart;
+            const floatHours = diffMs / (1000 * 60 * 60);
+            points.push({ x: floatHours, y: e.height_ft });
+        }
+    });
+
+    points.sort((a, b) => a.x - b.x);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Tide Height (ft)',
+                data: points,
+                borderColor: '#0077be',
+                backgroundColor: 'rgba(0, 119, 190, 0.2)',
+                borderWidth: 2,
+                tension: 0.4, // Smooth Bezier
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (context) => {
+                            const val = context[0].parsed.x;
+                            const h = Math.floor(val);
+                            const m = Math.round((val - h) * 60);
+                            // Handle day overflow for label
+                            let label = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+                            if (h < 0) label += " (Prev Day)";
+                            if (h >= 24) label += " (Next Day)";
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    min: 0,
+                    max: 24,
+                    title: { display: true, text: 'Hour (Midnight to Midnight)' },
+                    ticks: {
+                        stepSize: 3,
+                        callback: (v) => {
+                            if (v < 0 || v > 24) return '';
+                            return `${v}:00`;
+                        }
+                    }
+                },
+                y: {
+                    title: { display: true, text: 'Feet' }
+                }
+            }
+        }
+    });
+}
+
 function showBriefing(briefing) {
     const modal = document.getElementById('modal-briefing');
     const content = document.getElementById('briefing-content');
@@ -424,8 +518,11 @@ function showBriefing(briefing) {
     const tidesHtml = `
         <div class="briefing-section">
             <h3>Tides (${tides.station_name || 'Unknown Station'})</h3>
-            <div class="tide-box">
-                <ul style="list-style:none; padding:0; margin:0;">${tideEvents || '<li>No tide data</li>'}</ul>
+            <div class="tide-box" style="margin-bottom:1rem;">
+                <div style="height:200px; width:100%; position:relative;">
+                    <canvas id="tideChartModal"></canvas>
+                </div>
+                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">${tideEvents || '<li>No tide data</li>'}</ul>
             </div>
         </div>
     `;
@@ -478,6 +575,15 @@ function showBriefing(briefing) {
     modal.classList.remove('hidden');
     modalOverlay.classList.remove('hidden');
 
+    // Render Chart (must happen after modal is visible for size calc)
+    if (tides.events && tides.events.length > 0) {
+        // Find the stop date to anchor the chart
+        const stop = currentStops.find(s => s.id === briefing.stop_id);
+        const targetDateStr = stop ? stop.target_date : new Date().toISOString(); // Fallback
+        
+        renderTideChart('tideChartModal', tides, targetDateStr);
+    }
+
     const hide = () => {
         modal.classList.add('hidden');
         modalOverlay.classList.add('hidden');
@@ -502,9 +608,18 @@ async function redoBriefing(oldBriefing, btn) {
         await API.triggerResearch(oldBriefing.stop_id);
         
         const oldTime = new Date(oldBriefing.created_at).getTime();
+        const startTime = Date.now();
+        const TIMEOUT_MS = 45000; // 45 seconds
         
         // Poll
         const poll = setInterval(async () => {
+            if (Date.now() - startTime > TIMEOUT_MS) {
+                clearInterval(poll);
+                content.innerHTML = '<div style="text-align:center; padding:2rem; color: #d9534f;"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
+                btn.disabled = false;
+                return;
+            }
+
             try {
                 const b = await API.getBriefing(oldBriefing.stop_id);
                 if (b) {
@@ -738,7 +853,12 @@ function clearMap() {
                 
                 // Tides
                 if (b.tides && b.tides.events) {
-                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'})</h3><ul>`;
+                    const canvasId = `tideChart_${idx}`;
+                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'})</h3>
+                             <div style="height:200px; width:100%; position:relative; margin-bottom:1rem;">
+                                <canvas id="${canvasId}"></canvas>
+                             </div>
+                             <ul>`;
                     b.tides.events.forEach(e => {
                         html += `<li>${e.time} - ${e.type} (${e.height_ft} ft)</li>`;
                     });
@@ -774,6 +894,14 @@ function clearMap() {
         content.innerHTML = html;
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
+
+        // Render all charts
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings[idx];
+            if (b && b.tides && b.tides.events) {
+                renderTideChart(`tideChart_${idx}`, b.tides, stop.target_date);
+            }
+        });
 
     } catch (err) {
         console.error(err);
