@@ -74,6 +74,7 @@ func main() {
 			EXECUTION PLAN:
 			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
 			2. TIDES & FACILITIES: Call the 'search_specialist' tool to find:
+			   - "Official NOAA tide station name and ID for [Location]"
 			   - "Tide table for [Location] for [Date], [Date - 1 day], and [Date + 1 day]" (We need surrounding days for context).
 			   - "Anchorages near [Location] details"
 			   - "Marina contact info [Location]"
@@ -97,7 +98,7 @@ func main() {
 					"debug_duration_ms": 0
 				},
 				"tides": {
-					"station_name": "Name of Tide Station",
+					"station_name": "Full Station Name and NOAA ID (if available)",
 					"events": [
 						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5},
 						{"time": "2025-05-01 12:45", "type": "Low", "height_ft": 1.2}
