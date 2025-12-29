@@ -4,3 +4,4 @@ app/backend/static.min
 app/frontend/dist
 app/frontend/node_modules
 config/navallog-sa.json
+services/researcher/researcher
