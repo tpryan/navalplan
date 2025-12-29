@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
+	"time"
 
 	clog "github.com/charmbracelet/log"
 	"github.com/tpryan/navalplan/services/researcher/tools"
@@ -40,23 +42,7 @@ func main() {
 		clog.Fatalf("Failed to create weather tool: %v", err)
 	}
 
-	// 2. Define Sub-Agent (Weather Specialist)
-	weatherAgent, err := llmagent.New(llmagent.Config{
-		Name:        "weather_specialist",
-		Model:       model,
-		Description: "Retrieves precise weather forecasts.",
-		Instruction: `
-			You are a Weather Specialist.
-			1. Use the 'get_weather_forecast' tool for the requested location and date.
-			2. You MUST reply to the user with the JSON output from the tool. Do not add conversational text, just the data.
-		`,
-		Tools: []tool.Tool{weatherTool},
-	})
-	if err != nil {
-		clog.Fatalf("Failed to create weather agent: %v", err)
-	}
-
-	// 3. Define Sub-Agent (Search Specialist)
+	// 2. Define Sub-Agent (Search Specialist)
 	searchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "search_specialist",
 		Model:       model,
@@ -74,7 +60,7 @@ func main() {
 		clog.Fatalf("Failed to create search agent: %v", err)
 	}
 
-	// 4. Define Parent Agent (Researcher / Orchestrator)
+	// 3. Define Parent Agent (Researcher / Orchestrator)
 	// We wrap sub-agents as tools using agenttool.New
 	researchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "researcher_agent",
@@ -86,7 +72,7 @@ func main() {
 			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
 
 			EXECUTION PLAN:
-			1. WEATHER: Call the 'weather_specialist' tool to get precise forecast data.
+			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
 			2. TIDES & FACILITIES: Call the 'search_specialist' tool to find:
 			   - "Tide table for [Location] for [Date], [Date - 1 day], and [Date + 1 day]" (We need surrounding days for context).
 			   - "Anchorages near [Location] details"
@@ -94,13 +80,21 @@ func main() {
 
 			OUTPUT:
 			Combine all findings into this JSON structure. Ensure "details" is always an object with descriptive keys, not a string.
+			For the weather_summary:
+			- summary: A professional, natural language summary of the conditions (e.g., "Expect clear skies with moderate westerly winds. This is a seasonal estimate based on historical averages."). Do NOT just concatenate the tool output; synthesize a readable sentence.
+			- wind_speed_kt: The numerical maximum wind speed in knots.
+			- wind_direction: The cardinal direction (e.g. "NW").
+			- wave_height_ft: The numerical maximum wave height in feet.
+			- debug_duration_ms: The performance timing from the tool.
+
 			{
 				"location_name": "Resolved Name",
 				"weather_summary": {
 					"summary": "...",
 					"wind_speed_kt": 0,
 					"wind_direction": "...",
-					"wave_height_ft": 0
+					"wave_height_ft": 0,
+					"debug_duration_ms": 0
 				},
 				"tides": {
 					"station_name": "Name of Tide Station",
@@ -124,9 +118,11 @@ func main() {
 			}
 		`,
 		Tools: []tool.Tool{
-			agenttool.New(weatherAgent, nil),
+			weatherTool,
 			agenttool.New(searchAgent, nil),
 		},
+		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:  []llmagent.AfterToolCallback{onAfterTool},
 	})
 	if err != nil {
 		clog.Fatalf("Failed to create agent: %v", err)
@@ -155,4 +151,19 @@ func main() {
 	if err != nil {
 		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}
+}
+
+var toolTimings sync.Map
+
+func onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
+	toolTimings.Store(ctx.FunctionCallID(), time.Now())
+	return nil, nil
+}
+
+func onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
+	if startTime, ok := toolTimings.LoadAndDelete(ctx.FunctionCallID()); ok {
+		duration := time.Since(startTime.(time.Time))
+		clog.Info("Tool performance", "tool", t.Name(), "duration", duration)
+	}
+	return result, nil
 }

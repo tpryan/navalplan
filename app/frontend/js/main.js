@@ -505,8 +505,8 @@ function showBriefing(briefing) {
             <div class="weather-box">
                 <p><strong>Summary:</strong> ${weather.summary || 'N/A'}</p>
                 <div class="briefing-grid">
-                    <div><strong>Wind:</strong> ${weather.wind_direction || '-'} ${weather.wind_speed_kt || '-'} kt</div>
-                    <div><strong>Waves:</strong> ${weather.wave_height_ft || '-'} ft</div>
+                    <div><strong>Wind:</strong> ${weather.wind_direction || 'N/A'} ${weather.wind_speed_kt || '0'} kt</div>
+                    ${weather.wave_height_ft > 0 ? `<div><strong>Waves:</strong> ${weather.wave_height_ft} ft</div>` : ''}
                 </div>
             </div>
         </div>
@@ -845,8 +845,8 @@ function clearMap() {
                         <h3>Weather</h3>
                         <p>${w.summary || 'No summary available.'}</p>
                         <ul>
-                            <li>Wind: ${w.wind_direction || '-'} ${w.wind_speed_kt || '-'} kt</li>
-                            <li>Waves: ${w.wave_height_ft || '-'} ft</li>
+                            <li>Wind: ${w.wind_direction || 'N/A'} ${w.wind_speed_kt || '0'} kt</li>
+                            ${w.wave_height_ft > 0 ? `<li>Waves: ${w.wave_height_ft} ft</li>` : ''}
                         </ul>
                     `;
                 }

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tpryan/openmeteogo"
@@ -16,18 +17,21 @@ type WeatherArgs struct {
 }
 
 type WeatherResult struct {
-	Date          string  `json:"date"`
-	Summary       string  `json:"summary"`
-	MaxTemp       float64 `json:"max_temp"`
-	MinTemp       float64 `json:"min_temp"`
-	MaxWindKts    float64 `json:"max_wind_kts"`
-	MaxGustsKts   float64 `json:"max_gusts_kts"`
-	WindDirDeg    int     `json:"wind_dir_deg"`
-	PrecipTotal   float64 `json:"precip_total"`
-	WaveHeight    float64 `json:"wave_height,omitempty"`
-	WaveDirection float64 `json:"wave_direction,omitempty"`
-	WavePeriod    float64 `json:"wave_period,omitempty"`
-	Error         string  `json:"error,omitempty"`
+	Date            string  `json:"date"`
+	Condition       string  `json:"condition"`
+	ForecastType    string  `json:"forecast_type"`
+	MaxTemp         float64 `json:"max_temp"`
+	MinTemp         float64 `json:"min_temp"`
+	MaxWindKts      float64 `json:"max_wind_kts"`
+	MaxGustsKts     float64 `json:"max_gusts_kts"`
+	WindDirDeg      int     `json:"wind_dir_deg"`
+	WindDirection   string  `json:"wind_direction"`
+	PrecipTotal     float64 `json:"precip_total"`
+	WaveHeight      float64 `json:"wave_height"`
+	WaveDirection   float64 `json:"wave_direction"`
+	WavePeriod      float64 `json:"wave_period"`
+	DebugDurationMS int64   `json:"debug_duration_ms"`
+	Error           string  `json:"error,omitempty"`
 }
 
 func NewWeatherTool() (tool.Tool, error) {
@@ -35,6 +39,7 @@ func NewWeatherTool() (tool.Tool, error) {
 		Name:        "get_weather_forecast",
 		Description: "Retrieves precise weather forecasts (Wind, Gusts, Temp, Waves) for a specific location and date.",
 	}, func(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {
+		start := time.Now()
 		// 1. Parse Inputs
 		targetDate, err := time.Parse("2006-01-02", args.Date)
 		if err != nil {
@@ -101,11 +106,28 @@ func NewWeatherTool() (tool.Tool, error) {
 			}).
 			Build()
 
-		// 6. Fetch Data (Weather)
-		weather, err := c.Get(weatherOpts)
-		if err != nil {
-			fmt.Printf("OpenMeteo Weather Error: %v\n", err)
-			return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", err)}, nil
+		// 6. Fetch Data (Parallel Weather and Marine)
+		var weather, marine *openmeteogo.WeatherData
+		var weatherErr, marineErr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			weather, weatherErr = c.Get(weatherOpts)
+		}()
+
+		go func() {
+			defer wg.Done()
+			marine, marineErr = c.Get(marineOpts)
+		}()
+
+		wg.Wait()
+
+		// Handle Weather Error
+		if weatherErr != nil {
+			fmt.Printf("OpenMeteo Weather Error: %v\n", weatherErr)
+			return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", weatherErr)}, nil
 		}
 
 		if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
@@ -113,13 +135,12 @@ func NewWeatherTool() (tool.Tool, error) {
 			return WeatherResult{Error: "No weather data returned."}, nil
 		}
 
-		// 7. Fetch Data (Marine)
+		// 7. Process Marine Data
 		// We treat marine errors as non-fatal (e.g. location might be on land, or date out of range)
-		marine, err := c.Get(marineOpts)
 		var waveHeight, waveDir, wavePeriod float64
-		if err == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
+		if marineErr == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
 			if len(marine.Daily.WaveHeightMax) > 0 {
-				waveHeight = marine.Daily.WaveHeightMax[0]
+				waveHeight = marine.Daily.WaveHeightMax[0] * 3.28084 // Convert meters to feet
 			}
 			if len(marine.Daily.WaveDirectionDominant) > 0 {
 				waveDir = marine.Daily.WaveDirectionDominant[0]
@@ -127,25 +148,24 @@ func NewWeatherTool() (tool.Tool, error) {
 			if len(marine.Daily.WavePeriodMax) > 0 {
 				wavePeriod = marine.Daily.WavePeriodMax[0]
 			}
-		} else if err != nil {
+		} else if marineErr != nil {
 			// Don't log error for seasonal dates as it's expected to fail/be empty for marine
 			if !isSeasonal {
-				fmt.Printf("OpenMeteo Marine Error (ignoring): %v\n", err)
+				fmt.Printf("OpenMeteo Marine Error (ignoring): %v\n", marineErr)
 			}
 		}
 
-		// Handle missing weather code (Seasonal might rarely omit it, though test showed it works)
-		var desc string
+		// Handle missing weather code
+		condition := "Unknown weather"
 		if len(weather.Daily.WeatherCode) > 0 {
-			desc = openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
-		} else {
-			desc = "Unknown weather"
+			condition = openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
 		}
 
+		forecastType := "Standard"
 		if isSeasonal {
-			desc = fmt.Sprintf("[Seasonal Forecast] %s", desc)
+			forecastType = "Seasonal"
 		} else if isEstimate {
-			desc = fmt.Sprintf("[Historical Estimate from %d] %s", targetDate.Year(), desc)
+			forecastType = fmt.Sprintf("Historical Estimate (%d)", targetDate.Year())
 		}
 
 		// Handle potentially missing metrics in Seasonal response
@@ -172,17 +192,26 @@ func NewWeatherTool() (tool.Tool, error) {
 		}
 
 		return WeatherResult{
-			Date:          weather.Daily.Time[0],
-			Summary:       desc,
-			MaxTemp:       maxTemp,
-			MinTemp:       minTemp,
-			MaxWindKts:    maxWind,
-			MaxGustsKts:   maxGusts,
-			WindDirDeg:    windDir,
-			PrecipTotal:   precip,
-			WaveHeight:    waveHeight,
-			WaveDirection: waveDir,
-			WavePeriod:    wavePeriod,
+			Date:            weather.Daily.Time[0],
+			Condition:       condition,
+			ForecastType:    forecastType,
+			MaxTemp:         maxTemp,
+			MinTemp:         minTemp,
+			MaxWindKts:      maxWind,
+			MaxGustsKts:     maxGusts,
+			WindDirDeg:      windDir,
+			WindDirection:   degreesToDirection(float64(windDir)),
+			PrecipTotal:     precip,
+			WaveHeight:      waveHeight,
+			WaveDirection:   waveDir,
+			WavePeriod:      wavePeriod,
+			DebugDurationMS: time.Since(start).Milliseconds(),
 		}, nil
 	})
+}
+
+func degreesToDirection(deg float64) string {
+	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
+	index := int((deg + 11.25) / 22.5)
+	return directions[index%16]
 }
