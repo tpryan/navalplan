@@ -692,8 +692,8 @@ function initMap() {
   map = new mapboxgl.Map({
     container: 'map-container',
     style: __MAPBOX_STYLE__,
-    center: [-123.0, 48.5], // Salish Sea
-    zoom: 8
+    center: [-98.5795, 39.8283], // Center of USA
+    zoom: 3
   });
 
   map.on('load', () => {
