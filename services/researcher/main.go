@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
+	"github.com/charmbracelet/log"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
