@@ -41,23 +41,28 @@ func NewWeatherTool() (tool.Tool, error) {
 			return WeatherResult{Error: fmt.Sprintf("invalid date format: %v", err)}, nil
 		}
 
-		// 2. Auto-adjust for Future Dates (Climate Estimate)
+		// 2. Auto-adjust for Future Dates (Climate Estimate vs Seasonal)
 		// OpenMeteo forecast is valid for ~14 days.
+		// Seasonal forecast is valid for ~6 months (180 days).
 		// If request is further out, shift to previous year to get historical data.
 		isEstimate := false
+		isSeasonal := false
 		daysUntil := time.Until(targetDate).Hours() / 24
 
 		if daysUntil > 14 {
-			isEstimate = true
-			// Shift back 1 year (or more if needed to be in past)
-			// Simple logic: just -1 year for now
-			targetDate = targetDate.AddDate(-1, 0, 0)
+			if daysUntil < 180 {
+				isSeasonal = true
+			} else {
+				isEstimate = true
+				// Shift back 1 year (or more if needed to be in past)
+				targetDate = targetDate.AddDate(-1, 0, 0)
+			}
 		}
 		// 3. Initialize Client
 		c := openmeteogo.NewClient()
 
 		// 4. Build Options for Weather
-		weatherOpts := openmeteogo.NewOptionsBuilder().
+		weatherOptsBuilder := openmeteogo.NewOptionsBuilder().
 			Latitude(args.Latitude).
 			Longitude(args.Longitude).
 			TemperatureUnit(openmeteogo.Fahrenheit).
@@ -72,10 +77,17 @@ func NewWeatherTool() (tool.Tool, error) {
 				openmeteogo.WindGusts10mMax,
 				openmeteogo.WindDirection10mDominant,
 				openmeteogo.PrecipitationSum,
-			}).
-			Build()
+			})
+
+		if isSeasonal {
+			weatherOptsBuilder.Seasonal(true)
+		}
+
+		weatherOpts := weatherOptsBuilder.Build()
 
 		// 5. Build Options for Marine
+		// Marine forecasts generally don't extend to seasonal range in the standard API.
+		// We will try anyway; if empty, we just handle it.
 		marineOpts := openmeteogo.NewOptionsBuilder().
 			Latitude(args.Latitude).
 			Longitude(args.Longitude).
@@ -102,7 +114,7 @@ func NewWeatherTool() (tool.Tool, error) {
 		}
 
 		// 7. Fetch Data (Marine)
-		// We treat marine errors as non-fatal (e.g. location might be on land)
+		// We treat marine errors as non-fatal (e.g. location might be on land, or date out of range)
 		marine, err := c.Get(marineOpts)
 		var waveHeight, waveDir, wavePeriod float64
 		if err == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
@@ -116,28 +128,58 @@ func NewWeatherTool() (tool.Tool, error) {
 				wavePeriod = marine.Daily.WavePeriodMax[0]
 			}
 		} else if err != nil {
-			fmt.Printf("OpenMeteo Marine Error (ignoring): %v\n", err)
+			// Don't log error for seasonal dates as it's expected to fail/be empty for marine
+			if !isSeasonal {
+				fmt.Printf("OpenMeteo Marine Error (ignoring): %v\n", err)
+			}
 		}
 
-		if len(weather.Daily.WeatherCode) == 0 {
-			return WeatherResult{Error: "Weather code missing."}, nil
+		// Handle missing weather code (Seasonal might rarely omit it, though test showed it works)
+		var desc string
+		if len(weather.Daily.WeatherCode) > 0 {
+			desc = openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
+		} else {
+			desc = "Unknown weather"
 		}
 
-		desc := openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
-
-		if isEstimate {
+		if isSeasonal {
+			desc = fmt.Sprintf("[Seasonal Forecast] %s", desc)
+		} else if isEstimate {
 			desc = fmt.Sprintf("[Historical Estimate from %d] %s", targetDate.Year(), desc)
+		}
+
+		// Handle potentially missing metrics in Seasonal response
+		var maxTemp, minTemp, maxWind, maxGusts, precip float64
+		var windDir int
+
+		if len(weather.Daily.Temperature2mMax) > 0 {
+			maxTemp = weather.Daily.Temperature2mMax[0]
+		}
+		if len(weather.Daily.Temperature2mMin) > 0 {
+			minTemp = weather.Daily.Temperature2mMin[0]
+		}
+		if len(weather.Daily.WindSpeed10mMax) > 0 {
+			maxWind = weather.Daily.WindSpeed10mMax[0]
+		}
+		if len(weather.Daily.WindGusts10mMax) > 0 {
+			maxGusts = weather.Daily.WindGusts10mMax[0]
+		}
+		if len(weather.Daily.WindDirection10mDominant) > 0 {
+			windDir = weather.Daily.WindDirection10mDominant[0]
+		}
+		if len(weather.Daily.PrecipitationSum) > 0 {
+			precip = weather.Daily.PrecipitationSum[0]
 		}
 
 		return WeatherResult{
 			Date:          weather.Daily.Time[0],
 			Summary:       desc,
-			MaxTemp:       weather.Daily.Temperature2mMax[0],
-			MinTemp:       weather.Daily.Temperature2mMin[0],
-			MaxWindKts:    weather.Daily.WindSpeed10mMax[0],
-			MaxGustsKts:   weather.Daily.WindGusts10mMax[0],
-			WindDirDeg:    weather.Daily.WindDirection10mDominant[0],
-			PrecipTotal:   weather.Daily.PrecipitationSum[0],
+			MaxTemp:       maxTemp,
+			MinTemp:       minTemp,
+			MaxWindKts:    maxWind,
+			MaxGustsKts:   maxGusts,
+			WindDirDeg:    windDir,
+			PrecipTotal:   precip,
 			WaveHeight:    waveHeight,
 			WaveDirection: waveDir,
 			WavePeriod:    wavePeriod,
