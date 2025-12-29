@@ -497,15 +497,21 @@ function showBriefing(briefing) {
     const btnRedo = document.getElementById('btn-redo-briefing');
     const modalOverlay = document.getElementById('modal-overlay');
 
+    const isInvalid = (v) => {
+        if (!v) return true;
+        const sv = String(v).toLowerCase().trim();
+        return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
+    };
+
     // Weather
     const weather = briefing.weather_summary || {};
     const weatherHtml = `
         <div class="briefing-section">
             <h3>Weather</h3>
             <div class="weather-box">
-                <p><strong>Summary:</strong> ${weather.summary || 'N/A'}</p>
+                <p><strong>Summary:</strong> ${isInvalid(weather.summary) ? 'N/A' : weather.summary}</p>
                 <div class="briefing-grid">
-                    <div><strong>Wind:</strong> ${weather.wind_direction || 'N/A'} ${weather.wind_speed_kt || '0'} kt</div>
+                    <div><strong>Wind:</strong> ${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</div>
                     ${weather.wave_height_ft > 0 ? `<div><strong>Waves:</strong> ${weather.wave_height_ft} ft</div>` : ''}
                 </div>
             </div>
@@ -540,7 +546,11 @@ function showBriefing(briefing) {
                     } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
                         const rows = Object.entries(f.details)
-                            .filter(([_, v]) => v && v !== 'N/A' && v !== '')
+                            .filter(([_, v]) => {
+                                if (!v) return false;
+                                const sv = String(v).toLowerCase().trim();
+                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
+                            })
                             .map(([k, v]) => `
                                 <tr>
                                     <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">${k.replace(/_/g, ' ')}</td>
@@ -838,14 +848,20 @@ function clearMap() {
             `;
             
             if (b) {
+                 const isInvalid = (v) => {
+                    if (!v) return true;
+                    const sv = String(v).toLowerCase().trim();
+                    return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
+                 };
+
                  // Weather
                 if (b.weather_summary) {
                     const w = b.weather_summary;
                     html += `
                         <h3>Weather</h3>
-                        <p>${w.summary || 'No summary available.'}</p>
+                        <p>${isInvalid(w.summary) ? 'No summary available.' : w.summary}</p>
                         <ul>
-                            <li>Wind: ${w.wind_direction || 'N/A'} ${w.wind_speed_kt || '0'} kt</li>
+                            <li>Wind: ${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</li>
                             ${w.wave_height_ft > 0 ? `<li>Waves: ${w.wave_height_ft} ft</li>` : ''}
                         </ul>
                     `;
@@ -871,11 +887,20 @@ function clearMap() {
                      b.facilities.forEach(f => {
                          html += `<p><strong>${f.name}</strong> (${f.type})</p>`;
                          if (f.details) {
-                             html += `<ul style="font-size: 0.9em; color: #555;">`;
-                             for (const [k, v] of Object.entries(f.details)) {
-                                 html += `<li>${k}: ${v}</li>`;
+                             const entries = Object.entries(f.details)
+                                .filter(([_, v]) => {
+                                    if (!v) return false;
+                                    const sv = String(v).toLowerCase().trim();
+                                    return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
+                                });
+                             
+                             if (entries.length > 0) {
+                                html += `<ul style="font-size: 0.9em; color: #555;">`;
+                                for (const [k, v] of entries) {
+                                    html += `<li><strong style="text-transform:capitalize;">${k.replace(/_/g, ' ')}:</strong> ${v}</li>`;
+                                }
+                                html += `</ul>`;
                              }
-                             html += `</ul>`;
                          }
                      });
                 }
