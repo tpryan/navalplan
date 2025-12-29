@@ -114,7 +114,7 @@
   transform: scale(1.1);
 }
 
-.btn-icon.delete:hover {
+.btn-icon.delete:hover, .btn-icon.delete-stop:hover {
   color: #d9534f;
 }
 

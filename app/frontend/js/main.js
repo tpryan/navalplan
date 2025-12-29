@@ -341,6 +341,9 @@ function renderItinerary() {
                     <button class="btn-icon research" title="Research">
                         <span class="material-symbols-outlined">science</span>
                     </button>
+                    <button class="btn-icon delete-stop" title="Delete Stop">
+                        <span class="material-symbols-outlined">delete</span>
+                    </button>
                 </div>
             `;
         }
@@ -355,6 +358,22 @@ function renderItinerary() {
             btnResearch.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleResearchClick(stop, btnResearch);
+            });
+
+            const btnDelete = el.querySelector('.delete-stop');
+            btnDelete.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (confirm(`Remove stop at ${stop.location_name}?`)) {
+                    try {
+                        await API.deleteStop(stop.id);
+                        currentStops = currentStops.filter(s => s.id !== stop.id);
+                        renderItinerary();
+                        renderMapStops();
+                    } catch (err) {
+                        console.error(err);
+                        alert('Failed to delete stop');
+                    }
+                }
             });
         }
 

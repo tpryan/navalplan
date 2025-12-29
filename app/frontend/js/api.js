@@ -80,6 +80,14 @@ export const API = {
     return res.json();
   },
 
+  async deleteStop(stopId) {
+    const res = await fetch(`${API_BASE}/stops/${stopId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete stop');
+    return res.json();
+  },
+
   async exportVoyage(voyageId) {
     const res = await fetch(`${API_BASE}/voyages/${voyageId}/export`, {
         method: 'POST',
