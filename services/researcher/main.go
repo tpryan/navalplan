@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 
-	"github.com/charmbracelet/log"
+	clog "github.com/charmbracelet/log"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -18,6 +19,11 @@ import (
 )
 
 func main() {
+	// Set output for both standard log and charmbracelet log
+	log.SetOutput(os.Stdout)
+	clog.SetOutput(os.Stdout)
+	clog.SetLevel(clog.DebugLevel)
+
 	ctx := context.Background()
 
 	// 1. Initialize Gemini Model
@@ -26,12 +32,12 @@ func main() {
 		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
 	if err != nil {
-		log.Fatalf("Failed to create model: %v", err)
+		clog.Fatalf("Failed to create model: %v", err)
 	}
 
 	weatherTool, err := tools.NewWeatherTool()
 	if err != nil {
-		log.Fatalf("Failed to create weather tool: %v", err)
+		clog.Fatalf("Failed to create weather tool: %v", err)
 	}
 
 	// 2. Define Sub-Agent (Weather Specialist)
@@ -47,7 +53,7 @@ func main() {
 		Tools: []tool.Tool{weatherTool},
 	})
 	if err != nil {
-		log.Fatalf("Failed to create weather agent: %v", err)
+		clog.Fatalf("Failed to create weather agent: %v", err)
 	}
 
 	// 3. Define Sub-Agent (Search Specialist)
@@ -65,7 +71,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatalf("Failed to create search agent: %v", err)
+		clog.Fatalf("Failed to create search agent: %v", err)
 	}
 
 	// 4. Define Parent Agent (Researcher / Orchestrator)
@@ -123,7 +129,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
+		clog.Fatalf("Failed to create agent: %v", err)
 	}
 
 	// 5. Launch the Server
@@ -134,7 +140,7 @@ func main() {
 	// Recovery for main process
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in main: %v", r)
+			clog.Printf("Recovered from panic in main: %v", r)
 		}
 	}()
 
@@ -145,8 +151,8 @@ func main() {
 	}
 
 	l := full.NewLauncher()
-	err = l.Execute(ctx, config, []string{"web", "-port", port, "api"})
+	err = l.Execute(ctx, config, []string{"web", "-read-timeout", "60s", "-write-timeout", "60s", "-port", port, "api"})
 	if err != nil {
-		log.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
+		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}
 }

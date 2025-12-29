@@ -74,7 +74,7 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
 		if agentURL == "" {
-			agentURL = "http://localhost:8081"
+			agentURL = "http://127.0.0.1:8081"
 		}
 
 		appName := "researcher_agent"

@@ -22,6 +22,7 @@ type Server struct {
 
 func New(db datastore.Store) (*Server, error) {
 	log.SetOutput(os.Stderr)
+	log.SetPrefix("backend")
 	r := chi.NewRouter()
 	docsService := handlers.NewGoogleDocsService()
 	h := handlers.New(db, docsService)
