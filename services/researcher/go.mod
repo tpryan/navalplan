@@ -3,7 +3,7 @@ module github.com/tpryan/navalplan/services/researcher
 go 1.25.4
 
 require (
-	github.com/tpryan/openmeteogo v1.0.1
+	github.com/tpryan/openmeteogo v1.2.0
 	google.golang.org/adk v0.3.0
 	google.golang.org/genai v1.40.0
 )
