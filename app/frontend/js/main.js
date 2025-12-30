@@ -34,6 +34,7 @@ function initUI() {
   const formNewVoyage = document.getElementById('form-new-voyage');
   const btnBack = document.getElementById('btn-back-voyages');
   const btnExport = document.getElementById('btn-export-voyage');
+  const btnEditVoyage = document.getElementById('btn-edit-voyage');
 
   const btnUseMapCenter = document.getElementById('btn-use-map-center');
   const displayCoords = document.getElementById('voyage-coords-display');
@@ -111,13 +112,19 @@ function initUI() {
     };
 
     try {
+      let savedVoyage;
       if (editingVoyageId) {
-        await API.updateVoyage(editingVoyageId, voyageData);
+        savedVoyage = await API.updateVoyage(editingVoyageId, voyageData);
       } else {
-        await API.createVoyage(voyageData);
+        savedVoyage = await API.createVoyage(voyageData);
       }
       closeModal();
       loadVoyages(); // Refresh list
+
+      // If we are currently viewing this voyage, refresh the view
+      if (currentVoyage && currentVoyage.id === savedVoyage.id) {
+        selectVoyage(savedVoyage);
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to save voyage. Check console.');
@@ -132,6 +139,15 @@ function initUI() {
   // Export Button
   if (btnExport) {
     btnExport.addEventListener('click', handleShowReport);
+  }
+
+  // Edit Voyage Button (Itinerary View)
+  if (btnEditVoyage) {
+    btnEditVoyage.addEventListener('click', () => {
+      if (currentVoyage) {
+        openEditModal(currentVoyage);
+      }
+    });
   }
 
   // Report Modal Close Handler
@@ -279,14 +295,18 @@ function showVoyageList() {
     clearMap();
 }
 
+function updateItineraryHeader(voyage) {
+    document.getElementById('itinerary-title').textContent = voyage.title;
+    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}`;
+}
+
 async function selectVoyage(voyage) {
     currentVoyage = voyage;
     document.getElementById('voyage-list').classList.add('hidden');
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
 
-    document.getElementById('itinerary-title').textContent = voyage.title;
-    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}`;
+    updateItineraryHeader(voyage);
 
     // Load Stops
     try {
