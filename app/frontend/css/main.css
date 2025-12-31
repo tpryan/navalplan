@@ -25,3 +25,55 @@
     font-family: var(--font-primary);
     padding-left: 1rem;
 }
+
+/* --- Briefing Component Styles --- */
+.briefing-header-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.briefing-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    color: var(--text-dark);
+}
+
+.briefing-table thead {
+    background: rgba(0,0,0,0.05);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.briefing-th {
+    text-align: left;
+    font-weight: bold;
+    padding: 4px 8px;
+    vertical-align: top;
+}
+
+.briefing-td {
+    padding: 4px 8px;
+    vertical-align: top;
+}
+
+.briefing-td-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.briefing-table-label-width {
+    width: 100px;
+}
+
+.briefing-note {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 0.5rem;
+}
+
+.briefing-no-data {
+    padding: 8px;
+}

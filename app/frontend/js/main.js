@@ -550,31 +550,31 @@ function showBriefing(briefing) {
     const weather = briefing.weather_summary || {};
     const weatherHtml = `
         <div class="briefing-section">
-            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+            <h3 class="briefing-header-icon">
                 <span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span>
                 Weather
             </h3>
             <div class="weather-box">
-                <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
+                <table class="briefing-table">
                     <tr>
-                        <td style="font-weight:bold; padding:4px 8px; width:100px; vertical-align:top;">Summary</td>
-                        <td style="padding:4px 8px;">${isInvalid(weather.summary) ? 'N/A' : weather.summary}</td>
+                        <th class="briefing-th briefing-table-label-width">Summary</th>
+                        <td class="briefing-td">${isInvalid(weather.summary) ? 'N/A' : weather.summary}</td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
-                        <td style="padding:4px 8px; display:flex; align-items:center; gap:0.5rem;">
+                        <th class="briefing-th">Conditions</th>
+                        <td class="briefing-td briefing-td-icon">
                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(weather.condition)}</span>
                             ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
                         </td>
                     </tr>
                     <tr>
-                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
-                        <td style="padding:4px 8px;">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
+                        <th class="briefing-th">Wind</th>
+                        <td class="briefing-td">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
                     </tr>
                     ${weather.wave_height_ft > 0 ? `
                     <tr>
-                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Waves</td>
-                        <td style="padding:4px 8px;">${weather.wave_height_ft} ft</td>
+                        <th class="briefing-th">Waves</th>
+                        <td class="briefing-td">${weather.wave_height_ft} ft</td>
                     </tr>
                     ` : ''}
                 </table>
@@ -587,54 +587,55 @@ function showBriefing(briefing) {
     const tides = briefing.tides || {};
     const allEvents = tides.events || [];
     const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
+    
+    // Fix: Define displayDateHeader
+    const [y, m, d] = targetDateYMD.split('-');
+    const displayDateHeader = `${m}/${d}/${y}`;
 
     const tideEventsHtml = displayEvents.map(e => {
-        let dateStr = e.time;
+        let timeStr = e.time;
         try {
             const d = new Date(e.time.replace(' ', 'T'));
             if (!isNaN(d.getTime())) {
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                const yyyy = d.getFullYear();
                 let hours = d.getHours();
                 const minutes = String(d.getMinutes()).padStart(2, '0');
                 const ampm = hours >= 12 ? 'pm' : 'am';
                 hours = hours % 12;
                 hours = hours ? hours : 12;
-                dateStr = `${mm}/${dd}/${yyyy} ${hours}:${minutes} ${ampm}`;
+                timeStr = `${hours}:${minutes} ${ampm}`;
             }
         } catch (ignore) {}
 
         return `<tr>
-            <td style="padding:4px 8px;">${dateStr}</td>
-            <td style="padding:4px 8px;">${e.type}</td>
-            <td style="padding:4px 8px;">${e.height_ft} ft</td>
+            <td class="briefing-td">${timeStr}</td>
+            <td class="briefing-td">${e.type}</td>
+            <td class="briefing-td">${e.height_ft} ft</td>
         </tr>`;
     }).join('');
     
     const tidesHtml = `
         <div class="briefing-section">
-            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+            <h3 class="briefing-header-icon">
                 <span class="material-symbols-outlined">waves</span>
-                Tides (${tides.station_name || 'Unknown Station'}) - Local Time - ${targetDateYMD}
+                Tides (${tides.station_name || 'Unknown Station'}) - ${displayDateHeader}
             </h3>
             <div class="tide-box" style="margin-bottom:1rem;">
                 <div style="height:200px; width:100%; position:relative;">
                     <canvas id="tideChartModal"></canvas>
                 </div>
-                <table style="width:100%; margin-top:1rem; border-collapse: collapse; font-size:0.9em; color:#333;">
-                    <thead style="background:rgba(0,0,0,0.05); border-bottom:1px solid #ccc;">
+                <table class="briefing-table">
+                    <thead>
                         <tr>
-                            <th style="text-align:left; padding:4px 8px;">Date</th>
-                            <th style="text-align:left; padding:4px 8px;">Type</th>
-                            <th style="text-align:left; padding:4px 8px;">Height</th>
+                            <th class="briefing-th">Time</th>
+                            <th class="briefing-th">Type</th>
+                            <th class="briefing-th">Height</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${tideEventsHtml || '<tr><td colspan="3" style="padding:8px;">No tide data for this date</td></tr>'}
+                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
                     </tbody>
                 </table>
-                <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period. List shows events on ${targetDateYMD} only.</p>
+                <p class="briefing-note">* Graph shows 24h period. List shows events on ${targetDateYMD} only.</p>
             </div>
         </div>
     `;
@@ -643,7 +644,7 @@ function showBriefing(briefing) {
     const facilities = briefing.facilities || [];
     const facilHtml = `
         <div class="briefing-section">
-            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+            <h3 class="briefing-header-icon">
                 <span class="material-symbols-outlined">warehouse</span>
                 Facilities
             </h3>
@@ -663,8 +664,8 @@ function showBriefing(briefing) {
                         // Table format for details
                         let rows = `
                             <tr>
-                                <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">Type</td>
-                                <td>${f.type}</td>
+                                <th class="briefing-th">Type</th>
+                                <td class="briefing-td">${f.type}</td>
                             </tr>
                         `;
                         
@@ -676,17 +677,17 @@ function showBriefing(briefing) {
                             })
                             .map(([k, v]) => `
                                 <tr>
-                                    <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">${k.replace(/_/g, ' ')}</td>
-                                    <td>${v}</td>
+                                    <th class="briefing-th" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
                     }
 
                     return `
                         <li class="facility-item">
-                            <h4 style="display:flex; align-items:center; gap:0.5rem;">
+                            <h4 class="briefing-header-icon">
                                 <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
                                 ${f.name}
                             </h4>
@@ -980,31 +981,31 @@ function clearMap() {
                     const w = b.weather_summary;
                     html += `
                         <div class="briefing-section">
-                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                            <h3 class="briefing-header-icon">
                                 <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
                                 Weather
                             </h3>
                             <div class="weather-box">
-                                <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
+                                <table class="briefing-table">
                                     <tr>
-                                        <td style="font-weight:bold; padding:4px 8px; width:100px; vertical-align:top;">Summary</td>
-                                        <td style="padding:4px 8px;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                        <th class="briefing-th briefing-table-label-width">Summary</th>
+                                        <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
                                     <tr>
-                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
-                                        <td style="padding:4px 8px; display:flex; align-items:center; gap:0.5rem;">
+                                        <th class="briefing-th">Conditions</th>
+                                        <td class="briefing-td briefing-td-icon">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
-                                        <td style="padding:4px 8px;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                        <th class="briefing-th">Wind</th>
+                                        <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
                                     <tr>
-                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Waves</td>
-                                        <td style="padding:4px 8px;">${w.wave_height_ft} ft</td>
+                                        <th class="briefing-th">Waves</th>
+                                        <td class="briefing-td">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -1020,52 +1021,52 @@ function clearMap() {
                     const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
                     
                     const tideEventsHtml = displayEvents.map(e => {
-                        let dateStr = e.time;
+                        let timeStr = e.time;
                         try {
                             const d = new Date(e.time.replace(' ', 'T'));
                             if (!isNaN(d.getTime())) {
-                                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                                const dd = String(d.getDate()).padStart(2, '0');
-                                const yyyy = d.getFullYear();
                                 let hours = d.getHours();
                                 const minutes = String(d.getMinutes()).padStart(2, '0');
                                 const ampm = hours >= 12 ? 'pm' : 'am';
                                 hours = hours % 12;
                                 hours = hours ? hours : 12;
-                                dateStr = `${mm}/${dd}/${yyyy} ${hours}:${minutes} ${ampm}`;
+                                timeStr = `${hours}:${minutes} ${ampm}`;
                             }
                         } catch (ignore) {}
 
                         return `<tr>
-                            <td style="padding:4px 8px;">${dateStr}</td>
-                            <td style="padding:4px 8px;">${e.type}</td>
-                            <td style="padding:4px 8px;">${e.height_ft} ft</td>
+                            <td class="briefing-td">${timeStr}</td>
+                            <td class="briefing-td">${e.type}</td>
+                            <td class="briefing-td">${e.height_ft} ft</td>
                         </tr>`;
                     }).join('');
 
+                    const [y, m, d] = targetDateYMD.split('-');
+                    const displayDateHeader = `${m}/${d}/${y}`;
+
                     html += `
                         <div class="briefing-section">
-                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                            <h3 class="briefing-header-icon">
                                 <span class="material-symbols-outlined">waves</span>
-                                Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}
+                                Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
                             </h3>
                             <div class="tide-box" style="margin-bottom:1rem;">
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
                                 </div>
-                                <table style="width:100%; margin-top:1rem; border-collapse: collapse; font-size:0.9em; color:#333;">
-                                    <thead style="background:rgba(0,0,0,0.05); border-bottom:1px solid #ccc;">
+                                <table class="briefing-table">
+                                    <thead>
                                         <tr>
-                                            <th style="text-align:left; padding:4px 8px;">Date</th>
-                                            <th style="text-align:left; padding:4px 8px;">Type</th>
-                                            <th style="text-align:left; padding:4px 8px;">Height</th>
+                                            <th class="briefing-th">Time</th>
+                                            <th class="briefing-th">Type</th>
+                                            <th class="briefing-th">Height</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" style="padding:8px;">No tide data for this date</td></tr>'}
+                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
-                                <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period.</p>
+                                <p class="briefing-note">* Graph shows 24h period.</p>
                             </div>
                         </div>
                     `;
@@ -1075,14 +1076,12 @@ function clearMap() {
                 if (b.facilities && b.facilities.length > 0) {
                      html += `
                         <div class="briefing-section">
-                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                            <h3 class="briefing-header-icon">
                                 <span class="material-symbols-outlined">warehouse</span>
                                 Facilities
                             </h3>
                             <ul class="facility-list">
-                     `;
-                     
-                     b.facilities.forEach(f => {
+                                ${b.facilities.map(f => {
                          // Icon Mapping
                          let icon = 'place';
                          const typeLower = (f.type || '').toLowerCase();
@@ -1094,40 +1093,43 @@ function clearMap() {
                          if (typeof f.details === 'string') {
                              detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                          } else if (f.details && typeof f.details === 'object') {
-                             let rows = `
+                        // Table format for details
+                        let rows = `
+                            <tr>
+                                <th class="briefing-th">Type</th>
+                                <td class="briefing-td">${f.type}</td>
+                            </tr>
+                        `;
+                        
+                        rows += Object.entries(f.details)
+                            .filter(([_, v]) => {
+                                if (!v) return false;
+                                const sv = String(v).toLowerCase().trim();
+                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
+                            })
+                            .map(([k, v]) => `
                                 <tr>
-                                    <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">Type</td>
-                                    <td>${f.type}</td>
+                                    <th class="briefing-th" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td">${v}</td>
                                 </tr>
-                             `;
-                             rows += Object.entries(f.details)
-                                .filter(([_, v]) => {
-                                    if (!v) return false;
-                                    const sv = String(v).toLowerCase().trim();
-                                    return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                                })
-                                .map(([k, v]) => `
-                                    <tr>
-                                        <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">${k.replace(/_/g, ' ')}</td>
-                                        <td>${v}</td>
-                                    </tr>
-                                `).join('');
-                             
-                             detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
-                         }
-                         
-                         html += `
-                            <li class="facility-item">
-                                <h4 style="display:flex; align-items:center; gap:0.5rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
-                                    ${f.name}
-                                </h4>
-                                ${detailsHtml}
-                            </li>
-                         `;
-                     });
-                     
-                     html += `</ul></div>`;
+                            `).join('');
+                        
+                        detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
+                    }
+
+                    return `
+                        <li class="facility-item">
+                            <h4 class="briefing-header-icon">
+                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
+                                ${f.name}
+                            </h4>
+                            ${detailsHtml}
+                        </li>
+                    `;
+                }).join('') || '<li>No facilities found</li>'}
+            </ul>
+        </div>
+    `;
                 }
             } else {
                 html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;
