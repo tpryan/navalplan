@@ -602,7 +602,7 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
                 tension: 0.4, // Smooth Bezier
                 pointRadius: 4,
                 pointHoverRadius: 6,
-                fill: true
+                fill: 'start'
             }]
         },
         options: {
@@ -640,7 +640,21 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
                     }
                 },
                 y: {
-                    title: { display: true, text: 'Feet' }
+                    title: { display: true, text: 'Feet' },
+                    grid: {
+                        color: (context) => {
+                            if (context.tick.value === 0) {
+                                return '#333'; // Darker color for zero line
+                            }
+                            return 'rgba(0, 0, 0, 0.1)'; // Default grid color
+                        },
+                        lineWidth: (context) => {
+                            if (context.tick.value === 0) {
+                                return 2; // Thicker line for zero
+                            }
+                            return 1;
+                        }
+                    }
                 }
             }
         }
