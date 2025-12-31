@@ -76,7 +76,12 @@ func main() {
 			
 			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
 
-			EXECUTION PLAN:
+			RESTRICTIONS:
+			- Do NOT provide conversational updates (e.g., "I am researching...").
+			- Do NOT output the JSON structure until you have successfully called the tools and received data.
+			- Do NOT output "Please wait" messages. The user is an API client, not a human chatting.
+
+			EXECUTION PLAN (You MUST execute these tools first):
 			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
 			2. TIDES: Call the 'get_tides' tool to get official NOAA tide predictions for the location and date.
 			3. FACILITIES: Call the 'search_specialist' tool to find:

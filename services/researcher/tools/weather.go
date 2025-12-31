@@ -46,22 +46,14 @@ func NewWeatherTool() (tool.Tool, error) {
 			return WeatherResult{Error: fmt.Sprintf("invalid date format: %v", err)}, nil
 		}
 
-		// 2. Auto-adjust for Future Dates (Climate Estimate vs Seasonal)
+		// 2. Auto-adjust for Future Dates
 		// OpenMeteo forecast is valid for ~14 days.
-		// Seasonal forecast is valid for ~6 months (180 days).
-		// If request is further out, shift to previous year to get historical data.
-		isEstimate := false
+		// If request is further out, use Seasonal forecast.
 		isSeasonal := false
 		daysUntil := time.Until(targetDate).Hours() / 24
 
 		if daysUntil > 14 {
-			if daysUntil < 180 {
-				isSeasonal = true
-			} else {
-				isEstimate = true
-				// Shift back 1 year (or more if needed to be in past)
-				targetDate = targetDate.AddDate(-1, 0, 0)
-			}
+			isSeasonal = true
 		}
 		// 3. Initialize Client
 		c := openmeteogo.NewClient()
@@ -164,8 +156,6 @@ func NewWeatherTool() (tool.Tool, error) {
 		forecastType := "Standard"
 		if isSeasonal {
 			forecastType = "Seasonal"
-		} else if isEstimate {
-			forecastType = fmt.Sprintf("Historical Estimate (%d)", targetDate.Year())
 		}
 
 		// Handle potentially missing metrics in Seasonal response
