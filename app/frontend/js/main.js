@@ -1457,6 +1457,13 @@ function showVoyageGuide(guide) {
     const btnRedo = document.getElementById('btn-redo-guide');
     const modalOverlay = document.getElementById('modal-overlay');
 
+    const renderReferences = (refs) => {
+        if (!refs || refs.length === 0) return '';
+        return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
+            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+        </div>`;
+    };
+
     let html = `
         <div class="briefing-section">
             <h3>Overview</h3>
@@ -1473,7 +1480,7 @@ function showVoyageGuide(guide) {
                 <table class="briefing-table">
                     <tr><th class="briefing-th">Best Months</th><td class="briefing-td">${(s.primary_season_months || []).join(', ') || 'N/A'}</td></tr>
                     <tr><th class="briefing-th">Storm Season</th><td class="briefing-td">${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</td></tr>
-                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''}</td></tr>
+                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''} ${renderReferences(s.references)}</td></tr>
                 </table>
             </div>
         `;
@@ -1483,7 +1490,12 @@ function showVoyageGuide(guide) {
     if (guide.hazards && guide.hazards.length > 0) {
         html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
         guide.hazards.forEach(h => {
-            html += `<li class="facility-item"><h4>${h.title}</h4><p>${h.description}</p></li>`;
+            const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem; margin-left:0.5rem;">(Info)</a>` : '';
+            html += `<li class="facility-item">
+                <h4>${h.title}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
         });
         html += `</ul></div>`;
     }
@@ -1492,7 +1504,12 @@ function showVoyageGuide(guide) {
     if (guide.hubs && guide.hubs.length > 0) {
         html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
         guide.hubs.forEach(h => {
-            html += `<li class="facility-item"><h4>${h.name}</h4><p>${h.description}</p></li>`;
+            const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem; margin-left:0.5rem;">(Website)</a>` : '';
+            html += `<li class="facility-item">
+                <h4>${h.name}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
         });
         html += `</ul></div>`;
     }
@@ -1500,11 +1517,23 @@ function showVoyageGuide(guide) {
     // Charter Info
     if (guide.charter_info) {
         const c = guide.charter_info;
+        
+        let companiesHtml = 'None listed';
+        if (c.companies && c.companies.length > 0) {
+             companiesHtml = '<ul style="padding-left: 1.2rem; margin: 0.5rem 0;">' + 
+             c.companies.map(comp => {
+                if (typeof comp === 'string') return `<li>${comp}</li>`;
+                const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
+                return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
+             }).join('') + 
+             '</ul>';
+        }
+
         html += `
             <div class="briefing-section">
                 <h3>Charter Info</h3>
                 <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
-                <p><strong>Companies:</strong> ${(c.companies || []).join(', ')}</p>
+                <div style="margin-top:0.5rem"><strong>Companies:</strong> ${companiesHtml}</div>
             </div>
         `;
     }

@@ -168,17 +168,21 @@ func main() {
 				"storm_season_months": ["August", "September"],
 				"storm_risk_level": "High/Medium/Low",
 				"notes": "Hurricane season peaks in Sept."
+				"references" : ["https://...", "https://..."]
 			  },
 			  "hazards": [
-				{ "title": "Coral Heads", "description": "Numerous uncharted coral heads inside the reef." },
-				{ "title": "Christmas Winds", "description": "Strong trade winds (25-30kt) common in Dec/Jan." }
+				{ "title": "Coral Heads", "description": "Numerous uncharted coral heads inside the reef.", "url": "http...", "references" : ["https://...", "https://..."]  },
+				{ "title": "Christmas Winds", "description": "Strong trade winds (25-30kt) common in Dec/Jan.", "url": null, "references" : ["https://...", "https://..."] }
 			  ],
 			  "hubs": [
-				{ "name": "Road Town", "description": "Major provisioning and charter hub." }
+				{ "name": "Road Town", "description": "Major provisioning and charter hub.", "url": "http...", "references" : ["https://...", "https://..."] }
 			  ],
 			  "charter_info": {
 				 "is_charter_destination": true,
-				 "companies": ["Moorings", "Dream Yacht"]
+				 "companies": [
+					 { "name": "Moorings", "url": "https://...", "references" : ["https://...", "https://..."]},
+					 { "name": "Dream Yacht", "url": "https://...", "references" : ["https://...", "https://..."]}
+				 ]
 			  }
 			}
 
@@ -188,6 +192,10 @@ func main() {
 			3. "Sailing hazards and anomalies [Location]"
 			4. "Major marinas and sailing hubs [Location]"
 			5. "Yacht charter companies [Location]"
+			
+			Important: Always try to find a relevant URL for hazards (e.g., wiki or chart info), hubs (official website), and especially charter companies. Always provide reference links. 
+
+			Please also return a list of sources where you got the information. Please make sure they are valid and still active urls. Use them to populate urls for the content in the json.  
 		`,
 		Tools: []tool.Tool{
 			agenttool.New(searchAgent, nil),

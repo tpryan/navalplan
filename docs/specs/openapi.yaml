@@ -172,6 +172,10 @@ components:
                 type: string
             notes:
               type: string
+            references:
+              type: array
+              items:
+                type: string
         hazards:
           type: array
           items:
@@ -181,6 +185,13 @@ components:
                 type: string
               description: 
                 type: string
+              url:
+                type: string
+                nullable: true
+              references:
+                type: array
+                items:
+                  type: string
         hubs:
           type: array
           items:
@@ -190,6 +201,13 @@ components:
                 type: string
               description: 
                 type: string
+              url:
+                type: string
+                nullable: true
+              references:
+                type: array
+                items:
+                  type: string
         charter_info:
           type: object
           properties:
@@ -198,7 +216,17 @@ components:
             companies:
               type: array
               items:
-                type: string
+                type: object
+                properties:
+                  name:
+                    type: string
+                  url:
+                    type: string
+                    nullable: true
+                  references:
+                    type: array
+                    items:
+                      type: string
 
     WeatherSummary:
       type: object
