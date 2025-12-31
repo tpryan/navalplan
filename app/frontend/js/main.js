@@ -567,7 +567,29 @@ function showBriefing(briefing) {
     const allEvents = tides.events || [];
     const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
 
-    const tideEventsHtml = displayEvents.map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
+    const tideEventsHtml = displayEvents.map(e => {
+        let dateStr = e.time;
+        try {
+            const d = new Date(e.time.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                let hours = d.getHours();
+                const minutes = String(d.getMinutes()).padStart(2, '0');
+                const ampm = hours >= 12 ? 'pm' : 'am';
+                hours = hours % 12;
+                hours = hours ? hours : 12;
+                dateStr = `${mm}/${dd}/${yyyy} ${hours}:${minutes} ${ampm}`;
+            }
+        } catch (ignore) {}
+
+        return `<tr>
+            <td style="padding:4px 8px;">${dateStr}</td>
+            <td style="padding:4px 8px;">${e.type}</td>
+            <td style="padding:4px 8px;">${e.height_ft} ft</td>
+        </tr>`;
+    }).join('');
     
     const tidesHtml = `
         <div class="briefing-section">
@@ -576,9 +598,18 @@ function showBriefing(briefing) {
                 <div style="height:200px; width:100%; position:relative;">
                     <canvas id="tideChartModal"></canvas>
                 </div>
-                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">
-                    ${tideEventsHtml || '<li>No tide data for this date</li>'}
-                </ul>
+                <table style="width:100%; margin-top:1rem; border-collapse: collapse; font-size:0.9em; color:#333;">
+                    <thead style="background:rgba(0,0,0,0.05); border-bottom:1px solid #ccc;">
+                        <tr>
+                            <th style="text-align:left; padding:4px 8px;">Date</th>
+                            <th style="text-align:left; padding:4px 8px;">Type</th>
+                            <th style="text-align:left; padding:4px 8px;">Height</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tideEventsHtml || '<tr><td colspan="3" style="padding:8px;">No tide data for this date</td></tr>'}
+                    </tbody>
+                </table>
                 <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period. List shows events on ${targetDateYMD} only.</p>
             </div>
         </div>
@@ -925,7 +956,29 @@ function clearMap() {
                     const targetDateYMD = stop.target_date.split('T')[0];
                     const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
                     
-                    const tideEventsHtml = displayEvents.map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
+                    const tideEventsHtml = displayEvents.map(e => {
+                        let dateStr = e.time;
+                        try {
+                            const d = new Date(e.time.replace(' ', 'T'));
+                            if (!isNaN(d.getTime())) {
+                                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                const dd = String(d.getDate()).padStart(2, '0');
+                                const yyyy = d.getFullYear();
+                                let hours = d.getHours();
+                                const minutes = String(d.getMinutes()).padStart(2, '0');
+                                const ampm = hours >= 12 ? 'pm' : 'am';
+                                hours = hours % 12;
+                                hours = hours ? hours : 12;
+                                dateStr = `${mm}/${dd}/${yyyy} ${hours}:${minutes} ${ampm}`;
+                            }
+                        } catch (ignore) {}
+
+                        return `<tr>
+                            <td style="padding:4px 8px;">${dateStr}</td>
+                            <td style="padding:4px 8px;">${e.type}</td>
+                            <td style="padding:4px 8px;">${e.height_ft} ft</td>
+                        </tr>`;
+                    }).join('');
 
                     html += `
                         <div class="briefing-section">
@@ -934,9 +987,18 @@ function clearMap() {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
                                 </div>
-                                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">
-                                    ${tideEventsHtml || '<li>No tide data for this date</li>'}
-                                </ul>
+                                <table style="width:100%; margin-top:1rem; border-collapse: collapse; font-size:0.9em; color:#333;">
+                                    <thead style="background:rgba(0,0,0,0.05); border-bottom:1px solid #ccc;">
+                                        <tr>
+                                            <th style="text-align:left; padding:4px 8px;">Date</th>
+                                            <th style="text-align:left; padding:4px 8px;">Type</th>
+                                            <th style="text-align:left; padding:4px 8px;">Height</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${tideEventsHtml || '<tr><td colspan="3" style="padding:8px;">No tide data for this date</td></tr>'}
+                                    </tbody>
+                                </table>
                                 <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period.</p>
                             </div>
                         </div>
