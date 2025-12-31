@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/charmbracelet/log v0.4.2
+	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/tpryan/noaago v1.0.0
 	github.com/tpryan/openmeteogo v1.2.0
 	google.golang.org/adk v0.3.0

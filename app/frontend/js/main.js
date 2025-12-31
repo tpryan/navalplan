@@ -721,6 +721,44 @@ function showBriefing(briefing) {
         </div>
     `;
 
+    // Sun Phase
+    const sun = briefing.sun_phase || {};
+    let sunHtml = '';
+    if (sun.sunrise || sun.sunset) {
+        // Format times to be more readable if they are full date strings
+        const formatTime = (t) => {
+            if (!t) return 'N/A';
+            try {
+                const d = new Date(t);
+                if (isNaN(d.getTime())) return t;
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return t;
+            }
+        };
+
+        sunHtml = `
+        <div class="briefing-section">
+            <h3 class="briefing-header-icon">
+                <span class="material-symbols-outlined">wb_twilight</span>
+                Sun Phase
+            </h3>
+            <div class="weather-box"> <!-- Reuse weather box style -->
+                <table class="briefing-table">
+                    <tr>
+                        <th class="briefing-th briefing-table-label-width">Sunrise</th>
+                        <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                    </tr>
+                    <tr>
+                        <th class="briefing-th">Sunset</th>
+                        <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        `;
+    }
+
     // Tides
     // Filter events to only show the target date in the LIST
     const tides = briefing.tides || {};
@@ -838,7 +876,7 @@ function showBriefing(briefing) {
         </div>
     `;
 
-    content.innerHTML = weatherHtml + tidesHtml + facilHtml;
+    content.innerHTML = weatherHtml + sunHtml + tidesHtml + facilHtml;
     
     // Redo Handler
     if (btnRedo) {
@@ -1156,6 +1194,42 @@ function clearMap() {
                                 </table>
                             </div>
                         </div>
+                    `;
+                }
+
+                // Sun Phase
+                if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
+                    const sun = b.sun_phase;
+                    const formatTime = (t) => {
+                        if (!t) return 'N/A';
+                        try {
+                            const d = new Date(t);
+                            if (isNaN(d.getTime())) return t;
+                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        } catch (e) {
+                            return t;
+                        }
+                    };
+
+                    html += `
+                    <div class="briefing-section">
+                        <h3 class="briefing-header-icon">
+                            <span class="material-symbols-outlined">wb_twilight</span>
+                            Sun Phase
+                        </h3>
+                        <div class="weather-box">
+                            <table class="briefing-table">
+                                <tr>
+                                    <th class="briefing-th briefing-table-label-width">Sunrise</th>
+                                    <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                                </tr>
+                                <tr>
+                                    <th class="briefing-th">Sunset</th>
+                                    <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
                     `;
                 }
                 

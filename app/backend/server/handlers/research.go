@@ -40,6 +40,7 @@ type AgentEvent struct {
 type AgentOutput struct {
 	LocationName   string          `json:"location_name"`
 	WeatherSummary json.RawMessage `json:"weather_summary"`
+	SunPhase       json.RawMessage `json:"sun_phase"`
 	Tides          json.RawMessage `json:"tides"`
 	Facilities     json.RawMessage `json:"facilities"`
 }
@@ -146,6 +147,7 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 		briefing := &models.Briefing{
 			StopID:         stop.ID,
 			WeatherSummary: models.RawJSON(output.WeatherSummary),
+			SunPhase:       models.RawJSON(output.SunPhase),
 			Tides:          models.RawJSON(output.Tides),
 			Facilities:     models.RawJSON(output.Facilities),
 		}

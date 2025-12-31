@@ -47,6 +47,11 @@ func main() {
 		clog.Fatalf("Failed to create tide tool: %v", err)
 	}
 
+	sunriseTool, err := tools.NewSunriseTool()
+	if err != nil {
+		clog.Fatalf("Failed to create sunrise tool: %v", err)
+	}
+
 	// 2. Define Sub-Agent (Search Specialist)
 	searchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "search_specialist",
@@ -84,7 +89,8 @@ func main() {
 			EXECUTION PLAN (You MUST execute these tools first):
 			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
 			2. TIDES: Call the 'get_tides' tool to get official NOAA tide predictions for the location and date.
-			3. FACILITIES: Call the 'search_specialist' tool to find:
+			3. SUNRISE: Call the 'get_sunrise_sunset' tool to get sunrise and sunset times for the location and date.
+			4. FACILITIES: Call the 'search_specialist' tool to find:
 			   - "Anchorages near [Location] details"
 			   - "Marina contact info [Location]"
 
@@ -107,6 +113,10 @@ func main() {
 					"wind_direction": "...",
 					"wave_height_ft": 0,
 					"debug_duration_ms": 0
+				},
+				"sun_phase": {
+					"sunrise": "...",
+					"sunset": "..."
 				},
 				"tides": {
 					"station_name": "COPY_EXACT_STATION_NAME_FROM_TOOL_OUTPUT",
@@ -132,6 +142,7 @@ func main() {
 		Tools: []tool.Tool{
 			weatherTool,
 			tideTool,
+			sunriseTool,
 			agenttool.New(searchAgent, nil),
 		},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},

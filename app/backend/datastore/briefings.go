@@ -16,10 +16,11 @@ func (db *DB) GetBriefing(stopID int64) (*models.Briefing, error) {
 
 func (db *DB) CreateBriefing(b *models.Briefing) error {
 	query := `
-		INSERT INTO briefing (stop_id, weather_summary, tides, facilities)
-		VALUES (:stop_id, :weather_summary, :tides, :facilities)
+		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities)
+		VALUES (:stop_id, :weather_summary, :sun_phase, :tides, :facilities)
 		ON CONFLICT (stop_id) DO UPDATE SET
 			weather_summary = EXCLUDED.weather_summary,
+			sun_phase = EXCLUDED.sun_phase,
 			tides = EXCLUDED.tides,
 			facilities = EXCLUDED.facilities,
 			created_at = NOW()

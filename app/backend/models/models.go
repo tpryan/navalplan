@@ -55,6 +55,7 @@ type Briefing struct {
 	ID             int64      `json:"id" db:"id"`
 	StopID         int64      `json:"stop_id" db:"stop_id"`
 	WeatherSummary RawJSON    `json:"weather_summary" db:"weather_summary"`
+	SunPhase       RawJSON    `json:"sun_phase" db:"sun_phase"`
 	Tides          RawJSON    `json:"tides" db:"tides"`
 	Facilities     RawJSON    `json:"facilities" db:"facilities"`
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`

@@ -59,6 +59,7 @@ CREATE TABLE briefing (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     stop_id INTEGER REFERENCES stop(id) ON DELETE CASCADE UNIQUE,
     weather_summary JSONB,
+    sun_phase JSONB,
     tides JSONB,
     facilities JSONB,
     created_at TIMESTAMP DEFAULT NOW()
