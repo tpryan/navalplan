@@ -101,6 +101,8 @@ func main() {
 				"weather_summary": {
 					"summary": "...",
 					"condition": "...",
+					"temp_min_f": 0,
+					"temp_max_f": 0,
 					"wind_speed_kt": 0,
 					"wind_direction": "...",
 					"wave_height_ft": 0,

@@ -700,6 +700,12 @@ function showBriefing(briefing) {
                             ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
                         </td>
                     </tr>
+                    ${(weather.temp_max_f || weather.temp_min_f) ? `
+                    <tr>
+                        <th class="briefing-th">Temp</th>
+                        <td class="briefing-td">High: ${Math.round(weather.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(weather.temp_min_f)}°F</td>
+                    </tr>
+                    ` : ''}
                     <tr>
                         <th class="briefing-th">Wind</th>
                         <td class="briefing-td">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
@@ -1131,6 +1137,12 @@ function clearMap() {
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
+                                    ${(w.temp_max_f || w.temp_min_f) ? `
+                                    <tr>
+                                        <th class="briefing-th">Temp</th>
+                                        <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                    </tr>
+                                    ` : ''}
                                     <tr>
                                         <th class="briefing-th">Wind</th>
                                         <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
