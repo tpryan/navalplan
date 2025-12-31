@@ -622,12 +622,26 @@ function showBriefing(briefing) {
             <h3>Facilities</h3>
             <ul class="facility-list">
                 ${facilities.map(f => {
+                    // Icon Mapping
+                    let icon = 'place';
+                    const typeLower = (f.type || '').toLowerCase();
+                    if (typeLower.includes('anchorage')) icon = 'anchor';
+                    else if (typeLower.includes('marina')) icon = 'storefront';
+                    else if (typeLower.includes('mooring')) icon = 'crisis_alert';
+
                     let detailsHtml = '';
                     if (typeof f.details === 'string') {
-                        detailsHtml = `<p>${f.details}</p>`;
+                        detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                     } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
-                        const rows = Object.entries(f.details)
+                        let rows = `
+                            <tr>
+                                <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">Type</td>
+                                <td>${f.type}</td>
+                            </tr>
+                        `;
+                        
+                        rows += Object.entries(f.details)
                             .filter(([_, v]) => {
                                 if (!v) return false;
                                 const sv = String(v).toLowerCase().trim();
@@ -640,14 +654,15 @@ function showBriefing(briefing) {
                                 </tr>
                             `).join('');
                         
-                        if (rows) {
-                            detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
-                        }
+                        detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
                     }
 
                     return `
                         <li class="facility-item">
-                            <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
+                            <h4 style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
+                                ${f.name}
+                            </h4>
                             ${detailsHtml}
                         </li>
                     `;
@@ -1014,11 +1029,24 @@ function clearMap() {
                      `;
                      
                      b.facilities.forEach(f => {
+                         // Icon Mapping
+                         let icon = 'place';
+                         const typeLower = (f.type || '').toLowerCase();
+                         if (typeLower.includes('anchorage')) icon = 'anchor';
+                         else if (typeLower.includes('marina')) icon = 'storefront';
+                         else if (typeLower.includes('mooring')) icon = 'crisis_alert';
+
                          let detailsHtml = '';
                          if (typeof f.details === 'string') {
-                             detailsHtml = `<p>${f.details}</p>`;
+                             detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                          } else if (f.details && typeof f.details === 'object') {
-                             const rows = Object.entries(f.details)
+                             let rows = `
+                                <tr>
+                                    <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">Type</td>
+                                    <td>${f.type}</td>
+                                </tr>
+                             `;
+                             rows += Object.entries(f.details)
                                 .filter(([_, v]) => {
                                     if (!v) return false;
                                     const sv = String(v).toLowerCase().trim();
@@ -1031,14 +1059,15 @@ function clearMap() {
                                     </tr>
                                 `).join('');
                              
-                             if (rows) {
-                                detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
-                             }
+                             detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
                          }
                          
                          html += `
                             <li class="facility-item">
-                                <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
+                                <h4 style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
+                                    ${f.name}
+                                </h4>
                                 ${detailsHtml}
                             </li>
                          `;
