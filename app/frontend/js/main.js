@@ -169,16 +169,59 @@ function initUI() {
   if (btnCopyReport) {
     btnCopyReport.onclick = () => {
         const content = document.getElementById('report-content');
+        
+        // 1. Convert Canvases to Images
+        const canvases = content.querySelectorAll('canvas');
+        const tempImages = [];
+        
+        canvases.forEach(canvas => {
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL();
+            img.style.width = '100%';
+            img.style.height = 'auto';
+            
+            // Insert image, hide canvas
+            canvas.parentNode.insertBefore(img, canvas);
+            canvas.style.display = 'none';
+            tempImages.push({ canvas, img });
+        });
+
+        // 2. Hide Icons
+        const icons = content.querySelectorAll('.material-symbols-outlined');
+        const hiddenIcons = [];
+        icons.forEach(icon => {
+            if (icon.style.display !== 'none') {
+                icon.style.display = 'none';
+                hiddenIcons.push(icon);
+            }
+        });
+
+        // 3. Select and Copy
         const range = document.createRange();
         range.selectNode(content);
         window.getSelection().removeAllRanges();
         window.getSelection().addRange(range);
-        document.execCommand('copy');
-        window.getSelection().removeAllRanges();
         
-        const originalText = btnCopyReport.textContent;
-        btnCopyReport.textContent = 'Copied!';
-        setTimeout(() => btnCopyReport.textContent = originalText, 2000);
+        try {
+            document.execCommand('copy');
+            
+            const originalText = btnCopyReport.textContent;
+            btnCopyReport.textContent = 'Copied!';
+            setTimeout(() => btnCopyReport.textContent = originalText, 2000);
+        } catch (err) {
+            console.error('Failed to copy', err);
+            alert('Failed to copy report to clipboard');
+        } finally {
+            // 4. Restore Canvases and Icons
+            window.getSelection().removeAllRanges();
+            tempImages.forEach(({ canvas, img }) => {
+                canvas.style.display = '';
+                img.remove();
+            });
+            hiddenIcons.forEach(icon => {
+                icon.style.display = '';
+            });
+        }
     };
   }
 }
