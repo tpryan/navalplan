@@ -552,11 +552,26 @@ function showBriefing(briefing) {
         <div class="briefing-section">
             <h3>Weather</h3>
             <div class="weather-box">
-                <p><strong>Summary:</strong> ${isInvalid(weather.summary) ? 'N/A' : weather.summary}</p>
-                <div class="briefing-grid">
-                    <div><strong>Wind:</strong> ${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</div>
-                    ${weather.wave_height_ft > 0 ? `<div><strong>Waves:</strong> ${weather.wave_height_ft} ft</div>` : ''}
-                </div>
+                <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
+                    <tr>
+                        <td style="font-weight:bold; padding:4px 8px; width:100px; vertical-align:top;">Summary</td>
+                        <td style="padding:4px 8px;">${isInvalid(weather.summary) ? 'N/A' : weather.summary}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
+                        <td style="padding:4px 8px;">${isInvalid(weather.condition) ? 'N/A' : weather.condition}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
+                        <td style="padding:4px 8px;">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
+                    </tr>
+                    ${weather.wave_height_ft > 0 ? `
+                    <tr>
+                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Waves</td>
+                        <td style="padding:4px 8px;">${weather.wave_height_ft} ft</td>
+                    </tr>
+                    ` : ''}
+                </table>
             </div>
         </div>
     `;
@@ -955,11 +970,26 @@ function clearMap() {
                         <div class="briefing-section">
                             <h3>Weather</h3>
                             <div class="weather-box">
-                                <p><strong>Summary:</strong> ${isInvalid(w.summary) ? 'No summary available.' : w.summary}</p>
-                                <div class="briefing-grid">
-                                    <div><strong>Wind:</strong> ${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</div>
-                                    ${w.wave_height_ft > 0 ? `<div><strong>Waves:</strong> ${w.wave_height_ft} ft</div>` : ''}
-                                </div>
+                                <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
+                                    <tr>
+                                        <td style="font-weight:bold; padding:4px 8px; width:100px; vertical-align:top;">Summary</td>
+                                        <td style="padding:4px 8px;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
+                                        <td style="padding:4px 8px;">${isInvalid(w.condition) ? 'N/A' : w.condition}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
+                                        <td style="padding:4px 8px;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                    </tr>
+                                    ${w.wave_height_ft > 0 ? `
+                                    <tr>
+                                        <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Waves</td>
+                                        <td style="padding:4px 8px;">${w.wave_height_ft} ft</td>
+                                    </tr>
+                                    ` : ''}
+                                </table>
                             </div>
                         </div>
                     `;

@@ -100,6 +100,7 @@ func main() {
 				"location_name": "Resolved Name",
 				"weather_summary": {
 					"summary": "...",
+					"condition": "...",
 					"wind_speed_kt": 0,
 					"wind_direction": "...",
 					"wave_height_ft": 0,
