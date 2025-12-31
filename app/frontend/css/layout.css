@@ -345,6 +345,7 @@
   padding: 1rem;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
+  border-left: 3px solid var(--brand-medium);
 }
 
 .facility-list {
