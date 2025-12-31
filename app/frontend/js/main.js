@@ -186,17 +186,69 @@ function initUI() {
             tempImages.push({ canvas, img });
         });
 
-        // 2. Hide Icons
+        // 2. Remove Icons (to avoid copying their text)
         const icons = content.querySelectorAll('.material-symbols-outlined');
-        const hiddenIcons = [];
+        const removedIcons = [];
         icons.forEach(icon => {
-            if (icon.style.display !== 'none') {
-                icon.style.display = 'none';
-                hiddenIcons.push(icon);
-            }
+            const placeholder = document.createComment('icon-placeholder');
+            const parent = icon.parentNode;
+            removedIcons.push({ icon, parent, next: icon.nextSibling, placeholder });
+            parent.replaceChild(placeholder, icon);
         });
 
-        // 3. Select and Copy
+        // 2b. Convert Facility Lists to Divs with H4s
+        const facilityLists = content.querySelectorAll('.facility-list');
+        const modifiedLists = [];
+        
+        facilityLists.forEach(ul => {
+            const container = document.createElement('div');
+            const listItems = ul.querySelectorAll('li.facility-item');
+            const originalItems = [];
+            
+            listItems.forEach(li => {
+                const h4 = document.createElement('h4');
+                // Move all children
+                while (li.firstChild) {
+                    h4.appendChild(li.firstChild);
+                }
+                container.appendChild(h4);
+                originalItems.push({ li, h4 });
+            });
+            
+            // Replace UL with Container
+            ul.parentNode.insertBefore(container, ul);
+            ul.style.display = 'none';
+            
+            modifiedLists.push({ ul, container, originalItems });
+        });
+
+        // 3. Strip Styles and Classes
+        const allElements = content.querySelectorAll('*');
+        const originalAttributes = [];
+        
+        allElements.forEach(el => {
+            // Skip the temp images we just created
+            if (tempImages.some(t => t.img === el)) return;
+            // Skip the original ULs we just hid
+            if (modifiedLists.some(m => m.ul === el)) return;
+
+            originalAttributes.push({
+                el: el,
+                style: el.getAttribute('style'),
+                class: el.getAttribute('class')
+            });
+            
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+        });
+
+        // 3a. Apply specific clipboard styles (e.g. left-align headers)
+        const ths = content.querySelectorAll('th');
+        ths.forEach(th => {
+            th.style.textAlign = 'left';
+        });
+
+        // 4. Select and Copy
         const range = document.createRange();
         range.selectNode(content);
         window.getSelection().removeAllRanges();
@@ -212,14 +264,38 @@ function initUI() {
             console.error('Failed to copy', err);
             alert('Failed to copy report to clipboard');
         } finally {
-            // 4. Restore Canvases and Icons
+            // 5. Restore Attributes, Icons, Canvases, and Lists
             window.getSelection().removeAllRanges();
+            
+            // Restore attributes first
+            originalAttributes.forEach(({ el, style, class: cls }) => {
+                if (style !== null) el.setAttribute('style', style);
+                else el.removeAttribute('style');
+
+                if (cls !== null) el.setAttribute('class', cls);
+                else el.removeAttribute('class');
+            });
+
+            // Restore Lists
+            modifiedLists.forEach(({ ul, container, originalItems }) => {
+                originalItems.forEach(({ li, h4 }) => {
+                    while (h4.firstChild) {
+                        li.appendChild(h4.firstChild);
+                    }
+                });
+                container.remove();
+                ul.style.display = '';
+            });
+
+            // Restore Icons
+            removedIcons.forEach(({ icon, parent, placeholder }) => {
+                parent.replaceChild(icon, placeholder);
+            });
+
+            // Restore images/canvases
             tempImages.forEach(({ canvas, img }) => {
                 canvas.style.display = '';
                 img.remove();
-            });
-            hiddenIcons.forEach(icon => {
-                icon.style.display = '';
             });
         }
     };
