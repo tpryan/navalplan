@@ -546,16 +546,31 @@ function renderItinerary() {
 }
 
 async function handleResearchClick(stop, button) {
-    // Check if briefing exists first
-    button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+    const originalContent = button.innerHTML;
     
     try {
         const existing = await API.getBriefing(stop.id);
         if (existing) {
             showBriefing(existing);
-            button.innerHTML = '<span class="material-symbols-outlined">description</span>';
             return;
         }
+
+        // Show Modal Immediately with loading state
+        const modal = document.getElementById('modal-briefing');
+        const content = document.getElementById('briefing-content');
+        const modalOverlay = document.getElementById('modal-overlay');
+        
+        content.innerHTML = `
+            <div style="text-align:center; padding:3rem; color: #666;">
+                <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
+                <p><strong>Agent is researching...</strong></p>
+                <p style="font-size: 0.9em;">Checking weather, tides, and local charts.</p>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        modalOverlay.classList.remove('hidden');
+
+        button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
         // Trigger
         await API.triggerResearch(stop.id);
@@ -566,8 +581,8 @@ async function handleResearchClick(stop, button) {
                 const b = await API.getBriefing(stop.id);
                 if (b) {
                     clearInterval(poll);
-                    button.innerHTML = '<span class="material-symbols-outlined">description</span>';
-                    showBriefing(b);
+                    button.innerHTML = originalContent;
+                    showBriefing(b); // Updates the already-open modal with data
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
@@ -575,6 +590,7 @@ async function handleResearchClick(stop, button) {
     } catch (err) {
         console.error(err);
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
+        setTimeout(() => button.innerHTML = originalContent, 2000);
     }
 }
 
@@ -1503,15 +1519,30 @@ function getIconForWeather(description) {
 
 async function handleGuideClick(voyage, button) {
     const originalContent = button.innerHTML;
-    button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
     
     try {
         const existing = await API.getVoyageGuide(voyage.id);
         if (existing) {
             showVoyageGuide(existing);
-            button.innerHTML = originalContent;
             return;
         }
+
+        // Show Modal Immediately with loading state
+        const modal = document.getElementById('modal-guide');
+        const content = document.getElementById('guide-content');
+        const modalOverlay = document.getElementById('modal-overlay');
+        
+        content.innerHTML = `
+            <div style="text-align:center; padding:3rem; color: #666;">
+                <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
+                <p><strong>Agent is researching...</strong></p>
+                <p style="font-size: 0.9em;">Gathering local knowledge, seasonal data, and regional hazards.</p>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        modalOverlay.classList.remove('hidden');
+
+        button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
         // Trigger
         await API.triggerVoyageGuideResearch(voyage.id);
@@ -1523,7 +1554,7 @@ async function handleGuideClick(voyage, button) {
                 if (g) {
                     clearInterval(poll);
                     button.innerHTML = originalContent;
-                    showVoyageGuide(g);
+                    showVoyageGuide(g); // Updates the already-open modal with data
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
