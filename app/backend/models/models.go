@@ -52,13 +52,24 @@ type Stop struct {
 }
 
 type Briefing struct {
-	ID             int64      `json:"id" db:"id"`
-	StopID         int64      `json:"stop_id" db:"stop_id"`
-	WeatherSummary RawJSON    `json:"weather_summary" db:"weather_summary"`
-	SunPhase       RawJSON    `json:"sun_phase" db:"sun_phase"`
-	Tides          RawJSON    `json:"tides" db:"tides"`
-	Facilities     RawJSON    `json:"facilities" db:"facilities"`
-	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	ID             int64     `json:"id" db:"id"`
+	StopID         int64     `json:"stop_id" db:"stop_id"`
+	WeatherSummary RawJSON   `json:"weather_summary" db:"weather_summary"`
+	SunPhase       RawJSON   `json:"sun_phase" db:"sun_phase"`
+	Tides          RawJSON   `json:"tides" db:"tides"`
+	Facilities     RawJSON   `json:"facilities" db:"facilities"`
+	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+}
+
+type VoyageGuide struct {
+	ID            int64     `json:"id" db:"id"`
+	VoyageID      int64     `json:"voyage_id" db:"voyage_id"`
+	Summary       string    `json:"summary" db:"summary"`
+	SailingSeason RawJSON   `json:"sailing_season" db:"sailing_season"`
+	Hazards       RawJSON   `json:"hazards" db:"hazards"`
+	Hubs          RawJSON   `json:"hubs" db:"hubs"`
+	CharterInfo   RawJSON   `json:"charter_info" db:"charter_info"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
 // RawJSON is a helper for JSONB columns

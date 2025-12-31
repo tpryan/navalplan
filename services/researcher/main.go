@@ -152,9 +152,61 @@ func main() {
 		clog.Fatalf("Failed to create agent: %v", err)
 	}
 
+	// 4. Define Guide Agent
+	guideAgent, err := llmagent.New(llmagent.Config{
+		Name:        "guide_agent",
+		Model:       model,
+		Description: "A Local Knowledge Expert and Sailing Guide.",
+		Instruction: `
+			You are a Local Knowledge Expert and Sailing Guide.
+			Task: Research the general sailing region for the location.
+			Output: Produce a JSON object strictly following this schema:
+			{
+			  "summary": "A 2-3 sentence overview of sailing in this region.",
+			  "sailing_season": {
+				"primary_season_months": ["November", "December", ...],
+				"storm_season_months": ["August", "September"],
+				"storm_risk_level": "High/Medium/Low",
+				"notes": "Hurricane season peaks in Sept."
+			  },
+			  "hazards": [
+				{ "title": "Coral Heads", "description": "Numerous uncharted coral heads inside the reef." },
+				{ "title": "Christmas Winds", "description": "Strong trade winds (25-30kt) common in Dec/Jan." }
+			  ],
+			  "hubs": [
+				{ "name": "Road Town", "description": "Major provisioning and charter hub." }
+			  ],
+			  "charter_info": {
+				 "is_charter_destination": true,
+				 "companies": ["Moorings", "Dream Yacht"]
+			  }
+			}
+
+			Tools: Use Google Search to answer these specific questions:
+			1. "Sailing season months for [Location]"
+			2. "Hurricane season [Location]"
+			3. "Sailing hazards and anomalies [Location]"
+			4. "Major marinas and sailing hubs [Location]"
+			5. "Yacht charter companies [Location]"
+		`,
+		Tools: []tool.Tool{
+			agenttool.New(searchAgent, nil),
+		},
+		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:  []llmagent.AfterToolCallback{onAfterTool},
+	})
+	if err != nil {
+		clog.Fatalf("Failed to create guide agent: %v", err)
+	}
+
 	// 5. Launch the Server
+	loader, err := agent.NewMultiLoader(researchAgent, guideAgent)
+	if err != nil {
+		clog.Fatalf("Failed to create multi loader: %v", err)
+	}
+
 	config := &launcher.Config{
-		AgentLoader: agent.NewSingleLoader(researchAgent),
+		AgentLoader: loader,
 	}
 
 	// Recovery for main process

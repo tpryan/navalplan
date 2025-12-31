@@ -88,6 +88,19 @@ export const API = {
     return res.json();
   },
 
+  async triggerVoyageGuideResearch(voyageId) {
+    const res = await fetch(`${API_BASE}/voyages/${voyageId}/research_guide`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger guide research');
+    return res.json();
+  },
+
+  async getVoyageGuide(voyageId) {
+    const res = await fetch(`${API_BASE}/voyages/${voyageId}/guide`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Failed to get voyage guide');
+    return res.json();
+  },
+
   async exportVoyage(voyageId) {
     const res = await fetch(`${API_BASE}/voyages/${voyageId}/export`, {
         method: 'POST',

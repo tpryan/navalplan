@@ -1,6 +1,7 @@
 -- app/db/schema.sql
 
 DROP TABLE IF EXISTS briefing;
+DROP TABLE IF EXISTS voyage_guide;
 DROP TABLE IF EXISTS facility;
 DROP TABLE IF EXISTS stop;
 DROP TABLE IF EXISTS voyage;
@@ -64,6 +65,19 @@ CREATE TABLE briefing (
     facilities JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE voyage_guide (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    voyage_id INTEGER REFERENCES voyage(id) ON DELETE CASCADE UNIQUE,
+    summary TEXT,
+    sailing_season JSONB,
+    hazards JSONB,
+    hubs JSONB,
+    charter_info JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_voyage_guide_voyage_id ON voyage_guide(voyage_id);
 
 
 CREATE INDEX idx_session_expires_at ON session(expires_at);

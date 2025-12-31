@@ -56,6 +56,9 @@ func New(db datastore.Store) (*Server, error) {
 		r.Post("/voyages/{id}/share", h.EnableSharing)
 		r.Delete("/voyages/{id}/share", h.DisableSharing)
 
+		r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
+		r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
+
 		r.Get("/public/voyages/{token}", h.GetPublicVoyage)
 		r.Get("/public/voyages/{token}/stops", h.GetPublicStops)
 

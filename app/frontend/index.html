@@ -31,6 +31,9 @@
         <div id="itinerary-view" class="hidden">
           <div class="sidebar-actions">
             <button id="btn-back-voyages" class="btn secondary">&larr; Back</button>
+            <button id="btn-view-guide" class="btn secondary" title="Destination Guide">
+               <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">map</span>
+            </button>
             <button id="btn-export-voyage" class="btn secondary" title="View Full Report">
               <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">description</span>
             </button>
@@ -105,6 +108,20 @@
         </div>
       </div>
       <div id="briefing-content" class="briefing-body"></div>
+    </div>
+
+    <div id="modal-guide" class="modal hidden" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem;">
+        <h2 style="margin:0">Destination Guide</h2>
+        <div style="display:flex; gap:0.5rem">
+             <button id="btn-redo-guide" class="btn secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Redo Research">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">refresh</span>
+                Redo
+            </button>
+            <button id="btn-close-guide" class="btn-icon" style="font-size: 1.5rem;"><span class="material-symbols-outlined">close</span></button>
+        </div>
+      </div>
+      <div id="guide-content" class="briefing-body"></div>
     </div>
 
     <!-- Report Modal -->

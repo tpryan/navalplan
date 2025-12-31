@@ -152,6 +152,54 @@ components:
           items:
             $ref: '#/components/schemas/Facility'
 
+    VoyageGuide:
+      type: object
+      properties:
+        id:
+          type: integer
+        summary:
+          type: string
+        sailing_season:
+          type: object
+          properties:
+            primary_season_months:
+              type: array
+              items:
+                type: string
+            storm_season_months:
+              type: array
+              items:
+                type: string
+            notes:
+              type: string
+        hazards:
+          type: array
+          items:
+            type: object
+            properties:
+              title: 
+                type: string
+              description: 
+                type: string
+        hubs:
+          type: array
+          items:
+            type: object
+            properties:
+              name: 
+                type: string
+              description: 
+                type: string
+        charter_info:
+          type: object
+          properties:
+            is_charter_destination:
+              type: boolean
+            companies:
+              type: array
+              items:
+                type: string
+
     WeatherSummary:
       type: object
       properties:
@@ -378,6 +426,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Voyage'
+
+  /api/v1/voyages/{id}/research_guide:
+    post:
+      tags: [Research]
+      summary: Generate the Destination Guide for the voyage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '202':
+          description: Research Started
+
+  /api/v1/voyages/{id}/guide:
+    get:
+      tags: [Voyage]
+      summary: Get the Destination Guide
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Guide Data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageGuide'
+        '404':
+          description: Guide not found (not researched yet)
 
   /api/v1/public/voyages/{token}:
     get:

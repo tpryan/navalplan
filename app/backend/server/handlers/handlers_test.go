@@ -103,6 +103,19 @@ func (m *MockStore) CreateBriefing(b *models.Briefing) error {
 	return args.Error(0)
 }
 
+func (m *MockStore) GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.VoyageGuide), args.Error(1)
+}
+
+func (m *MockStore) CreateVoyageGuide(g *models.VoyageGuide) error {
+	args := m.Called(g)
+	return args.Error(0)
+}
+
 var _ datastore.Store = (*MockStore)(nil)
 
 type MockDocsService struct {

@@ -36,6 +36,8 @@ func (m *MockStore) DeleteStop(id int64) error { return nil }
 
 func (m *MockStore) GetBriefing(stopID int64) (*models.Briefing, error) { return nil, nil }
 func (m *MockStore) CreateBriefing(b *models.Briefing) error { return nil }
+func (m *MockStore) GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error) { return nil, nil }
+func (m *MockStore) CreateVoyageGuide(g *models.VoyageGuide) error { return nil }
 
 var _ datastore.Store = (*MockStore)(nil)
 

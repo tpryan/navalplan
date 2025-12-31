@@ -141,6 +141,16 @@ function initUI() {
     btnExport.addEventListener('click', handleShowReport);
   }
 
+  // Guide Button
+  const btnViewGuide = document.getElementById('btn-view-guide');
+  if (btnViewGuide) {
+      btnViewGuide.addEventListener('click', () => {
+          if (currentVoyage) {
+              handleGuideClick(currentVoyage, btnViewGuide);
+          }
+      });
+  }
+
   // Edit Voyage Button (Itinerary View)
   if (btnEditVoyage) {
     btnEditVoyage.addEventListener('click', () => {
@@ -165,6 +175,19 @@ function initUI() {
   if (btnCloseReport) {
       btnCloseReport.onclick = closeReport;
   }
+
+  // Guide Modal Close Handler
+  const modalGuide = document.getElementById('modal-guide');
+  const btnCloseGuide = document.getElementById('btn-close-guide');
+
+  const closeGuide = () => {
+      modalGuide.classList.add('hidden');
+      if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
+          modalOverlay.classList.add('hidden');
+      }
+  };
+  
+  if (btnCloseGuide) btnCloseGuide.onclick = closeGuide;
   
   if (btnCopyReport) {
     btnCopyReport.onclick = () => {
@@ -1393,3 +1416,147 @@ function getIconForWeather(description) {
     return 'cloud';
 }
 
+
+async function handleGuideClick(voyage, button) {
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+    
+    try {
+        const existing = await API.getVoyageGuide(voyage.id);
+        if (existing) {
+            showVoyageGuide(existing);
+            button.innerHTML = originalContent;
+            return;
+        }
+
+        // Trigger
+        await API.triggerVoyageGuideResearch(voyage.id);
+        
+        // Poll
+        const poll = setInterval(async () => {
+            try {
+                const g = await API.getVoyageGuide(voyage.id);
+                if (g) {
+                    clearInterval(poll);
+                    button.innerHTML = originalContent;
+                    showVoyageGuide(g);
+                }
+            } catch (ignore) { /* keep polling */ }
+        }, 3000);
+        
+    } catch (err) {
+        console.error(err);
+        button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
+        setTimeout(() => button.innerHTML = originalContent, 2000);
+    }
+}
+
+function showVoyageGuide(guide) {
+    const modal = document.getElementById('modal-guide');
+    const content = document.getElementById('guide-content');
+    const btnRedo = document.getElementById('btn-redo-guide');
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    let html = `
+        <div class="briefing-section">
+            <h3>Overview</h3>
+            <p>${guide.summary || 'No summary available.'}</p>
+        </div>
+    `;
+
+    // Sailing Season
+    if (guide.sailing_season) {
+        const s = guide.sailing_season;
+        html += `
+            <div class="briefing-section">
+                <h3>Sailing Season</h3>
+                <table class="briefing-table">
+                    <tr><th class="briefing-th">Best Months</th><td class="briefing-td">${(s.primary_season_months || []).join(', ') || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Storm Season</th><td class="briefing-td">${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</td></tr>
+                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Hazards
+    if (guide.hazards && guide.hazards.length > 0) {
+        html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
+        guide.hazards.forEach(h => {
+            html += `<li class="facility-item"><h4>${h.title}</h4><p>${h.description}</p></li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Hubs
+    if (guide.hubs && guide.hubs.length > 0) {
+        html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
+        guide.hubs.forEach(h => {
+            html += `<li class="facility-item"><h4>${h.name}</h4><p>${h.description}</p></li>`;
+        });
+        html += `</ul></div>`;
+    }
+    
+    // Charter Info
+    if (guide.charter_info) {
+        const c = guide.charter_info;
+        html += `
+            <div class="briefing-section">
+                <h3>Charter Info</h3>
+                <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
+                <p><strong>Companies:</strong> ${(c.companies || []).join(', ')}</p>
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+
+    // Redo Handler
+    if (btnRedo) {
+        btnRedo.onclick = () => redoGuide(guide, btnRedo);
+    }
+
+    modal.classList.remove('hidden');
+    modalOverlay.classList.remove('hidden');
+}
+
+async function redoGuide(oldGuide, btn) {
+    const content = document.getElementById('guide-content');
+    content.innerHTML = `
+        <div style="text-align:center; padding:3rem; color: #666;">
+            <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
+            <p><strong>Agent is researching...</strong></p>
+        </div>
+    `;
+    btn.disabled = true;
+
+    try {
+        await API.triggerVoyageGuideResearch(oldGuide.voyage_id);
+        const oldTime = new Date(oldGuide.created_at).getTime();
+        const startTime = Date.now();
+        const TIMEOUT_MS = 60000; 
+        
+        const poll = setInterval(async () => {
+             if (Date.now() - startTime > TIMEOUT_MS) {
+                clearInterval(poll);
+                content.innerHTML = '<div style="text-align:center; padding:2rem; color: #d9534f;"><p><strong>Research timed out.</strong></p></div>';
+                btn.disabled = false;
+                return;
+            }
+            try {
+                const g = await API.getVoyageGuide(oldGuide.voyage_id);
+                if (g) {
+                    const newTime = new Date(g.created_at).getTime();
+                    if (newTime > oldTime) {
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        showVoyageGuide(g);
+                    }
+                }
+            } catch (ignore) { }
+        }, 3000);
+    } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+    }
+}
