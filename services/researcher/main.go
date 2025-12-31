@@ -133,11 +133,16 @@ func main() {
 							"description": "...",
 							"protection": "...",
 							"vhf": "..."
-						}
+						},
+						"references": ["https://...", "https://..."]
 					}
 				],
 				"sources": [...]
 			}
+
+			Important: Always try to find a relevant URL for facilities. Always provide reference links. 
+
+			Please also return a list of sources where you got the information. Please make sure they are valid and still active urls. Use them to populate urls for the content in the json. 
 		`,
 		Tools: []tool.Tool{
 			weatherTool,

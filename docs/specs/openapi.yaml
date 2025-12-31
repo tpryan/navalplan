@@ -277,6 +277,10 @@ components:
           type: object
           description: Flexible key-value pairs (e.g. VHF, Phone, Holding Ground)
           additionalProperties: true
+        references:
+          type: array
+          items:
+            type: string
 
     # --- Requests ---
     ExportRequest:

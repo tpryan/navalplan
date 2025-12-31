@@ -697,6 +697,13 @@ function showBriefing(briefing) {
         return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
     };
 
+    const renderReferences = (refs) => {
+        if (!refs || refs.length === 0) return '';
+        return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
+            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+        </div>`;
+    };
+
     // Determine Target Date for Filtering & Charting
     const stop = currentStops.find(s => s.id === briefing.stop_id);
     const targetDateFull = stop ? stop.target_date : new Date().toISOString();
@@ -892,6 +899,7 @@ function showBriefing(briefing) {
                                 ${f.name}
                             </h4>
                             ${detailsHtml}
+                            ${renderReferences(f.references)}
                         </li>
                     `;
                 }).join('') || '<li>No facilities found</li>'}
@@ -1157,6 +1165,13 @@ function clearMap() {
             Promise.all(briefingPromises),
             guidePromise
         ]);
+
+        const renderReferences = (refs) => {
+            if (!refs || refs.length === 0) return '';
+            return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
+                <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+            </div>`;
+        };
         
         // 2. Build HTML
         let html = `
@@ -1169,13 +1184,6 @@ function clearMap() {
 
         // --- Add Destination Guide Section ---
         if (guide) {
-            const renderReferences = (refs) => {
-                if (!refs || refs.length === 0) return '';
-                return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
-                    <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
-                </div>`;
-            };
-
             html += `
                 <div style="margin-bottom: 2rem; page-break-inside: avoid; background: rgba(0,0,0,0.03); padding: 1rem; border-radius: 8px;">
                     <h2 class="report-day-header" style="border-left-color: var(--brand-green-dark);">Destination Guide</h2>
@@ -1441,6 +1449,7 @@ function clearMap() {
                                 ${f.name}
                             </h4>
                             ${detailsHtml}
+                            ${renderReferences(f.references)}
                         </li>
                     `;
                 }).join('') || '<li>No facilities found</li>'}
