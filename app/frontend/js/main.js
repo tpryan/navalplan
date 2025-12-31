@@ -1150,7 +1150,13 @@ function clearMap() {
         
         // Fetch Briefings in parallel
         const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
-        const briefings = await Promise.all(briefingPromises);
+        // Also fetch the Voyage Guide
+        const guidePromise = API.getVoyageGuide(currentVoyage.id).catch(() => null);
+        
+        const [briefings, guide] = await Promise.all([
+            Promise.all(briefingPromises),
+            guidePromise
+        ]);
         
         // 2. Build HTML
         let html = `
@@ -1160,7 +1166,76 @@ function clearMap() {
             </p>
             <hr />
         `;
-        
+
+        // --- Add Destination Guide Section ---
+        if (guide) {
+            const renderReferences = (refs) => {
+                if (!refs || refs.length === 0) return '';
+                return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
+                    <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+                </div>`;
+            };
+
+            html += `
+                <div style="margin-bottom: 2rem; page-break-inside: avoid; background: rgba(0,0,0,0.03); padding: 1rem; border-radius: 8px;">
+                    <h2 class="report-day-header" style="border-left-color: var(--brand-green-dark);">Destination Guide</h2>
+                    <p><strong>Summary:</strong> ${guide.summary || 'N/A'}</p>
+                    
+                    ${guide.sailing_season ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Sailing Season:</strong>
+                        <ul style="margin-top:0.5rem;">
+                            <li><strong>Best Months:</strong> ${(guide.sailing_season.primary_season_months || []).join(', ')}</li>
+                            <li><strong>Storm Season:</strong> ${(guide.sailing_season.storm_season_months || []).join(', ')}</li>
+                            <li><strong>Notes:</strong> ${guide.sailing_season.notes || ''} ${renderReferences(guide.sailing_season.references)}</li>
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    ${(guide.hazards && guide.hazards.length > 0) ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Hazards:</strong>
+                        <ul style="margin-top:0.5rem;">
+                            ${guide.hazards.map(h => {
+                                const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Info)</a>` : '';
+                                return `<li><strong>${h.title}${link}:</strong> ${h.description} ${renderReferences(h.references)}</li>`;
+                            }).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+                    
+                     ${(guide.hubs && guide.hubs.length > 0) ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Major Hubs:</strong>
+                        <ul style="margin-top:0.5rem;">
+                            ${guide.hubs.map(h => {
+                                const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Website)</a>` : '';
+                                return `<li><strong>${h.name}${link}:</strong> ${h.description} ${renderReferences(h.references)}</li>`;
+                            }).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    ${guide.charter_info ? `
+                    <div style="margin-top:1rem;">
+                         <strong>Charter Info:</strong>
+                         <p style="margin:0.5rem 0 0.5rem 1rem;"><strong>Available:</strong> ${guide.charter_info.is_charter_destination ? 'Yes' : 'No'}</p>
+                         <div style="margin-left:1rem;">
+                            <strong>Companies:</strong>
+                            ${(guide.charter_info.companies && guide.charter_info.companies.length > 0) ? 
+                                `<ul style="margin-top:0.2rem;">${guide.charter_info.companies.map(comp => {
+                                    if (typeof comp === 'string') return `<li>${comp}</li>`;
+                                    const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
+                                    return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
+                                }).join('')}</ul>` : 'None listed'}
+                         </div>
+                    </div>
+                    ` : ''}
+                </div>
+                <hr />
+            `;
+        }
+
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
             html += `
