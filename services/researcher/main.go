@@ -42,11 +42,16 @@ func main() {
 		clog.Fatalf("Failed to create weather tool: %v", err)
 	}
 
+	tideTool, err := tools.NewTideTool()
+	if err != nil {
+		clog.Fatalf("Failed to create tide tool: %v", err)
+	}
+
 	// 2. Define Sub-Agent (Search Specialist)
 	searchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "search_specialist",
 		Model:       model,
-		Description: "Finds information on the web (tides, facilities, reviews).",
+		Description: "Finds information on the web (facilities, reviews).",
 		Instruction: `
 			You are a Web Search Specialist.
 			Your goal is to find specific information requested by the user using Google Search.
@@ -73,21 +78,19 @@ func main() {
 
 			EXECUTION PLAN:
 			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
-			2. TIDES & FACILITIES: Call the 'search_specialist' tool to find:
-			   - "Official NOAA tide station name and ID for [Location]"
-			   - "Tide table for [Location] for [Date], [Date - 1 day], and [Date + 1 day]" (We need surrounding days for context).
+			2. TIDES: Call the 'get_tides' tool to get official NOAA tide predictions for the location and date.
+			3. FACILITIES: Call the 'search_specialist' tool to find:
 			   - "Anchorages near [Location] details"
 			   - "Marina contact info [Location]"
 
 			OUTPUT:
 			Combine all findings into this JSON structure. Ensure "details" is always an object with descriptive keys, not a string.
-			For the weather_summary:
-			- summary: A professional, natural language summary of the conditions (e.g., "Expect clear skies with moderate westerly winds. This is a seasonal estimate based on historical averages."). Do NOT just concatenate the tool output; synthesize a readable sentence.
-			- wind_speed_kt: The numerical maximum wind speed in knots.
-			- wind_direction: The cardinal direction (e.g. "NW").
-			- wave_height_ft: The numerical maximum wave height in feet.
-			- debug_duration_ms: The performance timing from the tool.
-
+			
+			CRITICAL RULES:
+			1. For 'tides.events': You MUST include ALL events returned by the 'get_tides' tool, including those from the previous and next days. The frontend needs the full 48-hour dataset for graphing. DO NOT filter the list.
+			2. For 'tides.station_name': Use the EXACT station_name returned by the 'get_tides' tool. DO NOT substitute it with a more general or famous location.
+			3. For 'weather_summary': Synthesize a readable sentence for the summary (e.g., "Expect clear skies with moderate westerly winds...").
+			
 			{
 				"location_name": "Resolved Name",
 				"weather_summary": {
@@ -98,7 +101,7 @@ func main() {
 					"debug_duration_ms": 0
 				},
 				"tides": {
-					"station_name": "Full Station Name and NOAA ID (if available)",
+					"station_name": "COPY_EXACT_STATION_NAME_FROM_TOOL_OUTPUT",
 					"events": [
 						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5},
 						{"time": "2025-05-01 12:45", "type": "Low", "height_ft": 1.2}
@@ -120,6 +123,7 @@ func main() {
 		`,
 		Tools: []tool.Tool{
 			weatherTool,
+			tideTool,
 			agenttool.New(searchAgent, nil),
 		},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},

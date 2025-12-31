@@ -439,25 +439,24 @@ async function handleResearchClick(stop, button) {
 function renderTideChart(canvasId, tideData, targetDateStr) {
     if (!tideData || !tideData.events) return;
 
-    // Target Date Midnight
+    // Target Date Midnight (UTC)
     const targetDate = new Date(targetDateStr);
     const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
-    const targetEnd = new Date(targetDate).setUTCHours(24,0,0,0);
 
     // Parse Events
     // Data: { time: "YYYY-MM-DD HH:MM", height_ft: 1.2 }
     const points = [];
     tideData.events.forEach(e => {
-        // Try parsing ISO or loose format
-        let d = new Date(e.time);
-        if (isNaN(d.getTime())) {
-            // Fallback for simple "HH:MM" (assume target date)
-            const parts = e.time.split(':');
-            if (parts.length >= 2) {
-                d = new Date(targetDate);
-                d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0);
-            }
+        // The API returns GMT time in "YYYY-MM-DD HH:MM" format.
+        // We append 'Z' to treat it as UTC.
+        let timeStr = e.time;
+        // Check if it has a timezone (Z or +HH:MM or -HH:MM)
+        const hasTimezone = timeStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(timeStr);
+        if (!hasTimezone) {
+             timeStr = timeStr.replace(' ', 'T') + 'Z';
         }
+
+        let d = new Date(timeStr);
         
         if (!isNaN(d.getTime())) {
             // Calculate relative hour (-24 to +48 range is fine)
@@ -502,7 +501,7 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
                             let label = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
                             if (h < 0) label += " (Prev Day)";
                             if (h >= 24) label += " (Next Day)";
-                            return label;
+                            return `Local Time: ${label}`;
                         }
                     }
                 }
@@ -512,7 +511,7 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
                     type: 'linear',
                     min: 0,
                     max: 24,
-                    title: { display: true, text: 'Hour (Midnight to Midnight)' },
+                    title: { display: true, text: 'Hour (Local Time)' },
                     ticks: {
                         stepSize: 3,
                         callback: (v) => {
@@ -542,6 +541,11 @@ function showBriefing(briefing) {
         return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
     };
 
+    // Determine Target Date for Filtering & Charting
+    const stop = currentStops.find(s => s.id === briefing.stop_id);
+    const targetDateFull = stop ? stop.target_date : new Date().toISOString();
+    const targetDateYMD = targetDateFull.split('T')[0]; // "YYYY-MM-DD"
+
     // Weather
     const weather = briefing.weather_summary || {};
     const weatherHtml = `
@@ -558,16 +562,24 @@ function showBriefing(briefing) {
     `;
 
     // Tides
+    // Filter events to only show the target date in the LIST
     const tides = briefing.tides || {};
-    const tideEvents = (tides.events || []).map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
+    const allEvents = tides.events || [];
+    const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
+
+    const tideEventsHtml = displayEvents.map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
+    
     const tidesHtml = `
         <div class="briefing-section">
-            <h3>Tides (${tides.station_name || 'Unknown Station'})</h3>
+            <h3>Tides (${tides.station_name || 'Unknown Station'}) - Local Time - ${targetDateYMD}</h3>
             <div class="tide-box" style="margin-bottom:1rem;">
                 <div style="height:200px; width:100%; position:relative;">
                     <canvas id="tideChartModal"></canvas>
                 </div>
-                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">${tideEvents || '<li>No tide data</li>'}</ul>
+                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">
+                    ${tideEventsHtml || '<li>No tide data for this date</li>'}
+                </ul>
+                <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period. List shows events on ${targetDateYMD} only.</p>
             </div>
         </div>
     `;
@@ -625,12 +637,9 @@ function showBriefing(briefing) {
     modalOverlay.classList.remove('hidden');
 
     // Render Chart (must happen after modal is visible for size calc)
-    if (tides.events && tides.events.length > 0) {
-        // Find the stop date to anchor the chart
-        const stop = currentStops.find(s => s.id === briefing.stop_id);
-        const targetDateStr = stop ? stop.target_date : new Date().toISOString(); // Fallback
-        
-        renderTideChart('tideChartModal', tides, targetDateStr);
+    // Pass ALL events to chart for smooth interpolation
+    if (allEvents.length > 0) {
+        renderTideChart('tideChartModal', tides, targetDateFull);
     }
 
     const hide = () => {
@@ -909,15 +918,21 @@ function clearMap() {
                 // Tides
                 if (b.tides && b.tides.events) {
                     const canvasId = `tideChart_${idx}`;
-                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'})</h3>
+                    const targetDateYMD = stop.target_date.split('T')[0];
+                    const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
+
+                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}</h3>
                              <div style="height:200px; width:100%; position:relative; margin-bottom:1rem;">
                                 <canvas id="${canvasId}"></canvas>
                              </div>
                              <ul>`;
-                    b.tides.events.forEach(e => {
+                    displayEvents.forEach(e => {
                         html += `<li>${e.time} - ${e.type} (${e.height_ft} ft)</li>`;
                     });
-                    html += `</ul>`;
+                    if (displayEvents.length === 0) {
+                        html += `<li>No tide data for this date</li>`;
+                    }
+                    html += `</ul><p style="font-size:0.8em; color:#999;">* Graph shows 24h period.</p>`;
                 }
                 
                 // Facilities

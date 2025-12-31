@@ -22,13 +22,13 @@ run: build-js
 	@echo "Starting NavalPlan backend (Production Mode)..."
 	# We assume .env is sourced or variables are set in your shell
 	# For convenience, you can add a local .env loader here
-	cd app/backend && go run main.go --content=./static.min
+	cd app/backend && go run -mod=vendor main.go --content=./static.min
 
 # 2. RUN-BACKEND: Runs the Go backend without rebuilding JS (for dev)
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
 	mkdir -p app/backend/static.min
-	cd app/backend && go run main.go --content=./static.min
+	cd app/backend && go run -mod=vendor main.go --content=./static.min
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
@@ -51,7 +51,7 @@ run-frontend:
 run-agent:
 	@echo "Starting NavalPlan Researcher Agent..."
 	# Requires GEMINI_API_KEY to be set
-	cd services/researcher && go run main.go
+	cd services/researcher && go run -mod=vendor main.go
 
 # --- Combined Dev ---
 
@@ -99,5 +99,10 @@ db-console:
 test:
 	cd app/backend && go test ./... -cover
 
-deps:
+deps: deps-backend deps-researcher
+
+deps-backend:
 	cd app/backend && go mod tidy && go mod vendor
+
+deps-researcher:
+	cd services/researcher && go mod tidy && go mod vendor
