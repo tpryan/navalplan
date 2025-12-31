@@ -614,7 +614,10 @@ function showBriefing(briefing) {
     
     const tidesHtml = `
         <div class="briefing-section">
-            <h3>Tides (${tides.station_name || 'Unknown Station'}) - Local Time - ${targetDateYMD}</h3>
+            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="material-symbols-outlined">waves</span>
+                Tides (${tides.station_name || 'Unknown Station'}) - Local Time - ${targetDateYMD}
+            </h3>
             <div class="tide-box" style="margin-bottom:1rem;">
                 <div style="height:200px; width:100%; position:relative;">
                     <canvas id="tideChartModal"></canvas>
@@ -640,7 +643,10 @@ function showBriefing(briefing) {
     const facilities = briefing.facilities || [];
     const facilHtml = `
         <div class="briefing-section">
-            <h3>Facilities</h3>
+            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="material-symbols-outlined">warehouse</span>
+                Facilities
+            </h3>
             <ul class="facility-list">
                 ${facilities.map(f => {
                     // Icon Mapping
@@ -1039,7 +1045,10 @@ function clearMap() {
 
                     html += `
                         <div class="briefing-section">
-                            <h3>Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}</h3>
+                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="material-symbols-outlined">waves</span>
+                                Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}
+                            </h3>
                             <div class="tide-box" style="margin-bottom:1rem;">
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
@@ -1066,7 +1075,10 @@ function clearMap() {
                 if (b.facilities && b.facilities.length > 0) {
                      html += `
                         <div class="briefing-section">
-                            <h3>Facilities</h3>
+                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="material-symbols-outlined">warehouse</span>
+                                Facilities
+                            </h3>
                             <ul class="facility-list">
                      `;
                      
