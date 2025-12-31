@@ -890,9 +890,9 @@ function clearMap() {
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
             html += `
-                <div style="margin-bottom: 2rem;">
-                    <h2 style="background-color: #eee; padding: 0.5rem;">Day ${idx + 1}: ${stop.location_name}</h2>
-                    <p><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString()}</p>
+                <div style="margin-bottom: 3rem; page-break-inside: avoid;">
+                    <h2 class="report-day-header">Day ${idx + 1}: ${stop.location_name}</h2>
+                    <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString()}</p>
             `;
             
             if (b) {
@@ -906,12 +906,16 @@ function clearMap() {
                 if (b.weather_summary) {
                     const w = b.weather_summary;
                     html += `
-                        <h3>Weather</h3>
-                        <p>${isInvalid(w.summary) ? 'No summary available.' : w.summary}</p>
-                        <ul>
-                            <li>Wind: ${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</li>
-                            ${w.wave_height_ft > 0 ? `<li>Waves: ${w.wave_height_ft} ft</li>` : ''}
-                        </ul>
+                        <div class="briefing-section">
+                            <h3>Weather</h3>
+                            <div class="weather-box">
+                                <p><strong>Summary:</strong> ${isInvalid(w.summary) ? 'No summary available.' : w.summary}</p>
+                                <div class="briefing-grid">
+                                    <div><strong>Wind:</strong> ${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</div>
+                                    ${w.wave_height_ft > 0 ? `<div><strong>Waves:</strong> ${w.wave_height_ft} ft</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
                     `;
                 }
                 
@@ -920,43 +924,65 @@ function clearMap() {
                     const canvasId = `tideChart_${idx}`;
                     const targetDateYMD = stop.target_date.split('T')[0];
                     const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
+                    
+                    const tideEventsHtml = displayEvents.map(e => `<li><strong>${e.time}</strong> ${e.type}: ${e.height_ft} ft</li>`).join('');
 
-                    html += `<h3>Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}</h3>
-                             <div style="height:200px; width:100%; position:relative; margin-bottom:1rem;">
-                                <canvas id="${canvasId}"></canvas>
-                             </div>
-                             <ul>`;
-                    displayEvents.forEach(e => {
-                        html += `<li>${e.time} - ${e.type} (${e.height_ft} ft)</li>`;
-                    });
-                    if (displayEvents.length === 0) {
-                        html += `<li>No tide data for this date</li>`;
-                    }
-                    html += `</ul><p style="font-size:0.8em; color:#999;">* Graph shows 24h period.</p>`;
+                    html += `
+                        <div class="briefing-section">
+                            <h3>Tides (${b.tides.station_name || 'Station Unknown'}) - Local Time - ${targetDateYMD}</h3>
+                            <div class="tide-box" style="margin-bottom:1rem;">
+                                <div style="height:200px; width:100%; position:relative;">
+                                    <canvas id="${canvasId}"></canvas>
+                                </div>
+                                <ul style="list-style:none; padding:0; margin:0; font-size:0.9em; color:#666; margin-top:0.5rem;">
+                                    ${tideEventsHtml || '<li>No tide data for this date</li>'}
+                                </ul>
+                                <p style="font-size:0.8em; color:#999; margin-top:0.5rem;">* Graph shows 24h period.</p>
+                            </div>
+                        </div>
+                    `;
                 }
                 
                 // Facilities
                 if (b.facilities && b.facilities.length > 0) {
-                     html += `<h3>Facilities</h3>`;
+                     html += `
+                        <div class="briefing-section">
+                            <h3>Facilities</h3>
+                            <ul class="facility-list">
+                     `;
+                     
                      b.facilities.forEach(f => {
-                         html += `<p><strong>${f.name}</strong> (${f.type})</p>`;
-                         if (f.details) {
-                             const entries = Object.entries(f.details)
+                         let detailsHtml = '';
+                         if (typeof f.details === 'string') {
+                             detailsHtml = `<p>${f.details}</p>`;
+                         } else if (f.details && typeof f.details === 'object') {
+                             const rows = Object.entries(f.details)
                                 .filter(([_, v]) => {
                                     if (!v) return false;
                                     const sv = String(v).toLowerCase().trim();
                                     return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                                });
+                                })
+                                .map(([k, v]) => `
+                                    <tr>
+                                        <td style="font-weight:bold; padding-right:1rem; text-transform:capitalize;">${k.replace(/_/g, ' ')}</td>
+                                        <td>${v}</td>
+                                    </tr>
+                                `).join('');
                              
-                             if (entries.length > 0) {
-                                html += `<ul style="font-size: 0.9em; color: #555;">`;
-                                for (const [k, v] of entries) {
-                                    html += `<li><strong style="text-transform:capitalize;">${k.replace(/_/g, ' ')}:</strong> ${v}</li>`;
-                                }
-                                html += `</ul>`;
+                             if (rows) {
+                                detailsHtml = `<table style="font-size:0.9em; border-collapse:collapse;">${rows}</table>`;
                              }
                          }
+                         
+                         html += `
+                            <li class="facility-item">
+                                <h4>${f.name} <span style="font-weight:normal; font-size:0.8em">(${f.type})</span></h4>
+                                ${detailsHtml}
+                            </li>
+                         `;
                      });
+                     
+                     html += `</ul></div>`;
                 }
             } else {
                 html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;

@@ -1,3 +1,27 @@
 @import './base.css';
 @import './components/buttons.css';
 @import './layout.css';
+
+/* --- Report Specific Styles --- */
+.report-body {
+    font-family: var(--font-secondary);
+    color: var(--text-dark);
+}
+
+.report-day-header {
+    background-color: rgba(255, 255, 255, 0.5); /* Semi-transparent white to blend with modal bg */
+    padding: 0.8rem;
+    border-left: 5px solid var(--brand-medium); /* Brand Gold/Bronze */
+    color: var(--brand-dark);
+    font-family: var(--font-primary);
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.report-day-date {
+    margin-bottom: 1.5rem;
+    color: var(--text-light);
+    font-family: var(--font-primary);
+    padding-left: 1rem;
+}
