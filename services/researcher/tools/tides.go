@@ -18,7 +18,7 @@ type TideArgs struct {
 type TideEvent struct {
 	Time   string  `json:"time"`
 	Type   string  `json:"type"`
-	Height float64 `json:"height"`
+	Height float64 `json:"height_ft"`
 	Unit   string  `json:"unit"`
 }
 
