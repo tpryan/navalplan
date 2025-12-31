@@ -550,7 +550,10 @@ function showBriefing(briefing) {
     const weather = briefing.weather_summary || {};
     const weatherHtml = `
         <div class="briefing-section">
-            <h3>Weather</h3>
+            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span>
+                Weather
+            </h3>
             <div class="weather-box">
                 <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
                     <tr>
@@ -559,7 +562,10 @@ function showBriefing(briefing) {
                     </tr>
                     <tr>
                         <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
-                        <td style="padding:4px 8px;">${isInvalid(weather.condition) ? 'N/A' : weather.condition}</td>
+                        <td style="padding:4px 8px; display:flex; align-items:center; gap:0.5rem;">
+                            <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(weather.condition)}</span>
+                            ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
+                        </td>
                     </tr>
                     <tr>
                         <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
@@ -968,7 +974,10 @@ function clearMap() {
                     const w = b.weather_summary;
                     html += `
                         <div class="briefing-section">
-                            <h3>Weather</h3>
+                            <h3 style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
+                                Weather
+                            </h3>
                             <div class="weather-box">
                                 <table style="font-size:0.9em; border-collapse:collapse; width:100%;">
                                     <tr>
@@ -977,7 +986,10 @@ function clearMap() {
                                     </tr>
                                     <tr>
                                         <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Conditions</td>
-                                        <td style="padding:4px 8px;">${isInvalid(w.condition) ? 'N/A' : w.condition}</td>
+                                        <td style="padding:4px 8px; display:flex; align-items:center; gap:0.5rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
+                                            ${isInvalid(w.condition) ? 'N/A' : w.condition}
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td style="font-weight:bold; padding:4px 8px; vertical-align:top;">Wind</td>
@@ -1137,3 +1149,14 @@ function clearMap() {
         btn.innerHTML = originalContent;
     }
 }
+
+function getIconForWeather(description) {
+    const d = (description || '').toLowerCase();
+    if (d.includes('clear')) return 'clear_day';
+    if (d.includes('partly cloudy')) return 'partly_cloudy_day';
+    if (d.includes('overcast')) return 'cloud';
+    if (d.includes('drizzle')) return 'weather_mix';
+    if (d.includes('rain')) return 'rainy';
+    return 'cloud';
+}
+
