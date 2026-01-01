@@ -74,6 +74,10 @@ CREATE TABLE voyage_guide (
     hazards JSONB,
     hubs JSONB,
     charter_info JSONB,
+    airports JSONB,
+    country_info JSONB,
+    currencies JSONB,
+    points_of_interest JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

@@ -21,11 +21,15 @@ import (
 )
 
 type GuideAgentOutput struct {
-	Summary       string          `json:"summary"`
-	SailingSeason json.RawMessage `json:"sailing_season"`
-	Hazards       json.RawMessage `json:"hazards"`
-	Hubs          json.RawMessage `json:"hubs"`
-	CharterInfo   json.RawMessage `json:"charter_info"`
+	Summary          string          `json:"summary"`
+	SailingSeason    json.RawMessage `json:"sailing_season"`
+	Hazards          json.RawMessage `json:"hazards"`
+	Hubs             json.RawMessage `json:"hubs"`
+	CharterInfo      json.RawMessage `json:"charter_info"`
+	Airports         json.RawMessage `json:"airports"`
+	CountryInfo      json.RawMessage `json:"country_info"`
+	Currencies       json.RawMessage `json:"currencies"`
+	PointsOfInterest json.RawMessage `json:"points_of_interest"`
 }
 
 func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +148,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 		locName = *voyage.LocationName
 	}
 
-	prompt := fmt.Sprintf("Research sailing guide for location: %s", locName)
+	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locName)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
@@ -198,13 +202,17 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	}
 
 	guide := &models.VoyageGuide{
-		VoyageID:      voyage.ID,
-		Summary:       output.Summary,
-		SailingSeason: models.RawJSON(output.SailingSeason),
-		Hazards:       models.RawJSON(output.Hazards),
-		Hubs:          models.RawJSON(output.Hubs),
-		CharterInfo:   models.RawJSON(output.CharterInfo),
-		CreatedAt:     time.Now(),
+		VoyageID:         voyage.ID,
+		Summary:          output.Summary,
+		SailingSeason:    models.RawJSON(output.SailingSeason),
+		Hazards:          models.RawJSON(output.Hazards),
+		Hubs:             models.RawJSON(output.Hubs),
+		CharterInfo:      models.RawJSON(output.CharterInfo),
+		Airports:         models.RawJSON(output.Airports),
+		CountryInfo:      models.RawJSON(output.CountryInfo),
+		Currencies:       models.RawJSON(output.Currencies),
+		PointsOfInterest: models.RawJSON(output.PointsOfInterest),
+		CreatedAt:        time.Now(),
 	}
 
 	if err := h.DB.CreateVoyageGuide(guide); err != nil {
@@ -228,6 +236,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 
 	guide, err := h.DB.GetVoyageGuide(voyageID)
 	if err != nil {
+		log.Errorf("Failed to get voyage guide for voyage %d: %v", voyageID, err)
 		http.Error(w, "Voyage guide not found", http.StatusNotFound)
 		return
 	}

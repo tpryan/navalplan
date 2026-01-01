@@ -1585,6 +1585,52 @@ function clearMap() {
                          </div>
                     </div>
                     ` : ''}
+
+                    ${(guide.country_info || guide.currencies) ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Country & Culture:</strong>
+                        <ul style="margin-top:0.5rem;">
+                             ${guide.country_info ? `
+                                <li><strong>Country:</strong> ${guide.country_info.name || 'N/A'}</li>
+                                <li><strong>Language:</strong> ${(guide.country_info.languages || []).join(', ') || 'N/A'}</li>
+                                <li><strong>Timezone:</strong> ${guide.country_info.timezone || 'N/A'}</li>
+                                <li><strong>Emergency:</strong> ${guide.country_info.emergency_numbers ? Object.entries(guide.country_info.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</li>
+                             ` : ''}
+                             ${(guide.currencies && guide.currencies.length > 0) ? `
+                                <li><strong>Currency:</strong> ${guide.currencies.map(c => `${c.name} (${c.code}) - ${c.symbol || ''}`).join(', ')}</li>
+                             ` : ''}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    ${(guide.airports && guide.airports.length > 0) ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Nearest Airports:</strong>
+                        <ul style="margin-top:0.5rem;">
+                            ${guide.airports.map(a => `
+                                <li>
+                                    <strong>${a.name} (${a.iata_code || 'N/A'})</strong>
+                                    - ${a.type || 'Unknown'}, ${a.distance_km ? a.distance_km + ' km' : 'Unknown distance'}
+                                    ${renderReferences(a.references)}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    ${(guide.points_of_interest && guide.points_of_interest.length > 0) ? `
+                    <div style="margin-top:1rem;">
+                        <strong>Points of Interest:</strong>
+                        <ul style="margin-top:0.5rem;">
+                            ${guide.points_of_interest.map(poi => `
+                                <li>
+                                    <strong>${poi.name}:</strong> ${poi.description}
+                                    ${renderReferences(poi.references)}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
                 </div>
                 <hr />
             `;
@@ -1994,6 +2040,57 @@ function showVoyageGuide(guide) {
                 <div style="margin-top:0.5rem"><strong>Companies:</strong> ${companiesHtml}</div>
             </div>
         `;
+    }
+
+    // Country Info & Currency
+    if (guide.country_info || guide.currencies) {
+        const c = guide.country_info || {};
+        const curs = guide.currencies || [];
+        
+        let currencyHtml = 'N/A';
+        if (curs.length > 0) {
+            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
+        }
+
+        html += `
+            <div class="briefing-section">
+                <h3>Country & Culture</h3>
+                <table class="briefing-table">
+                    <tr><th class="briefing-th">Country</th><td class="briefing-td">${c.name || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Language</th><td class="briefing-td">${c.languages ? c.languages.join(', ') : 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Timezone</th><td class="briefing-td">${c.timezone || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Emergency</th><td class="briefing-td">${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Currency</th><td class="briefing-td">${currencyHtml}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Airports
+    if (guide.airports && guide.airports.length > 0) {
+        html += `<div class="briefing-section"><h3>Nearest Airports</h3><ul class="facility-list">`;
+        guide.airports.forEach(a => {
+            html += `<li class="facility-item">
+                <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
+                <p><strong>Type:</strong> ${a.type || 'Unknown'}</p>
+                <p><strong>Distance:</strong> ${a.distance_km ? a.distance_km + ' km' : 'Unknown'}</p>
+                ${renderReferences(a.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Points of Interest
+    if (guide.points_of_interest && guide.points_of_interest.length > 0) {
+        html += `<div class="briefing-section"><h3>Points of Interest</h3><ul class="facility-list">`;
+        guide.points_of_interest.forEach(poi => {
+            html += `<li class="facility-item">
+                <h4>${poi.name}</h4>
+                <p>${poi.description}</p>
+                ${renderReferences(poi.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
     }
 
     content.innerHTML = html;

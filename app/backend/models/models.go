@@ -1,6 +1,8 @@
 package models
 
 import (
+	"database/sql/driver"
+	"errors"
 	"time"
 )
 
@@ -62,14 +64,18 @@ type Briefing struct {
 }
 
 type VoyageGuide struct {
-	ID            int64     `json:"id" db:"id"`
-	VoyageID      int64     `json:"voyage_id" db:"voyage_id"`
-	Summary       string    `json:"summary" db:"summary"`
-	SailingSeason RawJSON   `json:"sailing_season" db:"sailing_season"`
-	Hazards       RawJSON   `json:"hazards" db:"hazards"`
-	Hubs          RawJSON   `json:"hubs" db:"hubs"`
-	CharterInfo   RawJSON   `json:"charter_info" db:"charter_info"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	ID               int64     `json:"id" db:"id"`
+	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
+	Summary          string    `json:"summary" db:"summary"`
+	SailingSeason    RawJSON   `json:"sailing_season" db:"sailing_season"`
+	Hazards          RawJSON   `json:"hazards" db:"hazards"`
+	Hubs             RawJSON   `json:"hubs" db:"hubs"`
+	CharterInfo      RawJSON   `json:"charter_info" db:"charter_info"`
+	Airports         RawJSON   `json:"airports" db:"airports"`
+	CountryInfo      RawJSON   `json:"country_info" db:"country_info"`
+	Currencies       RawJSON   `json:"currencies" db:"currencies"`
+	PointsOfInterest RawJSON   `json:"points_of_interest" db:"points_of_interest"`
+	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
 
 // RawJSON is a helper for JSONB columns
@@ -84,5 +90,28 @@ func (r RawJSON) MarshalJSON() ([]byte, error) {
 
 func (r *RawJSON) UnmarshalJSON(data []byte) error {
 	*r = append((*r)[0:0], data...)
+	return nil
+}
+
+func (r RawJSON) Value() (driver.Value, error) {
+	if r == nil {
+		return nil, nil
+	}
+	return string(r), nil
+}
+
+func (r *RawJSON) Scan(value interface{}) error {
+	if value == nil {
+		*r = nil
+		return nil
+	}
+	switch v := value.(type) {
+	case []byte:
+		*r = append((*r)[0:0], v...)
+	case string:
+		*r = append((*r)[0:0], []byte(v)...)
+	default:
+		return errors.New("type assertion to []byte failed")
+	}
 	return nil
 }

@@ -180,7 +180,7 @@ func main() {
 				"primary_season_months": ["November", "December", ...],
 				"storm_season_months": ["August", "September"],
 				"storm_risk_level": "High/Medium/Low",
-				"notes": "Hurricane season peaks in Sept."
+				"notes": "Hurricane season peaks in Sept.",
 				"references" : ["https://...", "https://..."]
 			  },
 			  "hazards": [
@@ -196,7 +196,22 @@ func main() {
 					 { "name": "Moorings", "url": "https://...", "references" : ["https://...", "https://..."]},
 					 { "name": "Dream Yacht", "url": "https://...", "references" : ["https://...", "https://..."]}
 				 ]
-			  }
+			  },
+			  "airports": [
+			     { "name": "Terrance B. Lettsome International Airport", "iata_code": "EIS", "type": "International", "distance_km": 15, "references": ["https://..."] }
+			  ],
+			  "country_info": {
+			     "name": "British Virgin Islands",
+			     "languages": ["English"],
+			     "timezone": "AST (UTC-4)",
+			     "emergency_numbers": { "Police": "999", "Medical": "999" }
+			  },
+			  "currencies": [
+			     { "name": "United States Dollar", "code": "USD", "symbol": "$" }
+			  ],
+			  "points_of_interest": [
+			     { "name": "The Baths", "description": "Famous beach area on Virgin Gorda...", "references": ["https://..."] }
+			  ]
 			}
 
 			Tools: Use Google Search to answer these specific questions:
@@ -205,8 +220,11 @@ func main() {
 			3. "Sailing hazards and anomalies [Location]"
 			4. "Major marinas and sailing hubs [Location]"
 			5. "Yacht charter companies [Location]"
+			6. "Nearest airports to [Location] for sailing"
+			7. "Currency and language in [Location]"
+			8. "Must-visit sailing points of interest [Location]"
 			
-			Important: Always try to find a relevant URL for hazards (e.g., wiki or chart info), hubs (official website), and especially charter companies. Always provide reference links. 
+			Important: Always try to find a relevant URL for hazards, hubs, charter companies, and points of interest. Always provide reference links. 
 
 			Please also return a list of sources where you got the information. Please make sure they are valid and still active urls. Use them to populate urls for the content in the json.  
 		`,
