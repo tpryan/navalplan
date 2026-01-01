@@ -55,7 +55,7 @@ run-agent:
 
 # --- Combined Dev ---
 
-dev:
+dev: build-js
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
 	@(trap 'kill 0' SIGINT; make run-backend & make run-agent & (sleep 3 && make run-frontend) & wait)
