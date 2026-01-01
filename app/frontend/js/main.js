@@ -1290,6 +1290,19 @@ async function renderMapStops() {
                         features: features
                     }
                 });
+
+                map.addLayer({
+                    id: 'facilities-circles',
+                    type: 'circle',
+                    source: 'facilities',
+                    paint: {
+                        'circle-radius': 15,
+                        'circle-opacity': 1,
+                        'circle-color': '#000',
+                        'circle-stroke-width': 1,
+                        'circle-stroke-color': '#314c3b'
+                    }
+                });
                 
                 map.addLayer({
                     id: 'facilities',
@@ -1297,17 +1310,8 @@ async function renderMapStops() {
                     source: 'facilities',
                     layout: {
                         'icon-image': ['get', 'icon'],
-                        'icon-allow-overlap': true,
-                        'text-field': ['get', 'title'],
-                        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                        'text-offset': [0, 1.25],
-                        'text-anchor': 'top',
-                        'text-size': 10
-                    },
-                    paint: {
-                        'text-color': '#555',
-                        'text-halo-color': '#fff',
-                        'text-halo-width': 1
+                        'icon-size': 1.0,
+                        'icon-allow-overlap': true
                     }
                 });
 
@@ -1390,6 +1394,12 @@ function clearMap() {
                 type: 'LineString',
                 coordinates: []
             }
+        });
+    }
+    if (map && map.getSource('facilities')) {
+        map.getSource('facilities').setData({
+            type: 'FeatureCollection',
+            features: []
         });
     }
 }
