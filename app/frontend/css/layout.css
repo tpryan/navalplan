@@ -358,6 +358,7 @@
   padding: 0.8rem;
   border-radius: var(--border-radius);
   border-left: 3px solid var(--brand-medium);
+  margin-bottom: 5px;
 }
 
 /* --- Floating User Menu --- */
