@@ -24,6 +24,7 @@ func main() {
 	// Configure charmbracelet/log
 	clog.SetOutput(os.Stdout)
 	clog.SetLevel(clog.DebugLevel)
+	clog.SetPrefix("agent")
 
 	// Redirect standard log to charmbracelet/log
 	stdLog := clog.StandardLog()
