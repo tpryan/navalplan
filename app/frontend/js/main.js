@@ -1533,11 +1533,12 @@ function clearMap() {
                     </div>
                     ` : ''}
 
-                    <p><strong>Summary:</strong> ${guide.summary || 'N/A'}</p>
+                    <h3>Summary</h3>
+                    <p>${guide.summary || 'N/A'}</p>
                     
                     ${guide.sailing_season ? `
                     <div style="margin-top:1rem;">
-                        <strong>Sailing Season:</strong>
+                        <h3>Sailing Season</h3>
                         <ul style="margin-top:0.5rem;">
                             <li><strong>Best Months:</strong> ${(guide.sailing_season.primary_season_months || []).join(', ')}</li>
                             <li><strong>Storm Season:</strong> ${(guide.sailing_season.storm_season_months || []).join(', ')}</li>
@@ -1548,11 +1549,11 @@ function clearMap() {
 
                     ${(guide.hazards && guide.hazards.length > 0) ? `
                     <div style="margin-top:1rem;">
-                        <strong>Hazards:</strong>
+                        <h3>Hazards</h3>
                         <ul style="margin-top:0.5rem;">
                             ${guide.hazards.map(h => {
                                 const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Info)</a>` : '';
-                                return `<li><strong>${h.title}${link}:</strong> ${h.description} ${renderReferences(h.references)}</li>`;
+                                return `<li><h4>${h.title}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
                             }).join('')}
                         </ul>
                     </div>
@@ -1560,11 +1561,11 @@ function clearMap() {
                     
                      ${(guide.hubs && guide.hubs.length > 0) ? `
                     <div style="margin-top:1rem;">
-                        <strong>Major Hubs:</strong>
+                        <h3>Major Hubs</h3>
                         <ul style="margin-top:0.5rem;">
                             ${guide.hubs.map(h => {
                                 const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Website)</a>` : '';
-                                return `<li><strong>${h.name}${link}:</strong> ${h.description} ${renderReferences(h.references)}</li>`;
+                                return `<li><h4>${h.name}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
                             }).join('')}
                         </ul>
                     </div>
@@ -1572,7 +1573,7 @@ function clearMap() {
 
                     ${guide.charter_info ? `
                     <div style="margin-top:1rem;">
-                         <strong>Charter Info:</strong>
+                         <h3>Charter Info</h3>
                          <p style="margin:0.5rem 0 0.5rem 1rem;"><strong>Available:</strong> ${guide.charter_info.is_charter_destination ? 'Yes' : 'No'}</p>
                          <div style="margin-left:1rem;">
                             <strong>Companies:</strong>
@@ -1580,7 +1581,7 @@ function clearMap() {
                                 `<ul style="margin-top:0.2rem;">${guide.charter_info.companies.map(comp => {
                                     if (typeof comp === 'string') return `<li>${comp}</li>`;
                                     const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
-                                    return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
+                                    return `<li><h4>${nameLink}</h4> ${renderReferences(comp.references)}</li>`;
                                 }).join('')}</ul>` : 'None listed'}
                          </div>
                     </div>
@@ -1588,7 +1589,7 @@ function clearMap() {
 
                     ${(guide.country_info || guide.currencies) ? `
                     <div style="margin-top:1rem;">
-                        <strong>Country & Culture:</strong>
+                        <h3>Country & Culture</h3>
                         <ul style="margin-top:0.5rem;">
                              ${guide.country_info ? `
                                 <li><strong>Country:</strong> ${guide.country_info.name || 'N/A'}</li>
@@ -1605,12 +1606,12 @@ function clearMap() {
 
                     ${(guide.airports && guide.airports.length > 0) ? `
                     <div style="margin-top:1rem;">
-                        <strong>Nearest Airports:</strong>
+                        <h3>Nearest Airports</h3>
                         <ul style="margin-top:0.5rem;">
                             ${guide.airports.map(a => `
                                 <li>
-                                    <strong>${a.name} (${a.iata_code || 'N/A'})</strong>
-                                    - ${a.type || 'Unknown'}, ${a.distance_km ? a.distance_km + ' km' : 'Unknown distance'}
+                                    <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
+                                    <p><strong>Type:</strong> ${a.type || 'Unknown'}, ${a.distance_km ? a.distance_km + ' km' : 'Unknown distance'}</p>
                                     ${renderReferences(a.references)}
                                 </li>
                             `).join('')}
@@ -1620,12 +1621,12 @@ function clearMap() {
 
                     ${(guide.points_of_interest && guide.points_of_interest.length > 0) ? `
                     <div style="margin-top:1rem;">
-                        <strong>Points of Interest:</strong>
+                        <h3>Points of Interest</h3>
                         <ul style="margin-top:0.5rem;">
                             ${guide.points_of_interest.map(poi => `
                                 <li>
-                                    <strong>${poi.name}:</strong> ${poi.description}
-                                    ${renderReferences(poi.references)}
+                                    <h4>${poi.name}</h4>
+                                    <p>${poi.description} ${renderReferences(poi.references)}</p>
                                 </li>
                             `).join('')}
                         </ul>
