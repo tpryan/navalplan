@@ -38,7 +38,7 @@ func NewTideTool() (tool.Tool, error) {
 	}, func(ctx tool.Context, args TideArgs) (TideResult, error) {
 		client := noaago.NewClient()
 
-		log.Infof("[TideTool] Searching for tides at %f, %f\n", args.Latitude, args.Longitude)
+		log.Infof("[TideTool] Searching for tides at %f, %f", args.Latitude, args.Longitude)
 
 		// 1. Find nearest station
 		// Search within 50 miles. We explicitly filter for "tidepredictions" to find
@@ -57,7 +57,7 @@ func NewTideTool() (tool.Tool, error) {
 			return TideResult{Error: "No tide stations found within 50 miles."}, nil
 		}
 
-		log.Infof("[TideTool] Found %d stations\n", len(stationsResp.Stations))
+		log.Infof("[TideTool] Found %d stations", len(stationsResp.Stations))
 
 		// 2. Iterate through closest stations to find one that supports predictions
 		// The API might return Current stations or others that don't support tide predictions.
@@ -70,7 +70,7 @@ func NewTideTool() (tool.Tool, error) {
 
 		for i := 0; i < limit; i++ {
 			station := stationsResp.Stations[i]
-			log.Infof("[TideTool] Trying station %d: %s (%s)\n", i, station.Name, station.ID)
+			log.Infof("[TideTool] Trying station %d: %s (%s)", i, station.Name, station.ID)
 
 			parsedDate, err := time.Parse("2006-01-02", args.Date)
 			if err != nil {
@@ -95,11 +95,11 @@ func NewTideTool() (tool.Tool, error) {
 			if err != nil {
 				// This station likely doesn't support predictions (e.g. it's a Current station).
 				// Try the next one.
-				log.Infof("[TideTool] Failed to get tides for %s: %v\n", station.Name, err)
+				log.Infof("[TideTool] Failed to get tides for %s: %v", station.Name, err)
 				lastErr = err
 				continue
 			}
-			log.Infof("[TideTool] Success with station %s\n", station.Name)
+			log.Infof("[TideTool] Success with station %s", station.Name)
 
 			// Success! Convert and return.
 			var events []TideEvent

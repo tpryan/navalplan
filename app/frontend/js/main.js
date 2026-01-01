@@ -235,6 +235,7 @@ function initUI() {
                               // Re-render to show normal buttons (microscopes) or maybe checkmarks?
                               // Simple approach: re-render itinerary to reset buttons to interactive state
                               renderItinerary(); 
+                              renderMapStops();
                               
                               showNotification('Research Complete', 'All research tasks have been completed successfully.');
                           }
@@ -709,6 +710,7 @@ async function handleResearchClick(stop, button) {
                     clearInterval(poll);
                     button.innerHTML = originalContent;
                     showBriefing(b); // Updates the already-open modal with data
+                    renderMapStops();
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
@@ -1124,6 +1126,7 @@ async function redoBriefing(oldBriefing, btn) {
                         clearInterval(poll);
                         btn.disabled = false;
                         showBriefing(b); // Re-render with new data
+                        renderMapStops();
                     }
                 }
             } catch (ignore) { }
