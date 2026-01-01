@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 
 	"app/models"
@@ -60,6 +61,28 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 			EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
 		},
 	})
+
+	// Map (if available)
+	mapboxToken := os.Getenv("NAVALPLAN_MB_TOKEN")
+	if mapboxToken != "" && voyage.Latitude != nil && voyage.Longitude != nil {
+		// Mapbox Static Image API
+		mapURL := fmt.Sprintf("https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/%f,%f,10,0/600x400?access_token=%s",
+			*voyage.Longitude, *voyage.Latitude, mapboxToken)
+
+		requests = append(requests, &docs.Request{
+			InsertInlineImage: &docs.InsertInlineImageRequest{
+				Uri:                  mapURL,
+				EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+			},
+		})
+
+		requests = append(requests, &docs.Request{
+			InsertText: &docs.InsertTextRequest{
+				Text:                 "\n\n",
+				EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+			},
+		})
+	}
 
 	for _, stop := range stops {
 		text := fmt.Sprintf("\n----------------\nStop: %s\nDate: %s\n", stop.LocationName, stop.TargetDate.Format("2006-01-02"))
