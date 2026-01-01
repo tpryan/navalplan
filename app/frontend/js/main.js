@@ -1249,10 +1249,10 @@ async function renderMapStops() {
                 if (b && b.facilities) {
                     b.facilities.forEach(f => {
                          if (f.latitude && f.longitude) {
-                             let icon = 'marker15';
+                             let icon = 'marker-15';
                              const type = (f.type || '').toLowerCase();
-                             if (type.includes('anchorage')) icon = 'harbor15';
-                             else if (type.includes('marina')) icon = 'warehouse15';
+                             if (type.includes('anchorage')) icon = 'harbor-15';
+                             else if (type.includes('marina')) icon = 'warehouse-15';
                              
                              features.push({
                                  type: 'Feature',

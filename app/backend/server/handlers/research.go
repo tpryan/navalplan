@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	"app/models"
+
+	"github.com/charmbracelet/log"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -90,7 +91,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := http.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		log.Printf("Failed to create agent session: %v", err)
+		log.Infof("Failed to create agent session: %v", err)
 	} else {
 		respSession.Body.Close()
 	}
@@ -112,20 +113,20 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("Failed to call agent: %v", err)
+		log.Infof("Failed to call agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Agent returned error: %s", body)
+		log.Infof("Agent returned error: %s", body)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Printf("Failed to decode agent response: %v", err)
+		log.Infof("Failed to decode agent response: %v", err)
 		return
 	}
 
@@ -138,7 +139,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	}
 
 	if responseText == "" {
-		log.Println("No response from agent")
+		log.Infof("No response from agent")
 		return
 	}
 
@@ -146,7 +147,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 
 	var output AgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Printf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		log.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
 	}
 
@@ -159,9 +160,9 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	}
 
 	if err := h.DB.CreateBriefing(briefing); err != nil {
-		log.Printf("Failed to save briefing: %v", err)
+		log.Infof("Failed to save briefing: %v", err)
 	}
-	log.Printf("Briefing saved for stop %d", stop.ID)
+	log.Infof("Briefing saved for stop %d", stop.ID)
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
@@ -211,14 +212,14 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 
 	go func() {
 		// 1. Research Voyage Guide
-		log.Printf("Starting guide research for voyage %d", voyageID)
+		log.Infof("Starting guide research for voyage %d", voyageID)
 		h.performGuideResearch(voyage)
 
 		// 2. Research each stop
 		for _, stop := range stops {
 			// We can throttle this if needed, but for now let's just launch them
 			// Maybe a small delay to not overwhelm the agent service if it's rate limited
-			log.Printf("Starting stop research for stop %d", stop.ID)
+			log.Infof("Starting stop research for stop %d", stop.ID)
 			h.performStopResearch(&stop)
 			time.Sleep(500 * time.Millisecond)
 		}
