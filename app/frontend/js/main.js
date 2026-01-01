@@ -161,15 +161,97 @@ function initUI() {
               btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
               btnResearchAll.disabled = true;
               
+              // 1. Visual Indicators: Spin all microscope icons
+              const researchBtns = document.querySelectorAll('.day-actions .research');
+              researchBtns.forEach(btn => {
+                  if (!btn.querySelector('.spin')) { // Don't double spin if already spinning
+                     btn.dataset.originalContent = btn.innerHTML;
+                     btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+                     btn.disabled = true;
+                  }
+              });
+
               try {
                   await API.triggerFullResearch(currentVoyage.id);
-                  alert('Full voyage research started. This may take a few minutes. Check individual stops or the guide for updates.');
+                  showNotification('Research Started', 'Full voyage research has started. The agent is analyzing the destination guide and all stops in the background.');
+                  
+                  // 2. Poll for completion
+                  const startTime = Date.now();
+                  const TIMEOUT_MS = 120000; // 2 minutes timeout
+                  
+                  const pendingStops = [...currentStops]; // Clone
+                  let guideComplete = false;
+                  
+                  const poll = setInterval(async () => {
+                      // Check timeout
+                      if (Date.now() - startTime > TIMEOUT_MS) {
+                          clearInterval(poll);
+                          btnResearchAll.innerHTML = originalContent;
+                          btnResearchAll.disabled = false;
+                          // Revert stuck spinners
+                          researchBtns.forEach(btn => {
+                             if (btn.disabled) {
+                                 btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
+                                 btn.disabled = false;
+                             }
+                          });
+                          showNotification('Research Timeout', 'Research is taking longer than expected. Please check individual stops.');
+                          return;
+                      }
+
+                      try {
+                          // Check Guide
+                          if (!guideComplete) {
+                              const g = await API.getVoyageGuide(currentVoyage.id);
+                              if (g) guideComplete = true;
+                          }
+
+                          // Check Stops
+                          // We iterate backwards to remove completed ones
+                          for (let i = pendingStops.length - 1; i >= 0; i--) {
+                              const stop = pendingStops[i];
+                              const b = await API.getBriefing(stop.id);
+                              if (b) {
+                                  // Find button and update
+                                  // We can't easily query by ID unless we add ID to button, but we can rely on DOM order if stable
+                                  // Better: Find stop in currentStops to get index?
+                                  // For now, let's just mark the stop as done.
+                                  // To update UI, we re-render itinerary? That might be disruptive.
+                                  // Let's just find the button row.
+                                  // Implementation Detail: In renderItinerary, we didn't add IDs to buttons.
+                                  // We can assume renderItinerary hasn't changed structure.
+                                  pendingStops.splice(i, 1);
+                              }
+                          }
+
+                          // If all done
+                          if (guideComplete && pendingStops.length === 0) {
+                              clearInterval(poll);
+                              btnResearchAll.innerHTML = originalContent;
+                              btnResearchAll.disabled = false;
+                              
+                              // Re-render to show normal buttons (microscopes) or maybe checkmarks?
+                              // Simple approach: re-render itinerary to reset buttons to interactive state
+                              renderItinerary(); 
+                              
+                              showNotification('Research Complete', 'All research tasks have been completed successfully.');
+                          }
+
+                      } catch (err) {
+                          console.error("Polling error", err);
+                      }
+                  }, 4000); // Poll every 4 seconds
+
               } catch (err) {
                   console.error(err);
-                  alert('Failed to trigger research.');
-              } finally {
                   btnResearchAll.innerHTML = originalContent;
                   btnResearchAll.disabled = false;
+                  // Revert spinners
+                  researchBtns.forEach(btn => {
+                     btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
+                     btn.disabled = false;
+                  });
+                  alert('Failed to trigger research.');
               }
           }
       });
@@ -198,6 +280,24 @@ function initUI() {
   
   if (btnCloseReport) {
       btnCloseReport.onclick = closeReport;
+  }
+
+  // Notification Modal Handlers
+  const modalNotification = document.getElementById('modal-notification');
+  const btnCloseNotification = document.getElementById('btn-close-notification');
+  
+  if (btnCloseNotification) {
+      btnCloseNotification.onclick = () => {
+          modalNotification.classList.add('hidden');
+          const modalOverlay = document.getElementById('modal-overlay');
+          // Only hide overlay if no other modal is open
+          if (document.getElementById('modal-new-voyage').classList.contains('hidden') &&
+              document.getElementById('modal-briefing').classList.contains('hidden') && 
+              document.getElementById('modal-report').classList.contains('hidden') &&
+              document.getElementById('modal-guide').classList.contains('hidden')) {
+              modalOverlay.classList.add('hidden');
+          }
+      };
   }
 
   // Guide Modal Close Handler
@@ -1726,5 +1826,21 @@ async function redoGuide(oldGuide, btn) {
     } catch (err) {
         console.error(err);
         btn.disabled = false;
+    }
+}
+
+function showNotification(title, message) {
+    const modal = document.getElementById('modal-notification');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const titleEl = document.getElementById('notification-title');
+    const msgEl = document.getElementById('notification-message');
+
+    if (modal && titleEl && msgEl) {
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        modal.classList.remove('hidden');
+        modalOverlay.classList.remove('hidden');
+    } else {
+        alert(`${title}\n\n${message}`);
     }
 }
