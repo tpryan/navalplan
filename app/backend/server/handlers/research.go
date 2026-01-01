@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"app/models"
 
 	"github.com/charmbracelet/log"
+	"google.golang.org/api/idtoken"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -89,9 +91,28 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	userID := "system"
 	sessionID := fmt.Sprintf("stop_%d", stop.ID)
 
+	ctx := context.Background()
+
+	// SECURE CLIENT CREATION
+	// If we are calling a Cloud Run service securely, we need an ID Token.
+	var client *http.Client
+	var err error
+
+	if strings.Contains(agentURL, "run.app") {
+		// Create an authenticated client that appends the OIDC token for the specific audience (agentURL)
+		client, err = idtoken.NewClient(ctx, agentURL)
+		if err != nil {
+			log.Errorf("Failed to create authenticated client: %v", err)
+			return
+		}
+	} else {
+		// Default client for localhost development
+		client = http.DefaultClient
+	}
+
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	respSession, err := http.Post(createSessionURL, "application/json", nil)
+	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
 		log.Infof("Failed to create agent session: %v", err)
 	} else {
@@ -113,7 +134,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	}{{Text: prompt}}
 
 	jsonData, _ := json.Marshal(reqBody)
-	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Infof("Failed to call agent: %v", err)
 		return

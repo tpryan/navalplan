@@ -1,0 +1,44 @@
+steps:
+# 1. Install Frontend Dependencies
+- name: 'gcr.io/cloud-builders/npm'
+  args: ['install']
+  dir: 'app/frontend'
+
+# 2. Build Frontend
+# This creates the production assets (usually in app/frontend/dist)
+- name: 'gcr.io/cloud-builders/npm'
+  args: ['run', 'build']
+  dir: 'app/frontend'
+
+# 3. Prepare Static Assets for Backend
+# Move the built frontend assets to the folder the Go backend expects (./static.min)
+- name: 'ubuntu'
+  script: |
+    rm -rf app/backend/static.min
+    mv app/frontend/dist app/backend/static.min
+  
+# 4. Test Backend
+- name: 'golang'
+  args: ['test', './...']
+  dir: 'app/backend'
+  env:
+  - 'GO111MODULE=on'
+
+# 5. Deploy Backend to Cloud Run
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - 'run'
+  - 'deploy'
+  - 'navalplan-backend'
+  - '--source'
+  - '.'
+  - '--region'
+  - 'us-central1'
+  - '--project'
+  - 'navalplan' # Ensure this matches your project ID
+  - '--allow-unauthenticated' # Publicly accessible
+  - '--set-env-vars'
+  - 'NAVALPLAN_DB_HOST=your-db-host,NAVALPLAN_DB_USER=your-db-user,NAVALPLAN_DB_PASS=your-db-pass,NAVALPLAN_DB_NAME=navalplan'
+  dir: 'app/backend'
+  
+logsBucket: gs://navalplan-logging-bucket
