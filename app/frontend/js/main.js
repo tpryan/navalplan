@@ -1034,12 +1034,25 @@ function showBriefing(briefing) {
                         detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
                     }
 
+                    let locHtml = '';
+                    if (f.latitude && f.longitude) {
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        locHtml = `
+                            <p style="margin: 0.2rem 0; color: #666; font-size: 0.9em;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">my_location</span>
+                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
+                                <a href="${googleMapsUrl}" target="_blank" style="margin-left:5px;">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
                     return `
                         <li class="facility-item">
                             <h4 class="briefing-header-icon">
                                 <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
                                 ${f.name}
                             </h4>
+                            ${locHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -1584,12 +1597,25 @@ function clearMap() {
                         detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
                     }
 
+                    let locHtml = '';
+                    if (f.latitude && f.longitude) {
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        locHtml = `
+                            <p style="margin: 0.2rem 0; color: #666; font-size: 0.9em;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">my_location</span>
+                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
+                                <a href="${googleMapsUrl}" target="_blank" style="margin-left:5px;">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
                     return `
                         <li class="facility-item">
                             <h4 class="briefing-header-icon">
                                 <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
                                 ${f.name}
                             </h4>
+                            ${locHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>

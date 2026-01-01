@@ -91,11 +91,12 @@ func main() {
 			2. TIDES: Call the 'get_tides' tool to get official NOAA tide predictions for the location and date.
 			3. SUNRISE: Call the 'get_sunrise_sunset' tool to get sunrise and sunset times for the location and date.
 			4. FACILITIES: Call the 'search_specialist' tool to find:
-			   - "Anchorages near [Location] details"
-			   - "Marina contact info [Location]"
+			   - "Anchorages near [Location] details coordinates"
+			   - "Marina contact info [Location] coordinates"
 
 			OUTPUT:
 			Combine all findings into this JSON structure. Ensure "details" is always an object with descriptive keys, not a string.
+			Try to find latitude and longitude for facilities if available.
 			
 			CRITICAL RULES:
 			1. For 'tides.events': You MUST include ALL events returned by the 'get_tides' tool, including those from the previous and next days. The frontend needs the full 48-hour dataset for graphing. DO NOT filter the list.
@@ -129,6 +130,8 @@ func main() {
 					{
 						"name": "...",
 						"type": "Anchorage" | "Marina" | "Mooring",
+						"latitude": 0.0,
+						"longitude": 0.0,
 						"details": {
 							"description": "...",
 							"protection": "...",
