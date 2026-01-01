@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +14,7 @@ import (
 	"app/datastore"
 	"app/server"
 
+	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
@@ -28,16 +28,19 @@ func main() {
 	flag.Parse()
 
 	if os.Getenv("GOOGLE_CLIENT_ID") == "" || os.Getenv("GOOGLE_CLIENT_SECRET") == "" {
-		log.Println("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Authentication will fail.")
+		log.Warn("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Authentication will fail.")
 	}
 
 	if err := run(context.Background(), os.Stdout, os.Getenv, *contentDir); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		log.Error(err)
 		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDir string) error {
+	logger := log.New(w)
+	logger.SetPrefix("main")
+
 	// 1. Basic Configuration
 	port := getEnv("NAVALPLAN_PORT")
 	if port == "" {
@@ -73,8 +76,8 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(w, "NavalPlan starting on port %s...\n", port)
-		fmt.Fprintf(w, "Serving static content from: %s\n", contentDir)
+		logger.Infof("NavalPlan starting on port %s...", port)
+		logger.Infof("Serving static content from: %s", contentDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
@@ -87,9 +90,9 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 
 	select {
 	case <-quit:
-		log.Println("Shutting down server...")
+		logger.Info("Shutting down server...")
 	case <-ctx.Done():
-		log.Println("Context cancelled, shutting down...")
+		logger.Info("Context cancelled, shutting down...")
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
 	}
@@ -101,6 +104,6 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
-	log.Println("Server exiting")
+	logger.Info("Server exiting")
 	return nil
 }

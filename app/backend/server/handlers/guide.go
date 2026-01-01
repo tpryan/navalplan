@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
-	"app/models"
-
+	"github.com/charmbracelet/log"
 	"github.com/go-chi/chi/v5"
+
+	"app/models"
 )
 
 type GuideAgentOutput struct {
@@ -47,6 +47,9 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) performGuideResearch(voyage *models.Voyage) {
+	logger := log.New(os.Stderr)
+	logger.SetPrefix("guide-agent")
+
 	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
 	if agentURL == "" {
 		agentURL = "http://127.0.0.1:8081"
@@ -60,7 +63,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := http.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		log.Printf("Failed to create agent session: %v", err)
+		logger.Infof("Failed to create agent session: %v", err)
 	} else {
 		respSession.Body.Close()
 	}
@@ -86,20 +89,20 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("Failed to call agent: %v", err)
+		logger.Infof("Failed to call agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Agent returned error: %s", body)
+		logger.Infof("Agent returned error: %s", body)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Printf("Failed to decode agent response: %v", err)
+		logger.Infof("Failed to decode agent response: %v", err)
 		return
 	}
 
@@ -112,7 +115,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	}
 
 	if responseText == "" {
-		log.Println("No response from agent")
+		logger.Info("No response from agent")
 		return
 	}
 
@@ -120,7 +123,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Printf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		logger.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
 	}
 
@@ -135,9 +138,9 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	}
 
 	if err := h.DB.CreateVoyageGuide(guide); err != nil {
-		log.Printf("Failed to save voyage guide: %v", err)
+		logger.Infof("Failed to save voyage guide: %v", err)
 	}
-	log.Printf("Voyage guide saved for voyage %d", voyage.ID)
+	logger.Infof("Voyage guide saved for voyage %d", voyage.ID)
 }
 
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
