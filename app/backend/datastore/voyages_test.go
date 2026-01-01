@@ -14,11 +14,11 @@ func TestListVoyages(t *testing.T) {
 	db, mock := mockDB(t)
 	defer db.Close()
 
-	rows := sqlmock.NewRows([]string{"id", "title", "user_id", "start_date", "end_date", "search_radius", "search_radius_unit", "created_at"}).
+	rows := sqlmock.NewRows([]string{"id", "title", "person_id", "start_date", "end_date", "search_radius", "search_radius_unit", "created_at"}).
 		AddRow(1, "Voyage 1", 1, time.Now(), time.Now(), 60, "nm", time.Now()).
 		AddRow(2, "Voyage 2", 1, time.Now(), time.Now(), 60, "nm", time.Now())
 
-	query := `SELECT * FROM voyage WHERE user_id = $1 ORDER BY start_date DESC`
+	query := `SELECT * FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
 	voyages, err := db.ListVoyages(1)
@@ -32,7 +32,7 @@ func TestCreateVoyage(t *testing.T) {
 	defer db.Close()
 
 	v := &models.Voyage{
-		UserID:           1,
+		PersonID:         1,
 		Title:            "New Voyage",
 		StartDate:        time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
 		EndDate:          time.Date(2025, 7, 14, 0, 0, 0, 0, time.UTC),

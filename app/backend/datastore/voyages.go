@@ -4,17 +4,17 @@ import (
 	"app/models"
 )
 
-func (db *DB) ListVoyages(userID int64) ([]models.Voyage, error) {
-	voyages := []models.Voyage{}
-	query := `SELECT * FROM voyage WHERE user_id = $1 ORDER BY start_date DESC`
-	err := db.Select(&voyages, query, userID)
+func (db *DB) ListVoyages(personID int64) ([]models.Voyage, error) {
+	var voyages []models.Voyage
+	query := `SELECT * FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
+	err := db.Select(&voyages, query, personID)
 	return voyages, err
 }
 
 func (db *DB) CreateVoyage(v *models.Voyage) error {
 	query := `
-		INSERT INTO voyage (user_id, title, start_date, end_date, location_name, latitude, longitude, search_radius, search_radius_unit)
-		VALUES (:user_id, :title, :start_date, :end_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit)
+		INSERT INTO voyage (person_id, title, start_date, end_date, location_name, latitude, longitude, search_radius, search_radius_unit)
+		VALUES (:person_id, :title, :start_date, :end_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit)
 		RETURNING id, created_at`
 	
 	rows, err := db.NamedQuery(query, v)

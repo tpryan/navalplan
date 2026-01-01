@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type User struct {
+type Person struct {
 	ID         int64     `json:"id" db:"id"`
 	GoogleID   string    `json:"google_id" db:"google_id"`
 	Email      string    `json:"email" db:"email"`
@@ -15,14 +15,14 @@ type User struct {
 
 type Session struct {
 	Token     string    `json:"token" db:"token"`
-	UserID    int64     `json:"user_id" db:"user_id"`
+	PersonID  int64     `json:"person_id" db:"person_id"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	ExpiresAt time.Time `json:"expires_at" db:"expires_at"`
 }
 
 type Voyage struct {
 	ID               int64      `json:"id" db:"id"`
-	UserID           int64      `json:"user_id" db:"user_id"`
+	PersonID         int64      `json:"person_id" db:"person_id"`
 	Title            string     `json:"title" db:"title"`
 	StartDate        time.Time  `json:"start_date" db:"start_date"`
 	EndDate          time.Time  `json:"end_date" db:"end_date"`

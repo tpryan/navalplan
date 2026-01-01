@@ -21,8 +21,8 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) ListVoyages(userID int64) ([]models.Voyage, error) {
-	args := m.Called(userID)
+func (m *MockStore) ListVoyages(personID int64) ([]models.Voyage, error) {
+	args := m.Called(personID)
 	return args.Get(0).([]models.Voyage), args.Error(1)
 }
 
@@ -139,13 +139,13 @@ func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil)
 
-	userID := int64(1)
+	personID := int64(1)
 	expectedVoyages := []models.Voyage{
-		{ID: 1, Title: "Test Voyage 1", UserID: userID},
-		{ID: 2, Title: "Test Voyage 2", UserID: userID},
+		{ID: 1, Title: "Test Voyage 1", PersonID: personID},
+		{ID: 2, Title: "Test Voyage 2", PersonID: personID},
 	}
 
-	mockStore.On("ListVoyages", userID).Return(expectedVoyages, nil)
+	mockStore.On("ListVoyages", personID).Return(expectedVoyages, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
 	w := httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestCreateVoyage(t *testing.T) {
 
 	// Capture the voyage passed to CreateVoyage to simulate ID assignment or just check args
 	mockStore.On("CreateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
-		return v.Title == "New Voyage" && v.UserID == 1
+		return v.Title == "New Voyage" && v.PersonID == 1
 	})).Return(nil)
 
 	handler.CreateVoyage(w, req)

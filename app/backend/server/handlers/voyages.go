@@ -86,10 +86,10 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
-	// TODO: Get userID from context/session
-	userID := int64(1)
+	// TODO: Get personID from context/session
+	personID := int64(1)
 
-	voyages, err := h.DB.ListVoyages(userID)
+	voyages, err := h.DB.ListVoyages(personID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -106,8 +106,8 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Get userID from context
-	v.UserID = 1
+	// TODO: Get personID from context
+	v.PersonID = 1
 
 	if v.SearchRadius == 0 {
 		v.SearchRadius = 60

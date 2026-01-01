@@ -4,7 +4,7 @@ import "app/models"
 
 type Store interface {
 	// Voyages
-	ListVoyages(userID int64) ([]models.Voyage, error)
+	ListVoyages(personID int64) ([]models.Voyage, error)
 	CreateVoyage(v *models.Voyage) error
 	GetVoyage(id int64) (*models.Voyage, error)
 	UpdateVoyage(v *models.Voyage) error

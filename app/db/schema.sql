@@ -6,9 +6,9 @@ DROP TABLE IF EXISTS facility;
 DROP TABLE IF EXISTS stop;
 DROP TABLE IF EXISTS voyage;
 DROP TABLE IF EXISTS session;
-DROP TABLE IF EXISTS "user";
+DROP TABLE IF EXISTS person;
 
-CREATE TABLE "user" (
+CREATE TABLE person (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     google_id VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(255) NOT NULL,
@@ -19,14 +19,14 @@ CREATE TABLE "user" (
 
 CREATE TABLE session (
     token TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE voyage (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id INTEGER REFERENCES "user"(id) ON DELETE CASCADE,
+    person_id INTEGER REFERENCES person(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -78,8 +78,6 @@ CREATE TABLE voyage_guide (
 );
 
 CREATE INDEX idx_voyage_guide_voyage_id ON voyage_guide(voyage_id);
-
-
 CREATE INDEX idx_session_expires_at ON session(expires_at);
-CREATE INDEX idx_voyage_user_id ON voyage(user_id);
+CREATE INDEX idx_voyage_person_id ON voyage(person_id);
 CREATE INDEX idx_stop_voyage_id ON stop(voyage_id);

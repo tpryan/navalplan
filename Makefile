@@ -74,6 +74,7 @@ db-start:
 	@echo "Waiting for DB to accept connections..."
 	@sleep 3
 	@make db-schema
+	@make db-seed
 
 db-stop:
 	@echo "Stopping Database..."
@@ -89,7 +90,7 @@ db-schema:
 
 db-seed:
 	@echo "Seeding database..."
-	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/seed.sql
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/user.sql
 
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
