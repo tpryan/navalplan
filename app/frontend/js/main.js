@@ -1216,7 +1216,7 @@ function initMap() {
   });
 }
 
-function renderMapStops() {
+async function renderMapStops() {
     clearMap();
     if (!map) return;
 
@@ -1237,6 +1237,105 @@ function renderMapStops() {
             .addTo(map);
         markers.push(marker);
     });
+
+    // Fetch and Draw Facilities
+    // We do this async but don't block the line drawing
+    (async () => {
+        const features = [];
+        
+        for (const stop of sortedStops) {
+            try {
+                const b = await API.getBriefing(stop.id);
+                if (b && b.facilities) {
+                    b.facilities.forEach(f => {
+                         if (f.latitude && f.longitude) {
+                             let icon = 'marker15';
+                             const type = (f.type || '').toLowerCase();
+                             if (type.includes('anchorage')) icon = 'harbor15';
+                             else if (type.includes('marina')) icon = 'warehouse15';
+                             
+                             features.push({
+                                 type: 'Feature',
+                                 geometry: {
+                                     type: 'Point',
+                                     coordinates: [f.longitude, f.latitude]
+                                 },
+                                 properties: {
+                                     title: f.name,
+                                     icon: icon,
+                                     description: f.type,
+                                     lat: f.latitude,
+                                     lng: f.longitude
+                                 }
+                             });
+                         }
+                    });
+                }
+            } catch (err) {
+               // Ignore errors fetching briefings for map
+            }
+        }
+        
+        if (features.length > 0) {
+            if (map.getSource('facilities')) {
+                map.getSource('facilities').setData({
+                    type: 'FeatureCollection',
+                    features: features
+                });
+            } else {
+                map.addSource('facilities', {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: features
+                    }
+                });
+                
+                map.addLayer({
+                    id: 'facilities',
+                    type: 'symbol',
+                    source: 'facilities',
+                    layout: {
+                        'icon-image': ['get', 'icon'],
+                        'icon-allow-overlap': true,
+                        'text-field': ['get', 'title'],
+                        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                        'text-offset': [0, 1.25],
+                        'text-anchor': 'top',
+                        'text-size': 10
+                    },
+                    paint: {
+                        'text-color': '#555',
+                        'text-halo-color': '#fff',
+                        'text-halo-width': 1
+                    }
+                });
+
+                // Click event for facilities
+                map.on('click', 'facilities', (e) => {
+                    const coords = e.features[0].geometry.coordinates.slice();
+                    const props = e.features[0].properties;
+                    
+                    new mapboxgl.Popup()
+                        .setLngLat(coords)
+                        .setHTML(`
+                            <strong>${props.title}</strong><br>
+                            ${props.description}<br>
+                            <a href="https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}" target="_blank">View on Google Maps</a>
+                        `)
+                        .addTo(map);
+                });
+                
+                // Cursor style
+                map.on('mouseenter', 'facilities', () => {
+                    map.getCanvas().style.cursor = 'pointer';
+                });
+                map.on('mouseleave', 'facilities', () => {
+                    map.getCanvas().style.cursor = '';
+                });
+            }
+        }
+    })();
 
     // Draw Line
     const coords = sortedStops.map(s => [s.longitude, s.latitude]);
