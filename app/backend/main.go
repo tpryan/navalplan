@@ -76,8 +76,8 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 
 	errChan := make(chan error, 1)
 	go func() {
-		logger.Infof("NavalPlan starting on port %s...", port)
-		logger.Infof("Serving static content from: %s", contentDir)
+		log.Infof("NavalPlan starting on port %s...", port)
+		log.Infof("Serving static content from: %s", contentDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
@@ -90,9 +90,9 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 
 	select {
 	case <-quit:
-		logger.Info("Shutting down server...")
+		log.Info("Shutting down server...")
 	case <-ctx.Done():
-		logger.Info("Context cancelled, shutting down...")
+		log.Info("Context cancelled, shutting down...")
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
 	}
@@ -104,6 +104,6 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
-	logger.Info("Server exiting")
+	log.Info("Server exiting")
 	return nil
 }

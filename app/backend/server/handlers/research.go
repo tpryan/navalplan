@@ -214,18 +214,18 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	})
 
 	go func() {
-		logger := log.New(os.Stderr)
-		logger.SetPrefix("research-coordinator")
+		// logger := log.New(os.Stderr)
+		log.SetPrefix("research-coordinator")
 
 		// 1. Research Voyage Guide
-		logger.Infof("Starting guide research for voyage %d", voyageID)
+		log.Infof("Starting guide research for voyage %d", voyageID)
 		h.performGuideResearch(voyage)
 
 		// 2. Research each stop
 		for _, stop := range stops {
 			// We can throttle this if needed, but for now let's just launch them
 			// Maybe a small delay to not overwhelm the agent service if it's rate limited
-			logger.Infof("Starting stop research for stop %d", stop.ID)
+			log.Infof("Starting stop research for stop %d", stop.ID)
 			h.performStopResearch(&stop)
 			time.Sleep(500 * time.Millisecond)
 		}

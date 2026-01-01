@@ -47,8 +47,7 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) performGuideResearch(voyage *models.Voyage) {
-	logger := log.New(os.Stderr)
-	logger.SetPrefix("guide-agent")
+	log.SetPrefix("guide-agent")
 
 	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
 	if agentURL == "" {
@@ -63,7 +62,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := http.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		logger.Infof("Failed to create agent session: %v", err)
+		log.Infof("Failed to create agent session: %v", err)
 	} else {
 		respSession.Body.Close()
 	}
@@ -89,20 +88,20 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		logger.Infof("Failed to call agent: %v", err)
+		log.Infof("Failed to call agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		logger.Infof("Agent returned error: %s", body)
+		log.Infof("Agent returned error: %s", body)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		logger.Infof("Failed to decode agent response: %v", err)
+		log.Infof("Failed to decode agent response: %v", err)
 		return
 	}
 
@@ -115,7 +114,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	}
 
 	if responseText == "" {
-		logger.Info("No response from agent")
+		log.Info("No response from agent")
 		return
 	}
 
@@ -123,7 +122,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		logger.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		log.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
 	}
 
@@ -138,9 +137,9 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	}
 
 	if err := h.DB.CreateVoyageGuide(guide); err != nil {
-		logger.Infof("Failed to save voyage guide: %v", err)
+		log.Infof("Failed to save voyage guide: %v", err)
 	}
-	logger.Infof("Voyage guide saved for voyage %d", voyage.ID)
+	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
 }
 
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
