@@ -20,8 +20,17 @@ export async function checkSession() {
 function updateUIForLogin(person) {
     console.log('Auth: Updating UI for Login');
     const container = document.getElementById('auth-container');
+    const sidebar = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+
     if (!container) return;
 
+    // Show App Content
+    if (sidebar) sidebar.classList.remove('hidden');
+    if (mapContainer) mapContainer.classList.remove('hidden');
+
+    // Reset Container Style (remove modal class)
+    container.className = ''; 
     container.innerHTML = ''; // Clear existing content
 
     const menu = document.createElement('div');
@@ -42,15 +51,24 @@ function updateUIForLogin(person) {
 function updateUIForLogout() {
     console.log('Auth: Updating UI for Logout');
     const container = document.getElementById('auth-container');
+    const sidebar = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+    
     if (!container) return;
 
-    container.innerHTML = ''; // Clear existing content
+    // Hide App Content
+    if (sidebar) sidebar.classList.add('hidden');
+    if (mapContainer) mapContainer.classList.add('hidden');
 
-    const loginBtn = document.createElement('a');
-    loginBtn.id = 'btn-login-floating';
-    loginBtn.href = '/auth/google/login';
-    loginBtn.className = 'btn primary';
-    loginBtn.textContent = 'Login';
-    
-    container.appendChild(loginBtn);
+    // Show Full Screen Modal
+    container.className = 'full-screen-modal';
+    container.innerHTML = `
+        <div class="login-box">
+            <h1>NavalPlan</h1>
+            <p>Plan your next voyage with ease.</p>
+            <a href="/auth/google/login" class="btn primary" style="width: 100%; display: block; box-sizing: border-box; text-align: center; padding: 1rem; font-size: 1.1rem;">
+                Login with Google
+            </a>
+        </div>
+    `;
 }
