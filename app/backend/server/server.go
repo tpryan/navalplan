@@ -67,39 +67,43 @@ func New(db datastore.Store) (*Server, error) {
 
 	// API Routes (Placeholder)
 	r.Route("/api/v1", func(r chi.Router) {
-		// Protected Person Routes
-		r.Group(func(r chi.Router) {
-			r.Use(s.requireAuth)
-			r.Get("/person", h.GetPerson)
-			r.Put("/person", h.UpdatePerson)
-		})
-
-		r.Get("/voyages", h.ListVoyages)
-		r.Post("/voyages", h.CreateVoyage)
-		r.Get("/voyages/{id}", h.GetVoyage)
-		r.Put("/voyages/{id}", h.UpdateVoyage)
-		r.Delete("/voyages/{id}", h.DeleteVoyage)
-		r.Post("/voyages/{id}/export", h.ExportVoyage)
-		r.Post("/voyages/{id}/share", h.EnableSharing)
-		r.Delete("/voyages/{id}/share", h.DisableSharing)
-
-		r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
-		r.Post("/voyages/{id}/research", h.TriggerFullVoyageResearch)
-		r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
-
+		// --- Public Routes ---
 		r.Get("/public/voyages/{token}", h.GetPublicVoyage)
 		r.Get("/public/voyages/{token}/stops", h.GetPublicStops)
 
-		// Stop Management
-		r.Route("/voyages/{id}/stops", func(r chi.Router) {
-			r.Get("/", h.ListStops)
-			r.Post("/", h.CreateStop)
-		})
-		r.Route("/stops/{id}", func(r chi.Router) {
-			r.Put("/", h.UpdateStop)
-			r.Delete("/", h.DeleteStop)
-			r.Post("/research", h.TriggerResearch)
-			r.Get("/briefing", h.GetBriefing)
+		// --- Protected Routes ---
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireAuth)
+
+			// Person
+			r.Get("/person", h.GetPerson)
+			r.Put("/person", h.UpdatePerson)
+
+			// Voyages
+			r.Get("/voyages", h.ListVoyages)
+			r.Post("/voyages", h.CreateVoyage)
+			r.Get("/voyages/{id}", h.GetVoyage)
+			r.Put("/voyages/{id}", h.UpdateVoyage)
+			r.Delete("/voyages/{id}", h.DeleteVoyage)
+			r.Post("/voyages/{id}/export", h.ExportVoyage)
+			r.Post("/voyages/{id}/share", h.EnableSharing)
+			r.Delete("/voyages/{id}/share", h.DisableSharing)
+
+			r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
+			r.Post("/voyages/{id}/research", h.TriggerFullVoyageResearch)
+			r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
+
+			// Stop Management
+			r.Route("/voyages/{id}/stops", func(r chi.Router) {
+				r.Get("/", h.ListStops)
+				r.Post("/", h.CreateStop)
+			})
+			r.Route("/stops/{id}", func(r chi.Router) {
+				r.Put("/", h.UpdateStop)
+				r.Delete("/", h.DeleteStop)
+				r.Post("/research", h.TriggerResearch)
+				r.Get("/briefing", h.GetBriefing)
+			})
 		})
 	})
 

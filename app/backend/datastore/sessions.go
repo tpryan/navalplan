@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -15,10 +16,10 @@ func (db *DB) CreateSession(token string, personID int64, expiresAt time.Time) e
 	return err
 }
 
-func (db *DB) GetSession(token string) (*models.Session, error) {
+func (db *DB) GetSession(ctx context.Context, token string) (*models.Session, error) {
 	var session models.Session
 	query := `SELECT * FROM session WHERE token = $1 AND expires_at > NOW()`
-	err := db.Get(&session, query, token)
+	err := db.GetContext(ctx, &session, query, token)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

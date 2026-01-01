@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"database/sql"
 
 	"app/models"
@@ -19,10 +20,10 @@ func (db *DB) FindPersonByGoogleID(googleID string) (*models.Person, error) {
 	return &person, nil
 }
 
-func (db *DB) GetPersonByID(id int64) (*models.Person, error) {
+func (db *DB) GetPersonByID(ctx context.Context, id int64) (*models.Person, error) {
 	var person models.Person
 	query := `SELECT * FROM "person" WHERE id = $1`
-	err := db.Get(&person, query, id)
+	err := db.GetContext(ctx, &person, query, id)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +35,7 @@ func (db *DB) CreatePerson(googleID, email, name, pictureURL string) (*models.Pe
 		INSERT INTO "person" (google_id, email, name, picture_url)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at`
-	
+
 	var person models.Person
 	person.GoogleID = googleID
 	person.Email = email

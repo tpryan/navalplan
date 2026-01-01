@@ -1,8 +1,10 @@
 package datastore
 
 import (
-	"app/models"
+	"context"
 	"time"
+
+	"app/models"
 )
 
 type Store interface {
@@ -32,12 +34,12 @@ type Store interface {
 
 	// Person
 	FindPersonByGoogleID(googleID string) (*models.Person, error)
-	GetPersonByID(id int64) (*models.Person, error)
+	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
 	CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error)
 	UpdatePersonName(id int64, name string) error
 
 	// Session
 	CreateSession(token string, personID int64, expiresAt time.Time) error
-	GetSession(token string) (*models.Session, error)
+	GetSession(ctx context.Context, token string) (*models.Session, error)
 	DeleteSession(token string) error
 }

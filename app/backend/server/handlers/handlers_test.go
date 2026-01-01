@@ -12,6 +12,7 @@ import (
 	"app/datastore"
 	"app/models"
 	"app/server/handlers"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -125,7 +126,7 @@ func (m *MockStore) FindPersonByGoogleID(googleID string) (*models.Person, error
 	return args.Get(0).(*models.Person), args.Error(1)
 }
 
-func (m *MockStore) GetPersonByID(id int64) (*models.Person, error) {
+func (m *MockStore) GetPersonByID(ctx context.Context, id int64) (*models.Person, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -151,7 +152,7 @@ func (m *MockStore) CreateSession(token string, personID int64, expiresAt time.T
 	return args.Error(0)
 }
 
-func (m *MockStore) GetSession(token string) (*models.Session, error) {
+func (m *MockStore) GetSession(ctx context.Context, token string) (*models.Session, error) {
 	args := m.Called(token)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -278,7 +279,7 @@ func TestStopOperations(t *testing.T) {
 	r.ServeHTTP(wList, reqList)
 
 	assert.Equal(t, http.StatusOK, wList.Code)
-	
+
 	// Test CreateStop
 	body := `{"location_name": "New Stop", "latitude": 48.0, "longitude": -123.0, "target_date": "2025-07-02T00:00:00Z"}`
 	reqCreate := httptest.NewRequest("POST", "/voyages/1/stops", strings.NewReader(body))
@@ -338,11 +339,11 @@ func TestSharingOperations(t *testing.T) {
 	r.Get("/public/voyages/{token}", handler.GetPublicVoyage)
 
 	voyageID := int64(1)
-	
+
 	// Enable Sharing
 	mockStore.On("UpdateVoyageSharing", voyageID, mock.AnythingOfType("*string"), true).Return(nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, IsPublic: true}, nil)
-	
+
 	reqEnable := httptest.NewRequest("POST", "/voyages/1/share", nil)
 	wEnable := httptest.NewRecorder()
 	r.ServeHTTP(wEnable, reqEnable)
@@ -351,7 +352,7 @@ func TestSharingOperations(t *testing.T) {
 	// Get Public Voyage
 	token := "some-token"
 	mockStore.On("GetVoyageByToken", token).Return(&models.Voyage{ID: voyageID, Title: "Public Voyage"}, nil)
-	
+
 	reqPublic := httptest.NewRequest("GET", "/public/voyages/some-token", nil)
 	wPublic := httptest.NewRecorder()
 	r.ServeHTTP(wPublic, reqPublic)
@@ -368,7 +369,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 	r.Delete("/stops/{id}", handler.DeleteStop)
 
 	stopID := int64(100)
-	
+
 	// Update
 	body := `{"location_name": "Updated Stop"}`
 	mockStore.On("UpdateStop", mock.MatchedBy(func(s *models.Stop) bool {
@@ -398,7 +399,7 @@ func TestResearchBriefing(t *testing.T) {
 	r.Get("/stops/{id}/briefing", handler.GetBriefing)
 
 	stopID := int64(10)
-	
+
 	// Trigger
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID}, nil)
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
@@ -434,7 +435,6 @@ func TestDisableSharing(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-
 func TestTriggerFullVoyageResearch(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil)
@@ -455,4 +455,3 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockStore.AssertExpectations(t)
 }
-

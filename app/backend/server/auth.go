@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-
-	appContext "app/context"
 )
 
 func (s *Server) oauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
@@ -104,31 +102,6 @@ func (s *Server) oauthLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func (s *Server) requireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie("navalplan_session")
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		session, err := s.DB.GetSession(c.Value)
-		if err != nil || session == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		person, err := s.DB.GetPersonByID(session.PersonID)
-		if err != nil || person == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := appContext.AddPersonToContext(r.Context(), person)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }
 
 // Helpers
