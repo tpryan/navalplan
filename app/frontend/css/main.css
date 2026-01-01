@@ -65,7 +65,8 @@
 }
 
 .briefing-table-label-width {
-    width: 100px;
+    width: 20ch;
+    white-space: nowrap;
 }
 
 .briefing-note {

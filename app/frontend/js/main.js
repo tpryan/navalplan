@@ -864,7 +864,7 @@ function showBriefing(briefing) {
                         <td class="briefing-td">${isInvalid(weather.summary) ? 'N/A' : weather.summary}</td>
                     </tr>
                     <tr>
-                        <th class="briefing-th">Conditions</th>
+                        <th class="briefing-th briefing-table-label-width">Conditions</th>
                         <td class="briefing-td briefing-td-icon">
                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(weather.condition)}</span>
                             ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
@@ -872,17 +872,17 @@ function showBriefing(briefing) {
                     </tr>
                     ${(weather.temp_max_f || weather.temp_min_f) ? `
                     <tr>
-                        <th class="briefing-th">Temp</th>
+                        <th class="briefing-th briefing-table-label-width">Temp</th>
                         <td class="briefing-td">High: ${Math.round(weather.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(weather.temp_min_f)}°F</td>
                     </tr>
                     ` : ''}
                     <tr>
-                        <th class="briefing-th">Wind</th>
+                        <th class="briefing-th briefing-table-label-width">Wind</th>
                         <td class="briefing-td">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
                     </tr>
                     ${weather.wave_height_ft > 0 ? `
                     <tr>
-                        <th class="briefing-th">Waves</th>
+                        <th class="briefing-th briefing-table-label-width">Waves</th>
                         <td class="briefing-td">${weather.wave_height_ft} ft</td>
                     </tr>
                     ` : ''}
@@ -920,7 +920,7 @@ function showBriefing(briefing) {
                         <td class="briefing-td">${formatTime(sun.sunrise)}</td>
                     </tr>
                     <tr>
-                        <th class="briefing-th">Sunset</th>
+                        <th class="briefing-th briefing-table-label-width">Sunset</th>
                         <td class="briefing-td">${formatTime(sun.sunset)}</td>
                     </tr>
                 </table>
@@ -1011,7 +1011,7 @@ function showBriefing(briefing) {
                         // Table format for details
                         let rows = `
                             <tr>
-                                <th class="briefing-th">Type</th>
+                                <th class="briefing-th briefing-table-label-width">Type</th>
                                 <td class="briefing-td">${f.type}</td>
                             </tr>
                         `;
@@ -1024,7 +1024,7 @@ function showBriefing(briefing) {
                             })
                             .map(([k, v]) => `
                                 <tr>
-                                    <th class="briefing-th" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <th class="briefing-th briefing-table-label-width" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
                                     <td class="briefing-td">${v}</td>
                                 </tr>
                             `).join('');
@@ -1415,7 +1415,7 @@ function clearMap() {
                                         <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
                                     <tr>
-                                        <th class="briefing-th">Conditions</th>
+                                        <th class="briefing-th briefing-table-label-width">Conditions</th>
                                         <td class="briefing-td briefing-td-icon">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
@@ -1423,17 +1423,17 @@ function clearMap() {
                                     </tr>
                                     ${(w.temp_max_f || w.temp_min_f) ? `
                                     <tr>
-                                        <th class="briefing-th">Temp</th>
+                                        <th class="briefing-th briefing-table-label-width">Temp</th>
                                         <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
                                     </tr>
                                     ` : ''}
                                     <tr>
-                                        <th class="briefing-th">Wind</th>
+                                        <th class="briefing-th briefing-table-label-width">Wind</th>
                                         <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
                                     <tr>
-                                        <th class="briefing-th">Waves</th>
+                                        <th class="briefing-th briefing-table-label-width">Waves</th>
                                         <td class="briefing-td">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
@@ -1470,7 +1470,7 @@ function clearMap() {
                                     <td class="briefing-td">${formatTime(sun.sunrise)}</td>
                                 </tr>
                                 <tr>
-                                    <th class="briefing-th">Sunset</th>
+                                    <th class="briefing-th briefing-table-label-width">Sunset</th>
                                     <td class="briefing-td">${formatTime(sun.sunset)}</td>
                                 </tr>
                             </table>
@@ -1561,7 +1561,7 @@ function clearMap() {
                         // Table format for details
                         let rows = `
                             <tr>
-                                <th class="briefing-th">Type</th>
+                                <th class="briefing-th briefing-table-label-width">Type</th>
                                 <td class="briefing-td">${f.type}</td>
                             </tr>
                         `;
@@ -1574,7 +1574,7 @@ function clearMap() {
                             })
                             .map(([k, v]) => `
                                 <tr>
-                                    <th class="briefing-th" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <th class="briefing-th briefing-table-label-width" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
                                     <td class="briefing-td">${v}</td>
                                 </tr>
                             `).join('');
