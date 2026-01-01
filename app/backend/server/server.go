@@ -23,7 +23,7 @@ type Server struct {
 	GoogleConfig *oauth2.Config
 }
 
-func New(db datastore.Store) (*Server, error) {
+func New(db datastore.Store, contentDir string) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
 
@@ -40,7 +40,7 @@ func New(db datastore.Store) (*Server, error) {
 
 	r := chi.NewRouter()
 	docsService := handlers.NewGoogleDocsService()
-	h := handlers.New(db, docsService)
+	h := handlers.New(db, docsService, contentDir)
 
 	// Standard Middleware
 	r.Use(CustomLogger)
@@ -92,6 +92,7 @@ func New(db datastore.Store) (*Server, error) {
 			r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
 			r.Post("/voyages/{id}/research", h.TriggerFullVoyageResearch)
 			r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
+			r.Post("/voyages/{id}/guide/map_image", h.UploadVoyageMap)
 
 			// Stop Management
 			r.Route("/voyages/{id}/stops", func(r chi.Router) {

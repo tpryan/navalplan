@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -22,6 +23,54 @@ type GuideAgentOutput struct {
 	Hazards       json.RawMessage `json:"hazards"`
 	Hubs          json.RawMessage `json:"hubs"`
 	CharterInfo   json.RawMessage `json:"charter_info"`
+}
+
+func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	voyageID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	// Limit upload size to 10MB
+	r.ParseMultipartForm(10 << 20)
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Failed to retrieve image", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Ensure maps directory exists
+	mapsDir := filepath.Join(h.ContentDir, "maps")
+	if err := os.MkdirAll(mapsDir, 0755); err != nil {
+		log.Errorf("Failed to create maps directory: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Save file
+	filename := fmt.Sprintf("voyage_%d.png", voyageID)
+	dstPath := filepath.Join(mapsDir, filename)
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		log.Errorf("Failed to create map file: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		log.Errorf("Failed to save map file: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": "/maps/" + filename})
 }
 
 func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +191,11 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
 }
 
+type VoyageGuideResponse struct {
+	*models.VoyageGuide
+	MapURL string `json:"map_url,omitempty"`
+}
+
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
@@ -156,6 +210,19 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for map image
+	var mapURL string
+	mapFilename := fmt.Sprintf("voyage_%d.png", voyageID)
+	mapPath := filepath.Join(h.ContentDir, "maps", mapFilename)
+	if _, err := os.Stat(mapPath); err == nil {
+		mapURL = "/maps/" + mapFilename
+	}
+
+	resp := VoyageGuideResponse{
+		VoyageGuide: guide,
+		MapURL:      mapURL,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(guide)
+	json.NewEncoder(w).Encode(resp)
 }

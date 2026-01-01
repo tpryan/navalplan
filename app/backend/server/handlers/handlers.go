@@ -14,13 +14,15 @@ type DocsService interface {
 }
 
 type Handler struct {
-	DB   datastore.Store
-	Docs DocsService
+	DB         datastore.Store
+	Docs       DocsService
+	ContentDir string
 }
 
-func New(db datastore.Store, docsService DocsService) *Handler {
+func New(db datastore.Store, docsService DocsService, contentDir string) *Handler {
 	return &Handler{
-		DB:   db,
-		Docs: docsService,
+		DB:         db,
+		Docs:       docsService,
+		ContentDir: contentDir,
 	}
 }

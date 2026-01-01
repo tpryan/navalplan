@@ -60,7 +60,7 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 	defer db.Close()
 
 	// 3. Initialize Server
-	srv, err := server.New(db)
+	srv, err := server.New(db, contentDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}

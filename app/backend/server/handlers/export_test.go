@@ -16,7 +16,7 @@ import (
 func TestExportVoyage_Success(t *testing.T) {
 	mockStore := new(MockStore)
 	mockDocs := new(MockDocsService)
-	handler := handlers.New(mockStore, mockDocs)
+	handler := handlers.New(mockStore, mockDocs, "test_content")
 
 	voyageID := int64(1)
 	now := time.Now()
