@@ -1057,7 +1057,6 @@ function showBriefing(briefing) {
                         ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
                     </tbody>
                 </table>
-                <p class="briefing-note">* Graph shows 24h period. List shows events on ${targetDateYMD} only.</p>
             </div>
         </div>
     `;
@@ -1784,7 +1783,6 @@ function clearMap() {
                                         ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
-                                <p class="briefing-note">* Graph shows 24h period.</p>
                             </div>
                         </div>
                     `;
