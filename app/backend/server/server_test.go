@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"app/datastore"
 	"app/models"
@@ -18,7 +19,7 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) ListVoyages(userID int64) ([]models.Voyage, error) {
+func (m *MockStore) ListVoyages(personID int64) ([]models.Voyage, error) {
 	return nil, nil
 }
 func (m *MockStore) CreateVoyage(v *models.Voyage) error { return nil }
@@ -38,6 +39,14 @@ func (m *MockStore) GetBriefing(stopID int64) (*models.Briefing, error) { return
 func (m *MockStore) CreateBriefing(b *models.Briefing) error { return nil }
 func (m *MockStore) GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error) { return nil, nil }
 func (m *MockStore) CreateVoyageGuide(g *models.VoyageGuide) error { return nil }
+
+func (m *MockStore) FindPersonByGoogleID(googleID string) (*models.Person, error) { return nil, nil }
+func (m *MockStore) GetPersonByID(id int64) (*models.Person, error) { return nil, nil }
+func (m *MockStore) CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error) { return nil, nil }
+func (m *MockStore) UpdatePersonName(id int64, name string) error { return nil }
+func (m *MockStore) CreateSession(token string, personID int64, expiresAt time.Time) error { return nil }
+func (m *MockStore) GetSession(token string) (*models.Session, error) { return nil, nil }
+func (m *MockStore) DeleteSession(token string) error { return nil }
 
 var _ datastore.Store = (*MockStore)(nil)
 

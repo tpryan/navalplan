@@ -1,6 +1,9 @@
 package datastore
 
-import "app/models"
+import (
+	"app/models"
+	"time"
+)
 
 type Store interface {
 	// Voyages
@@ -26,4 +29,15 @@ type Store interface {
 	// Voyage Guide
 	GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error)
 	CreateVoyageGuide(g *models.VoyageGuide) error
+
+	// Person
+	FindPersonByGoogleID(googleID string) (*models.Person, error)
+	GetPersonByID(id int64) (*models.Person, error)
+	CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error)
+	UpdatePersonName(id int64, name string) error
+
+	// Session
+	CreateSession(token string, personID int64, expiresAt time.Time) error
+	GetSession(token string) (*models.Session, error)
+	DeleteSession(token string) error
 }

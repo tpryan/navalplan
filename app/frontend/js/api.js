@@ -1,14 +1,42 @@
 const API_BASE = '/api/v1';
 
+async function apiFetch(url, options = {}, suppressAuthRedirect = false) {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    if (!suppressAuthRedirect) {
+        window.location.href = '/auth/google/login'; 
+    }
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
 export const API = {
+  async getPerson() {
+    // Suppress redirect so checkSession can handle UI state
+    const res = await apiFetch(`${API_BASE}/person`, {}, true);
+    if (!res.ok) throw new Error('Failed to load person');
+    return res.json();
+  },
+
+  async updatePerson(person) {
+    const res = await apiFetch(`${API_BASE}/person`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(person),
+    });
+    if (!res.ok) throw new Error('Failed to update person');
+    return res.json();
+  },
+
   async getVoyages() {
-    const res = await fetch(`${API_BASE}/voyages`);
+    const res = await apiFetch(`${API_BASE}/voyages`);
     if (!res.ok) throw new Error('Failed to load voyages');
     return res.json();
   },
 
   async createVoyage(voyage) {
-    const res = await fetch(`${API_BASE}/voyages`, {
+    const res = await apiFetch(`${API_BASE}/voyages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(voyage),
@@ -18,7 +46,7 @@ export const API = {
   },
 
   async updateVoyage(id, voyage) {
-    const res = await fetch(`${API_BASE}/voyages/${id}`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(voyage),
@@ -28,7 +56,7 @@ export const API = {
   },
 
   async deleteVoyage(id) {
-    const res = await fetch(`${API_BASE}/voyages/${id}`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete voyage');
@@ -36,32 +64,32 @@ export const API = {
   },
 
   async triggerResearch(stopId) {
-    const res = await fetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
+    const res = await apiFetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to trigger research');
     return res.json();
   },
 
   async getBriefing(stopId) {
-    const res = await fetch(`${API_BASE}/stops/${stopId}/briefing`);
+    const res = await apiFetch(`${API_BASE}/stops/${stopId}/briefing`);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Failed to get briefing');
     return res.json();
   },
 
   async getVoyage(id) {
-    const res = await fetch(`${API_BASE}/voyages/${id}`);
+    const res = await apiFetch(`${API_BASE}/voyages/${id}`);
     if (!res.ok) throw new Error('Failed to load voyage');
     return res.json();
   },
   
   async getStops(voyageId) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/stops`);
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`);
     if (!res.ok) throw new Error('Failed to load stops');
     return res.json();
   },
 
   async createStop(voyageId, stop) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/stops`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stop),
@@ -71,7 +99,7 @@ export const API = {
   },
 
   async updateStop(stopId, stop) {
-    const res = await fetch(`${API_BASE}/stops/${stopId}`, {
+    const res = await apiFetch(`${API_BASE}/stops/${stopId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stop),
@@ -81,7 +109,7 @@ export const API = {
   },
 
   async deleteStop(stopId) {
-    const res = await fetch(`${API_BASE}/stops/${stopId}`, {
+    const res = await apiFetch(`${API_BASE}/stops/${stopId}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete stop');
@@ -89,26 +117,26 @@ export const API = {
   },
 
   async triggerVoyageGuideResearch(voyageId) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/research_guide`, { method: 'POST' });
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/research_guide`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to trigger guide research');
     return res.json();
   },
 
   async triggerFullResearch(voyageId) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/research`, { method: 'POST' });
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/research`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to trigger full research');
     return res.json();
   },
 
   async getVoyageGuide(voyageId) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/guide`);
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/guide`);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Failed to get voyage guide');
     return res.json();
   },
 
   async exportVoyage(voyageId) {
-    const res = await fetch(`${API_BASE}/voyages/${voyageId}/export`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'docs' })

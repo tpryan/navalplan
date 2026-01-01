@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"app/datastore"
 	"app/models"
@@ -113,6 +114,53 @@ func (m *MockStore) GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error) 
 
 func (m *MockStore) CreateVoyageGuide(g *models.VoyageGuide) error {
 	args := m.Called(g)
+	return args.Error(0)
+}
+
+func (m *MockStore) FindPersonByGoogleID(googleID string) (*models.Person, error) {
+	args := m.Called(googleID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Person), args.Error(1)
+}
+
+func (m *MockStore) GetPersonByID(id int64) (*models.Person, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Person), args.Error(1)
+}
+
+func (m *MockStore) CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error) {
+	args := m.Called(googleID, email, name, pictureURL)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Person), args.Error(1)
+}
+
+func (m *MockStore) UpdatePersonName(id int64, name string) error {
+	args := m.Called(id, name)
+	return args.Error(0)
+}
+
+func (m *MockStore) CreateSession(token string, personID int64, expiresAt time.Time) error {
+	args := m.Called(token, personID, expiresAt)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetSession(token string) (*models.Session, error) {
+	args := m.Called(token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Session), args.Error(1)
+}
+
+func (m *MockStore) DeleteSession(token string) error {
+	args := m.Called(token)
 	return args.Error(0)
 }
 

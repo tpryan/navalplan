@@ -23,6 +23,11 @@ type Server struct {
 func New(db datastore.Store) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
+	
+	s := &Server{
+		DB: db,
+	}
+
 	r := chi.NewRouter()
 	docsService := handlers.NewGoogleDocsService()
 	h := handlers.New(db, docsService)
@@ -45,8 +50,20 @@ func New(db datastore.Store) (*Server, error) {
 		w.Write([]byte("OK"))
 	})
 
+	// Auth Routes
+	r.Get("/auth/google/login", s.oauthGoogleLogin)
+	r.Get("/auth/google/callback", s.oauthGoogleCallback)
+	r.Get("/auth/logout", s.oauthLogout)
+
 	// API Routes (Placeholder)
 	r.Route("/api/v1", func(r chi.Router) {
+		// Protected Person Routes
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireAuth)
+			r.Get("/person", h.GetPerson)
+			r.Put("/person", h.UpdatePerson)
+		})
+
 		r.Get("/voyages", h.ListVoyages)
 		r.Post("/voyages", h.CreateVoyage)
 		r.Get("/voyages/{id}", h.GetVoyage)
@@ -76,10 +93,8 @@ func New(db datastore.Store) (*Server, error) {
 		})
 	})
 
-	return &Server{
-		Router: r,
-		DB:     db,
-	}, nil
+	s.Router = r
+	return s, nil
 }
 
 func CustomLogger(next http.Handler) http.Handler {

@@ -2,6 +2,7 @@ import mapboxgl from 'mapbox-gl';
 import Chart from 'chart.js/auto';
 import { API } from './api.js';
 import { exportToGoogleDocs } from './google_export.js';
+import { checkSession } from './auth.js';
 
 // Configuration
 const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   console.log('NavalPlan: Initializing...');
+  checkSession();
   initMap();
   initUI();
   loadVoyages();
