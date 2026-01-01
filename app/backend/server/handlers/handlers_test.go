@@ -386,22 +386,25 @@ func TestDisableSharing(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestGetPublicStops(t *testing.T) {
+
+func TestTriggerFullVoyageResearch(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil)
 	r := chi.NewRouter()
-	r.Get("/public/voyages/{token}/stops", handler.GetPublicStops)
+	r.Post("/voyages/{id}/research", handler.TriggerFullVoyageResearch)
 
-	token := "abc"
-	voyageID := int64(99)
-	mockStore.On("GetVoyageByToken", token).Return(&models.Voyage{ID: voyageID}, nil)
-	mockStore.On("ListStops", voyageID).Return([]models.Stop{{ID: 1}}, nil)
+	voyageID := int64(1)
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID}, nil)
+	mockStore.On("ListStops", voyageID).Return([]models.Stop{
+		{ID: 10, LocationName: "Stop 1"},
+		{ID: 11, LocationName: "Stop 2"},
+	}, nil)
 
-	req := httptest.NewRequest("GET", "/public/voyages/abc/stops", nil)
+	req := httptest.NewRequest("POST", "/voyages/1/research", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockStore.AssertExpectations(t)
 }
 

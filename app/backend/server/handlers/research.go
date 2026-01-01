@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"app/models"
 
@@ -72,91 +73,95 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "stop_id": idStr})
 
 	// Async processing
-	go func() {
-		agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
-		if agentURL == "" {
-			agentURL = "http://127.0.0.1:8081"
+	go h.performStopResearch(stop)
+}
+
+func (h *Handler) performStopResearch(stop *models.Stop) {
+	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
+	if agentURL == "" {
+		agentURL = "http://127.0.0.1:8081"
+	}
+
+	appName := "researcher_agent"
+	userID := "system"
+	sessionID := fmt.Sprintf("stop_%d", stop.ID)
+
+	// 1. Create Session
+	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
+	respSession, err := http.Post(createSessionURL, "application/json", nil)
+	if err != nil {
+		log.Printf("Failed to create agent session: %v", err)
+	} else {
+		respSession.Body.Close()
+	}
+
+	// 2. Run Agent
+	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
+		stop.Latitude, stop.Longitude, stop.LocationName, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+
+	reqBody := AgentRunRequest{
+		AppName:   appName,
+		UserID:    userID,
+		SessionID: sessionID,
+	}
+	reqBody.NewMessage.Role = "user"
+	reqBody.NewMessage.Parts = []struct {
+		Text string `json:"text"`
+	}{{Text: prompt}}
+
+	jsonData, _ := json.Marshal(reqBody)
+	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("Failed to call agent: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Agent returned error: %s", body)
+		return
+	}
+
+	var events []AgentEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		log.Printf("Failed to decode agent response: %v", err)
+		return
+	}
+
+	// Find the model response
+	var responseText string
+	for _, e := range events {
+		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
+			responseText = e.Content.Parts[0].Text
 		}
+	}
 
-		appName := "researcher_agent"
-		userID := "system"
-		sessionID := fmt.Sprintf("stop_%d", stop.ID)
+	if responseText == "" {
+		log.Println("No response from agent")
+		return
+	}
 
-		// 1. Create Session
-		createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-		respSession, err := http.Post(createSessionURL, "application/json", nil)
-		if err != nil {
-			log.Printf("Failed to create agent session: %v", err)
-		} else {
-			respSession.Body.Close()
-		}
+	responseText = cleanJSON(responseText)
 
-		// 2. Run Agent
-		prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
-			stop.Latitude, stop.Longitude, stop.LocationName, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+	var output AgentOutput
+	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
+		log.Printf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		return
+	}
 
-		reqBody := AgentRunRequest{
-			AppName:   appName,
-			UserID:    userID,
-			SessionID: sessionID,
-		}
-		reqBody.NewMessage.Role = "user"
-		reqBody.NewMessage.Parts = []struct{ Text string `json:"text"` }{{Text: prompt}}
+	briefing := &models.Briefing{
+		StopID:         stop.ID,
+		WeatherSummary: models.RawJSON(output.WeatherSummary),
+		SunPhase:       models.RawJSON(output.SunPhase),
+		Tides:          models.RawJSON(output.Tides),
+		Facilities:     models.RawJSON(output.Facilities),
+	}
 
-		jsonData, _ := json.Marshal(reqBody)
-		resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			log.Printf("Failed to call agent: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			log.Printf("Agent returned error: %s", body)
-			return
-		}
-
-		var events []AgentEvent
-		if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-			log.Printf("Failed to decode agent response: %v", err)
-			return
-		}
-
-		// Find the model response
-		var responseText string
-		for _, e := range events {
-			if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-				responseText = e.Content.Parts[0].Text
-			}
-		}
-
-		if responseText == "" {
-			log.Println("No response from agent")
-			return
-		}
-
-		responseText = cleanJSON(responseText)
-
-		var output AgentOutput
-		if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-			log.Printf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
-			return
-		}
-
-		briefing := &models.Briefing{
-			StopID:         stop.ID,
-			WeatherSummary: models.RawJSON(output.WeatherSummary),
-			SunPhase:       models.RawJSON(output.SunPhase),
-			Tides:          models.RawJSON(output.Tides),
-			Facilities:     models.RawJSON(output.Facilities),
-		}
-
-		if err := h.DB.CreateBriefing(briefing); err != nil {
-			log.Printf("Failed to save briefing: %v", err)
-		}
-		log.Printf("Briefing saved for stop %d", stop.ID)
-	}()
+	if err := h.DB.CreateBriefing(briefing); err != nil {
+		log.Printf("Failed to save briefing: %v", err)
+	}
+	log.Printf("Briefing saved for stop %d", stop.ID)
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
@@ -175,4 +180,47 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(briefing)
+}
+
+func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	voyageID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	voyage, err := h.DB.GetVoyage(voyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+
+	stops, err := h.DB.ListStops(voyageID)
+	if err != nil {
+		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"msg":        "Full research started",
+		"voyage_id":  voyageID,
+		"stop_count": len(stops),
+	})
+
+	go func() {
+		// 1. Research Voyage Guide
+		log.Printf("Starting guide research for voyage %d", voyageID)
+		h.performGuideResearch(voyage)
+
+		// 2. Research each stop
+		for _, stop := range stops {
+			// We can throttle this if needed, but for now let's just launch them
+			// Maybe a small delay to not overwhelm the agent service if it's rate limited
+			log.Printf("Starting stop research for stop %d", stop.ID)
+			h.performStopResearch(&stop)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
 }

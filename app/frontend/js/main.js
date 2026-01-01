@@ -151,6 +151,30 @@ function initUI() {
       });
   }
 
+  // Research All Button
+  const btnResearchAll = document.getElementById('btn-research-all');
+  if (btnResearchAll) {
+      btnResearchAll.addEventListener('click', async () => {
+          if (!currentVoyage) return;
+          if (confirm('This will trigger research for the entire voyage and all stops. Continue?')) {
+              const originalContent = btnResearchAll.innerHTML;
+              btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+              btnResearchAll.disabled = true;
+              
+              try {
+                  await API.triggerFullResearch(currentVoyage.id);
+                  alert('Full voyage research started. This may take a few minutes. Check individual stops or the guide for updates.');
+              } catch (err) {
+                  console.error(err);
+                  alert('Failed to trigger research.');
+              } finally {
+                  btnResearchAll.innerHTML = originalContent;
+                  btnResearchAll.disabled = false;
+              }
+          }
+      });
+  }
+
   // Edit Voyage Button (Itinerary View)
   if (btnEditVoyage) {
     btnEditVoyage.addEventListener('click', () => {
