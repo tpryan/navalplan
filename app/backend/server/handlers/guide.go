@@ -142,11 +142,6 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
 }
 
-type VoyageGuideResponse struct {
-	*models.VoyageGuide
-	MapURL string `json:"map_url,omitempty"`
-}
-
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
@@ -161,22 +156,6 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch voyage for coordinates
-	voyage, err := h.DB.GetVoyage(voyageID)
-	var mapURL string
-	if err == nil && voyage.Latitude != nil && voyage.Longitude != nil {
-		mapboxToken := os.Getenv("NAVALPLAN_MB_TOKEN")
-		if mapboxToken != "" {
-			mapURL = fmt.Sprintf("https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/%f,%f,10,0/600x400?access_token=%s",
-				*voyage.Longitude, *voyage.Latitude, mapboxToken)
-		}
-	}
-
-	resp := VoyageGuideResponse{
-		VoyageGuide: guide,
-		MapURL:      mapURL,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(guide)
 }
