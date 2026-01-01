@@ -6,3 +6,4 @@ app/frontend/node_modules
 config/navallog-sa.json
 services/researcher/researcher
 services/researcher/vendor
+.env

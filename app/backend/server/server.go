@@ -13,19 +13,29 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 type Server struct {
-	Router *chi.Mux
-	DB     datastore.Store
+	Router       *chi.Mux
+	DB           datastore.Store
+	GoogleConfig *oauth2.Config
 }
 
 func New(db datastore.Store) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
-	
+
 	s := &Server{
 		DB: db,
+		GoogleConfig: &oauth2.Config{
+			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+			Endpoint:     google.Endpoint,
+		},
 	}
 
 	r := chi.NewRouter()

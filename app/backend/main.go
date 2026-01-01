@@ -14,11 +14,22 @@ import (
 
 	"app/datastore"
 	"app/server"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file (try current dir, then project root)
+	// We ignore errors because it's okay if one of them is missing, as long as we get the config we need.
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../../.env")
+
 	contentDir := flag.String("content", "./static.min", "Path to static content to serve")
 	flag.Parse()
+
+	if os.Getenv("GOOGLE_CLIENT_ID") == "" || os.Getenv("GOOGLE_CLIENT_SECRET") == "" {
+		log.Println("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Authentication will fail.")
+	}
 
 	if err := run(context.Background(), os.Stdout, os.Getenv, *contentDir); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -85,11 +96,11 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
-	
+
 	log.Println("Server exiting")
 	return nil
 }

@@ -12,27 +12,13 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 
 	appContext "app/context"
 )
 
-var googleOauthConfig *oauth2.Config
-
-func init() {
-	googleOauthConfig = &oauth2.Config{
-		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
-		Endpoint:     google.Endpoint,
-	}
-}
-
 func (s *Server) oauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	oauthState := generateStateOauthCookie(w)
-	u := googleOauthConfig.AuthCodeURL(oauthState)
+	u := s.GoogleConfig.AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
 
@@ -45,7 +31,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := getUserDataFromGoogle(r.FormValue("code"))
+	data, err := s.getUserDataFromGoogle(r.FormValue("code"))
 	if err != nil {
 		log.Error("getUserDataFromGoogle", "error", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -157,8 +143,8 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 	return state
 }
 
-func getUserDataFromGoogle(code string) ([]byte, error) {
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
+func (s *Server) getUserDataFromGoogle(code string) ([]byte, error) {
+	token, err := s.GoogleConfig.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}
