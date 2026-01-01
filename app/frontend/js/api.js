@@ -128,10 +128,23 @@ export const API = {
     return res.json();
   },
 
-  async getVoyageGuide(voyageId) {
-    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/guide`);
+  async getVoyageGuide(id) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/guide`);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Failed to get voyage guide');
+    return res.json();
+  },
+
+  async uploadVoyageMap(id, imageBlob) {
+    const formData = new FormData();
+    formData.append('image', imageBlob);
+    
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/guide/map_image`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!res.ok) throw new Error('Failed to upload map image');
     return res.json();
   },
 

@@ -153,6 +153,43 @@ function initUI() {
       });
   }
 
+  // Capture Map Button
+  const btnCaptureMap = document.getElementById('btn-capture-map');
+  if (btnCaptureMap) {
+      btnCaptureMap.addEventListener('click', async () => {
+          if (!currentVoyage || !map) return;
+          
+          const originalContent = btnCaptureMap.innerHTML;
+          btnCaptureMap.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+          btnCaptureMap.disabled = true;
+
+          try {
+              // Create blob from map canvas
+              map.getCanvas().toBlob(async (blob) => {
+                  if (!blob) {
+                      throw new Error('Failed to generate map image');
+                  }
+                  
+                  try {
+                      await API.uploadVoyageMap(currentVoyage.id, blob);
+                      showNotification('Map Captured', 'Current map view has been saved to the voyage report.');
+                  } catch (err) {
+                      console.error(err);
+                      alert('Failed to upload map image.');
+                  } finally {
+                      btnCaptureMap.innerHTML = originalContent;
+                      btnCaptureMap.disabled = false;
+                  }
+              });
+          } catch (err) {
+              console.error(err);
+              btnCaptureMap.innerHTML = originalContent;
+              btnCaptureMap.disabled = false;
+              alert('Failed to capture map.');
+          }
+      });
+  }
+
   // Research All Button
   const btnResearchAll = document.getElementById('btn-research-all');
   if (btnResearchAll) {
@@ -317,8 +354,35 @@ function initUI() {
   if (btnCloseGuide) btnCloseGuide.onclick = closeGuide;
   
   if (btnCopyReport) {
-    btnCopyReport.onclick = () => {
+    btnCopyReport.onclick = async () => {
         const content = document.getElementById('report-content');
+        const originalText = btnCopyReport.textContent;
+        btnCopyReport.textContent = 'Processing...';
+        btnCopyReport.disabled = true;
+
+        // 0. Convert Remote Images (like the Map) to Data URIs
+        const remoteImages = content.querySelectorAll('img');
+        const processedImages = [];
+        
+        for (const img of remoteImages) {
+             // Skip if already data URI
+             if (img.src.startsWith('data:')) continue;
+             
+             try {
+                 const resp = await fetch(img.src);
+                 const blob = await resp.blob();
+                 const dataUrl = await new Promise(resolve => {
+                     const reader = new FileReader();
+                     reader.onload = () => resolve(reader.result);
+                     reader.readAsDataURL(blob);
+                 });
+                 
+                 processedImages.push({ el: img, src: img.src });
+                 img.src = dataUrl;
+             } catch (err) {
+                 console.warn('Failed to embed image:', img.src, err);
+             }
+        }
         
         // 1. Convert Canvases to Images
         const canvases = content.querySelectorAll('canvas');
@@ -407,12 +471,12 @@ function initUI() {
         try {
             document.execCommand('copy');
             
-            const originalText = btnCopyReport.textContent;
             btnCopyReport.textContent = 'Copied!';
             setTimeout(() => btnCopyReport.textContent = originalText, 2000);
         } catch (err) {
             console.error('Failed to copy', err);
             alert('Failed to copy report to clipboard');
+            btnCopyReport.textContent = originalText;
         } finally {
             // 5. Restore Attributes, Icons, Canvases, and Lists
             window.getSelection().removeAllRanges();
@@ -447,6 +511,13 @@ function initUI() {
                 canvas.style.display = '';
                 img.remove();
             });
+            
+            // Restore Remote Images
+            processedImages.forEach(({ el, src }) => {
+                el.src = src;
+            });
+            
+            btnCopyReport.disabled = false;
         }
     };
   }
@@ -1162,7 +1233,8 @@ function initMap() {
     container: 'map-container',
     style: __MAPBOX_STYLE__,
     center: [-98.5795, 39.8283], // Center of USA
-    zoom: 3
+    zoom: 3,
+    preserveDrawingBuffer: true
   });
 
   map.on('load', () => {
@@ -1454,6 +1526,13 @@ function clearMap() {
             html += `
                 <div style="margin-bottom: 2rem; page-break-inside: avoid; background: rgba(0,0,0,0.03); padding: 1rem; border-radius: 8px;">
                     <h2 class="report-day-header" style="border-left-color: var(--brand-green-dark);">Destination Guide</h2>
+                    
+                    ${guide.map_url ? `
+                    <div style="margin-bottom: 1.5rem; text-align: center;">
+                        <img src="${guide.map_url}" alt="Voyage Map" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+                    </div>
+                    ` : ''}
+
                     <p><strong>Summary:</strong> ${guide.summary || 'N/A'}</p>
                     
                     ${guide.sailing_season ? `

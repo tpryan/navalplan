@@ -63,7 +63,7 @@ var _ datastore.Store = (*MockStore)(nil)
 
 func TestServerHealth(t *testing.T) {
 	mockStore := new(MockStore)
-	srv, err := server.New(mockStore)
+	srv, err := server.New(mockStore, ".")
 	assert.NoError(t, err)
 	assert.NotNil(t, srv)
 
@@ -78,7 +78,7 @@ func TestServerHealth(t *testing.T) {
 
 func TestServerRoutes(t *testing.T) {
 	mockStore := new(MockStore)
-	srv, err := server.New(mockStore)
+	srv, err := server.New(mockStore, ".")
 	assert.NoError(t, err)
 
 	// Verify API route prefix exists
