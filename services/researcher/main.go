@@ -21,10 +21,14 @@ import (
 )
 
 func main() {
-	// Set output for both standard log and charmbracelet log
-	log.SetOutput(os.Stdout)
+	// Configure charmbracelet/log
 	clog.SetOutput(os.Stdout)
 	clog.SetLevel(clog.DebugLevel)
+
+	// Redirect standard log to charmbracelet/log
+	stdLog := clog.StandardLog()
+	log.SetOutput(stdLog.Writer())
+	log.SetFlags(0)
 
 	ctx := context.Background()
 
