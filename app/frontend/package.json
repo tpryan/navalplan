@@ -1,6 +1,7 @@
 {
   "name": "navalplan-frontend",
   "version": "0.0.1",
+  "type": "module",
   "description": "Frontend for NavalPlan",
   "scripts": {
     "dev": "vite",
