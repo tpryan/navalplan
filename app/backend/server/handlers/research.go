@@ -78,8 +78,7 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) performStopResearch(stop *models.Stop) {
-	logger := log.New(os.Stderr)
-	logger.SetPrefix("researcher-agent")
+	log.SetPrefix("researcher-agent")
 
 	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
 	if agentURL == "" {
@@ -94,7 +93,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := http.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		logger.Infof("Failed to create agent session: %v", err)
+		log.Infof("Failed to create agent session: %v", err)
 	} else {
 		respSession.Body.Close()
 	}
@@ -116,20 +115,20 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		logger.Infof("Failed to call agent: %v", err)
+		log.Infof("Failed to call agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		logger.Infof("Agent returned error: %s", body)
+		log.Infof("Agent returned error: %s", body)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		logger.Infof("Failed to decode agent response: %v", err)
+		log.Infof("Failed to decode agent response: %v", err)
 		return
 	}
 
@@ -142,7 +141,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	}
 
 	if responseText == "" {
-		logger.Infof("No response from agent")
+		log.Infof("No response from agent")
 		return
 	}
 
@@ -150,7 +149,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 
 	var output AgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		logger.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		log.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
 	}
 
@@ -163,9 +162,9 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	}
 
 	if err := h.DB.CreateBriefing(briefing); err != nil {
-		logger.Infof("Failed to save briefing: %v", err)
+		log.Infof("Failed to save briefing: %v", err)
 	}
-	logger.Infof("Briefing saved for stop %d", stop.ID)
+	log.Infof("Briefing saved for stop %d", stop.ID)
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
