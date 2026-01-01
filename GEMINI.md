@@ -6,3 +6,5 @@ Do not perform git operations.
 
 Please run goimports on all go code after you write it.
 Run goimports before you test go code. More often than not this will catch many issues.  
+
+You can find a go.mod file for gopls in app/backend
