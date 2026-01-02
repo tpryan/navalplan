@@ -460,6 +460,62 @@ function initUI() {
         const ths = content.querySelectorAll('th');
         ths.forEach(th => {
             th.style.textAlign = 'left';
+            th.style.backgroundColor = 'rgb(227, 220, 211)'; // var(--brand-lighter)
+            th.style.padding = '4px 8px';
+            th.style.border = '1px solid #cccccc';
+            th.style.textTransform = 'capitalize';
+
+            // Check if it originally had the label-width class
+            const attr = originalAttributes.find(a => a.el === th);
+            if (attr && attr.class && attr.class.includes('briefing-table-label-width')) {
+                th.style.width = '20ch';
+                th.style.whiteSpace = 'nowrap';
+            }
+        });
+
+        const theads = content.querySelectorAll('thead');
+        theads.forEach(thead => {
+            thead.style.backgroundColor = 'rgba(0,0,0,0.05)';
+        });
+
+        const tds = content.querySelectorAll('td');
+        tds.forEach(td => {
+            td.style.padding = '4px 8px';
+            td.style.border = '1px solid #cccccc';
+            td.style.verticalAlign = 'top';
+        });
+
+        const tables = content.querySelectorAll('table');
+        tables.forEach(table => {
+            table.style.borderCollapse = 'collapse';
+            table.style.width = '100%';
+            table.style.marginTop = '1rem';
+            table.style.marginBottom = '1rem';
+        });
+
+        const h3s = content.querySelectorAll('h3');
+        h3s.forEach(h3 => {
+            h3.style.color = 'rgb(88, 61, 27)'; // var(--brand-dark)
+            h3.style.marginTop = '1.5rem';
+            h3.style.marginBottom = '0.5rem';
+            h3.style.borderBottom = '1px solid #cccccc';
+            h3.style.paddingBottom = '4px';
+        });
+
+        const h4s = content.querySelectorAll('h4');
+        h4s.forEach(h4 => {
+            h4.style.margin = '0.5rem 0';
+            h4.style.fontSize = '1.1rem';
+            h4.style.color = 'rgb(88, 61, 27)';
+        });
+
+        const imgs = content.querySelectorAll('img');
+        imgs.forEach(img => {
+            img.style.width = '100%';
+            img.style.maxWidth = '600px';
+            img.style.height = 'auto';
+            img.style.display = 'block';
+            img.style.margin = '1rem 0';
         });
 
         // 4. Select and Copy
