@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -17,8 +16,6 @@ func TestRun_Config(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancel immediately to stop server if it starts
 
-	var buf bytes.Buffer
-
 	// Mock Env
 	env := func(key string) string {
 		if key == "NAVALPLAN_PORT" {
@@ -33,7 +30,7 @@ func TestRun_Config(t *testing.T) {
 	cfg := loadConfig(env, ".")
 
 	// It should return an error because DB is not reachable
-	err := run(ctx, &buf, cfg)
+	err := run(ctx, cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to database")
 }

@@ -11,5 +11,8 @@ steps:
   - '--project'
   - 'navallog'                     # Your Google Cloud Project ID
   - '--no-allow-unauthenticated'    # Security: Only backend can call this
+  - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   dir: 'services/researcher'        # Build context
+substitutions:
+  _NAVALPLAN_AGENT_MODEL: "gemini-2.0-flash-001"
 logsBucket: gs://navalplan-logging-bucket

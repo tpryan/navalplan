@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +40,12 @@ func main() {
 	if modelName == "" {
 		modelName = "gemini-2.0-flash-001"
 	}
+
+	key := ObscureString(os.Getenv("GEMINI_API_KEY"), os.Getenv("GEMINI_API_KEY"))
+
+	clog.Info("config", "key", key)
+	clog.Info("config", "modelName", modelName)
+
 	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
 		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
@@ -273,6 +280,13 @@ func main() {
 	if err != nil {
 		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}
+}
+
+func ObscureString(input, toObscure string) string {
+	// The number of runes (characters) in the input determines the length of the output.
+	str := strings.Repeat("*", len(toObscure))
+	return strings.ReplaceAll(input, toObscure, str)
+
 }
 
 var toolTimings sync.Map

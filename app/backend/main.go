@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +20,7 @@ import (
 )
 
 func main() {
+	log.SetPrefix("main")
 	// Load .env file (try current dir, then project root)
 	// We ignore errors because it's okay if one of them is missing, as long as we get the config we need.
 	_ = godotenv.Load(".env")
@@ -35,7 +35,7 @@ func main() {
 
 	cfg := loadConfig(os.Getenv, *contentDir)
 
-	if err := run(context.Background(), os.Stdout, cfg); err != nil {
+	if err := run(context.Background(), cfg); err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}
@@ -108,7 +108,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		agentURL = "http://127.0.0.1:8081"
 	}
 
-	return &config.Config{
+	result := &config.Config{
 		Env:                getEnv("ENV"),
 		Port:               port,
 		ContentDir:         contentDir,
@@ -118,11 +118,32 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 	}
+
+	logdsn := ObscureString(dsn, dbPass)
+	logSecret := ObscureString(result.GoogleClientSecret, result.GoogleClientSecret)
+
+	log.Info("config", "Env", result.Env)
+	log.Info("config", "Port", result.Port)
+	log.Info("config", "ContentDir", result.ContentDir)
+	log.Info("config", "DatabaseDSN", logdsn)
+	log.Info("config", "GoogleClientID", result.GoogleClientID)
+	log.Info("config", "GoogleClientSecret", logSecret)
+	log.Info("config", "BaseURL", result.BaseURL)
+	log.Info("config", "NavalPlanAgentURL", result.NavalPlanAgentURL)
+
+	return result
+
 }
 
-func run(ctx context.Context, w io.Writer, cfg *config.Config) error {
-	logger := log.New(w)
-	logger.SetPrefix("main")
+// ObscureString replaces the input string with asterisks of the same length.
+func ObscureString(input, toObscure string) string {
+	// The number of runes (characters) in the input determines the length of the output.
+	str := strings.Repeat("*", len(toObscure))
+	return strings.ReplaceAll(input, toObscure, str)
+
+}
+
+func run(ctx context.Context, cfg *config.Config) error {
 
 	// 2. Initialize DB
 	db, err := datastore.New(cfg.DatabaseDSN)
