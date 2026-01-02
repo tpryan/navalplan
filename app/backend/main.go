@@ -42,7 +42,10 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 	logger.SetPrefix("main")
 
 	// 1. Basic Configuration
-	port := getEnv("NAVALPLAN_PORT")
+	port := getEnv("PORT")
+	if port == "" {
+		port = getEnv("NAVALPLAN_PORT")
+	}
 	if port == "" {
 		port = "8080"
 	}

@@ -5,17 +5,16 @@ steps:
   dir: 'app/frontend'
 
 # 2. Build Frontend
-# This creates the production assets (usually in app/frontend/dist)
+# We pass the Mapbox token so it's baked into the JS at build time.
 - name: 'gcr.io/cloud-builders/npm'
   args: ['run', 'build']
   dir: 'app/frontend'
 
-# 3. Prepare Static Assets for Backend
-# Move the built frontend assets to the folder the Go backend expects (./static.min)
+# 3. Verify Static Assets
+# Vite is configured to build directly into app/backend/static.min
 - name: 'ubuntu'
   script: |
-    rm -rf app/backend/static.min
-    mv app/frontend/dist app/backend/static.min
+    ls -la app/backend/static.min
   
 # 4. Test Backend
 - name: 'golang'
@@ -35,7 +34,7 @@ steps:
   - '--region'
   - 'us-central1'
   - '--project'
-  - 'navallog' # Ensure this matches your project ID
+  - '${PROJECT_ID}'
   - '--allow-unauthenticated' # Publicly accessible
   dir: 'app/backend'
   
