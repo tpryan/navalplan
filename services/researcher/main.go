@@ -34,8 +34,12 @@ func main() {
 	ctx := context.Background()
 
 	// 1. Initialize Gemini Model
-	// We use gemini-2.0-flash-001 as it is the current stable flash model
-	model, err := gemini.NewModel(ctx, "gemini-2.0-flash-001", &genai.ClientConfig{
+	// We use gemini-2.0-flash-001 as it is the current stable flash model, unless overridden by env var
+	modelName := os.Getenv("NAVALPLAN_AGENT_MODEL")
+	if modelName == "" {
+		modelName = "gemini-2.0-flash-001"
+	}
+	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
 		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
 	if err != nil {
