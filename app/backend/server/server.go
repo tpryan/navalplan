@@ -27,10 +27,15 @@ func New(db datastore.Store, contentDir string) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
 
+	redirectURL := os.Getenv("NAVALPLAN_OA_RURL")
+	if redirectURL == "" {
+		redirectURL = os.Getenv("GOOGLE_REDIRECT_URL")
+	}
+
 	s := &Server{
 		DB: db,
 		GoogleConfig: &oauth2.Config{
-			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+			RedirectURL:  redirectURL,
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 			Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
