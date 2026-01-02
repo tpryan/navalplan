@@ -1292,248 +1292,300 @@ function initMap() {
     preserveDrawingBuffer: true
   });
 
-  map.on('load', () => {
-    console.log('NavalPlan: Map Loaded Successfully');
-  });
-
-  map.addControl(new mapboxgl.NavigationControl());
-
-  map.on('click', async (e) => {
-    if (!currentVoyage || !selectedDate) return;
-
-    const {lng, lat} = e.lngLat;
-    const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
-
-    // Get features at click point
-    const features = map.queryRenderedFeatures(e.point);
-    console.log('Clicked Features:', features);
-    
-    // Attempt to find a label
-    let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-    const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
-    
-    if (labelFeature) {
-        locationName = labelFeature.properties.name || labelFeature.properties.name_en;
-        console.log('Found Label:', locationName);
-    }
-
-    // Create or Update
-    const stopData = {
-        target_date: selectedDate + 'T00:00:00Z',
-        location_name: locationName,
-        latitude: lat,
-        longitude: lng,
-        search_radius: 5,
-        search_radius_unit: 'nm',
-        notes: ''
-    };
-
-    try {
-        if (stop) {
-            const updated = await API.updateStop(stop.id, stopData);
-            const idx = currentStops.findIndex(s => s.id === stop.id);
-            currentStops[idx] = updated;
-        } else {
-            const created = await API.createStop(currentVoyage.id, stopData);
-            currentStops.push(created);
-        }
-        renderItinerary();
-        renderMapStops();
-    } catch (err) {
-        console.error(err);
-        alert('Failed to save stop');
-    }
-  });
-}
-
-async function renderMapStops() {
-    clearMap();
-    if (!map) return;
-
-    // Sort stops by date
-    const sortedStops = [...currentStops].sort((a, b) => 
-        new Date(a.target_date) - new Date(b.target_date)
-    );
-
-    // Add Markers
-    sortedStops.forEach((stop, index) => {
-        const el = document.createElement('div');
-        el.className = 'marker';
-        el.innerHTML = `<span><b>${index + 1}</b></span>`;
-
-        const marker = new mapboxgl.Marker(el)
-            .setLngLat([stop.longitude, stop.latitude])
-            .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(`${stop.location_name} (Day ${index + 1})`))
-            .addTo(map);
-        markers.push(marker);
+      map.on('load', () => {
+      console.log('NavalPlan: Map Loaded Successfully');
     });
-
-    // Fetch and Draw Facilities
-    // We do this async but don't block the line drawing
-    (async () => {
-        const features = [];
-        
-        for (const stop of sortedStops) {
-            try {
-                const b = await API.getBriefing(stop.id);
-                if (b && b.facilities) {
-                    b.facilities.forEach(f => {
-                         if (f.latitude && f.longitude) {
-                             let icon = 'marker-15';
-                             const type = (f.type || '').toLowerCase();
-                             if (type.includes('anchorage')) icon = 'harbor-15';
-                             else if (type.includes('marina')) icon = 'warehouse-15';
-                             
-                             features.push({
-                                 type: 'Feature',
-                                 geometry: {
-                                     type: 'Point',
-                                     coordinates: [f.longitude, f.latitude]
-                                 },
-                                 properties: {
-                                     title: f.name,
-                                     icon: icon,
-                                     description: f.type,
-                                     lat: f.latitude,
-                                     lng: f.longitude
-                                 }
-                             });
-                         }
-                    });
-                }
-            } catch (err) {
-               // Ignore errors fetching briefings for map
-            }
-        }
-        
-        if (features.length > 0) {
-            if (map.getSource('facilities')) {
-                map.getSource('facilities').setData({
-                    type: 'FeatureCollection',
-                    features: features
-                });
-            } else {
-                map.addSource('facilities', {
-                    type: 'geojson',
-                    data: {
-                        type: 'FeatureCollection',
-                        features: features
-                    }
-                });
-
-                map.addLayer({
-                    id: 'facilities-circles',
-                    type: 'circle',
-                    source: 'facilities',
-                    paint: {
-                        'circle-radius': 15,
-                        'circle-opacity': 1,
-                        'circle-color': '#000',
-                        'circle-stroke-width': 1,
-                        'circle-stroke-color': '#314c3b'
-                    }
-                });
-                
-                map.addLayer({
-                    id: 'facilities',
-                    type: 'symbol',
-                    source: 'facilities',
-                    layout: {
-                        'icon-image': ['get', 'icon'],
-                        'icon-size': 1.0,
-                        'icon-allow-overlap': true
-                    }
-                });
-
-                // Click event for facilities
-                map.on('click', 'facilities', (e) => {
-                    const coords = e.features[0].geometry.coordinates.slice();
-                    const props = e.features[0].properties;
-                    
-                    new mapboxgl.Popup()
-                        .setLngLat(coords)
-                        .setHTML(`
-                            <strong>${props.title}</strong><br>
-                            ${props.description}<br>
-                            <a href="https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}" target="_blank">View on Google Maps</a>
-                        `)
-                        .addTo(map);
-                });
-                
-                // Cursor style
-                map.on('mouseenter', 'facilities', () => {
-                    map.getCanvas().style.cursor = 'pointer';
-                });
-                map.on('mouseleave', 'facilities', () => {
-                    map.getCanvas().style.cursor = '';
-                });
-            }
-        }
-    })();
-
-    // Draw Line
-    const coords = sortedStops.map(s => [s.longitude, s.latitude]);
-    
-    if (map.getSource('route')) {
-        map.getSource('route').setData({
-            type: 'Feature',
-            properties: {},
-            geometry: {
-                type: 'LineString',
-                coordinates: coords
-            }
-        });
-    } else {
-        map.addSource('route', {
-            type: 'geojson',
-            data: {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                    type: 'LineString',
-                    coordinates: coords
-                }
-            }
-        });
-
-        map.addLayer({
-            id: 'route',
-            type: 'line',
-            source: 'route',
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: {
-                'line-color': '#314c3b', // Brand Green
-                'line-width': 4,
-                'line-dasharray': [2, 1]
-            }
-        });
-    }
-}
-
-function clearMap() {
-    markers.forEach(m => m.remove());
-    markers = [];
-    if (map && map.getSource('route')) {
-        map.getSource('route').setData({
-            type: 'Feature',
-            properties: {},
-            geometry: {
-                type: 'LineString',
-                coordinates: []
-            }
-        });
-    }
-    if (map && map.getSource('facilities')) {
-        map.getSource('facilities').setData({
-            type: 'FeatureCollection',
-            features: []
-        });
-    }
-}
-
+  
+    map.addControl(new mapboxgl.NavigationControl());
+  
+    map.on('click', async (e) => {
+      if (!currentVoyage || !selectedDate) return;
+  
+      const {lng, lat} = e.lngLat;
+      const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
+  
+      // Get features at click point
+      const features = map.queryRenderedFeatures(e.point);
+      console.log('Clicked Features:', features);
+      
+      // Attempt to find a label
+      let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+      const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
+      
+      if (labelFeature) {
+          locationName = labelFeature.properties.name || labelFeature.properties.name_en;
+          console.log('Found Label:', locationName);
+      }
+  
+      // Create or Update
+      const stopData = {
+          target_date: selectedDate + 'T00:00:00Z',
+          location_name: locationName,
+          latitude: lat,
+          longitude: lng,
+          search_radius: 5,
+          search_radius_unit: 'nm',
+          notes: ''
+      };
+  
+      try {
+          if (stop) {
+              const updated = await API.updateStop(stop.id, stopData);
+              const idx = currentStops.findIndex(s => s.id === stop.id);
+              currentStops[idx] = updated;
+          } else {
+              const created = await API.createStop(currentVoyage.id, stopData);
+              currentStops.push(created);
+          }
+          renderItinerary();
+          renderMapStops();
+      } catch (err) {
+          console.error(err);
+          alert('Failed to save stop');
+      }
+    });
+  }
+  
+  async function renderMapStops() {
+      clearMap();
+      if (!map) return;
+  
+      // Sort stops by date
+      const sortedStops = [...currentStops].sort((a, b) => 
+          new Date(a.target_date) - new Date(b.target_date)
+      );
+  
+      // Add Markers
+      sortedStops.forEach((stop, index) => {
+          const el = document.createElement('div');
+          el.className = 'marker';
+          el.innerHTML = `<span><b>${index + 1}</b></span>`;
+  
+          const marker = new mapboxgl.Marker(el)
+              .setLngLat([stop.longitude, stop.latitude])
+              .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(`${stop.location_name} (Day ${index + 1})`))
+              .addTo(map);
+          markers.push(marker);
+      });
+  
+      // Fetch and Draw Facilities
+      // We do this async but don't block the line drawing
+      (async () => {
+          const features = [];
+          
+          for (const stop of sortedStops) {
+              try {
+                  const b = await API.getBriefing(stop.id);
+                  if (b && b.facilities) {
+                      b.facilities.forEach(f => {
+                           if (f.latitude && f.longitude) {
+                               let icon = 'marker-15';
+                               const type = (f.type || '').toLowerCase();
+                               if (type.includes('anchorage')) icon = 'harbor-15';
+                               else if (type.includes('marina')) icon = 'warehouse-15';
+                               
+                               features.push({
+                                   type: 'Feature',
+                                   geometry: {
+                                       type: 'Point',
+                                       coordinates: [f.longitude, f.latitude]
+                                   },
+                                   properties: {
+                                       title: f.name,
+                                       icon: icon,
+                                       description: f.type,
+                                       lat: f.latitude,
+                                       lng: f.longitude
+                                   }
+                               });
+                           }
+                      });
+                  }
+              } catch (err) {
+                 // Ignore errors fetching briefings for map
+              }
+          }
+          
+          if (features.length > 0) {
+              if (map.getSource('facilities')) {
+                  map.getSource('facilities').setData({
+                      type: 'FeatureCollection',
+                      features: features
+                  });
+              } else {
+                  map.addSource('facilities', {
+                      type: 'geojson',
+                      data: {
+                          type: 'FeatureCollection',
+                          features: features
+                      }
+                  });
+  
+                  map.addLayer({
+                      id: 'facilities-circles',
+                      type: 'circle',
+                      source: 'facilities',
+                      paint: {
+                          'circle-radius': 15,
+                          'circle-opacity': 1,
+                          'circle-color': '#000',
+                          'circle-stroke-width': 1,
+                          'circle-stroke-color': '#314c3b'
+                      }
+                  });
+                  
+                  map.addLayer({
+                      id: 'facilities',
+                      type: 'symbol',
+                      source: 'facilities',
+                      layout: {
+                          'icon-image': ['get', 'icon'],
+                          'icon-size': 1.0,
+                          'icon-allow-overlap': true
+                      }
+                  });
+  
+                  // Click event for facilities
+                  map.on('click', 'facilities', (e) => {
+                      const coords = e.features[0].geometry.coordinates.slice();
+                      const props = e.features[0].properties;
+                      
+                      new mapboxgl.Popup()
+                          .setLngLat(coords)
+                          .setHTML(`
+                              <strong>${props.title}</strong><br>
+                              ${props.description}<br>
+                              <a href="https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}" target="_blank">View on Google Maps</a>
+                          `)
+                          .addTo(map);
+                  });
+                  
+                  // Cursor style
+                  map.on('mouseenter', 'facilities', () => {
+                      map.getCanvas().style.cursor = 'pointer';
+                  });
+                  map.on('mouseleave', 'facilities', () => {
+                      map.getCanvas().style.cursor = '';
+                  });
+              }
+          }
+      })();
+  
+      // Draw Line
+      const coords = sortedStops.map(s => [s.longitude, s.latitude]);
+      
+      if (map.getSource('route')) {
+          map.getSource('route').setData({
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                  type: 'LineString',
+                  coordinates: coords
+              }
+          });
+      } else {
+          map.addSource('route', {
+              type: 'geojson',
+              data: {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                      type: 'LineString',
+                      coordinates: coords
+                  }
+              }
+          });
+  
+          map.addLayer({
+              id: 'route',
+              type: 'line',
+              source: 'route',
+              layout: {
+                  'line-join': 'round',
+                  'line-cap': 'round'
+              },
+              paint: {
+                  'line-color': '#314c3b', // Brand Green
+                  'line-width': 4,
+                  'line-dasharray': [2, 1]
+              }
+          });
+      }
+  }
+  
+  function clearMap() {
+      markers.forEach(m => m.remove());
+      markers = [];
+      if (map && map.getSource('route')) {
+          map.getSource('route').setData({
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                  type: 'LineString',
+                  coordinates: []
+              }
+          });
+      }
+      if (map && map.getSource('facilities')) {
+          map.getSource('facilities').setData({
+              type: 'FeatureCollection',
+              features: []
+          });
+      }
+  }
+  
+  function renderMiniTideChart(canvasId, tideData, targetDateStr) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+  
+      if (!tideData || !tideData.events) return;
+      const targetDate = new Date(targetDateStr);
+      const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
+      
+      const points = [];
+      tideData.events.forEach(e => {
+          let timeStr = e.time;
+           const hasTimezone = timeStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(timeStr);
+          if (!hasTimezone) {
+               timeStr = timeStr.replace(' ', 'T') + 'Z';
+          }
+          let d = new Date(timeStr);
+          if (!isNaN(d.getTime())) {
+              const diffMs = d.getTime() - targetStart;
+              const floatHours = diffMs / (1000 * 60 * 60);
+              if (floatHours >= 0 && floatHours <= 24) {
+                   points.push({ x: floatHours, y: e.height_ft });
+              }
+          }
+      });
+      points.sort((a, b) => a.x - b.x);
+  
+      const ctx = canvas.getContext('2d');
+      new Chart(ctx, {
+          type: 'line',
+          data: {
+              datasets: [{
+                  data: points,
+                  borderColor: '#0077be',
+                  backgroundColor: 'rgba(0, 119, 190, 0.1)',
+                  borderWidth: 1.5,
+                  tension: 0.4,
+                  pointRadius: 0,
+                  fill: 'start'
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              scales: {
+                  x: { display: false, min: 0, max: 24 },
+                  y: { display: false }
+              },
+              layout: { padding: 0 }
+          }
+      });
+  }
     async function handleShowReport() {
     if (!currentVoyage) return;
     
@@ -1691,6 +1743,55 @@ function clearMap() {
                 <hr />
             `;
         }
+
+        // --- Consolidated View ---
+        html += `<div style="margin-bottom: 2rem; page-break-inside: avoid;">
+            <h2 class="report-day-header" style="border-left-color: var(--brand-blue);">Voyage Overview</h2>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">`;
+            
+        sortedStops.forEach((stop, idx) => {
+            const briefing = briefings[idx] || {};
+            const date = new Date(stop.target_date);
+            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            // Weather
+            const w = briefing.weather_summary || {};
+            const weatherIcon = getIconForWeather(w.condition);
+            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+
+            // Sun
+            const sun = briefing.sun_phase || {};
+            const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+            const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+            const canvasId = `miniTideChart_${idx}`;
+
+            html += `
+                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 180px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
+                        ${dateStr}
+                    </div>
+                    <div style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stop.location_name}">
+                        ${stop.location_name}
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
+                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
+                        <span style="font-size: 1rem; font-weight: bold;">${temp}</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
+                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                    </div>
+
+                    <div style="flex: 1; position: relative; height: 50px; min-height: 50px;">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div><hr />`;
 
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
@@ -1933,11 +2034,14 @@ function clearMap() {
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
 
-        // Render all charts
+        // Render all charts (including mini ones)
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
             if (b && b.tides && b.tides.events) {
+                // Main Chart
                 renderTideChart(`tideChart_${idx}`, b.tides, stop.target_date);
+                // Mini Chart
+                renderMiniTideChart(`miniTideChart_${idx}`, b.tides, stop.target_date);
             }
         });
 

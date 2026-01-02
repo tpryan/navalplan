@@ -69,20 +69,20 @@ export const API = {
     return res.json();
   },
 
-  async getBriefing(stopId) {
-    const res = await apiFetch(`${API_BASE}/stops/${stopId}/briefing`);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error('Failed to get briefing');
-    return res.json();
-  },
+	async getBriefing(stopId) {
+		const res = await apiFetch(`${API_BASE}/stops/${stopId}/briefing`);
+		if (res.status === 404) return null;
+		if (!res.ok) throw new Error('Failed to get briefing');
+		return res.json();
+	},
 
-  async getVoyage(id) {
-    const res = await apiFetch(`${API_BASE}/voyages/${id}`);
-    if (!res.ok) throw new Error('Failed to load voyage');
-    return res.json();
-  },
-  
-  async getStops(voyageId) {
+	async getVoyageBriefings(voyageId) {
+		const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/briefings`);
+		if (!res.ok) throw new Error('Failed to get voyage briefings');
+		return res.json();
+	},
+
+	async getStops(voyageId) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`);
     if (!res.ok) throw new Error('Failed to load stops');
     return res.json();
