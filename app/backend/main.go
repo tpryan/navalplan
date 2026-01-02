@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -90,9 +91,16 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		dsn = val
 	}
 
-	redirectURL := getEnv("NAVALPLAN_OA_RURL")
-	if redirectURL == "" {
-		redirectURL = getEnv("GOOGLE_REDIRECT_URL")
+	baseURL := getEnv("NAVALPLAN_BASE_URL")
+	if baseURL == "" {
+		// Fallback to construction from GOOGLE_REDIRECT_URL if available
+		fullRedirect := getEnv("GOOGLE_REDIRECT_URL")
+		if fullRedirect != "" {
+			baseURL = strings.TrimSuffix(fullRedirect, "/auth/google/callback")
+		}
+	}
+	if baseURL == "" {
+		baseURL = "http://localhost:" + port
 	}
 
 	agentURL := getEnv("NAVALPLAN_AGENT_URL")
@@ -105,9 +113,9 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		Port:               port,
 		ContentDir:         contentDir,
 		DatabaseDSN:        dsn,
-		GoogleClientID:     getEnv("NAVALPLAN_OA_CLIENT"),
-		GoogleClientSecret: getEnv("NAVALPLAN_OA_SECRET"),
-		GoogleRedirectURL:  redirectURL,
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET"),
+		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 	}
 }

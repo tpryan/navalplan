@@ -13,7 +13,7 @@ type Config struct {
 	// Auth
 	GoogleClientID     string
 	GoogleClientSecret string
-	GoogleRedirectURL  string
+	BaseURL            string
 
 	// External Services
 	NavalPlanAgentURL string

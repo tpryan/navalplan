@@ -33,7 +33,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		DB:  db,
 		Env: cfg.Env,
 		GoogleConfig: &oauth2.Config{
-			RedirectURL:  cfg.GoogleRedirectURL,
+			RedirectURL:  cfg.BaseURL + "/auth/google/callback",
 			ClientID:     cfg.GoogleClientID,
 			ClientSecret: cfg.GoogleClientSecret,
 			Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
