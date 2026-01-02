@@ -258,7 +258,10 @@ func main() {
 	// Port handling for Cloud Run compatibility
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8081"
+		port = os.Getenv("NAVALPLAN_AGENT_PORT")
+	}
+	if port == "" {
+		port = "8081" // Default fallback
 	}
 
 	l := full.NewLauncher()
