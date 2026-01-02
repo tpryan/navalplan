@@ -56,7 +56,8 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 	dbHost := getEnv("NAVALPLAN_DB_HOST")
 	dbPort := getEnv("NAVALPLAN_DB_PORT")
 	dbName := getEnv("NAVALPLAN_DB_NAME")
-	dbMode := getEnv("NAVALPLAN_DB_MODE") // Maps to sslmode
+	dbMode := getEnv("NAVALPLAN_DB_MODE")     // Maps to sslmode
+	dbSocket := getEnv("NAVALPLAN_DB_SOCKET") // For Cloud Run / Unix Sockets
 
 	if dbUser == "" {
 		dbUser = "navalplan_user"
@@ -78,7 +79,14 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 	}
 
 	log.Info("Setting Database connection string")
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dbUser, dbPass, dbHost, dbPort, dbName, dbMode)
+	var dsn string
+	if dbSocket != "" {
+		log.Info("Setting Database using socket")
+		dsn = fmt.Sprintf("postgres://%s:%s@/%s?host=%s&sslmode=%s", dbUser, dbPass, dbName, dbSocket, dbMode)
+	} else {
+		log.Info("Setting Database using host")
+		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dbUser, dbPass, dbHost, dbPort, dbName, dbMode)
+	}
 
 	// Allow override
 	if val := getEnv("NAVALPLAN_DATABASE_URL"); val != "" {
