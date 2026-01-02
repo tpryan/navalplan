@@ -107,3 +107,40 @@ deps-backend:
 
 deps-researcher:
 	cd services/researcher && go mod tidy && go mod vendor
+
+# --- Deployment ---
+
+deploy-agent:
+	@echo "Deploying Agent..."
+	gcloud builds submit --config cloudbuild-agent.yaml .
+
+deploy-backend:
+	@echo "Deploying Backend..."
+	@if [ -z "$(AGENT_URL)" ]; then \
+		echo "Warning: AGENT_URL is not set. Use 'make deploy-backend AGENT_URL=...'"; \
+		gcloud builds submit --config cloudbuild.yaml .; \
+	else \
+		gcloud builds submit --config cloudbuild.yaml --substitutions=_AGENT_URL=$(AGENT_URL) .; \
+	fi
+
+# --- Cloud SQL ---
+
+db-publish-prod:
+	@echo "WARNING: This will DROP and RE-CREATE all tables in the PRODUCTION database 'navalplan' on instance 'wakelogdb'."
+	@echo "Target Instance: wakelogdb"
+	@echo "Target Database: navalplan"
+	@echo -n "Are you sure? [y/N] "; \
+	read ans; \
+	if [ "$$ans" != "y" ]; then \
+		echo "Aborting."; \
+		exit 1; \
+	fi
+	@echo "Uploading schema to GCS..."
+	gsutil cp app/db/pg-shortkey.sql gs://navalplan-logging-bucket/tmp/pg-shortkey.sql
+	gsutil cp app/db/schema.sql gs://navalplan-logging-bucket/tmp/schema.sql
+	@echo "Importing pg-shortkey.sql into Cloud SQL..."
+	gcloud sql import sql wakelogdb gs://navalplan-logging-bucket/tmp/pg-shortkey.sql --database=navalplan --quiet
+	@echo "Importing schema.sql into Cloud SQL..."
+	gcloud sql import sql wakelogdb gs://navalplan-logging-bucket/tmp/schema.sql --database=navalplan --quiet
+	@echo "Cleaning up GCS bucket..."
+	gsutil rm gs://navalplan-logging-bucket/tmp/pg-shortkey.sql gs://navalplan-logging-bucket/tmp/schema.sql
