@@ -44,9 +44,9 @@ func TestCreateVoyage(t *testing.T) {
 	// sqlmock sees the *result* of the parse (parameters replaced with ? or $1).
 	// We use a regex to match the core parts.
 	query := `INSERT INTO voyage`
-	
+
 	rows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow(10, time.Now())
-	
+
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
 	err := db.CreateVoyage(v)

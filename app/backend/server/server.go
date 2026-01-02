@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"app/config"
 	"app/datastore"
 	"app/server/handlers"
 
@@ -21,23 +22,20 @@ type Server struct {
 	Router       *chi.Mux
 	DB           datastore.Store
 	GoogleConfig *oauth2.Config
+	Env          string
 }
 
-func New(db datastore.Store, contentDir string) (*Server, error) {
+func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
 
-	redirectURL := os.Getenv("NAVALPLAN_OA_RURL")
-	if redirectURL == "" {
-		redirectURL = os.Getenv("GOOGLE_REDIRECT_URL")
-	}
-
 	s := &Server{
-		DB: db,
+		DB:  db,
+		Env: cfg.Env,
 		GoogleConfig: &oauth2.Config{
-			RedirectURL:  redirectURL,
-			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			RedirectURL:  cfg.GoogleRedirectURL,
+			ClientID:     cfg.GoogleClientID,
+			ClientSecret: cfg.GoogleClientSecret,
 			Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 			Endpoint:     google.Endpoint,
 		},
@@ -45,7 +43,7 @@ func New(db datastore.Store, contentDir string) (*Server, error) {
 
 	r := chi.NewRouter()
 	docsService := handlers.NewGoogleDocsService()
-	h := handlers.New(db, docsService, contentDir)
+	h := handlers.New(db, docsService, cfg.ContentDir, cfg.NavalPlanAgentURL)
 
 	// Standard Middleware
 	r.Use(CustomLogger)

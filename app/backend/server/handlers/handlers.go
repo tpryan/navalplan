@@ -17,12 +17,14 @@ type Handler struct {
 	DB         datastore.Store
 	Docs       DocsService
 	ContentDir string
+	AgentURL   string
 }
 
-func New(db datastore.Store, docsService DocsService, contentDir string) *Handler {
+func New(db datastore.Store, docsService DocsService, contentDir string, agentURL string) *Handler {
 	return &Handler{
 		DB:         db,
 		Docs:       docsService,
 		ContentDir: contentDir,
+		AgentURL:   agentURL,
 	}
 }

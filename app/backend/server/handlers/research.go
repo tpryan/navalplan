@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -82,7 +81,7 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) performStopResearch(stop *models.Stop) {
 	log.SetPrefix("researcher-agent")
 
-	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
+	agentURL := h.AgentURL
 	if agentURL == "" {
 		agentURL = "http://127.0.0.1:8081"
 	}

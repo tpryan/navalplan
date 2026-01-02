@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"crypto/rand"
-	"encoding/hex"
 
 	"app/models"
 

@@ -105,7 +105,7 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	log.SetPrefix("guide-agent")
 
-	agentURL := os.Getenv("NAVALPLAN_AGENT_URL")
+	agentURL := h.AgentURL
 	if agentURL == "" {
 		agentURL = "http://127.0.0.1:8081"
 	}

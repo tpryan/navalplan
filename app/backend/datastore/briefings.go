@@ -25,7 +25,7 @@ func (db *DB) CreateBriefing(b *models.Briefing) error {
 			facilities = EXCLUDED.facilities,
 			created_at = NOW()
 		RETURNING id, created_at`
-	
+
 	rows, err := db.NamedQuery(query, b)
 	if err != nil {
 		return err

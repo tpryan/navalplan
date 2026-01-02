@@ -16,7 +16,7 @@ func (db *DB) CreateVoyage(v *models.Voyage) error {
 		INSERT INTO voyage (person_id, title, start_date, end_date, location_name, latitude, longitude, search_radius, search_radius_unit)
 		VALUES (:person_id, :title, :start_date, :end_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit)
 		RETURNING id, created_at`
-	
+
 	rows, err := db.NamedQuery(query, v)
 	if err != nil {
 		return err

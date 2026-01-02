@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -83,7 +82,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("ENV") == "production",
+		Secure:   s.Env == "production",
 	})
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)

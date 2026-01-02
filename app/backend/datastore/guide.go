@@ -40,6 +40,6 @@ func (db *DB) CreateVoyageGuide(g *models.VoyageGuide) error {
 	if rows.Next() {
 		return rows.Scan(&g.ID, &g.CreatedAt)
 	}
-    // If no rows returned, it might mean no update/insert happened, which shouldn't happen with RETURNING
+	// If no rows returned, it might mean no update/insert happened, which shouldn't happen with RETURNING
 	return nil
 }

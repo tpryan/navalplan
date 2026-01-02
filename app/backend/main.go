@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"app/config"
 	"app/datastore"
 	"app/server"
 
@@ -31,16 +32,15 @@ func main() {
 		log.Warn("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Authentication will fail.")
 	}
 
-	if err := run(context.Background(), os.Stdout, os.Getenv, *contentDir); err != nil {
+	cfg := loadConfig(os.Getenv, *contentDir)
+
+	if err := run(context.Background(), os.Stdout, cfg); err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDir string) error {
-	logger := log.New(w)
-	logger.SetPrefix("main")
-
+func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 	// 1. Basic Configuration
 	port := getEnv("PORT")
 	if port == "" {
@@ -78,48 +78,70 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 		dbMode = "disable"
 	}
 
-	log.Info("Setting Database connection string")
 	var dsn string
 	if dbSocket != "" {
-		log.Info("Setting Database using socket")
 		dsn = fmt.Sprintf("postgres://%s:%s@/%s?host=%s&sslmode=%s", dbUser, dbPass, dbName, dbSocket, dbMode)
 	} else {
-		log.Info("Setting Database using host")
 		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dbUser, dbPass, dbHost, dbPort, dbName, dbMode)
 	}
 
 	// Allow override
 	if val := getEnv("NAVALPLAN_DATABASE_URL"); val != "" {
-		log.Warn("Database settings overridden by NAVALPLAN_DATABASE_URL")
 		dsn = val
 	}
 
+	redirectURL := getEnv("NAVALPLAN_OA_RURL")
+	if redirectURL == "" {
+		redirectURL = getEnv("GOOGLE_REDIRECT_URL")
+	}
+
+	agentURL := getEnv("NAVALPLAN_AGENT_URL")
+	if agentURL == "" {
+		agentURL = "http://127.0.0.1:8081"
+	}
+
+	return &config.Config{
+		Env:                getEnv("ENV"),
+		Port:               port,
+		ContentDir:         contentDir,
+		DatabaseDSN:        dsn,
+		GoogleClientID:     getEnv("NAVALPLAN_OA_CLIENT"),
+		GoogleClientSecret: getEnv("NAVALPLAN_OA_SECRET"),
+		GoogleRedirectURL:  redirectURL,
+		NavalPlanAgentURL:  agentURL,
+	}
+}
+
+func run(ctx context.Context, w io.Writer, cfg *config.Config) error {
+	logger := log.New(w)
+	logger.SetPrefix("main")
+
 	// 2. Initialize DB
-	db, err := datastore.New(dsn)
+	db, err := datastore.New(cfg.DatabaseDSN)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
 	// 3. Initialize Server
-	srv, err := server.New(db, contentDir)
+	srv, err := server.New(db, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
 	// 3.5 Register Routes for static content
-	srv.Routes(contentDir)
+	srv.Routes(cfg.ContentDir)
 
 	// 4. Start HTTP Server
 	httpServer := &http.Server{
-		Addr:    ":" + port,
+		Addr:    ":" + cfg.Port,
 		Handler: srv.Router,
 	}
 
 	errChan := make(chan error, 1)
 	go func() {
-		log.Infof("NavalPlan starting on port %s...", port)
-		log.Infof("Serving static content from: %s", contentDir)
+		log.Infof("NavalPlan starting on port %s...", cfg.Port)
+		log.Infof("Serving static content from: %s", cfg.ContentDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}

@@ -13,12 +13,12 @@ func TestRun_Config(t *testing.T) {
 	// Since we are not mocking datastore.New (it's hardcoded in main),
 	// we expect it to fail on DB connection unless we have a real DB running.
 	// However, this verifies the config parsing logic.
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancel immediately to stop server if it starts
 
 	var buf bytes.Buffer
-	
+
 	// Mock Env
 	env := func(key string) string {
 		if key == "NAVALPLAN_PORT" {
@@ -30,8 +30,10 @@ func TestRun_Config(t *testing.T) {
 		return ""
 	}
 
+	cfg := loadConfig(env, ".")
+
 	// It should return an error because DB is not reachable
-	err := run(ctx, &buf, env, ".")
+	err := run(ctx, &buf, cfg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to database")
 }

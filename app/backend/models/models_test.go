@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"app/models"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -48,11 +49,11 @@ func TestBriefing_JSON(t *testing.T) {
 	b := models.Briefing{
 		WeatherSummary: models.RawJSON(`{"temp":20}`),
 	}
-	
+
 	data, err := json.Marshal(b)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `{"temp":20}`)
-	
+
 	var b2 models.Briefing
 	err = json.Unmarshal(data, &b2)
 	assert.NoError(t, err)

@@ -16,7 +16,7 @@ func (db *DB) CreateStop(s *models.Stop) error {
 		INSERT INTO stop (voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes)
 		VALUES (:voyage_id, :target_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit, :notes)
 		RETURNING id, created_at`
-	
+
 	rows, err := db.NamedQuery(query, s)
 	if err != nil {
 		return err

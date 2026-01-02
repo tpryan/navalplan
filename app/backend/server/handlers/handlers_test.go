@@ -186,7 +186,7 @@ func (m *MockDocsService) BatchUpdate(ctx context.Context, docID string, request
 
 func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 
 	personID := int64(1)
 	expectedVoyages := []models.Voyage{
@@ -214,7 +214,7 @@ func TestListVoyages(t *testing.T) {
 
 func TestCreateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 
 	// We use strings.NewReader for the body
 	body := `{"title": "New Voyage", "start_date": "2025-07-01T00:00:00Z", "end_date": "2025-07-14T00:00:00Z"}`
@@ -236,7 +236,7 @@ func TestCreateVoyage(t *testing.T) {
 
 func TestGetVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 
 	voyageID := int64(123)
 	expectedVoyage := &models.Voyage{ID: voyageID, Title: "My Voyage"}
@@ -264,7 +264,7 @@ func TestGetVoyage(t *testing.T) {
 
 func TestStopOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Get("/voyages/{id}/stops", handler.ListStops)
 	r.Post("/voyages/{id}/stops", handler.CreateStop)
@@ -295,7 +295,7 @@ func TestStopOperations(t *testing.T) {
 
 func TestUpdateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Put("/voyages/{id}", handler.UpdateVoyage)
 
@@ -315,7 +315,7 @@ func TestUpdateVoyage(t *testing.T) {
 
 func TestDeleteVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Delete("/voyages/{id}", handler.DeleteVoyage)
 
@@ -332,7 +332,7 @@ func TestDeleteVoyage(t *testing.T) {
 
 func TestSharingOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Post("/voyages/{id}/share", handler.EnableSharing)
 	r.Delete("/voyages/{id}/share", handler.DisableSharing)
@@ -363,7 +363,7 @@ func TestSharingOperations(t *testing.T) {
 
 func TestUpdateDeleteStop(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Put("/stops/{id}", handler.UpdateStop)
 	r.Delete("/stops/{id}", handler.DeleteStop)
@@ -393,7 +393,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 
 func TestResearchBriefing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Post("/stops/{id}/research", handler.TriggerResearch)
 	r.Get("/stops/{id}/briefing", handler.GetBriefing)
@@ -419,7 +419,7 @@ func TestResearchBriefing(t *testing.T) {
 
 func TestDisableSharing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Delete("/voyages/{id}/share", handler.DisableSharing)
 
@@ -437,7 +437,7 @@ func TestDisableSharing(t *testing.T) {
 
 func TestTriggerFullVoyageResearch(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content")
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	r := chi.NewRouter()
 	r.Post("/voyages/{id}/research", handler.TriggerFullVoyageResearch)
 

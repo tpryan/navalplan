@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"app/config"
 	"app/datastore"
 	"app/models"
 	"app/server"
@@ -63,7 +64,10 @@ var _ datastore.Store = (*MockStore)(nil)
 
 func TestServerHealth(t *testing.T) {
 	mockStore := new(MockStore)
-	srv, err := server.New(mockStore, ".")
+	cfg := &config.Config{
+		ContentDir: ".",
+	}
+	srv, err := server.New(mockStore, cfg)
 	assert.NoError(t, err)
 	assert.NotNil(t, srv)
 
@@ -78,7 +82,10 @@ func TestServerHealth(t *testing.T) {
 
 func TestServerRoutes(t *testing.T) {
 	mockStore := new(MockStore)
-	srv, err := server.New(mockStore, ".")
+	cfg := &config.Config{
+		ContentDir: ".",
+	}
+	srv, err := server.New(mockStore, cfg)
 	assert.NoError(t, err)
 
 	// Verify API route prefix exists

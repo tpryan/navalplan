@@ -9,6 +9,7 @@ import (
 
 	"app/models"
 	"app/server/handlers"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
@@ -16,7 +17,7 @@ import (
 func TestExportVoyage_Success(t *testing.T) {
 	mockStore := new(MockStore)
 	mockDocs := new(MockDocsService)
-	handler := handlers.New(mockStore, mockDocs, "test_content")
+	handler := handlers.New(mockStore, mockDocs, "test_content", "http://test-agent")
 
 	voyageID := int64(1)
 	now := time.Now()
@@ -39,7 +40,7 @@ func TestExportVoyage_Success(t *testing.T) {
 	mockStore.On("GetVoyage", voyageID).Return(voyage, nil)
 	mockStore.On("ListStops", voyageID).Return(stops, nil)
 	mockStore.On("GetBriefing", int64(10)).Return(briefing, nil)
-	
+
 	// Note: DB is NOT updated in this handler anymore (frontend handles the actual export)
 
 	// Setup Router
@@ -52,10 +53,10 @@ func TestExportVoyage_Success(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var resp handlers.ExportResponse
 	json.NewDecoder(w.Body).Decode(&resp)
-	
+
 	assert.Equal(t, "Logbook: Test Voyage", resp.Title)
 	assert.NotEmpty(t, resp.Requests)
 	// We expect at least header + stop + weather requests
