@@ -35,7 +35,7 @@ steps:
   - '--region'
   - 'us-central1'
   - '--project'
-  - 'navalplan' # Ensure this matches your project ID
+  - 'wakelog' # Ensure this matches your project ID
   - '--allow-unauthenticated' # Publicly accessible
   dir: 'app/backend'
   

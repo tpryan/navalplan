@@ -9,7 +9,7 @@ steps:
   - '--region'
   - 'us-central1'
   - '--project'
-  - 'navalplan'                     # Your Google Cloud Project ID
+  - 'wakelog'                     # Your Google Cloud Project ID
   - '--no-allow-unauthenticated'    # Security: Only backend can call this
   dir: 'services/researcher'        # Build context
 logsBucket: gs://navalplan-logging-bucket
