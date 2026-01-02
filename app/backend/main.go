@@ -47,9 +47,40 @@ func run(ctx context.Context, w io.Writer, getEnv func(string) string, contentDi
 		port = "8080"
 	}
 
-	dsn := getEnv("NAVALPLAN_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://navalplan_user:navalplan_pass@localhost:5433/navalplan?sslmode=disable"
+	// Construct DSN from components
+	dbUser := getEnv("NAVALPLAN_DB_USER")
+	dbPass := getEnv("NAVALPLAN_DB_PASS")
+	dbHost := getEnv("NAVALPLAN_DB_HOST")
+	dbPort := getEnv("NAVALPLAN_DB_PORT")
+	dbName := getEnv("NAVALPLAN_DB_NAME")
+	dbMode := getEnv("NAVALPLAN_DB_MODE") // Maps to sslmode
+
+	if dbUser == "" {
+		dbUser = "navalplan_user"
+	}
+	if dbPass == "" {
+		dbPass = "navalplan_pass"
+	}
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+	if dbPort == "" {
+		dbPort = "5433"
+	}
+	if dbName == "" {
+		dbName = "navalplan"
+	}
+	if dbMode == "" {
+		dbMode = "disable"
+	}
+
+	log.Info("Setting Database connection string")
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dbUser, dbPass, dbHost, dbPort, dbName, dbMode)
+
+	// Allow override
+	if val := getEnv("NAVALPLAN_DATABASE_URL"); val != "" {
+		log.Warn("Database settings overridden by NAVALPLAN_DATABASE_URL")
+		dsn = val
 	}
 
 	// 2. Initialize DB
