@@ -29,8 +29,8 @@ func main() {
 	contentDir := flag.String("content", "./static.min", "Path to static content to serve")
 	flag.Parse()
 
-	if os.Getenv("GOOGLE_CLIENT_ID") == "" || os.Getenv("GOOGLE_CLIENT_SECRET") == "" {
-		log.Warn("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Authentication will fail.")
+	if os.Getenv("NAVALPLAN_OA_CLIENT") == "" || os.Getenv("NAVALPLAN_OA_SECRET") == "" {
+		log.Warn("NAVALPLAN_OA_CLIENT or NAVALPLAN_OA_SECRET is not set. Authentication will fail.")
 	}
 
 	cfg := loadConfig(os.Getenv, *contentDir)
@@ -113,8 +113,8 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		Port:               port,
 		ContentDir:         contentDir,
 		DatabaseDSN:        dsn,
-		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET"),
+		GoogleClientID:     getEnv("NAVALPLAN_OA_CLIENT"),
+		GoogleClientSecret: getEnv("NAVALPLAN_OA_SECRET"),
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 	}

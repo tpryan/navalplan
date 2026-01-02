@@ -29,6 +29,18 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
 
+	if len(cfg.GoogleClientID) > 0 {
+		prefix := ""
+		if len(cfg.GoogleClientID) >= 5 {
+			prefix = cfg.GoogleClientID[:5]
+		} else {
+			prefix = cfg.GoogleClientID
+		}
+		log.Infof("Initializing server with Google Client ID prefix: %s... (total length: %d)", prefix, len(cfg.GoogleClientID))
+	} else {
+		log.Warn("Initializing server with EMPTY Google Client ID!")
+	}
+
 	s := &Server{
 		DB:  db,
 		Env: cfg.Env,
