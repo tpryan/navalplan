@@ -1824,6 +1824,55 @@ function initMap() {
             <hr />
         `;
 
+        // --- Consolidated View ---
+        html += `<div style="margin-bottom: 2rem; page-break-inside: avoid;">
+            <h2 class="report-day-header" style="border-left-color: var(--brand-blue);">Voyage Overview</h2>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">`;
+            
+        sortedStops.forEach((stop, idx) => {
+            const briefing = briefings[idx] || {};
+            const date = new Date(stop.target_date);
+            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            // Weather
+            const w = briefing.weather_summary || {};
+            const weatherIcon = getIconForWeather(w.condition);
+            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+
+            // Sun
+            const sun = briefing.sun_phase || {};
+            const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+            const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+            const canvasId = `miniTideChart_${idx}`;
+
+            html += `
+                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 21%; min-width: 150px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
+                        ${dateStr}
+                    </div>
+                    <div style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stop.location_name}">
+                        ${stop.location_name}
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
+                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
+                        <span style="font-size: 1rem; font-weight: bold;">${temp}</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
+                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                    </div>
+
+                    <div style="flex: 1; position: relative; height: 60px; min-height: 60px;">
+                        <canvas id="${canvasId}"></canvas>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div><hr />`;
+
         // --- Add Destination Guide Section ---
         if (guide) {
             html += `
@@ -1939,55 +1988,6 @@ function initMap() {
                 <hr />
             `;
         }
-
-        // --- Consolidated View ---
-        html += `<div style="margin-bottom: 2rem; page-break-inside: avoid;">
-            <h2 class="report-day-header" style="border-left-color: var(--brand-blue);">Voyage Overview</h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">`;
-            
-        sortedStops.forEach((stop, idx) => {
-            const briefing = briefings[idx] || {};
-            const date = new Date(stop.target_date);
-            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-            
-            // Weather
-            const w = briefing.weather_summary || {};
-            const weatherIcon = getIconForWeather(w.condition);
-            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-            // Sun
-            const sun = briefing.sun_phase || {};
-            const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-            const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-
-            const canvasId = `miniTideChart_${idx}`;
-
-            html += `
-                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 23%; min-width: 150px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
-                        ${dateStr}
-                    </div>
-                    <div style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stop.location_name}">
-                        ${stop.location_name}
-                    </div>
-                    
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
-                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                        <span style="font-size: 1rem; font-weight: bold;">${temp}</span>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
-                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                    </div>
-
-                    <div style="flex: 1; position: relative; height: 60px; min-height: 60px;">
-                        <canvas id="${canvasId}"></canvas>
-                    </div>
-                </div>
-            `;
-        });
-        html += `</div></div><hr />`;
 
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
