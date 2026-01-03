@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+// Server holds the application dependencies and router.
 type Server struct {
 	Router       *chi.Mux
 	DB           datastore.Store
@@ -25,6 +26,7 @@ type Server struct {
 	Env          string
 }
 
+// New initializes a new Server with the provided database and configuration.
 func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
@@ -128,6 +130,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 	return s, nil
 }
 
+// CustomLogger is a middleware that logs HTTP requests.
 func CustomLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -143,6 +146,7 @@ func CustomLogger(next http.Handler) http.Handler {
 	})
 }
 
+// Routes sets up the 404 handler and static file serving.
 func (s *Server) Routes(contentDir string) {
 	// 404 Handler for API
 	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) {

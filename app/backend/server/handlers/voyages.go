@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	appcontext "app/context"
 	"app/models"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,7 @@ func generateToken() string {
 	return hex.EncodeToString(b)
 }
 
+// EnableSharing generates a public share token for a voyage.
 func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -37,6 +39,7 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// DisableSharing revokes the public share token for a voyage.
 func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -55,6 +58,7 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// GetPublicVoyage retrieves a shared voyage by its token.
 func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	v, err := h.DB.GetVoyageByToken(token)
@@ -67,6 +71,7 @@ func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// GetPublicStops retrieves stops for a shared voyage.
 func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	v, err := h.DB.GetVoyageByToken(token)
@@ -85,11 +90,15 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stops)
 }
 
+// ListVoyages returns all voyages for the authenticated user.
 func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
-	// TODO: Get personID from context/session
-	personID := int64(1)
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	voyages, err := h.DB.ListVoyages(personID)
+	voyages, err := h.DB.ListVoyages(person.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -99,15 +108,21 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(voyages)
 }
 
+// CreateVoyage creates a new voyage for the authenticated user.
 func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var v models.Voyage
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// TODO: Get personID from context
-	v.PersonID = 1
+	v.PersonID = person.ID
 
 	if v.SearchRadius == 0 {
 		v.SearchRadius = 60
@@ -126,6 +141,7 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// GetVoyage retrieves a specific voyage by ID.
 func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -144,6 +160,7 @@ func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// UpdateVoyage updates an existing voyage.
 func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -168,6 +185,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// DeleteVoyage deletes a voyage by ID.
 func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

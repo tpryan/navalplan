@@ -41,6 +41,7 @@ func main() {
 	}
 }
 
+// loadConfig reads configuration from environment variables.
 func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 	// 1. Basic Configuration
 	port := getEnv("PORT")

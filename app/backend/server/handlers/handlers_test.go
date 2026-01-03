@@ -206,6 +206,12 @@ func TestListVoyages(t *testing.T) {
 	mockStore.On("ListVoyages", personID).Return(expectedVoyages, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
+	
+	// Add person to context
+	person := &models.Person{ID: personID, Name: "Test User"}
+	ctx := appContext.AddPersonToContext(req.Context(), person)
+	req = req.WithContext(ctx)
+
 	w := httptest.NewRecorder()
 
 	handler.ListVoyages(w, req)
@@ -228,6 +234,13 @@ func TestCreateVoyage(t *testing.T) {
 	// We use strings.NewReader for the body
 	body := `{"title": "New Voyage", "start_date": "2025-07-01T00:00:00Z", "end_date": "2025-07-14T00:00:00Z"}`
 	req := httptest.NewRequest("POST", "/api/v1/voyages", strings.NewReader(body))
+
+	// Add person to context
+	personID := int64(1)
+	person := &models.Person{ID: personID, Name: "Test User"}
+	ctx := appContext.AddPersonToContext(req.Context(), person)
+	req = req.WithContext(ctx)
+
 	w := httptest.NewRecorder()
 
 	// Capture the voyage passed to CreateVoyage to simulate ID assignment or just check args

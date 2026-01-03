@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Person represents a user in the system.
 type Person struct {
 	ID         int64     `json:"id" db:"id"`
 	GoogleID   string    `json:"google_id" db:"google_id"`
@@ -15,6 +16,7 @@ type Person struct {
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }
 
+// Session represents a user session.
 type Session struct {
 	Token     string    `json:"token" db:"token"`
 	PersonID  int64     `json:"person_id" db:"person_id"`
@@ -22,6 +24,7 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at" db:"expires_at"`
 }
 
+// Voyage represents a planned trip.
 type Voyage struct {
 	ID               int64      `json:"id" db:"id"`
 	PersonID         int64      `json:"person_id" db:"person_id"`
@@ -40,6 +43,7 @@ type Voyage struct {
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
+// Stop represents a specific stop or waypoint within a voyage.
 type Stop struct {
 	ID               int64     `json:"id" db:"id"`
 	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
@@ -53,6 +57,7 @@ type Stop struct {
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
 
+// Briefing contains researched information about a stop, such as weather and tides.
 type Briefing struct {
 	ID             int64     `json:"id" db:"id"`
 	StopID         int64     `json:"stop_id" db:"stop_id"`
@@ -63,6 +68,7 @@ type Briefing struct {
 	CreatedAt      time.Time `json:"created_at" db:"created_at"`
 }
 
+// VoyageGuide contains comprehensive researched information about the entire voyage.
 type VoyageGuide struct {
 	ID               int64     `json:"id" db:"id"`
 	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
@@ -81,6 +87,7 @@ type VoyageGuide struct {
 // RawJSON is a helper for JSONB columns
 type RawJSON []byte
 
+// MarshalJSON returns the JSON encoding of r.
 func (r RawJSON) MarshalJSON() ([]byte, error) {
 	if r == nil {
 		return []byte("null"), nil
@@ -88,11 +95,13 @@ func (r RawJSON) MarshalJSON() ([]byte, error) {
 	return r, nil
 }
 
+// UnmarshalJSON sets *r to a copy of data.
 func (r *RawJSON) UnmarshalJSON(data []byte) error {
 	*r = append((*r)[0:0], data...)
 	return nil
 }
 
+// Value implements the driver.Valuer interface.
 func (r RawJSON) Value() (driver.Value, error) {
 	if r == nil {
 		return nil, nil
@@ -100,6 +109,7 @@ func (r RawJSON) Value() (driver.Value, error) {
 	return string(r), nil
 }
 
+// Scan implements the sql.Scanner interface.
 func (r *RawJSON) Scan(value interface{}) error {
 	if value == nil {
 		*r = nil
