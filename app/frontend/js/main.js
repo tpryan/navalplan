@@ -153,43 +153,6 @@ function initUI() {
       });
   }
 
-  // Capture Map Button
-  const btnCaptureMap = document.getElementById('btn-capture-map');
-  if (btnCaptureMap) {
-      btnCaptureMap.addEventListener('click', async () => {
-          if (!currentVoyage || !map) return;
-          
-          const originalContent = btnCaptureMap.innerHTML;
-          btnCaptureMap.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
-          btnCaptureMap.disabled = true;
-
-          try {
-              // Create blob from map canvas
-              map.getCanvas().toBlob(async (blob) => {
-                  if (!blob) {
-                      throw new Error('Failed to generate map image');
-                  }
-                  
-                  try {
-                      await API.uploadVoyageMap(currentVoyage.id, blob);
-                      showNotification('Map Captured', 'Current map view has been saved to the voyage report.');
-                  } catch (err) {
-                      console.error(err);
-                      alert('Failed to upload map image.');
-                  } finally {
-                      btnCaptureMap.innerHTML = originalContent;
-                      btnCaptureMap.disabled = false;
-                  }
-              });
-          } catch (err) {
-              console.error(err);
-              btnCaptureMap.innerHTML = originalContent;
-              btnCaptureMap.disabled = false;
-              alert('Failed to capture map.');
-          }
-      });
-  }
-
   // Research All Button
   const btnResearchAll = document.getElementById('btn-research-all');
   if (btnResearchAll) {
@@ -1753,6 +1716,26 @@ function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   
   }
 
+async function captureAndUploadMap(voyageId) {
+    if (!map) return false;
+    return new Promise((resolve) => {
+        map.getCanvas().toBlob(async (blob) => {
+            if (!blob) {
+                console.warn('Failed to generate map image');
+                resolve(false);
+                return;
+            }
+            try {
+                await API.uploadVoyageMap(voyageId, blob);
+                resolve(true);
+            } catch (err) {
+                console.error('Failed to upload map image', err);
+                resolve(false);
+            }
+        });
+    });
+}
+
     async function handleShowReport() {
     if (!currentVoyage) return;
     
@@ -1762,8 +1745,19 @@ function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
     try {
-        // 1. Fetch all data
-        // For simplicity, we re-use the currentStops we have, but we need briefings
+        // 1. Check/Capture Map
+        let guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
+        
+        // If guide doesn't exist or has no map, try to capture
+        if (!guide || !guide.map_url) {
+             const captured = await captureAndUploadMap(currentVoyage.id);
+             if (captured) {
+                 // Re-fetch guide to get the new map_url
+                 guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
+             }
+        }
+
+        // 2. Fetch all data (Briefings)
         // Sort stops
         const sortedStops = [...currentStops].sort((a, b) => 
             new Date(a.target_date) - new Date(b.target_date)
@@ -1771,12 +1765,9 @@ function renderMiniTideChart(canvasId, tideData, targetDateStr) {
         
         // Fetch Briefings in parallel
         const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
-        // Also fetch the Voyage Guide
-        const guidePromise = API.getVoyageGuide(currentVoyage.id).catch(() => null);
         
-        const [briefings, guide] = await Promise.all([
-            Promise.all(briefingPromises),
-            guidePromise
+        const [briefings] = await Promise.all([
+            Promise.all(briefingPromises)
         ]);
 
         const renderReferences = (refs) => {
