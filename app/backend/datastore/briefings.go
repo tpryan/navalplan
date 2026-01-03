@@ -14,6 +14,21 @@ func (db *DB) GetBriefing(stopID int64) (*models.Briefing, error) {
 	return &b, nil
 }
 
+func (db *DB) ListVoyageBriefings(voyageID int64) ([]models.Briefing, error) {
+	var briefings []models.Briefing
+	query := `
+		SELECT b.*
+		FROM briefing b
+		JOIN stop s ON b.stop_id = s.id
+		WHERE s.voyage_id = $1
+	`
+	err := db.Select(&briefings, query, voyageID)
+	if err != nil {
+		return nil, err
+	}
+	return briefings, nil
+}
+
 func (db *DB) CreateBriefing(b *models.Briefing) error {
 	query := `
 		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities)

@@ -100,6 +100,14 @@ func (m *MockStore) GetBriefing(stopID int64) (*models.Briefing, error) {
 	return args.Get(0).(*models.Briefing), args.Error(1)
 }
 
+func (m *MockStore) ListVoyageBriefings(voyageID int64) ([]models.Briefing, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Briefing), args.Error(1)
+}
+
 func (m *MockStore) CreateBriefing(b *models.Briefing) error {
 	args := m.Called(b)
 	return args.Error(0)

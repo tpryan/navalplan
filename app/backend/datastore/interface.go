@@ -26,6 +26,7 @@ type Store interface {
 
 	// Briefings
 	GetBriefing(stopID int64) (*models.Briefing, error)
+	ListVoyageBriefings(voyageID int64) ([]models.Briefing, error)
 	CreateBriefing(b *models.Briefing) error
 
 	// Voyage Guide

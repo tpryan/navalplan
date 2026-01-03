@@ -107,6 +107,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 			r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
 			r.Post("/voyages/{id}/research", h.TriggerFullVoyageResearch)
 			r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
+			r.Get("/voyages/{id}/briefings", h.ListVoyageBriefings)
 			r.Post("/voyages/{id}/guide/map_image", h.UploadVoyageMap)
 
 			// Stop Management

@@ -257,3 +257,22 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
+
+func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	voyageID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	briefings, err := h.DB.ListVoyageBriefings(voyageID)
+	if err != nil {
+		log.Errorf("Failed to list briefings for voyage %d: %v", voyageID, err)
+		http.Error(w, "Failed to list briefings", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(briefings)
+}
