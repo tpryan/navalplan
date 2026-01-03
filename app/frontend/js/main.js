@@ -1870,7 +1870,7 @@ function initMap() {
                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                     </div>
 
-                    <div style="position: relative; height: 60px; min-height: 60px; width: 100%;">
+                    <div style="position: relative; height: 120px; min-height: 120px; width: 100%;">
                         <canvas id="${canvasId}" style="width: 100%; height: 100%;"></canvas>
                     </div>
                 </td>
