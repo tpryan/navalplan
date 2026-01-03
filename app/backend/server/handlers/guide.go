@@ -88,7 +88,7 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voyage, err := h.DB.GetVoyage(voyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
 		return
@@ -215,7 +215,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 		CreatedAt:        time.Now(),
 	}
 
-	if err := h.DB.CreateVoyageGuide(guide); err != nil {
+	if err := h.DB.CreateVoyageGuide(ctx, guide); err != nil {
 		log.Infof("Failed to save voyage guide: %v", err)
 	}
 	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
@@ -234,7 +234,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	guide, err := h.DB.GetVoyageGuide(voyageID)
+	guide, err := h.DB.GetVoyageGuide(r.Context(), voyageID)
 	// We don't error out immediately if guide is not found,
 	// because we might still have a map image.
 
@@ -278,7 +278,7 @@ func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	briefings, err := h.DB.ListVoyageBriefings(voyageID)
+	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
 	if err != nil {
 		log.Errorf("Failed to list briefings for voyage %d: %v", voyageID, err)
 		http.Error(w, "Failed to list briefings", http.StatusInternalServerError)

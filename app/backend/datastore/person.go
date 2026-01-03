@@ -7,10 +7,10 @@ import (
 	"app/models"
 )
 
-func (db *DB) FindPersonByGoogleID(googleID string) (*models.Person, error) {
+func (db *DB) FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error) {
 	var person models.Person
 	query := `SELECT * FROM "person" WHERE google_id = $1`
-	err := db.Get(&person, query, googleID)
+	err := db.GetContext(ctx, &person, query, googleID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -30,7 +30,7 @@ func (db *DB) GetPersonByID(ctx context.Context, id int64) (*models.Person, erro
 	return &person, nil
 }
 
-func (db *DB) CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error) {
+func (db *DB) CreatePerson(ctx context.Context, googleID, email, name, pictureURL string) (*models.Person, error) {
 	query := `
 		INSERT INTO "person" (google_id, email, name, picture_url)
 		VALUES ($1, $2, $3, $4)
@@ -42,15 +42,15 @@ func (db *DB) CreatePerson(googleID, email, name, pictureURL string) (*models.Pe
 	person.Name = name
 	person.PictureURL = pictureURL
 
-	err := db.QueryRow(query, googleID, email, name, pictureURL).Scan(&person.ID, &person.CreatedAt)
+	err := db.QueryRowContext(ctx, query, googleID, email, name, pictureURL).Scan(&person.ID, &person.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &person, nil
 }
 
-func (db *DB) UpdatePersonName(id int64, name string) error {
+func (db *DB) UpdatePersonName(ctx context.Context, id int64, name string) error {
 	query := `UPDATE "person" SET name = $1 WHERE id = $2`
-	_, err := db.Exec(query, name, id)
+	_, err := db.ExecContext(ctx, query, name, id)
 	return err
 }

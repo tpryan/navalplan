@@ -49,7 +49,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find or Create Person
-	person, err := s.DB.FindPersonByGoogleID(gUser.ID)
+	person, err := s.DB.FindPersonByGoogleID(r.Context(), gUser.ID)
 	if err != nil {
 		log.Error("db find person", "error", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -57,7 +57,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if person == nil {
-		person, err = s.DB.CreatePerson(gUser.ID, gUser.Email, gUser.Name, gUser.Picture)
+		person, err = s.DB.CreatePerson(r.Context(), gUser.ID, gUser.Email, gUser.Name, gUser.Picture)
 		if err != nil {
 			log.Error("db create person", "error", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)
@@ -68,7 +68,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Create Session
 	token := generateSessionToken()
 	expiresAt := time.Now().Add(30 * 24 * time.Hour) // 30 days
-	if err := s.DB.CreateSession(token, person.ID, expiresAt); err != nil {
+	if err := s.DB.CreateSession(r.Context(), token, person.ID, expiresAt); err != nil {
 		log.Error("db create session", "error", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -91,7 +91,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 func (s *Server) oauthLogout(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("navalplan_session")
 	if err == nil {
-		s.DB.DeleteSession(c.Value)
+		s.DB.DeleteSession(r.Context(), c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "navalplan_session",

@@ -21,102 +21,102 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) ListVoyages(personID int64) ([]models.Voyage, error) {
+func (m *MockStore) ListVoyages(ctx context.Context, personID int64) ([]models.Voyage, error) {
 	args := m.Called(personID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]models.Voyage), args.Error(1)
 }
-func (m *MockStore) CreateVoyage(v *models.Voyage) error {
+func (m *MockStore) CreateVoyage(ctx context.Context, v *models.Voyage) error {
 	args := m.Called(v)
 	return args.Error(0)
 }
-func (m *MockStore) UpdateVoyage(v *models.Voyage) error {
+func (m *MockStore) UpdateVoyage(ctx context.Context, v *models.Voyage) error {
 	args := m.Called(v)
 	return args.Error(0)
 }
-func (m *MockStore) GetVoyage(id int64) (*models.Voyage, error) {
+func (m *MockStore) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Voyage), args.Error(1)
 }
-func (m *MockStore) UpdateVoyageSharing(id int64, shareToken *string, isPublic bool) error {
+func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *string, isPublic bool) error {
 	args := m.Called(id, shareToken, isPublic)
 	return args.Error(0)
 }
-func (m *MockStore) GetVoyageByToken(token string) (*models.Voyage, error) {
+func (m *MockStore) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	args := m.Called(token)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Voyage), args.Error(1)
 }
-func (m *MockStore) DeleteVoyage(id int64) error {
+func (m *MockStore) DeleteVoyage(ctx context.Context, id int64) error {
 	args := m.Called(id)
 	return args.Error(0)
 }
 
-func (m *MockStore) ListStops(voyageID int64) ([]models.Stop, error) {
+func (m *MockStore) ListStops(ctx context.Context, voyageID int64) ([]models.Stop, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
-func (m *MockStore) CreateStop(s *models.Stop) error {
+func (m *MockStore) CreateStop(ctx context.Context, s *models.Stop) error {
 	args := m.Called(s)
 	return args.Error(0)
 }
-func (m *MockStore) GetStop(id int64) (*models.Stop, error) {
+func (m *MockStore) GetStop(ctx context.Context, id int64) (*models.Stop, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Stop), args.Error(1)
 }
-func (m *MockStore) UpdateStop(s *models.Stop) error {
+func (m *MockStore) UpdateStop(ctx context.Context, s *models.Stop) error {
 	args := m.Called(s)
 	return args.Error(0)
 }
-func (m *MockStore) DeleteStop(id int64) error {
+func (m *MockStore) DeleteStop(ctx context.Context, id int64) error {
 	args := m.Called(id)
 	return args.Error(0)
 }
 
-func (m *MockStore) GetBriefing(stopID int64) (*models.Briefing, error) {
+func (m *MockStore) GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error) {
 	args := m.Called(stopID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Briefing), args.Error(1)
 }
-func (m *MockStore) ListVoyageBriefings(voyageID int64) ([]models.Briefing, error) {
+func (m *MockStore) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]models.Briefing), args.Error(1)
 }
-func (m *MockStore) CreateBriefing(b *models.Briefing) error {
+func (m *MockStore) CreateBriefing(ctx context.Context, b *models.Briefing) error {
 	args := m.Called(b)
 	return args.Error(0)
 }
-func (m *MockStore) GetVoyageGuide(voyageID int64) (*models.VoyageGuide, error) {
+func (m *MockStore) GetVoyageGuide(ctx context.Context, voyageID int64) (*models.VoyageGuide, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.VoyageGuide), args.Error(1)
 }
-func (m *MockStore) CreateVoyageGuide(g *models.VoyageGuide) error {
+func (m *MockStore) CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide) error {
 	args := m.Called(g)
 	return args.Error(0)
 }
 
-func (m *MockStore) FindPersonByGoogleID(googleID string) (*models.Person, error) {
+func (m *MockStore) FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error) {
 	args := m.Called(googleID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -130,18 +130,18 @@ func (m *MockStore) GetPersonByID(ctx context.Context, id int64) (*models.Person
 	}
 	return args.Get(0).(*models.Person), args.Error(1)
 }
-func (m *MockStore) CreatePerson(googleID, email, name, pictureURL string) (*models.Person, error) {
+func (m *MockStore) CreatePerson(ctx context.Context, googleID, email, name, pictureURL string) (*models.Person, error) {
 	args := m.Called(googleID, email, name, pictureURL)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Person), args.Error(1)
 }
-func (m *MockStore) UpdatePersonName(id int64, name string) error {
+func (m *MockStore) UpdatePersonName(ctx context.Context, id int64, name string) error {
 	args := m.Called(id, name)
 	return args.Error(0)
 }
-func (m *MockStore) CreateSession(token string, personID int64, expiresAt time.Time) error {
+func (m *MockStore) CreateSession(ctx context.Context, token string, personID int64, expiresAt time.Time) error {
 	args := m.Called(token, personID, expiresAt)
 	return args.Error(0)
 }
@@ -152,7 +152,7 @@ func (m *MockStore) GetSession(ctx context.Context, token string) (*models.Sessi
 	}
 	return args.Get(0).(*models.Session), args.Error(1)
 }
-func (m *MockStore) DeleteSession(token string) error {
+func (m *MockStore) DeleteSession(ctx context.Context, token string) error {
 	args := m.Called(token)
 	return args.Error(0)
 }

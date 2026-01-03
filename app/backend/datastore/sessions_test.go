@@ -23,7 +23,7 @@ func TestCreateSession(t *testing.T) {
 		WithArgs(token, personID, expiresAt).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.CreateSession(token, personID, expiresAt)
+	err := db.CreateSession(context.Background(), token, personID, expiresAt)
 	assert.NoError(t, err)
 }
 
@@ -52,6 +52,6 @@ func TestDeleteSession(t *testing.T) {
 
 	mock.ExpectExec(regexp.QuoteMeta(query)).WithArgs(token).WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.DeleteSession(token)
+	err := db.DeleteSession(context.Background(), token)
 	assert.NoError(t, err)
 }

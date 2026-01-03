@@ -29,12 +29,12 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := generateToken()
-	if err := h.DB.UpdateVoyageSharing(id, &token, true); err != nil {
+	if err := h.DB.UpdateVoyageSharing(r.Context(), id, &token, true); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	v, _ := h.DB.GetVoyage(id)
+	v, _ := h.DB.GetVoyage(r.Context(), id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
@@ -48,12 +48,12 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.UpdateVoyageSharing(id, nil, false); err != nil {
+	if err := h.DB.UpdateVoyageSharing(r.Context(), id, nil, false); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	v, _ := h.DB.GetVoyage(id)
+	v, _ := h.DB.GetVoyage(r.Context(), id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
@@ -61,7 +61,7 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 // GetPublicVoyage retrieves a shared voyage by its token.
 func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
-	v, err := h.DB.GetVoyageByToken(token)
+	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
 		return
@@ -74,13 +74,13 @@ func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 // GetPublicStops retrieves stops for a shared voyage.
 func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
-	v, err := h.DB.GetVoyageByToken(token)
+	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
 		return
 	}
 
-	stops, err := h.DB.ListStops(v.ID)
+	stops, err := h.DB.ListStops(r.Context(), v.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,7 +98,7 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voyages, err := h.DB.ListVoyages(person.ID)
+	voyages, err := h.DB.ListVoyages(r.Context(), person.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -131,7 +131,7 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 		v.SearchRadiusUnit = "nm"
 	}
 
-	if err := h.DB.CreateVoyage(&v); err != nil {
+	if err := h.DB.CreateVoyage(r.Context(), &v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.DB.GetVoyage(id)
+	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -176,7 +176,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	}
 	v.ID = id
 
-	if err := h.DB.UpdateVoyage(&v); err != nil {
+	if err := h.DB.UpdateVoyage(r.Context(), &v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -194,7 +194,7 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.DeleteVoyage(id); err != nil {
+	if err := h.DB.DeleteVoyage(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

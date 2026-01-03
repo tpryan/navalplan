@@ -64,7 +64,7 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stop, err := h.DB.GetStop(stopID)
+	stop, err := h.DB.GetStop(r.Context(), stopID)
 	if err != nil {
 		http.Error(w, "Stop not found", http.StatusNotFound)
 		return
@@ -181,7 +181,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 		Facilities:     models.RawJSON(output.Facilities),
 	}
 
-	if err := h.DB.CreateBriefing(briefing); err != nil {
+	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
 		log.Infof("Failed to save briefing: %v", err)
 	}
 	log.Infof("Briefing saved for stop %d", stop.ID)
@@ -195,7 +195,7 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	briefing, err := h.DB.GetBriefing(stopID)
+	briefing, err := h.DB.GetBriefing(r.Context(), stopID)
 	if err != nil {
 		http.Error(w, "Briefing not found", http.StatusNotFound)
 		return
@@ -213,13 +213,13 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	voyage, err := h.DB.GetVoyage(voyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
 		return
 	}
 
-	stops, err := h.DB.ListStops(voyageID)
+	stops, err := h.DB.ListStops(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
 		return

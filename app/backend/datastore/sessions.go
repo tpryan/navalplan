@@ -8,11 +8,11 @@ import (
 	"app/models"
 )
 
-func (db *DB) CreateSession(token string, personID int64, expiresAt time.Time) error {
+func (db *DB) CreateSession(ctx context.Context, token string, personID int64, expiresAt time.Time) error {
 	query := `
 		INSERT INTO session (token, person_id, expires_at)
 		VALUES ($1, $2, $3)`
-	_, err := db.Exec(query, token, personID, expiresAt)
+	_, err := db.ExecContext(ctx, query, token, personID, expiresAt)
 	return err
 }
 
@@ -29,8 +29,8 @@ func (db *DB) GetSession(ctx context.Context, token string) (*models.Session, er
 	return &session, nil
 }
 
-func (db *DB) DeleteSession(token string) error {
+func (db *DB) DeleteSession(ctx context.Context, token string) error {
 	query := `DELETE FROM session WHERE token = $1`
-	_, err := db.Exec(query, token)
+	_, err := db.ExecContext(ctx, query, token)
 	return err
 }

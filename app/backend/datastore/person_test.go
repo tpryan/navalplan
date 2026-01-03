@@ -21,7 +21,7 @@ func TestFindPersonByGoogleID(t *testing.T) {
 
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(googleID).WillReturnRows(rows)
 
-	person, err := db.FindPersonByGoogleID(googleID)
+	person, err := db.FindPersonByGoogleID(context.Background(), googleID)
 	assert.NoError(t, err)
 	assert.NotNil(t, person)
 	assert.Equal(t, googleID, person.GoogleID)
@@ -59,7 +59,7 @@ func TestCreatePerson(t *testing.T) {
 		WithArgs(googleID, email, name, pic).
 		WillReturnRows(rows)
 
-	person, err := db.CreatePerson(googleID, email, name, pic)
+	person, err := db.CreatePerson(context.Background(), googleID, email, name, pic)
 	assert.NoError(t, err)
 	assert.NotNil(t, person)
 	assert.Equal(t, int64(1), person.ID)
@@ -78,6 +78,6 @@ func TestUpdatePersonName(t *testing.T) {
 		WithArgs(newName, id).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.UpdatePersonName(id, newName)
+	err := db.UpdatePersonName(context.Background(), id, newName)
 	assert.NoError(t, err)
 }

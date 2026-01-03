@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"app/models"
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestListStops(t *testing.T) {
 	query := `SELECT * FROM stop WHERE voyage_id = $1 ORDER BY target_date ASC`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
-	stops, err := db.ListStops(1)
+	stops, err := db.ListStops(context.Background(), 1)
 	assert.NoError(t, err)
 	assert.Len(t, stops, 2)
 }
@@ -42,7 +43,7 @@ func TestCreateStop(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow(10, time.Now())
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
-	err := db.CreateStop(s)
+	err := db.CreateStop(context.Background(), s)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), s.ID)
 }
@@ -55,7 +56,7 @@ func TestGetStop(t *testing.T) {
 	query := `SELECT * FROM stop WHERE id = $1`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
-	s, err := db.GetStop(1)
+	s, err := db.GetStop(context.Background(), 1)
 	assert.NoError(t, err)
 	assert.Equal(t, "Stop 1", s.LocationName)
 }
@@ -74,7 +75,7 @@ func TestUpdateStop(t *testing.T) {
 	query := `UPDATE stop SET`
 	mock.ExpectExec(query).WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.UpdateStop(s)
+	err := db.UpdateStop(context.Background(), s)
 	assert.NoError(t, err)
 }
 
@@ -85,6 +86,6 @@ func TestDeleteStop(t *testing.T) {
 	query := `DELETE FROM stop WHERE id = $1`
 	mock.ExpectExec(regexp.QuoteMeta(query)).WithArgs(1).WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.DeleteStop(1)
+	err := db.DeleteStop(context.Background(), 1)
 	assert.NoError(t, err)
 }

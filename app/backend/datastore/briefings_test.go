@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"app/models"
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestGetBriefing(t *testing.T) {
 	query := `SELECT * FROM briefing WHERE stop_id = $1`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(10).WillReturnRows(rows)
 
-	b, err := db.GetBriefing(10)
+	b, err := db.GetBriefing(context.Background(), 10)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), b.ID)
 }
@@ -35,7 +36,7 @@ func TestCreateBriefing(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow(1, time.Now())
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
-	err := db.CreateBriefing(b)
+	err := db.CreateBriefing(context.Background(), b)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), b.ID)
 }

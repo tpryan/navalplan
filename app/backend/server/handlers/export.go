@@ -30,13 +30,13 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch Data
-	voyage, err := h.DB.GetVoyage(voyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
 		return
 	}
 
-	stops, err := h.DB.ListStops(voyageID)
+	stops, err := h.DB.ListStops(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
 		return
@@ -44,7 +44,7 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 
 	briefings := make(map[int64]*models.Briefing)
 	for _, s := range stops {
-		b, err := h.DB.GetBriefing(s.ID)
+		b, err := h.DB.GetBriefing(r.Context(), s.ID)
 		if err == nil {
 			briefings[s.ID] = b
 		}

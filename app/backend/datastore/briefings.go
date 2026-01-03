@@ -1,20 +1,22 @@
 package datastore
 
 import (
+	"context"
+
 	"app/models"
 )
 
-func (db *DB) GetBriefing(stopID int64) (*models.Briefing, error) {
+func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error) {
 	var b models.Briefing
 	query := `SELECT * FROM briefing WHERE stop_id = $1`
-	err := db.Get(&b, query, stopID)
+	err := db.GetContext(ctx, &b, query, stopID)
 	if err != nil {
 		return nil, err
 	}
 	return &b, nil
 }
 
-func (db *DB) ListVoyageBriefings(voyageID int64) ([]models.Briefing, error) {
+func (db *DB) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error) {
 	var briefings []models.Briefing
 	query := `
 		SELECT b.*
@@ -22,14 +24,14 @@ func (db *DB) ListVoyageBriefings(voyageID int64) ([]models.Briefing, error) {
 		JOIN stop s ON b.stop_id = s.id
 		WHERE s.voyage_id = $1
 	`
-	err := db.Select(&briefings, query, voyageID)
+	err := db.SelectContext(ctx, &briefings, query, voyageID)
 	if err != nil {
 		return nil, err
 	}
 	return briefings, nil
 }
 
-func (db *DB) CreateBriefing(b *models.Briefing) error {
+func (db *DB) CreateBriefing(ctx context.Context, b *models.Briefing) error {
 	query := `
 		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities)
 		VALUES (:stop_id, :weather_summary, :sun_phase, :tides, :facilities)
@@ -41,7 +43,7 @@ func (db *DB) CreateBriefing(b *models.Briefing) error {
 			created_at = NOW()
 		RETURNING id, created_at`
 
-	rows, err := db.NamedQuery(query, b)
+	rows, err := db.NamedQueryContext(ctx, query, b)
 	if err != nil {
 		return err
 	}

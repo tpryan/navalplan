@@ -32,7 +32,7 @@ func (h *Handler) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.UpdatePersonName(person.ID, req.Name); err != nil {
+	if err := h.DB.UpdatePersonName(r.Context(), person.ID, req.Name); err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}

@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"app/models"
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestGetVoyageGuide(t *testing.T) {
 
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(voyageID).WillReturnRows(rows)
 
-	g, err := db.GetVoyageGuide(voyageID)
+	g, err := db.GetVoyageGuide(context.Background(), voyageID)
 	assert.NoError(t, err)
 	assert.NotNil(t, g)
 	assert.Equal(t, voyageID, g.VoyageID)
@@ -54,7 +55,7 @@ func TestCreateVoyageGuide(t *testing.T) {
 	mock.ExpectQuery(query).
 		WillReturnRows(rows)
 
-	err := db.CreateVoyageGuide(g)
+	err := db.CreateVoyageGuide(context.Background(), g)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(100), g.ID)
 }

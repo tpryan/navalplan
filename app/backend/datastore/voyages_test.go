@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"app/models"
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestListVoyages(t *testing.T) {
 	query := `SELECT * FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
-	voyages, err := db.ListVoyages(1)
+	voyages, err := db.ListVoyages(context.Background(), 1)
 	assert.NoError(t, err)
 	assert.Len(t, voyages, 2)
 	assert.Equal(t, "Voyage 1", voyages[0].Title)
@@ -49,7 +50,7 @@ func TestCreateVoyage(t *testing.T) {
 
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
-	err := db.CreateVoyage(v)
+	err := db.CreateVoyage(context.Background(), v)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), v.ID)
 }
@@ -62,7 +63,7 @@ func TestGetVoyage(t *testing.T) {
 	query := `SELECT * FROM voyage WHERE id = $1`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
-	v, err := db.GetVoyage(1)
+	v, err := db.GetVoyage(context.Background(), 1)
 	assert.NoError(t, err)
 	assert.Equal(t, "My Voyage", v.Title)
 }
@@ -75,7 +76,7 @@ func TestUpdateVoyageSharing(t *testing.T) {
 	token := "token"
 	mock.ExpectExec(regexp.QuoteMeta(query)).WithArgs(token, true, 1).WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.UpdateVoyageSharing(1, &token, true)
+	err := db.UpdateVoyageSharing(context.Background(), 1, &token, true)
 	assert.NoError(t, err)
 }
 
@@ -87,7 +88,7 @@ func TestGetVoyageByToken(t *testing.T) {
 	query := `SELECT * FROM voyage WHERE share_token = $1 AND is_public = true`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs("abc").WillReturnRows(rows)
 
-	v, err := db.GetVoyageByToken("abc")
+	v, err := db.GetVoyageByToken(context.Background(), "abc")
 	assert.NoError(t, err)
 	assert.Equal(t, "Public Voyage", v.Title)
 }
@@ -99,6 +100,6 @@ func TestDeleteVoyage(t *testing.T) {
 	query := `DELETE FROM voyage WHERE id = $1`
 	mock.ExpectExec(regexp.QuoteMeta(query)).WithArgs(1).WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.DeleteVoyage(1)
+	err := db.DeleteVoyage(context.Background(), 1)
 	assert.NoError(t, err)
 }
