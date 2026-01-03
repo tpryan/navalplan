@@ -1553,7 +1553,8 @@ function initMap() {
           if (!isNaN(d.getTime())) {
               const diffMs = d.getTime() - targetStart;
               const floatHours = diffMs / (1000 * 60 * 60);
-              if (floatHours >= 0 && floatHours <= 24) {
+              // Allow a buffer around the day so the line extends to edges
+              if (floatHours >= -6 && floatHours <= 30) {
                    points.push({ x: floatHours, y: e.height_ft });
               }
           }
@@ -1568,7 +1569,7 @@ function initMap() {
                   data: points,
                   borderColor: '#0077be',
                   backgroundColor: 'rgba(0, 119, 190, 0.1)',
-                  borderWidth: 1.5,
+                  borderWidth: 2,
                   tension: 0.4,
                   pointRadius: 0,
                   fill: 'start'
@@ -1582,11 +1583,11 @@ function initMap() {
                   x: { display: false, min: 0, max: 24 },
                   y: { display: false }
               },
-              layout: { padding: 0 }
+              layout: { padding: 0 },
+              animation: false // Disable animation for immediate render
           }
       });
-  }
-    async function handleShowReport() {
+  }    async function handleShowReport() {
     if (!currentVoyage) return;
     
     const btn = document.getElementById('btn-export-voyage');
