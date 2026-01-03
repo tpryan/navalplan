@@ -571,7 +571,7 @@ function renderVoyageList() {
       <div class="voyage-info">
         <h3>${voyage.title}</h3>
         <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
-        ${voyage.location_name ? '<p style="font-size:0.8rem; color:#888">📍 ' + voyage.location_name + '</p>' : ''}
+        ${voyage.location_name ? '<p class="font-sm text-gray">📍 ' + voyage.location_name + '</p>' : ''}
       </div>
       <div class="voyage-actions">
         <button class="btn-icon edit" title="Edit">
@@ -707,7 +707,7 @@ function renderItinerary() {
         
         // Day Info
         let html = `
-            <div style="flex:1" class="day-info">
+            <div class="day-info flex-1">
                 <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
                 <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
             </div>
@@ -778,10 +778,9 @@ async function handleResearchClick(stop, button) {
         const modalOverlay = document.getElementById('modal-overlay');
         
         content.innerHTML = `
-            <div style="text-align:center; padding:3rem; color: #666;">
-                <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
-                <p><strong>Agent is researching...</strong></p>
-                <p style="font-size: 0.9em;">Checking weather, tides, and local charts.</p>
+            <div class="loading-state">
+                <span class="material-symbols-outlined spin loading-icon">sync</span>
+                <p class="font-xs">Checking weather, tides, and local charts.</p>
             </div>
         `;
         modal.classList.remove('hidden');
@@ -930,8 +929,8 @@ function showBriefing(briefing) {
 
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
-        return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
-            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+        return `<div class="ref-link">
+            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
         </div>`;
     };
 
@@ -957,7 +956,7 @@ function showBriefing(briefing) {
                     <tr>
                         <th class="briefing-th briefing-table-label-width">Conditions</th>
                         <td class="briefing-td briefing-td-icon">
-                            <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(weather.condition)}</span>
+                            <span class="material-symbols-outlined icon-lg">${getIconForWeather(weather.condition)}</span>
                             ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
                         </td>
                     </tr>
@@ -1057,8 +1056,8 @@ function showBriefing(briefing) {
                 <span class="material-symbols-outlined">waves</span>
                 Tides (${tides.station_name || 'Unknown Station'}) - ${displayDateHeader}
             </h3>
-            <div class="tide-box" style="margin-bottom:1rem;">
-                <div style="height:200px; width:100%; position:relative;">
+            <div class="tide-box mb-md">
+                <div class="tide-chart-container">
                     <canvas id="tideChartModal"></canvas>
                 </div>
                 <table class="briefing-table">
@@ -1116,22 +1115,22 @@ function showBriefing(briefing) {
                             })
                             .map(([k, v]) => `
                                 <tr>
-                                    <th class="briefing-th briefing-table-label-width" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
                                     <td class="briefing-td">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
                     }
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
                         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
                         locHtml = `
-                            <p style="margin: 0.2rem 0; color: #666; font-size: 0.9em;">
-                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">my_location</span>
+                            <p class="map-link-p">
+                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" style="margin-left:5px;">(Open Map)</a>
+                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
                             </p>
                         `;
                     }
@@ -1139,7 +1138,7 @@ function showBriefing(briefing) {
                     return `
                         <li class="facility-item">
                             <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
+                                <span class="material-symbols-outlined icon-lg">${icon}</span>
                                 ${f.name}
                             </h4>
                             ${locHtml}
@@ -1181,10 +1180,9 @@ function showBriefing(briefing) {
 async function redoBriefing(oldBriefing, btn) {
     const content = document.getElementById('briefing-content');
     content.innerHTML = `
-        <div style="text-align:center; padding:3rem; color: #666;">
-            <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
-            <p><strong>Agent is researching...</strong></p>
-            <p style="font-size: 0.9em;">Checking weather, tides, and local charts.</p>
+        <div class="loading-state">
+            <span class="material-symbols-outlined spin loading-icon">sync</span>
+            <p class="font-xs">Checking weather, tides, and local charts.</p>
         </div>
     `;
     btn.disabled = true;
@@ -1200,7 +1198,7 @@ async function redoBriefing(oldBriefing, btn) {
         const poll = setInterval(async () => {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
-                content.innerHTML = '<div style="text-align:center; padding:2rem; color: #d9534f;"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
+                content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
                 btn.disabled = false;
                 return;
             }
@@ -1221,7 +1219,7 @@ async function redoBriefing(oldBriefing, btn) {
         }, 3000);
     } catch (err) {
         console.error(err);
-        content.innerHTML = '<div style="text-align:center; padding:2rem; color: red;"><p>Failed to redo research.</p></div>';
+        content.innerHTML = '<div class="error-state error-text"><p>Failed to redo research.</p></div>';
         btn.disabled = false;
     }
 }
@@ -1776,24 +1774,24 @@ async function captureAndUploadMap(voyageId) {
 
         const renderReferences = (refs) => {
             if (!refs || refs.length === 0) return '';
-            return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
-                <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+            return `<div class="ref-link">
+                <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
             </div>`;
         };
         
         // 2. Build HTML
         let html = `
-            <h1 style="text-align:center; border-bottom: 2px solid #333; padding-bottom: 0.5rem;">${currentVoyage.title}</h1>
-            <p style="text-align:center; font-style:italic;">
+            <h1 class="report-title">${currentVoyage.title}</h1>
+            <p class="report-dates">
                 ${new Date(currentVoyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(currentVoyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
             </p>
             <hr />
         `;
 
         // --- Consolidated View ---
-        html += `<div style="margin-bottom: 2rem; page-break-inside: avoid;">
-            <h2 class="report-day-header" style="border-left-color: var(--brand-blue);">Voyage Overview</h2>
-            <table style="width: 100%; border-collapse: separate; border-spacing: 10px;">
+        html += `<div class="report-section-wrapper">
+            <h2 class="report-day-header brand-blue">Voyage Overview</h2>
+            <table class="overview-table">
         `;
             
         sortedStops.forEach((stop, idx) => {
@@ -1818,26 +1816,26 @@ async function captureAndUploadMap(voyageId) {
             const canvasId = `miniTideChart_${idx}`;
 
             html += `
-                <td style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 25%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); vertical-align: top;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
+                <td class="overview-card">
+                    <div class="overview-date">
                         ${dateStr}
                     </div>
-                    <div style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stop.location_name}">
+                    <div class="overview-location" title="${stop.location_name}">
                         ${stop.location_name}
                     </div>
                     
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
+                    <div class="overview-weather">
                         <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                        <span style="font-size: 1rem; font-weight: bold;">${temp}</span>
+                        <span class="overview-temp">${temp}</span>
                     </div>
 
-                    <div style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
+                    <div class="overview-sun">
                         <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                     </div>
 
-                    <div style="position: relative; height: 120px; min-height: 120px; width: 100%;">
-                        <canvas id="${canvasId}" style="width: 100%; height: 100%;"></canvas>
+                    <div class="overview-chart">
+                        <canvas id="${canvasId}"></canvas>
                     </div>
                 </td>
             `;
@@ -1851,12 +1849,12 @@ async function captureAndUploadMap(voyageId) {
         // --- Add Destination Guide Section ---
         if (guide) {
             html += `
-                <div style="margin-bottom: 2rem; page-break-inside: avoid; background: rgba(0,0,0,0.03); padding: 1rem; border-radius: 8px;">
-                    <h2 class="report-day-header" style="border-left-color: var(--brand-green-dark);">Destination Guide</h2>
+                <div class="report-section-wrapper report-guide-bg">
+                    <h2 class="report-day-header brand-green">Destination Guide</h2>
                     
                     ${guide.map_url ? `
-                    <div style="margin-bottom: 1.5rem; text-align: center;">
-                        <img src="${guide.map_url}" alt="Voyage Map" style="max-width: 100%; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+                    <div class="report-map-container">
+                        <img src="${guide.map_url}" alt="Voyage Map" class="report-map-img" />
                     </div>
                     ` : ''}
 
@@ -1864,9 +1862,9 @@ async function captureAndUploadMap(voyageId) {
                     <p>${guide.summary || 'N/A'}</p>
                     
                     ${guide.sailing_season ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Sailing Season</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                             <li><strong>Best Months:</strong> ${(guide.sailing_season.primary_season_months || []).join(', ')}</li>
                             <li><strong>Storm Season:</strong> ${(guide.sailing_season.storm_season_months || []).join(', ')}</li>
                             <li><strong>Notes:</strong> ${guide.sailing_season.notes || ''} ${renderReferences(guide.sailing_season.references)}</li>
@@ -1875,11 +1873,11 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
 
                     ${(guide.hazards && guide.hazards.length > 0) ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Hazards</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                             ${guide.hazards.map(h => {
-                                const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Info)</a>` : '';
+                                const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm">(Info)</a>` : '';
                                 return `<li><h4>${h.title}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
                             }).join('')}
                         </ul>
@@ -1887,11 +1885,11 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
                     
                      ${(guide.hubs && guide.hubs.length > 0) ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Major Hubs</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                             ${guide.hubs.map(h => {
-                                const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem;">(Website)</a>` : '';
+                                const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm">(Website)</a>` : '';
                                 return `<li><h4>${h.name}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
                             }).join('')}
                         </ul>
@@ -1899,13 +1897,13 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
 
                     ${guide.charter_info ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                          <h3>Charter Info</h3>
-                         <p style="margin:0.5rem 0 0.5rem 1rem;"><strong>Available:</strong> ${guide.charter_info.is_charter_destination ? 'Yes' : 'No'}</p>
-                         <div style="margin-left:1rem;">
+                         <p class="mb-sm ml-md"><strong>Available:</strong> ${guide.charter_info.is_charter_destination ? 'Yes' : 'No'}</p>
+                         <div class="ml-md">
                             <strong>Companies:</strong>
                             ${(guide.charter_info.companies && guide.charter_info.companies.length > 0) ? 
-                                `<ul style="margin-top:0.2rem;">${guide.charter_info.companies.map(comp => {
+                                `<ul class="mt-xs">${guide.charter_info.companies.map(comp => {
                                     if (typeof comp === 'string') return `<li>${comp}</li>`;
                                     const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
                                     return `<li><h4>${nameLink}</h4> ${renderReferences(comp.references)}</li>`;
@@ -1915,9 +1913,9 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
 
                     ${(guide.country_info || guide.currencies) ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Country & Culture</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                              ${guide.country_info ? `
                                 <li><strong>Country:</strong> ${guide.country_info.name || 'N/A'}</li>
                                 <li><strong>Language:</strong> ${(guide.country_info.languages || []).join(', ') || 'N/A'}</li>
@@ -1932,9 +1930,9 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
 
                     ${(guide.airports && guide.airports.length > 0) ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Nearest Airports</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                             ${guide.airports.map(a => `
                                 <li>
                                     <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
@@ -1947,9 +1945,9 @@ async function captureAndUploadMap(voyageId) {
                     ` : ''}
 
                     ${(guide.points_of_interest && guide.points_of_interest.length > 0) ? `
-                    <div style="margin-top:1rem;">
+                    <div class="mt-md">
                         <h3>Points of Interest</h3>
-                        <ul style="margin-top:0.5rem;">
+                        <ul class="mt-sm">
                             ${guide.points_of_interest.map(poi => `
                                 <li>
                                     <h4>${poi.name}</h4>
@@ -1967,7 +1965,7 @@ async function captureAndUploadMap(voyageId) {
         sortedStops.forEach((stop, idx) => {
             const b = briefings[idx];
             html += `
-                <div style="margin-bottom: 3rem; page-break-inside: avoid;">
+                <div class="report-daily-wrapper">
                     <h2 class="report-day-header">Day ${idx + 1}: ${stop.location_name}</h2>
                     <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
@@ -2155,22 +2153,22 @@ async function captureAndUploadMap(voyageId) {
                             })
                             .map(([k, v]) => `
                                 <tr>
-                                    <th class="briefing-th briefing-table-label-width" style="text-transform:capitalize;">${k.replace(/_/g, ' ')}</th>
+                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
                                     <td class="briefing-td">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table" style="margin-top:0;">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
                     }
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
                         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
                         locHtml = `
-                            <p style="margin: 0.2rem 0; color: #666; font-size: 0.9em;">
-                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">my_location</span>
+                            <p class="map-link-p">
+                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" style="margin-left:5px;">(Open Map)</a>
+                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
                             </p>
                         `;
                     }
@@ -2178,7 +2176,7 @@ async function captureAndUploadMap(voyageId) {
                     return `
                         <li class="facility-item">
                             <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">${icon}</span>
+                                <span class="material-symbols-outlined icon-lg">${icon}</span>
                                 ${f.name}
                             </h4>
                             ${locHtml}
@@ -2254,10 +2252,9 @@ async function handleGuideClick(voyage, button) {
         const modalOverlay = document.getElementById('modal-overlay');
         
         content.innerHTML = `
-            <div style="text-align:center; padding:3rem; color: #666;">
-                <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
-                <p><strong>Agent is researching...</strong></p>
-                <p style="font-size: 0.9em;">Gathering local knowledge, seasonal data, and regional hazards.</p>
+            <div class="loading-state">
+                <span class="material-symbols-outlined spin loading-icon">sync</span>
+                <p class="font-xs">Gathering local knowledge, seasonal data, and regional hazards.</p>
             </div>
         `;
         modal.classList.remove('hidden');
@@ -2295,8 +2292,8 @@ function showVoyageGuide(guide) {
 
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
-        return `<div style="font-size: 0.8em; margin-top: 0.3rem; color: #666;">
-            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" style="margin-right:0.3rem">[${i+1}]</a>`).join('')}
+        return `<div class="ref-link">
+            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
         </div>`;
     };
 
@@ -2326,7 +2323,7 @@ function showVoyageGuide(guide) {
     if (guide.hazards && guide.hazards.length > 0) {
         html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
         guide.hazards.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem; margin-left:0.5rem;">(Info)</a>` : '';
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
             html += `<li class="facility-item">
                 <h4>${h.title}${link}</h4>
                 <p>${h.description}</p>
@@ -2340,7 +2337,7 @@ function showVoyageGuide(guide) {
     if (guide.hubs && guide.hubs.length > 0) {
         html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
         guide.hubs.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" style="font-size:0.8rem; margin-left:0.5rem;">(Website)</a>` : '';
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
             html += `<li class="facility-item">
                 <h4>${h.name}${link}</h4>
                 <p>${h.description}</p>
@@ -2356,7 +2353,7 @@ function showVoyageGuide(guide) {
         
         let companiesHtml = 'None listed';
         if (c.companies && c.companies.length > 0) {
-             companiesHtml = '<ul style="padding-left: 1.2rem; margin: 0.5rem 0;">' + 
+             companiesHtml = '<ul class="charter-list">' + 
              c.companies.map(comp => {
                 if (typeof comp === 'string') return `<li>${comp}</li>`;
                 const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
@@ -2369,7 +2366,7 @@ function showVoyageGuide(guide) {
             <div class="briefing-section">
                 <h3>Charter Info</h3>
                 <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
-                <div style="margin-top:0.5rem"><strong>Companies:</strong> ${companiesHtml}</div>
+                <div class="mt-sm"><strong>Companies:</strong> ${companiesHtml}</div>
             </div>
         `;
     }
@@ -2439,8 +2436,8 @@ function showVoyageGuide(guide) {
 async function redoGuide(oldGuide, btn) {
     const content = document.getElementById('guide-content');
     content.innerHTML = `
-        <div style="text-align:center; padding:3rem; color: #666;">
-            <span class="material-symbols-outlined spin" style="font-size: 3rem; margin-bottom: 1rem;">sync</span>
+        <div class="loading-state">
+            <span class="material-symbols-outlined spin loading-icon">sync</span>
             <p><strong>Agent is researching...</strong></p>
         </div>
     `;
@@ -2455,7 +2452,7 @@ async function redoGuide(oldGuide, btn) {
         const poll = setInterval(async () => {
              if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
-                content.innerHTML = '<div style="text-align:center; padding:2rem; color: #d9534f;"><p><strong>Research timed out.</strong></p></div>';
+                content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p></div>';
                 btn.disabled = false;
                 return;
             }

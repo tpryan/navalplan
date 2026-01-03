@@ -85,10 +85,100 @@
     padding: 8px;
 }
 
+/* --- Floating User Menu --- */
+#auth-container {
+  position: absolute;
+  top: 10px;
+  right: 50px;
+  z-index: 50; /* High z-index to ensure visibility */
+}
+
+#user-floating-menu {
+  background-color: var(--surface-bg);
+  backdrop-filter: blur(10px);
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius); /* Match brand style (8px) */
+  box-shadow: var(--shadow-main);
+  padding: 5px 10px 5px 5px; 
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#user-floating-menu img.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  object-fit: cover;
+  background-color: #ccc;
+}
+
+#user-floating-menu .menu-actions {
+    display: flex;
+    gap: 5px;
+    border-left: 1px solid var(--border-color);
+    padding-left: 8px;
+}
+
+#user-floating-menu .btn-icon {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+  transition: all 0.2s;
+  padding: 0;
+}
+
+#user-floating-menu .btn-icon:hover {
+  background-color: rgba(0,0,0,0.1);
+  color: var(--brand-dark);
+}
+
 /* Login Button (Floating) */
 #btn-login-floating {
     display: block; /* Ensure it respects box model */
 }
+
+.login-btn-full {
+    width: 100%;
+    display: block;
+    box-sizing: border-box;
+    text-align: center;
+    padding: 1rem;
+    font-size: 1.1rem;
+}
+
+/* --- Report Typography & Colors --- */
+.report-body h3 {
+    color: var(--brand-dark);
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #cccccc;
+    padding-bottom: 4px;
+}
+
+.report-body h4 {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+    color: var(--brand-dark);
+}
+
+.report-day-header.brand-blue {
+    border-left-color: #0077be; /* Brand Blue equivalent */
+}
+
+.report-day-header.brand-green {
+    border-left-color: var(--brand-green-dark);
+}
+
+/* Utilities */
+.w-auto { width: auto !important; }
 
 /* --- Login Modal Styles --- */
 #auth-container.full-screen-modal {
@@ -143,4 +233,205 @@
     color: var(--text-dark);
     margin-bottom: 2rem;
     font-size: 1.1rem;
+}
+
+/* --- Extracted Utilities & Components --- */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-around { justify-content: space-around; }
+.align-center { align-items: center; }
+.align-start { align-items: flex-start; }
+.gap-xs { gap: 0.2rem; }
+.gap-sm { gap: 0.5rem; }
+.gap-md { gap: 1rem; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-gray { color: #666; }
+.text-dark { color: var(--text-dark); }
+.font-sm { font-size: 0.8rem; }
+.font-xs { font-size: 0.9em; } /* For briefing refs */
+.mt-0 { margin-top: 0; }
+.mt-xs { margin-top: 0.2rem; }
+.mt-sm { margin-top: 0.5rem; }
+.mt-md { margin-top: 1rem; }
+.mb-sm { margin-bottom: 0.5rem; }
+.mb-md { margin-bottom: 1rem; }
+.ml-md { margin-left: 1rem; }
+.ml-sm { margin-left: 0.5rem; }
+.p-sm { padding: 0.5rem; }
+.p-md { padding: 1rem; }
+.relative { position: relative; }
+.icon-align { vertical-align: middle; }
+.icon-bottom { vertical-align: text-bottom; }
+.icon-sm { font-size: 12px; }
+.icon-md { font-size: 1rem; }
+.icon-lg { font-size: 1.2rem; }
+.icon-xl { font-size: 1.5rem; }
+.capitalize { text-transform: capitalize; }
+
+/* Modal Utilities */
+.modal-scrollable {
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.modal-header-row {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+.modal-content-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+/* Loading/Error States */
+.loading-state {
+    text-align: center;
+    padding: 3rem;
+    color: #666;
+}
+.loading-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+.error-state {
+    text-align: center;
+    padding: 2rem;
+    color: #d9534f;
+}
+.error-text { color: red; }
+
+/* Voyage Overview (Report) */
+.overview-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 10px;
+}
+.overview-card {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+    width: 21%;
+    min-width: 150px;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    vertical-align: top;
+}
+.overview-date {
+    font-weight: bold;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+.overview-location {
+    font-size: 0.8rem;
+    text-align: center;
+    margin-bottom: 5px;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.overview-weather {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.overview-temp {
+    font-size: 1rem;
+    font-weight: bold;
+}
+.overview-sun {
+    display: flex;
+    justify-content: space-around;
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+.overview-chart {
+    position: relative;
+    height: 120px;
+    min-height: 120px;
+    width: 100%;
+}
+.overview-chart canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Report Sections */
+.report-title {
+    text-align: center;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+}
+.report-dates {
+    text-align: center;
+    font-style: italic;
+}
+.report-section-wrapper {
+    margin-bottom: 2rem;
+    page-break-inside: avoid;
+}
+.report-guide-bg {
+    background: rgba(0,0,0,0.03);
+    padding: 1rem;
+    border-radius: 8px;
+}
+.report-map-container {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+.report-map-img {
+    max-width: 100%;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.report-daily-wrapper {
+    margin-bottom: 3rem;
+    page-break-inside: avoid;
+}
+
+/* Briefing Details */
+.ref-link {
+    font-size: 0.8em;
+    margin-top: 0.3rem;
+    color: #666;
+}
+.ref-anchor {
+    margin-right: 0.3rem;
+}
+.map-link-p {
+    margin: 0.2rem 0;
+    color: #666;
+    font-size: 0.9em;
+}
+.map-link-a {
+    margin-left: 5px;
+}
+.facility-link {
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+.charter-list {
+    padding-left: 1.2rem;
+    margin: 0.5rem 0;
+}
+.no-data {
+    color: #888;
+    font-style: italic;
+}
+.tide-chart-container {
+    height: 200px; width: 100%; position: relative;
 }

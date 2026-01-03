@@ -37,7 +37,7 @@ function updateUIForLogin(person) {
     menu.id = 'user-floating-menu';
     
     menu.innerHTML = `
-        <img src="${person.picture_url || ''}" class="avatar" alt="${person.name}" title="${person.name}" style="background:#ccc;" />
+        <img src="${person.picture_url || ''}" class="avatar" alt="${person.name}" title="${person.name}" />
         <div class="menu-actions">
             <a href="/auth/logout" class="btn-icon" title="Logout">
                 <span class="material-symbols-outlined">logout</span>
@@ -66,7 +66,7 @@ function updateUIForLogout() {
         <div class="login-box">
             <h1>NavalPlan</h1>
             <p>Plan your next voyage with ease.</p>
-            <a href="/auth/google/login" class="btn primary" style="width: 100%; display: block; box-sizing: border-box; text-align: center; padding: 1rem; font-size: 1.1rem;">
+            <a href="/auth/google/login" class="btn primary login-btn-full">
                 Login with Google
             </a>
         </div>

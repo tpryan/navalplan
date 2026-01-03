@@ -33,17 +33,17 @@
           <div class="sidebar-actions">
             <button id="btn-back-voyages" class="btn secondary">&larr; Back</button>
             <button id="btn-view-guide" class="btn secondary" title="Destination Guide">
-               <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">map</span>
+               <span class="material-symbols-outlined icon-lg icon-align">map</span>
             </button>
             <button id="btn-research-all" class="btn secondary" title="Research All">
-               <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">travel_explore</span>
+               <span class="material-symbols-outlined icon-lg icon-align">travel_explore</span>
             </button>
             <button id="btn-export-voyage" class="btn secondary" title="View Full Report">
-              <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">description</span>
+              <span class="material-symbols-outlined icon-lg icon-align">description</span>
             </button>
           </div>
           <div class="voyage-header">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div class="flex justify-between align-start">
               <h2 id="itinerary-title">Voyage Title</h2>
               <button id="btn-edit-voyage" class="btn-icon" title="Edit Voyage">
                 <span class="material-symbols-outlined">edit</span>
@@ -73,13 +73,13 @@
         
         <div class="form-group">
           <label>Starting Location</label>
-          <div style="display:flex; gap:0.5rem">
+          <div class="flex gap-sm">
             <input type="text" id="voyage-location-name" name="location_name" placeholder="e.g. Seattle" />
-            <button type="button" id="btn-use-map-center" class="btn secondary" style="width:auto; padding: 0.5rem;">Use Map Center</button>
+            <button type="button" id="btn-use-map-center" class="btn secondary p-sm w-auto">Use Map Center</button>
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />
           <input type="hidden" id="voyage-lng" name="longitude" />
-          <p id="voyage-coords-display" style="font-size:0.8rem; color:#666; margin:0.2rem 0 0 0"></p>
+          <p id="voyage-coords-display" class="font-sm text-gray mt-xs"></p>
         </div>
         
         <div class="form-row">
@@ -100,52 +100,52 @@
       </form>
     </div>
 
-    <div id="modal-briefing" class="modal hidden" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
-      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem;">
-        <h2 style="margin:0">Destination Briefing</h2>
-        <div style="display:flex; gap:0.5rem">
-            <button id="btn-redo-briefing" class="btn secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Redo Research">
-                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">refresh</span>
+    <div id="modal-briefing" class="modal hidden modal-scrollable">
+      <div class="modal-header-row flex justify-between align-center">
+        <h2 class="m-0">Destination Briefing</h2>
+        <div class="flex gap-sm">
+            <button id="btn-redo-briefing" class="btn secondary p-xs font-sm" title="Redo Research">
+                <span class="material-symbols-outlined icon-lg icon-align">refresh</span>
                 Redo
             </button>
-            <button id="btn-close-briefing" class="btn-icon" style="font-size: 1.5rem;"><span class="material-symbols-outlined">close</span></button>
+            <button id="btn-close-briefing" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
         </div>
       </div>
       <div id="briefing-content" class="briefing-body"></div>
     </div>
 
-    <div id="modal-guide" class="modal hidden" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
-      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem;">
-        <h2 style="margin:0">Destination Guide</h2>
-        <div style="display:flex; gap:0.5rem">
-             <button id="btn-redo-guide" class="btn secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Redo Research">
-                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">refresh</span>
+    <div id="modal-guide" class="modal hidden modal-scrollable">
+      <div class="modal-header-row flex justify-between align-center">
+        <h2 class="m-0">Destination Guide</h2>
+        <div class="flex gap-sm">
+             <button id="btn-redo-guide" class="btn secondary p-xs font-sm" title="Redo Research">
+                <span class="material-symbols-outlined icon-lg icon-align">refresh</span>
                 Redo
             </button>
-            <button id="btn-close-guide" class="btn-icon" style="font-size: 1.5rem;"><span class="material-symbols-outlined">close</span></button>
+            <button id="btn-close-guide" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
         </div>
       </div>
       <div id="guide-content" class="briefing-body"></div>
     </div>
 
     <!-- Report Modal -->
-    <div id="modal-report" class="modal hidden" style="max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
-        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem;">
-            <h2 style="margin:0">Voyage Report</h2>
-            <div style="display:flex; gap:0.5rem">
-                <button id="btn-copy-report" class="btn primary" style="padding: 0.5rem 1rem;">Copy to Clipboard</button>
-                <button id="btn-close-report" class="btn-icon" style="font-size: 1.5rem;"><span class="material-symbols-outlined">close</span></button>
+    <div id="modal-report" class="modal hidden modal-scrollable flex flex-col">
+        <div class="modal-header-row flex justify-between align-center">
+            <h2 class="m-0">Voyage Report</h2>
+            <div class="flex gap-sm">
+                <button id="btn-copy-report" class="btn primary px-md py-sm">Copy to Clipboard</button>
+                <button id="btn-close-report" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
             </div>
         </div>
-        <div id="report-content" class="report-body" style="flex:1; overflow-y:auto; padding: 1rem;">
+        <div id="report-content" class="report-body modal-content-scroll">
             <!-- Report HTML injected here -->
         </div>
     </div>
 
     <!-- Notification Modal -->
-    <div id="modal-notification" class="modal hidden" style="text-align: center; max-width: 400px;">
-        <h2 id="notification-title" style="margin-bottom: 1rem;">Notification</h2>
-        <p id="notification-message" style="margin-bottom: 2rem; color: var(--text-dark);"></p>
+    <div id="modal-notification" class="modal hidden text-center">
+        <h2 id="notification-title" class="mb-md">Notification</h2>
+        <p id="notification-message" class="mb-lg text-dark"></p>
         <button id="btn-close-notification" class="btn primary">Close</button>
     </div>
 
