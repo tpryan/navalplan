@@ -235,18 +235,30 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guide, err := h.DB.GetVoyageGuide(voyageID)
-	if err != nil {
-		log.Errorf("Failed to get voyage guide for voyage %d: %v", voyageID, err)
-		http.Error(w, "Voyage guide not found", http.StatusNotFound)
-		return
-	}
+	// We don't error out immediately if guide is not found,
+	// because we might still have a map image.
 
 	// Check for map image
 	var mapURL string
 	mapFilename := fmt.Sprintf("voyage_%d.png", voyageID)
 	mapPath := filepath.Join(h.ContentDir, "maps", mapFilename)
-	if _, err := os.Stat(mapPath); err == nil {
+	if _, statErr := os.Stat(mapPath); statErr == nil {
 		mapURL = "/maps/" + mapFilename
+	}
+
+	// If we have neither a guide nor a map, then it's a 404
+	if err != nil && mapURL == "" {
+		// Log the error if it's something other than "not found" (depending on DB impl)
+		// For now assuming err implies not found or db error
+		log.Warnf("Voyage guide not found for voyage %d: %v", voyageID, err)
+		http.Error(w, "Voyage guide not found", http.StatusNotFound)
+		return
+	}
+
+	if guide == nil {
+		guide = &models.VoyageGuide{
+			VoyageID: voyageID,
+		}
 	}
 
 	resp := VoyageGuideResponse{
