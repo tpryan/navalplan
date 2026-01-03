@@ -852,28 +852,25 @@ async function handleResearchClick(stop, button) {
 function renderTideChart(canvasId, tideData, targetDateStr) {
     if (!tideData || !tideData.events) return;
 
-    // Target Date Midnight (UTC)
-    const targetDate = new Date(targetDateStr);
-    const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
+    // Helper to parse strings as wall-clock time (browser local)
+    const parseLocal = (s) => {
+        if (!s) return new Date(NaN);
+        // Strip 'Z' if present, replace space with 'T'
+        const clean = s.replace('Z', '').replace(' ', 'T');
+        // If it's just a date (YYYY-MM-DD), append T00:00:00 to avoid UTC parsing
+        const final = clean.length === 10 ? clean + 'T00:00:00' : clean;
+        return new Date(final);
+    };
+
+    // Target Date Midnight (Wall-clock)
+    const targetStart = parseLocal(targetDateStr).getTime();
 
     // Parse Events
-    // Data: { time: "YYYY-MM-DD HH:MM", height_ft: 1.2 }
     const points = [];
     tideData.events.forEach(e => {
-        // The API returns GMT time in "YYYY-MM-DD HH:MM" format.
-        // We append 'Z' to treat it as UTC.
-        let timeStr = e.time;
-        // Check if it has a timezone (Z or +HH:MM or -HH:MM)
-        const hasTimezone = timeStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(timeStr);
-        if (!hasTimezone) {
-             timeStr = timeStr.replace(' ', 'T') + 'Z';
-        }
-
-        let d = new Date(timeStr);
+        const d = parseLocal(e.time);
         
         if (!isNaN(d.getTime())) {
-            // Calculate relative hour (-24 to +48 range is fine)
-            // But for chart logic, simple float hours relative to midnight is best
             const diffMs = d.getTime() - targetStart;
             const floatHours = diffMs / (1000 * 60 * 60);
             points.push({ x: floatHours, y: e.height_ft });
@@ -1534,63 +1531,37 @@ function initMap() {
       }
   }
   
-  function renderMiniTideChart(canvasId, tideData, targetDateStr) {
-  
-      const canvas = document.getElementById(canvasId);
-  
-      if (!canvas) return;
-  
-  
-  
-      if (!tideData || !tideData.events) return;
-  
-  
-  
-      const targetDate = new Date(targetDateStr);
-  
-      const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
-  
-      
-  
-      const points = [];
-  
-      tideData.events.forEach(e => {
-  
-          let timeStr = e.time;
-  
-           const hasTimezone = timeStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(timeStr);
-  
-          if (!hasTimezone) {
-  
-               timeStr = timeStr.replace(' ', 'T') + 'Z';
-  
-          }
-  
-          let d = new Date(timeStr);
-  
-          if (!isNaN(d.getTime())) {
-  
-              const diffMs = d.getTime() - targetStart;
-  
-              const floatHours = diffMs / (1000 * 60 * 60);
-  
-              // Allow a buffer around the day so the line extends to edges
-  
-              if (floatHours >= -6 && floatHours <= 30) {
-  
-                   points.push({ x: floatHours, y: e.height_ft });
-  
-              }
-  
-          }
-  
-      });
-  
-      points.sort((a, b) => a.x - b.x);
-  
-  
-  
-      const tideLevels = {
+function renderMiniTideChart(canvasId, tideData, targetDateStr) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    if (!tideData || !tideData.events) return;
+
+    // Helper to parse strings as wall-clock time (browser local)
+    const parseLocal = (s) => {
+        if (!s) return new Date(NaN);
+        const clean = s.replace('Z', '').replace(' ', 'T');
+        const final = clean.length === 10 ? clean + 'T00:00:00' : clean;
+        return new Date(final);
+    };
+
+    const targetStart = parseLocal(targetDateStr).getTime();
+    
+    const points = [];
+    tideData.events.forEach(e => {
+        const d = parseLocal(e.time);
+        if (!isNaN(d.getTime())) {
+            const diffMs = d.getTime() - targetStart;
+            const floatHours = diffMs / (1000 * 60 * 60);
+            // Allow a buffer around the day so the line extends to edges
+            if (floatHours >= -6 && floatHours <= 30) {
+                 points.push({ x: floatHours, y: e.height_ft });
+            }
+        }
+    });
+    points.sort((a, b) => a.x - b.x);
+
+    const tideLevels = {
   
           id: 'tideLevels',
   
