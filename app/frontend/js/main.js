@@ -1093,6 +1093,8 @@ function showBriefing(briefing) {
                     if (typeLower.includes('anchorage')) icon = 'anchor';
                     else if (typeLower.includes('marina')) icon = 'storefront';
                     else if (typeLower.includes('mooring')) icon = 'crisis_alert';
+                    else if (typeLower.includes('bar')) icon = 'local_bar';
+                    else if (typeLower.includes('restaurant')) icon = 'restaurant';
 
                     let detailsHtml = '';
                     if (typeof f.details === 'string') {
@@ -1343,6 +1345,8 @@ function initMap() {
                                const type = (f.type || '').toLowerCase();
                                if (type.includes('anchorage')) icon = 'harbor-15';
                                else if (type.includes('marina')) icon = 'warehouse-15';
+                               else if (type.includes('bar')) icon = 'bar-15';
+                               else if (type.includes('restaurant')) icon = 'restaurant-15';
                                
                                features.push({
                                    type: 'Feature',
@@ -2128,6 +2132,8 @@ async function captureAndUploadMap(voyageId) {
                          if (typeLower.includes('anchorage')) icon = 'anchor';
                          else if (typeLower.includes('marina')) icon = 'storefront';
                          else if (typeLower.includes('mooring')) icon = 'crisis_alert';
+                         else if (typeLower.includes('bar')) icon = 'local_bar';
+                         else if (typeLower.includes('restaurant')) icon = 'restaurant';
 
                          let detailsHtml = '';
                          if (typeof f.details === 'string') {

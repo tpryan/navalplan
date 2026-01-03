@@ -109,6 +109,7 @@ func main() {
 			4. FACILITIES: Call the 'search_specialist' tool to find:
 			   - "Anchorages near [Location] details coordinates"
 			   - "Marina contact info [Location] coordinates"
+			   - "Sailor friendly bars and restaurants near [Location] with dinghy access or near marinas"
 
 			OUTPUT:
 			Combine all findings into this JSON structure. Ensure "details" is always an object with descriptive keys, not a string.
@@ -118,6 +119,7 @@ func main() {
 			1. For 'tides.events': You MUST include ALL events returned by the 'get_tides' tool, including those from the previous and next days. The frontend needs the full 48-hour dataset for graphing. DO NOT filter the list.
 			2. For 'tides.station_name': Use the EXACT station_name returned by the 'get_tides' tool. DO NOT substitute it with a more general or famous location.
 			3. For 'weather_summary': Synthesize a readable sentence for the summary (e.g., "Expect clear skies with moderate westerly winds...").
+			4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water (dinghy dock) or immediately adjacent to a marina/anchorage.
 			
 			{
 				"location_name": "Resolved Name",
@@ -145,7 +147,7 @@ func main() {
 				"facilities": [
 					{
 						"name": "...",
-						"type": "Anchorage" | "Marina" | "Mooring",
+						"type": "Anchorage" | "Marina" | "Mooring" | "Bar" | "Restaurant",
 						"latitude": 0.0,
 						"longitude": 0.0,
 						"details": {
