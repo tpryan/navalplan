@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	appContext "app/context"
 	"app/datastore"
 	"app/models"
 	"app/server/handlers"
@@ -462,4 +463,101 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockStore.AssertExpectations(t)
+}
+
+func TestPersonHandlers(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+
+	// Helper to add person to context
+	addPerson := func(req *http.Request) *http.Request {
+		person := &models.Person{ID: 1, Name: "Test User"}
+		ctx := appContext.AddPersonToContext(req.Context(), person)
+		return req.WithContext(ctx)
+	}
+
+	t.Run("GetPerson_Success", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/person", nil)
+		req = addPerson(req)
+		w := httptest.NewRecorder()
+
+		handler.GetPerson(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var p models.Person
+		json.NewDecoder(w.Body).Decode(&p)
+		assert.Equal(t, "Test User", p.Name)
+	})
+
+	t.Run("GetPerson_Unauthorized", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/person", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetPerson(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("UpdatePerson_Success", func(t *testing.T) {
+		body := `{"name": "New Name"}`
+		req := httptest.NewRequest("PUT", "/person", strings.NewReader(body))
+		req = addPerson(req)
+		w := httptest.NewRecorder()
+
+		mockStore.On("UpdatePersonName", int64(1), "New Name").Return(nil)
+
+		handler.UpdatePerson(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var p models.Person
+		json.NewDecoder(w.Body).Decode(&p)
+		assert.Equal(t, "New Name", p.Name)
+	})
+}
+
+func TestGuideHandlers(t *testing.T) {
+	mockStore := new(MockStore)
+	// Use a temp dir for content to test map upload/retrieval
+	tempDir := t.TempDir()
+	handler := handlers.New(mockStore, nil, tempDir, "http://test-agent")
+	r := chi.NewRouter()
+	r.Get("/voyages/{id}/guide", handler.GetVoyageGuide)
+	r.Post("/voyages/{id}/research_guide", handler.TriggerGuideResearch)
+
+	t.Run("GetVoyageGuide_Found", func(t *testing.T) {
+		voyageID := int64(1)
+		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{ID: 1, Summary: "Found"}, nil)
+
+		req := httptest.NewRequest("GET", "/voyages/1/guide", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp handlers.VoyageGuideResponse
+		json.NewDecoder(w.Body).Decode(&resp)
+		assert.NotNil(t, resp.VoyageGuide)
+		assert.Equal(t, "Found", resp.Summary)
+	})
+
+	t.Run("GetVoyageGuide_NotFound", func(t *testing.T) {
+		voyageID := int64(999)
+		mockStore.On("GetVoyageGuide", voyageID).Return(nil, assert.AnError)
+
+		req := httptest.NewRequest("GET", "/voyages/999/guide", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("TriggerGuideResearch_Success", func(t *testing.T) {
+		voyageID := int64(2)
+		loc := "Sea"
+		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, LocationName: &loc}, nil)
+
+		req := httptest.NewRequest("POST", "/voyages/2/research_guide", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusAccepted, w.Code)
+	})
 }
