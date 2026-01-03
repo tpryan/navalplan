@@ -1827,9 +1827,14 @@ function initMap() {
         // --- Consolidated View ---
         html += `<div style="margin-bottom: 2rem; page-break-inside: avoid;">
             <h2 class="report-day-header" style="border-left-color: var(--brand-blue);">Voyage Overview</h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">`;
+            <table style="width: 100%; border-collapse: separate; border-spacing: 10px;">
+        `;
             
         sortedStops.forEach((stop, idx) => {
+            if (idx % 4 === 0) {
+                html += '<tr>';
+            }
+
             const briefing = briefings[idx] || {};
             const date = new Date(stop.target_date);
             const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -1847,7 +1852,7 @@ function initMap() {
             const canvasId = `miniTideChart_${idx}`;
 
             html += `
-                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 21%; min-width: 150px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+                <td style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 25%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); vertical-align: top;">
                     <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
                         ${dateStr}
                     </div>
@@ -1865,13 +1870,17 @@ function initMap() {
                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                     </div>
 
-                    <div style="flex: 1; position: relative; height: 60px; min-height: 60px;">
-                        <canvas id="${canvasId}"></canvas>
+                    <div style="position: relative; height: 60px; min-height: 60px; width: 100%;">
+                        <canvas id="${canvasId}" style="width: 100%; height: 100%;"></canvas>
                     </div>
-                </div>
+                </td>
             `;
+
+            if (idx % 4 === 3 || idx === sortedStops.length - 1) {
+                html += '</tr>';
+            }
         });
-        html += `</div></div><hr />`;
+        html += `</table></div><hr />`;
 
         // --- Add Destination Guide Section ---
         if (guide) {
