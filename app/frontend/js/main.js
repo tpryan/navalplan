@@ -1535,10 +1535,18 @@ function initMap() {
   }
   
   function renderMiniTideChart(canvasId, tideData, targetDateStr) {
+      console.log(`Rendering Mini Chart: ${canvasId}`, targetDateStr);
       const canvas = document.getElementById(canvasId);
-      if (!canvas) return;
+      if (!canvas) {
+          console.warn(`Canvas not found: ${canvasId}`);
+          return;
+      }
   
-      if (!tideData || !tideData.events) return;
+      if (!tideData || !tideData.events) {
+          console.warn(`No tide data for ${canvasId}`);
+          return;
+      }
+  
       const targetDate = new Date(targetDateStr);
       const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
       
@@ -1561,9 +1569,14 @@ function initMap() {
       });
       points.sort((a, b) => a.x - b.x);
   
+      console.log(`Points for ${canvasId}:`, points.length, points);
+  
+      if (points.length === 0) {
+           console.warn(`No points within range for ${canvasId}`);
+      }
+  
       const ctx = canvas.getContext('2d');
-      new Chart(ctx, {
-          type: 'line',
+      new Chart(ctx, {          type: 'line',
           data: {
               datasets: [{
                   data: points,
@@ -1579,11 +1592,10 @@ function initMap() {
               responsive: true,
               maintainAspectRatio: false,
               plugins: { legend: { display: false }, tooltip: { enabled: false } },
-              scales: {
-                  x: { display: false, min: 0, max: 24 },
-                  y: { display: false }
-              },
-              layout: { padding: 0 },
+                          scales: {
+                              x: { type: 'linear', display: false, min: 0, max: 24 },
+                              y: { display: false }
+                          },              layout: { padding: 0 },
               animation: false // Disable animation for immediate render
           }
       });
