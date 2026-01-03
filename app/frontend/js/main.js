@@ -1535,71 +1535,254 @@ function initMap() {
   }
   
   function renderMiniTideChart(canvasId, tideData, targetDateStr) {
-      console.log(`Rendering Mini Chart: ${canvasId}`, targetDateStr);
-      const canvas = document.getElementById(canvasId);
-      if (!canvas) {
-          console.warn(`Canvas not found: ${canvasId}`);
-          return;
-      }
   
-      if (!tideData || !tideData.events) {
-          console.warn(`No tide data for ${canvasId}`);
-          return;
-      }
+      const canvas = document.getElementById(canvasId);
+  
+      if (!canvas) return;
+  
+  
+  
+      if (!tideData || !tideData.events) return;
+  
+  
   
       const targetDate = new Date(targetDateStr);
+  
       const targetStart = new Date(targetDate).setUTCHours(0,0,0,0);
+  
       
+  
       const points = [];
+  
       tideData.events.forEach(e => {
+  
           let timeStr = e.time;
+  
            const hasTimezone = timeStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(timeStr);
+  
           if (!hasTimezone) {
+  
                timeStr = timeStr.replace(' ', 'T') + 'Z';
+  
           }
+  
           let d = new Date(timeStr);
+  
           if (!isNaN(d.getTime())) {
+  
               const diffMs = d.getTime() - targetStart;
+  
               const floatHours = diffMs / (1000 * 60 * 60);
+  
               // Allow a buffer around the day so the line extends to edges
+  
               if (floatHours >= -6 && floatHours <= 30) {
+  
                    points.push({ x: floatHours, y: e.height_ft });
+  
               }
+  
           }
+  
       });
+  
       points.sort((a, b) => a.x - b.x);
   
-      console.log(`Points for ${canvasId}:`, points.length, points);
   
-      if (points.length === 0) {
-           console.warn(`No points within range for ${canvasId}`);
-      }
+  
+      const tideLevels = {
+  
+          id: 'tideLevels',
+  
+          afterDraw: (chart) => {
+  
+              const { ctx, scales: { x, y } } = chart;
+  
+              const yZero = y.getPixelForValue(0);
+  
+              
+  
+              // 1. Draw Zero Line (if within chart area)
+  
+              if (yZero >= y.top && yZero <= y.bottom) {
+  
+                  ctx.save();
+  
+                  ctx.beginPath();
+  
+                  ctx.setLineDash([2, 2]);
+  
+                  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  
+                  ctx.lineWidth = 1;
+  
+                  ctx.moveTo(x.left, yZero);
+  
+                  ctx.lineTo(x.right, yZero);
+  
+                  ctx.stroke();
+  
+                  ctx.restore();
+  
+              }
+  
+  
+  
+              // 2. Find and Label High/Low for the VISIBLE day (0 to 24)
+  
+              let maxPt = null;
+  
+              let minPt = null;
+  
+  
+  
+              points.forEach(p => {
+  
+                  if (p.x >= 0 && p.x <= 24) {
+  
+                      if (!maxPt || p.y > maxPt.y) maxPt = p;
+  
+                      if (!minPt || p.y < minPt.y) minPt = p;
+  
+                  }
+  
+              });
+  
+  
+  
+              const drawLabel = (pt, color, baseline) => {
+  
+                  if (!pt) return;
+  
+                  const xPos = x.getPixelForValue(pt.x);
+  
+                  const yPos = y.getPixelForValue(pt.y);
+  
+  
+  
+                  // Draw horizontal dash
+  
+                  ctx.save();
+  
+                  ctx.beginPath();
+  
+                  ctx.setLineDash([2, 2]);
+  
+                  ctx.strokeStyle = color;
+  
+                  ctx.lineWidth = 1;
+  
+                  // Short line around the point
+  
+                  ctx.moveTo(xPos - 10, yPos);
+  
+                  ctx.lineTo(xPos + 10, yPos);
+  
+                  ctx.stroke();
+  
+  
+  
+                  // Draw Text
+  
+                  ctx.font = 'bold 9px sans-serif';
+  
+                  ctx.fillStyle = color;
+  
+                  ctx.textAlign = 'center';
+  
+                  ctx.textBaseline = baseline;
+  
+                  
+  
+                  // Offset text slightly
+  
+                  const offset = baseline === 'bottom' ? -4 : 12;
+  
+                  ctx.fillText(`${pt.y.toFixed(1)}`, xPos, yPos + offset);
+  
+                  ctx.restore();
+  
+              };
+  
+  
+  
+              // Draw High
+  
+              if (maxPt) drawLabel(maxPt, '#d9534f', 'bottom');
+  
+              // Draw Low
+  
+              if (minPt) drawLabel(minPt, '#314c3b', 'top');
+  
+          }
+  
+      };
+  
+  
   
       const ctx = canvas.getContext('2d');
-      new Chart(ctx, {          type: 'line',
+  
+      new Chart(ctx, {
+  
+          type: 'line',
+  
           data: {
+  
               datasets: [{
+  
                   data: points,
+  
                   borderColor: '#0077be',
+  
                   backgroundColor: 'rgba(0, 119, 190, 0.1)',
+  
                   borderWidth: 2,
+  
                   tension: 0.4,
+  
                   pointRadius: 0,
+  
                   fill: 'start'
+  
               }]
+  
           },
+  
           options: {
+  
               responsive: true,
+  
               maintainAspectRatio: false,
+  
               plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                          scales: {
-                              x: { type: 'linear', display: false, min: 0, max: 24 },
-                              y: { display: false }
-                          },              layout: { padding: 0 },
-              animation: false // Disable animation for immediate render
-          }
+  
+              scales: {
+  
+                  x: { type: 'linear', display: false, min: 0, max: 24 },
+  
+                  y: { 
+  
+                      display: false,
+  
+                      grace: '20%' // Add space for labels
+  
+                  }
+  
+              },
+  
+              layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
+  
+              animation: false
+  
+          },
+  
+          plugins: [tideLevels]
+  
       });
-  }    async function handleShowReport() {
+  
+  }
+
+    async function handleShowReport() {
     if (!currentVoyage) return;
     
     const btn = document.getElementById('btn-export-voyage');
@@ -1780,7 +1963,7 @@ function initMap() {
             const canvasId = `miniTideChart_${idx}`;
 
             html += `
-                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 180px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
+                <div style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; width: 23%; min-width: 150px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
                     <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">
                         ${dateStr}
                     </div>
@@ -1798,7 +1981,7 @@ function initMap() {
                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                     </div>
 
-                    <div style="flex: 1; position: relative; height: 50px; min-height: 50px;">
+                    <div style="flex: 1; position: relative; height: 60px; min-height: 60px;">
                         <canvas id="${canvasId}"></canvas>
                     </div>
                 </div>
