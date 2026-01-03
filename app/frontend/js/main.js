@@ -607,7 +607,7 @@ function renderVoyageList() {
     el.innerHTML = `
       <div class="voyage-info">
         <h3>${voyage.title}</h3>
-        <p>${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}</p>
+        <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
         ${voyage.location_name ? '<p style="font-size:0.8rem; color:#888">📍 ' + voyage.location_name + '</p>' : ''}
       </div>
       <div class="voyage-actions">
@@ -693,7 +693,7 @@ function showVoyageList() {
 
 function updateItineraryHeader(voyage) {
     document.getElementById('itinerary-title').textContent = voyage.title;
-    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString()} - ${new Date(voyage.end_date).toLocaleDateString()}`;
+    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}`;
 }
 
 async function selectVoyage(voyage) {
@@ -745,7 +745,7 @@ function renderItinerary() {
         // Day Info
         let html = `
             <div style="flex:1" class="day-info">
-                <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
                 <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
             </div>
         `;
@@ -1819,7 +1819,7 @@ function initMap() {
         let html = `
             <h1 style="text-align:center; border-bottom: 2px solid #333; padding-bottom: 0.5rem;">${currentVoyage.title}</h1>
             <p style="text-align:center; font-style:italic;">
-                ${new Date(currentVoyage.start_date).toLocaleDateString()} - ${new Date(currentVoyage.end_date).toLocaleDateString()}
+                ${new Date(currentVoyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(currentVoyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
             </p>
             <hr />
         `;
@@ -1837,7 +1837,7 @@ function initMap() {
 
             const briefing = briefings[idx] || {};
             const date = new Date(stop.target_date);
-            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
             
             // Weather
             const w = briefing.weather_summary || {};
@@ -2003,7 +2003,7 @@ function initMap() {
             html += `
                 <div style="margin-bottom: 3rem; page-break-inside: avoid;">
                     <h2 class="report-day-header">Day ${idx + 1}: ${stop.location_name}</h2>
-                    <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString()}</p>
+                    <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
             
             if (b) {
