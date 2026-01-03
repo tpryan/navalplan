@@ -14,7 +14,6 @@ import (
 	"app/models"
 	"app/server/handlers"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/docs/v1"
@@ -196,6 +195,8 @@ func (m *MockDocsService) BatchUpdate(ctx context.Context, docID string, request
 func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/voyages", handler.ListVoyages)
 
 	personID := int64(1)
 	expectedVoyages := []models.Voyage{
@@ -206,7 +207,7 @@ func TestListVoyages(t *testing.T) {
 	mockStore.On("ListVoyages", personID).Return(expectedVoyages, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
-
+	
 	// Add person to context
 	person := &models.Person{ID: personID, Name: "Test User"}
 	ctx := appContext.AddPersonToContext(req.Context(), person)
@@ -214,7 +215,7 @@ func TestListVoyages(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	handler.ListVoyages(w, req)
+	mux.ServeHTTP(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -226,10 +227,11 @@ func TestListVoyages(t *testing.T) {
 
 	mockStore.AssertExpectations(t)
 }
-
 func TestCreateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/voyages", handler.CreateVoyage)
 
 	// We use strings.NewReader for the body
 	body := `{"title": "New Voyage", "start_date": "2025-07-01T00:00:00Z", "end_date": "2025-07-14T00:00:00Z"}`
@@ -248,7 +250,7 @@ func TestCreateVoyage(t *testing.T) {
 		return v.Title == "New Voyage" && v.PersonID == 1
 	})).Return(nil)
 
-	handler.CreateVoyage(w, req)
+	mux.ServeHTTP(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -265,14 +267,14 @@ func TestGetVoyage(t *testing.T) {
 
 	mockStore.On("GetVoyage", voyageID).Return(expectedVoyage, nil)
 
-	// Need to setup chi context for URL params
-	r := chi.NewRouter()
-	r.Get("/voyages/{id}", handler.GetVoyage)
+	// Need to setup mux for URL params
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /voyages/{id}", handler.GetVoyage)
 
 	req := httptest.NewRequest("GET", "/voyages/123", nil)
 	w := httptest.NewRecorder()
 
-	r.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -287,9 +289,9 @@ func TestGetVoyage(t *testing.T) {
 func TestStopOperations(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Get("/voyages/{id}/stops", handler.ListStops)
-	r.Post("/voyages/{id}/stops", handler.CreateStop)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /voyages/{id}/stops", handler.ListStops)
+	mux.HandleFunc("POST /voyages/{id}/stops", handler.CreateStop)
 
 	personID := int64(1)
 	voyageID := int64(1)
@@ -309,7 +311,7 @@ func TestStopOperations(t *testing.T) {
 	reqList := httptest.NewRequest("GET", "/voyages/1/stops", nil)
 	reqList = addPerson(reqList)
 	wList := httptest.NewRecorder()
-	r.ServeHTTP(wList, reqList)
+	mux.ServeHTTP(wList, reqList)
 
 	assert.Equal(t, http.StatusOK, wList.Code)
 
@@ -323,15 +325,15 @@ func TestStopOperations(t *testing.T) {
 		return s.LocationName == "New Stop" && s.VoyageID == 1
 	})).Return(nil)
 
-	r.ServeHTTP(wCreate, reqCreate)
+	mux.ServeHTTP(wCreate, reqCreate)
 	mockStore.AssertExpectations(t)
 }
 
 func TestUpdateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Put("/voyages/{id}", handler.UpdateVoyage)
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /voyages/{id}", handler.UpdateVoyage)
 
 	voyageID := int64(1)
 	body := `{"title": "Updated Voyage"}`
@@ -342,7 +344,7 @@ func TestUpdateVoyage(t *testing.T) {
 		return v.ID == voyageID && v.Title == "Updated Voyage"
 	})).Return(nil)
 
-	r.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockStore.AssertExpectations(t)
 }
@@ -350,15 +352,15 @@ func TestUpdateVoyage(t *testing.T) {
 func TestDeleteVoyage(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Delete("/voyages/{id}", handler.DeleteVoyage)
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /voyages/{id}", handler.DeleteVoyage)
 
 	voyageID := int64(456)
 	mockStore.On("DeleteVoyage", voyageID).Return(nil)
 
 	req := httptest.NewRequest("DELETE", "/voyages/456", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockStore.AssertExpectations(t)
@@ -367,10 +369,10 @@ func TestDeleteVoyage(t *testing.T) {
 func TestSharingOperations(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Post("/voyages/{id}/share", handler.EnableSharing)
-	r.Delete("/voyages/{id}/share", handler.DisableSharing)
-	r.Get("/public/voyages/{token}", handler.GetPublicVoyage)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /voyages/{id}/share", handler.EnableSharing)
+	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
+	mux.HandleFunc("GET /public/voyages/{token}", handler.GetPublicVoyage)
 
 	voyageID := int64(1)
 
@@ -380,7 +382,7 @@ func TestSharingOperations(t *testing.T) {
 
 	reqEnable := httptest.NewRequest("POST", "/voyages/1/share", nil)
 	wEnable := httptest.NewRecorder()
-	r.ServeHTTP(wEnable, reqEnable)
+	mux.ServeHTTP(wEnable, reqEnable)
 	assert.Equal(t, http.StatusOK, wEnable.Code)
 
 	// Get Public Voyage
@@ -389,7 +391,7 @@ func TestSharingOperations(t *testing.T) {
 
 	reqPublic := httptest.NewRequest("GET", "/public/voyages/some-token", nil)
 	wPublic := httptest.NewRecorder()
-	r.ServeHTTP(wPublic, reqPublic)
+	mux.ServeHTTP(wPublic, reqPublic)
 	assert.Equal(t, http.StatusOK, wPublic.Code)
 
 	mockStore.AssertExpectations(t)
@@ -398,9 +400,9 @@ func TestSharingOperations(t *testing.T) {
 func TestUpdateDeleteStop(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Put("/stops/{id}", handler.UpdateStop)
-	r.Delete("/stops/{id}", handler.DeleteStop)
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /stops/{id}", handler.UpdateStop)
+	mux.HandleFunc("DELETE /stops/{id}", handler.DeleteStop)
 
 	stopID := int64(100)
 	voyageID := int64(50)
@@ -426,7 +428,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 	reqUpdate := httptest.NewRequest("PUT", "/stops/100", strings.NewReader(body))
 	reqUpdate = addPerson(reqUpdate)
 	wUpdate := httptest.NewRecorder()
-	r.ServeHTTP(wUpdate, reqUpdate)
+	mux.ServeHTTP(wUpdate, reqUpdate)
 	assert.Equal(t, http.StatusOK, wUpdate.Code)
 
 	// Delete
@@ -434,7 +436,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 	reqDelete := httptest.NewRequest("DELETE", "/stops/100", nil)
 	reqDelete = addPerson(reqDelete)
 	wDelete := httptest.NewRecorder()
-	r.ServeHTTP(wDelete, reqDelete)
+	mux.ServeHTTP(wDelete, reqDelete)
 	assert.Equal(t, http.StatusOK, wDelete.Code)
 
 	mockStore.AssertExpectations(t)
@@ -443,9 +445,9 @@ func TestUpdateDeleteStop(t *testing.T) {
 func TestResearchBriefing(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Post("/stops/{id}/research", handler.TriggerResearch)
-	r.Get("/stops/{id}/briefing", handler.GetBriefing)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /stops/{id}/research", handler.TriggerResearch)
+	mux.HandleFunc("GET /stops/{id}/briefing", handler.GetBriefing)
 
 	stopID := int64(10)
 
@@ -453,14 +455,14 @@ func TestResearchBriefing(t *testing.T) {
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID}, nil)
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
 	wTrigger := httptest.NewRecorder()
-	r.ServeHTTP(wTrigger, reqTrigger)
+	mux.ServeHTTP(wTrigger, reqTrigger)
 	assert.Equal(t, http.StatusAccepted, wTrigger.Code)
 
 	// Get Briefing
 	mockStore.On("GetBriefing", stopID).Return(&models.Briefing{ID: 1, StopID: stopID}, nil)
 	reqGet := httptest.NewRequest("GET", "/stops/10/briefing", nil)
 	wGet := httptest.NewRecorder()
-	r.ServeHTTP(wGet, reqGet)
+	mux.ServeHTTP(wGet, reqGet)
 	assert.Equal(t, http.StatusOK, wGet.Code)
 
 	mockStore.AssertExpectations(t)
@@ -469,8 +471,8 @@ func TestResearchBriefing(t *testing.T) {
 func TestDisableSharing(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Delete("/voyages/{id}/share", handler.DisableSharing)
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
 
 	voyageID := int64(1)
 	mockStore.On("UpdateVoyageSharing", voyageID, (*string)(nil), false).Return(nil)
@@ -478,7 +480,7 @@ func TestDisableSharing(t *testing.T) {
 
 	req := httptest.NewRequest("DELETE", "/voyages/1/share", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockStore.AssertExpectations(t)
@@ -487,8 +489,8 @@ func TestDisableSharing(t *testing.T) {
 func TestTriggerFullVoyageResearch(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
-	r := chi.NewRouter()
-	r.Post("/voyages/{id}/research", handler.TriggerFullVoyageResearch)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /voyages/{id}/research", handler.TriggerFullVoyageResearch)
 
 	voyageID := int64(1)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID}, nil)
@@ -499,7 +501,7 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/voyages/1/research", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockStore.AssertExpectations(t)
@@ -508,6 +510,9 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 func TestPersonHandlers(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /person", handler.GetPerson)
+	mux.HandleFunc("PUT /person", handler.UpdatePerson)
 
 	// Helper to add person to context
 	addPerson := func(req *http.Request) *http.Request {
@@ -521,7 +526,7 @@ func TestPersonHandlers(t *testing.T) {
 		req = addPerson(req)
 		w := httptest.NewRecorder()
 
-		handler.GetPerson(w, req)
+		mux.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var p models.Person
@@ -533,7 +538,7 @@ func TestPersonHandlers(t *testing.T) {
 		req := httptest.NewRequest("GET", "/person", nil)
 		w := httptest.NewRecorder()
 
-		handler.GetPerson(w, req)
+		mux.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
@@ -545,7 +550,7 @@ func TestPersonHandlers(t *testing.T) {
 
 		mockStore.On("UpdatePersonName", int64(1), "New Name").Return(nil)
 
-		handler.UpdatePerson(w, req)
+		mux.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var p models.Person
@@ -559,9 +564,9 @@ func TestGuideHandlers(t *testing.T) {
 	// Use a temp dir for content to test map upload/retrieval
 	tempDir := t.TempDir()
 	handler := handlers.New(mockStore, nil, tempDir, "http://test-agent")
-	r := chi.NewRouter()
-	r.Get("/voyages/{id}/guide", handler.GetVoyageGuide)
-	r.Post("/voyages/{id}/research_guide", handler.TriggerGuideResearch)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /voyages/{id}/guide", handler.GetVoyageGuide)
+	mux.HandleFunc("POST /voyages/{id}/research_guide", handler.TriggerGuideResearch)
 
 	t.Run("GetVoyageGuide_Found", func(t *testing.T) {
 		voyageID := int64(1)
@@ -569,7 +574,7 @@ func TestGuideHandlers(t *testing.T) {
 
 		req := httptest.NewRequest("GET", "/voyages/1/guide", nil)
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp handlers.VoyageGuideResponse
@@ -584,7 +589,7 @@ func TestGuideHandlers(t *testing.T) {
 
 		req := httptest.NewRequest("GET", "/voyages/999/guide", nil)
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
@@ -596,7 +601,7 @@ func TestGuideHandlers(t *testing.T) {
 
 		req := httptest.NewRequest("POST", "/voyages/2/research_guide", nil)
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		mux.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusAccepted, w.Code)
 	})

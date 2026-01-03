@@ -24,6 +24,9 @@ run: build-js
 	# For convenience, you can add a local .env loader here
 	cd app/backend && go run -mod=vendor main.go --content=./static.min
 
+# 2. BUILD: The master build command
+build: build-js
+
 # 2. RUN-BACKEND: Runs the Go backend without rebuilding JS (for dev)
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."

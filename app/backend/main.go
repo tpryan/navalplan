@@ -159,13 +159,13 @@ func run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 
-	// 3.5 Register Routes for static content
+	// 3.5 Register Routes
 	srv.Routes(cfg.ContentDir)
 
 	// 4. Start HTTP Server
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: srv.Router,
+		Handler: srv.Middleware(srv.Mux),
 	}
 
 	errChan := make(chan error, 1)

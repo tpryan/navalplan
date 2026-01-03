@@ -8,7 +8,6 @@ import (
 
 	"app/models"
 
-	"github.com/go-chi/chi/v5"
 	"google.golang.org/api/docs/v1"
 )
 
@@ -22,7 +21,7 @@ type ExportResponse struct {
 }
 
 func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)

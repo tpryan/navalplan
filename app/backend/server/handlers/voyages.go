@@ -9,8 +9,6 @@ import (
 
 	appcontext "app/context"
 	"app/models"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func generateToken() string {
@@ -21,7 +19,7 @@ func generateToken() string {
 
 // EnableSharing generates a public share token for a voyage.
 func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -41,7 +39,7 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 
 // DisableSharing revokes the public share token for a voyage.
 func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -60,7 +58,7 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 
 // GetPublicVoyage retrieves a shared voyage by its token.
 func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
-	token := chi.URLParam(r, "token")
+	token := r.PathValue("token")
 	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
@@ -73,7 +71,7 @@ func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 
 // GetPublicStops retrieves stops for a shared voyage.
 func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
-	token := chi.URLParam(r, "token")
+	token := r.PathValue("token")
 	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
@@ -143,7 +141,7 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 
 // GetVoyage retrieves a specific voyage by ID.
 func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -162,7 +160,7 @@ func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 
 // UpdateVoyage updates an existing voyage.
 func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -187,7 +185,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 
 // DeleteVoyage deletes a voyage by ID.
 func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)

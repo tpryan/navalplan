@@ -15,8 +15,6 @@ import (
 
 	"github.com/charmbracelet/log"
 	"google.golang.org/api/idtoken"
-
-	"github.com/go-chi/chi/v5"
 )
 
 type AgentRunRequest struct {
@@ -57,7 +55,7 @@ func cleanJSON(s string) string {
 }
 
 func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Stop ID", http.StatusBadRequest)
@@ -188,7 +186,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Stop ID", http.StatusBadRequest)
@@ -206,7 +204,7 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)

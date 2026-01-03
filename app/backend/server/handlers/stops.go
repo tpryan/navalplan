@@ -7,12 +7,10 @@ import (
 
 	appcontext "app/context"
 	"app/models"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
@@ -47,7 +45,7 @@ func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
@@ -89,7 +87,7 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -139,7 +137,7 @@ func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteStop(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)

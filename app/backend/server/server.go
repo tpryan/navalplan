@@ -11,19 +11,17 @@ import (
 	"app/server/handlers"
 
 	"github.com/charmbracelet/log"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 // Server holds the application dependencies and router.
 type Server struct {
-	Router       *chi.Mux
+	Mux          *http.ServeMux
 	DB           datastore.Store
 	GoogleConfig *oauth2.Config
 	Env          string
+	Handler      *handlers.Handler
 }
 
 // New initializes a new Server with the provided database and configuration.
@@ -43,9 +41,14 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		log.Warn("Initializing server with EMPTY Google Client ID!")
 	}
 
+	docsService := handlers.NewGoogleDocsService()
+	h := handlers.New(db, docsService, cfg.ContentDir, cfg.NavalPlanAgentURL)
+
 	s := &Server{
-		DB:  db,
-		Env: cfg.Env,
+		Mux:     http.NewServeMux(),
+		DB:      db,
+		Env:     cfg.Env,
+		Handler: h,
 		GoogleConfig: &oauth2.Config{
 			RedirectURL:  cfg.BaseURL + "/auth/google/callback",
 			ClientID:     cfg.GoogleClientID,
@@ -55,105 +58,52 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		},
 	}
 
-	r := chi.NewRouter()
-	docsService := handlers.NewGoogleDocsService()
-	h := handlers.New(db, docsService, cfg.ContentDir, cfg.NavalPlanAgentURL)
-
-	// Standard Middleware
-	r.Use(CustomLogger)
-	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
-
-	// Basic Health Check
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
-	// Auth Routes
-	r.Get("/auth/google/login", s.oauthGoogleLogin)
-	r.Get("/auth/google/callback", s.oauthGoogleCallback)
-	r.Get("/auth/logout", s.oauthLogout)
-
-	// API Routes (Placeholder)
-	r.Route("/api/v1", func(r chi.Router) {
-		// --- Public Routes ---
-		r.Get("/public/voyages/{token}", h.GetPublicVoyage)
-		r.Get("/public/voyages/{token}/stops", h.GetPublicStops)
-
-		// --- Protected Routes ---
-		r.Group(func(r chi.Router) {
-			r.Use(s.requireAuth)
-
-			// Person
-			r.Get("/person", h.GetPerson)
-			r.Put("/person", h.UpdatePerson)
-
-			// Voyages
-			r.Get("/voyages", h.ListVoyages)
-			r.Post("/voyages", h.CreateVoyage)
-			r.Get("/voyages/{id}", h.GetVoyage)
-			r.Put("/voyages/{id}", h.UpdateVoyage)
-			r.Delete("/voyages/{id}", h.DeleteVoyage)
-			r.Post("/voyages/{id}/export", h.ExportVoyage)
-			r.Post("/voyages/{id}/share", h.EnableSharing)
-			r.Delete("/voyages/{id}/share", h.DisableSharing)
-
-			r.Post("/voyages/{id}/research_guide", h.TriggerGuideResearch)
-			r.Post("/voyages/{id}/research", h.TriggerFullVoyageResearch)
-			r.Get("/voyages/{id}/guide", h.GetVoyageGuide)
-			r.Get("/voyages/{id}/briefings", h.ListVoyageBriefings)
-			r.Post("/voyages/{id}/guide/map_image", h.UploadVoyageMap)
-
-			// Stop Management
-			r.Route("/voyages/{id}/stops", func(r chi.Router) {
-				r.Get("/", h.ListStops)
-				r.Post("/", h.CreateStop)
-			})
-			r.Route("/stops/{id}", func(r chi.Router) {
-				r.Put("/", h.UpdateStop)
-				r.Delete("/", h.DeleteStop)
-				r.Post("/research", h.TriggerResearch)
-				r.Get("/briefing", h.GetBriefing)
-			})
-		})
-	})
-
-	s.Router = r
 	return s, nil
 }
 
-// CustomLogger is a middleware that logs HTTP requests.
-func CustomLogger(next http.Handler) http.Handler {
+// Middleware wraps the handler with standard middleware (Logging, CORS, Recovery).
+func (s *Server) Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-		next.ServeHTTP(ww, r)
+		// 1. Recovery
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error("Panic recovered", "error", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		}()
 
-		// Calculate duration
-		str := time.Since(start).String()
+		// 2. CORS (Simplified)
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Adjust for production
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
-		// Log
-		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.Status(), str))
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// 3. Request Logging wrapper
+		// We need to wrap ResponseWriter to capture status code
+		ww := &responseWriter{w, http.StatusOK}
+
+		h.ServeHTTP(ww, r)
+
+		// 4. Log
+		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, time.Since(start)))
 	})
 }
 
-// Routes sets up the 404 handler and static file serving.
-func (s *Server) Routes(contentDir string) {
-	// 404 Handler for API
-	s.Router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, contentDir+"/index.html")
-	})
-
-	// Static Files
-	fileServer := http.FileServer(http.Dir(contentDir))
-	s.Router.Handle("/*", http.StripPrefix("/", fileServer))
+// responseWriter is a wrapper to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
 }
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+

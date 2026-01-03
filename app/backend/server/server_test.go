@@ -168,10 +168,13 @@ func TestServerHealth(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, srv)
 
+	// Register routes
+	srv.Routes(cfg.ContentDir)
+
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	w := httptest.NewRecorder()
 
-	srv.Router.ServeHTTP(w, req)
+	srv.Mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "OK", w.Body.String())
@@ -185,6 +188,9 @@ func TestServerRoutes(t *testing.T) {
 	srv, err := server.New(mockStore, cfg)
 	assert.NoError(t, err)
 
+	// Register routes
+	srv.Routes(cfg.ContentDir)
+
 	// Verify API route prefix exists
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
 	w := httptest.NewRecorder()
@@ -195,7 +201,7 @@ func TestServerRoutes(t *testing.T) {
 	// but here we just want to ensure routing is wired.
 	// Actually, ListVoyages will try to encode `nil` which is valid JSON "null".
 
-	srv.Router.ServeHTTP(w, req)
+	srv.Mux.ServeHTTP(w, req)
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
@@ -203,6 +209,7 @@ func TestAuthMiddleware(t *testing.T) {
 	mockStore := new(MockStore)
 	cfg := &config.Config{ContentDir: "."}
 	srv, _ := server.New(mockStore, cfg)
+	srv.Routes(cfg.ContentDir)
 
 	// We need to define a route that uses the middleware.
 	// The existing /api/v1/person uses it.
@@ -210,7 +217,7 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("No Cookie", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/person", nil)
 		w := httptest.NewRecorder()
-		srv.Router.ServeHTTP(w, req)
+		srv.Mux.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
@@ -221,7 +228,7 @@ func TestAuthMiddleware(t *testing.T) {
 		mockStore.On("GetSession", mock.Anything, "invalid-token").Return(nil, nil)
 
 		w := httptest.NewRecorder()
-		srv.Router.ServeHTTP(w, req)
+		srv.Mux.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
@@ -236,7 +243,7 @@ func TestAuthMiddleware(t *testing.T) {
 		mockStore.On("GetPersonByID", mock.Anything, personID).Return(&models.Person{ID: personID, Name: "Test User"}, nil)
 		
 		w := httptest.NewRecorder()
-		srv.Router.ServeHTTP(w, req)
+		srv.Mux.ServeHTTP(w, req)
 		
 		assert.Equal(t, http.StatusOK, w.Code)
 	})

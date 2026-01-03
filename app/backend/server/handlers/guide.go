@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	"github.com/go-chi/chi/v5"
 	"google.golang.org/api/idtoken"
 
 	"app/models"
@@ -33,7 +32,7 @@ type GuideAgentOutput struct {
 }
 
 func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
@@ -81,7 +80,7 @@ func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
@@ -227,7 +226,7 @@ type VoyageGuideResponse struct {
 }
 
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
@@ -271,7 +270,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
