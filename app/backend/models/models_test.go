@@ -59,3 +59,51 @@ func TestBriefing_JSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.JSONEq(t, string(b.WeatherSummary), string(b2.WeatherSummary))
 }
+
+func TestRawJSON_Value(t *testing.T) {
+	t.Run("nil value", func(t *testing.T) {
+		var r models.RawJSON
+		v, err := r.Value()
+		assert.NoError(t, err)
+		assert.Nil(t, v)
+	})
+
+	t.Run("non-nil value", func(t *testing.T) {
+		r := models.RawJSON(`{"foo":"bar"}`)
+		v, err := r.Value()
+		assert.NoError(t, err)
+		assert.Equal(t, `{"foo":"bar"}`, v)
+	})
+}
+
+func TestRawJSON_Scan(t *testing.T) {
+	t.Run("nil value", func(t *testing.T) {
+		var r models.RawJSON
+		err := r.Scan(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, r)
+	})
+
+	t.Run("bytes value", func(t *testing.T) {
+		var r models.RawJSON
+		input := []byte(`{"foo":"bar"}`)
+		err := r.Scan(input)
+		assert.NoError(t, err)
+		assert.Equal(t, string(input), string(r))
+	})
+
+	t.Run("string value", func(t *testing.T) {
+		var r models.RawJSON
+		input := `{"foo":"bar"}`
+		err := r.Scan(input)
+		assert.NoError(t, err)
+		assert.Equal(t, input, string(r))
+	})
+
+	t.Run("invalid type", func(t *testing.T) {
+		var r models.RawJSON
+		err := r.Scan(123)
+		assert.Error(t, err)
+		assert.Equal(t, "type assertion to []byte failed", err.Error())
+	})
+}
