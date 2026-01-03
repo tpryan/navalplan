@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gopls": {
+      "command": "gopls",
+      "args": ["mcp"],
+      "cwd": "app/backend" 
+    }
+  }
+}
