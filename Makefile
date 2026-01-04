@@ -104,9 +104,16 @@ db-console:
 
 # --- Testing ---
 
-test:
+test: test-backend test-frontend
+
+test-backend:
+	@echo "Running Backend Tests..."
 	cd app/backend && go test ./... -cover
 	cd services/researcher && go test ./... -cover
+
+test-frontend:
+	@echo "Running Frontend Tests..."
+	cd app/frontend && npm test
 
 deps: deps-backend deps-researcher
 
