@@ -106,6 +106,7 @@ db-console:
 
 test:
 	cd app/backend && go test ./... -cover
+	cd services/researcher && go test ./... -cover
 
 deps: deps-backend deps-researcher
 

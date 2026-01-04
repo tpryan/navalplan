@@ -15,6 +15,7 @@ import (
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
+	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
@@ -51,9 +52,6 @@ func main() {
 		modelName = "gemini-2.0-flash-001"
 	}
 
-	key := ObscureString(os.Getenv("GEMINI_API_KEY"), os.Getenv("GEMINI_API_KEY"))
-
-	clog.Info("config", "key", key)
 	clog.Info("config", "modelName", modelName)
 
 	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
@@ -63,75 +61,12 @@ func main() {
 		clog.Fatalf("Failed to create model: %v", err)
 	}
 
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
-		Temperature:     genai.Ptr[float32](0.4),
-	}
-
-	weatherTool, err := tools.NewWeatherTool()
+	researchAgent, err := CreateResearcherAgent(model)
 	if err != nil {
-		clog.Fatalf("Failed to create weather tool: %v", err)
+		clog.Fatalf("Failed to create researcher agent: %v", err)
 	}
 
-	tideTool, err := tools.NewTideTool()
-	if err != nil {
-		clog.Fatalf("Failed to create tide tool: %v", err)
-	}
-
-	sunriseTool, err := tools.NewSunriseTool()
-	if err != nil {
-		clog.Fatalf("Failed to create sunrise tool: %v", err)
-	}
-
-	// 2. Define Sub-Agent (Search Specialist)
-	searchAgent, err := llmagent.New(llmagent.Config{
-		Name:        "search_specialist",
-		Model:       model,
-		Description: "Finds information on the web (facilities, reviews).",
-		Instruction: searchSpecialistPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		GenerateContentConfig: genConfig,
-	})
-	if err != nil {
-		clog.Fatalf("Failed to create search agent: %v", err)
-	}
-
-	// 3. Define Parent Agent (Researcher / Orchestrator)
-	// We wrap sub-agents as tools using agenttool.New
-	researchAgent, err := llmagent.New(llmagent.Config{
-		Name:        "researcher_agent",
-		Model:       model,
-		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: researcherAgentPrompt,
-		Tools: []tool.Tool{
-			weatherTool,
-			tideTool,
-			sunriseTool,
-			agenttool.New(searchAgent, nil),
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-	if err != nil {
-		clog.Fatalf("Failed to create agent: %v", err)
-	}
-
-	// 4. Define Guide Agent
-	guideAgent, err := llmagent.New(llmagent.Config{
-		Name:        "guide_agent",
-		Model:       model,
-		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: guideAgentPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
+	guideAgent, err := CreateGuideAgent(model)
 	if err != nil {
 		clog.Fatalf("Failed to create guide agent: %v", err)
 	}
@@ -167,6 +102,80 @@ func main() {
 	if err != nil {
 		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}
+}
+
+func CreateResearcherAgent(model model.LLM) (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
+	weatherTool, err := tools.NewWeatherTool()
+	if err != nil {
+		return nil, err
+	}
+
+	tideTool, err := tools.NewTideTool()
+	if err != nil {
+		return nil, err
+	}
+
+	sunriseTool, err := tools.NewSunriseTool()
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Define Sub-Agent (Search Specialist)
+	searchAgent, err := llmagent.New(llmagent.Config{
+		Name:        "search_specialist",
+		Model:       model,
+		Description: "Finds information on the web (facilities, reviews).",
+		Instruction: searchSpecialistPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		GenerateContentConfig: genConfig,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Define Parent Agent (Researcher / Orchestrator)
+	return llmagent.New(llmagent.Config{
+		Name:        "researcher_agent",
+		Model:       model,
+		Description: "A Virtual Harbourmaster that researches sailing destinations.",
+		Instruction: researcherAgentPrompt,
+		Tools: []tool.Tool{
+			weatherTool,
+			tideTool,
+			sunriseTool,
+			agenttool.New(searchAgent, nil),
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
+}
+
+func CreateGuideAgent(model model.LLM) (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
+	return llmagent.New(llmagent.Config{
+		Name:        "guide_agent",
+		Model:       model,
+		Description: "A Local Knowledge Expert and Sailing Guide.",
+		Instruction: guideAgentPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
 }
 
 func ObscureString(input, toObscure string) string {
