@@ -2,8 +2,8 @@ package server
 
 import (
 	"net/http"
-	"os"
 	"path/filepath"
+	"strings"
 )
 
 // route defines a single HTTP route with its verb, path, handler, and auth level.
@@ -30,12 +30,7 @@ func (s *Server) Register(r ...route) {
 }
 
 func (s *Server) Routes(staticPath string) {
-	// 1. Define Static File Handlers (matching navallog's manual approach)
-	indexHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
-	})
-
-	// 2. Define the Route Table
+	// 1. Define the Route Table
 	routes := []route{
 		// --- System / Auth (Public) ---
 		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("OK")) }), 0},
@@ -77,35 +72,24 @@ func (s *Server) Routes(staticPath string) {
 
 		// --- Static Files Catch-All (Public) ---
 		{http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 1. API Guard: Don't serve HTML for missing API routes
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.NotFound(w, r)
+				return
+			}
+
+			// 2. SPA Fallback: If no extension, assume it's a client-side route
+			// This avoids os.Stat overhead for routes like /dashboard, /users/123
+			if filepath.Ext(r.URL.Path) == "" {
+				http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
+				return
+			}
+
+			// 3. Static Files: Serve directly
+			// http.ServeFile handles 404s if the file (with extension) doesn't exist
 			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
-			info, err := os.Stat(fpath)
-			if err != nil {
-				if os.IsNotExist(err) {
-					// SPA Fallback: If file doesn't exist, serve index.html (client-side routing)
-					// But we should verify if it looks like an API call to avoid serving HTML for 404 API
-					// For now, simple fallback.
-					http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
-					return
-				}
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			if info.IsDir() {
-				index := filepath.Join(fpath, "index.html")
-				if _, err := os.Stat(index); err == nil {
-					http.ServeFile(w, r, index)
-					return
-				}
-				http.ServeFile(w, r, filepath.Join(staticPath, "index.html")) // SPA Fallback
-				return
-			}
 			http.ServeFile(w, r, fpath)
 		}), 0},
-		
-		// Add explicit SPA routes if necessary to point to indexHandler
-		// This ensures deep links work even if static handler misses them
-		{http.MethodGet, "/voyages", indexHandler, 0},
-		{http.MethodGet, "/voyages/{id}", indexHandler, 0},
 	}
 
 	s.Register(routes...)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -247,4 +249,54 @@ func TestAuthMiddleware(t *testing.T) {
 		
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
+}
+
+func TestStaticAndSPARouting(t *testing.T) {
+	// Setup temporary static dir
+	tmpDir := t.TempDir()
+
+	// Create index.html
+	indexContent := "<html>Index</html>"
+	err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte(indexContent), 0644)
+	assert.NoError(t, err)
+
+	// Create style.css
+	cssContent := "body { color: red; }"
+	err = os.WriteFile(filepath.Join(tmpDir, "style.css"), []byte(cssContent), 0644)
+	assert.NoError(t, err)
+
+	mockStore := new(MockStore)
+	cfg := &config.Config{
+		ContentDir: tmpDir,
+	}
+	srv, err := server.New(mockStore, cfg)
+	assert.NoError(t, err)
+	srv.Routes(cfg.ContentDir)
+
+	tests := []struct {
+		name           string
+		path           string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{"Root returns index", "/", http.StatusOK, indexContent},
+		{"SPA route returns index", "/dashboard", http.StatusOK, indexContent},
+		{"Deep SPA route returns index", "/users/123", http.StatusOK, indexContent},
+		{"Static file returns content", "/style.css", http.StatusOK, cssContent},
+		{"Missing static file returns 404", "/missing.css", http.StatusNotFound, "404 page not found\n"},
+		{"API 404 returns 404", "/api/v1/unknown", http.StatusNotFound, "404 page not found\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			w := httptest.NewRecorder()
+			srv.Mux.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+			if tc.expectedBody != "" {
+				assert.Equal(t, tc.expectedBody, w.Body.String())
+			}
+		})
+	}
 }
