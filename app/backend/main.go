@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -84,9 +85,29 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 
 	var dsn string
 	if dbSocket != "" {
-		dsn = fmt.Sprintf("postgres://%s:%s@/%s?host=%s&sslmode=%s", dbUser, dbPass, dbName, dbSocket, dbMode)
+		q := make(url.Values)
+		q.Set("host", dbSocket)
+		q.Set("sslmode", dbMode)
+		
+		u := url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(dbUser, dbPass),
+			Path:     "/" + dbName,
+			RawQuery: q.Encode(),
+		}
+		dsn = u.String()
 	} else {
-		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dbUser, dbPass, dbHost, dbPort, dbName, dbMode)
+		q := make(url.Values)
+		q.Set("sslmode", dbMode)
+		
+		u := url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(dbUser, dbPass),
+			Host:     fmt.Sprintf("%s:%s", dbHost, dbPort),
+			Path:     dbName,
+			RawQuery: q.Encode(),
+		}
+		dsn = u.String()
 	}
 
 	// Allow override
