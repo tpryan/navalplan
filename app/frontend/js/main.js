@@ -1,22 +1,12 @@
 import mapboxgl from 'mapbox-gl';
 import Chart from 'chart.js/auto';
+import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { exportToGoogleDocs } from './google_export.js';
 import { checkSession } from './auth.js';
 
 // Configuration
 const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
-
-// Helper: Escape HTML to prevent XSS
-function escapeHTML(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
 
 // State
 let voyages = [];
@@ -605,11 +595,14 @@ function renderVoyageList() {
   voyages.forEach(voyage => {
     const el = document.createElement('div');
     el.className = 'voyage-item';
-    el.innerHTML = `
+    
+    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(voyage.location_name)}</p>` : '';
+    
+    el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
-        <h3>${escapeHTML(voyage.title)}</h3>
+        <h3>${voyage.title}</h3>
         <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
-        ${voyage.location_name ? '<p class="font-sm text-gray">📍 ' + escapeHTML(voyage.location_name) + '</p>' : ''}
+        ${locationHtml}
       </div>
       <div class="voyage-actions">
         <button class="btn-icon edit" title="Edit">
@@ -619,7 +612,7 @@ function renderVoyageList() {
           <span class="material-symbols-outlined">delete</span>
         </button>
       </div>
-    `;
+    `);
     
     // Select Voyage
     el.querySelector('.voyage-info').addEventListener('click', () => selectVoyage(voyage));
@@ -747,7 +740,7 @@ function renderItinerary() {
         let html = `
             <div class="day-info flex-1">
                 <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
-                <span class="day-location ${stop ? 'set' : ''}">${stop ? escapeHTML(stop.location_name) : 'No destination'}</span>
+                <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
             </div>
         `;
         
@@ -765,7 +758,7 @@ function renderItinerary() {
             `;
         }
         
-        el.innerHTML = html;
+        el.innerHTML = DOMPurify.sanitize(html);
         
         // Handlers
         el.querySelector('.day-info').addEventListener('click', () => selectDate(dateStr));
@@ -1189,7 +1182,7 @@ function showBriefing(briefing) {
         </div>
     `;
 
-    content.innerHTML = weatherHtml + sunHtml + tidesHtml + facilHtml;
+    content.innerHTML = DOMPurify.sanitize(weatherHtml + sunHtml + tidesHtml + facilHtml);
     
     // Redo Handler
     if (btnRedo) {
@@ -1829,7 +1822,7 @@ async function captureAndUploadMap(voyageId) {
         
         // 2. Build HTML
         let html = `
-            <h1 class="report-title">${escapeHTML(currentVoyage.title)}</h1>
+            <h1 class="report-title">${DOMPurify.sanitize(currentVoyage.title)}</h1>
             <p class="report-dates">
                 ${new Date(currentVoyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(currentVoyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
             </p>
@@ -1868,8 +1861,8 @@ async function captureAndUploadMap(voyageId) {
                     <div class="overview-date">
                         ${dateStr}
                     </div>
-                    <div class="overview-location" title="${escapeHTML(stop.location_name)}">
-                        ${escapeHTML(stop.location_name)}
+                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
+                        ${DOMPurify.sanitize(stop.location_name)}
                     </div>
                     
                     <div class="overview-weather">
@@ -2014,7 +2007,7 @@ async function captureAndUploadMap(voyageId) {
             const b = briefings[idx];
             html += `
                 <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${escapeHTML(stop.location_name)}</h2>
+                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(stop.location_name)}</h2>
                     <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
             
@@ -2249,7 +2242,7 @@ async function captureAndUploadMap(voyageId) {
         const content = document.getElementById('report-content');
         const modalOverlay = document.getElementById('modal-overlay');
         
-        content.innerHTML = html;
+        content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
 
@@ -2470,7 +2463,7 @@ function showVoyageGuide(guide) {
         html += `</ul></div>`;
     }
 
-    content.innerHTML = html;
+    content.innerHTML = DOMPurify.sanitize(html);
 
     // Redo Handler
     if (btnRedo) {
