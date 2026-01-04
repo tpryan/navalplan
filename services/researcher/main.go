@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"log"
 	"os"
 	"strings"
@@ -20,6 +21,15 @@ import (
 	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
 )
+
+//go:embed prompts/search_specialist.md
+var searchSpecialistPrompt string
+
+//go:embed prompts/researcher_agent.md
+var researcherAgentPrompt string
+
+//go:embed prompts/guide_agent.md
+var guideAgentPrompt string
 
 func main() {
 	// Configure charmbracelet/log
@@ -73,11 +83,7 @@ func main() {
 		Name:        "search_specialist",
 		Model:       model,
 		Description: "Finds information on the web (facilities, reviews).",
-		Instruction: `
-			You are a Web Search Specialist.
-			Your goal is to find specific information requested by the user using Google Search.
-			Do NOT synthesize or summarize extensively. Return the relevant search snippets or data points directly and concisely.
-		`,
+		Instruction: searchSpecialistPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
@@ -92,74 +98,7 @@ func main() {
 		Name:        "researcher_agent",
 		Model:       model,
 		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: `
-			You are an expert Virtual Harbourmaster.
-			
-			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
-
-			RESTRICTIONS:
-			- Do NOT provide conversational updates.
-			- Do NOT output the JSON structure until you have successfully called the tools and received data.
-
-			DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
-			1. Call 'get_weather_forecast' for the location and date.
-			2. Call 'get_tides' for the location and date.
-			3. Call 'get_sunrise_sunset' for the location and date.
-			4. Call 'search_specialist' multiple times (or once with a combined query) for:
-			   - "Anchorages near [Location] details protection holding"
-			   - "Marina contact info [Location] vhf phone"
-			   - "Dinghy accessible bars and restaurants near [Location] waterfront"
-
-			OUTPUT:
-			Combine all findings into this JSON structure. 
-			
-			CRITICAL RULES:
-			1. For 'tides.events': Include ALL events returned.
-			2. For 'tides.station_name': Use the EXACT station_name from the tool.
-			3. For 'weather_summary': Synthesize a readable sentence.
-			4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water.
-			
-			{
-				"location_name": "Resolved Name",
-				"weather_summary": {
-					"summary": "...",
-					"condition": "...",
-					"temp_min_f": 0,
-					"temp_max_f": 0,
-					"wind_speed_kt": 0,
-					"wind_direction": "...",
-					"wave_height_ft": 0,
-					"debug_duration_ms": 0
-				},
-				"sun_phase": {
-					"sunrise": "...",
-					"sunset": "..."
-				},
-				"tides": {
-					"station_name": "...",
-					"events": [
-						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5}
-					]
-				},
-				"facilities": [
-					{
-						"name": "...",
-						"type": "Anchorage" | "Marina" | "Mooring" | "Bar" | "Restaurant",
-						"latitude": 0.0,
-						"longitude": 0.0,
-						"details": {
-							"description": "...",
-							"protection": "...",
-							"vhf": "..."
-						},
-						"references": ["https://..."]
-					}
-				],
-				"sources": [...]
-			}
-
-			Important: Always try to find a relevant URL for facilities. Always provide reference links. 
-		`,
+		Instruction: researcherAgentPrompt,
 		Tools: []tool.Tool{
 			weatherTool,
 			tideTool,
@@ -178,61 +117,7 @@ func main() {
 		Name:        "guide_agent",
 		Model:       model,
 		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: `
-			You are a Local Knowledge Expert and Sailing Guide.
-			Task: Research the general sailing region for the location.
-			
-			DATA GATHERING (Execute multiple searches in PARALLEL):
-			Call 'google_search' for:
-			- "Sailing season months hurricane season [Location]"
-			- "Sailing hazards coral reefs currents [Location]"
-			- "Major sailing hubs marinas [Location]"
-			- "Yacht charter companies [Location]"
-			- "Nearest airports to [Location]"
-			- "Currency language emergency numbers [Location]"
-			- "Top sailing points of interest [Location]"
-
-			Output: Produce a JSON object strictly following this schema:
-			{
-			  "summary": "A 2-3 sentence overview of sailing in this region.",
-			  "sailing_season": {
-				"primary_season_months": ["November", "December", ...],
-				"storm_season_months": ["August", "September"],
-				"storm_risk_level": "High/Medium/Low",
-				"notes": "Hurricane season peaks in Sept.",
-				"references" : ["https://...", "https://..."]
-			  },
-			  "hazards": [
-				{ "title": "...", "description": "...", "url": "...", "references" : [...] }
-			  ],
-			  "hubs": [
-				{ "name": "...", "description": "...", "url": "...", "references" : [...] }
-			  ],
-			  "charter_info": {
-				 "is_charter_destination": true,
-				 "companies": [
-					 { "name": "...", "url": "...", "references" : [...]}
-				 ]
-			  },
-			  "airports": [
-			     { "name": "...", "iata_code": "...", "type": "...", "distance_km": 0, "references": [...] }
-			  ],
-			  "country_info": {
-			     "name": "...",
-			     "languages": ["..."],
-			     "timezone": "...",
-			     "emergency_numbers": { "Police": "..." }
-			  },
-			  "currencies": [
-			     { "name": "...", "code": "...", "symbol": "..." }
-			  ],
-			  "points_of_interest": [
-			     { "name": "...", "description": "...", "references": [...] }
-			  ]
-			}
-			
-			Important: Always provide reference links for every section.
-		`,
+		Instruction: guideAgentPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
