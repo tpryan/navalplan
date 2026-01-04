@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/log"
 	"google.golang.org/api/idtoken"
 
+	appcontext "app/context"
 	"app/models"
 )
 
@@ -32,10 +33,27 @@ type GuideAgentOutput struct {
 }
 
 func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -80,6 +98,12 @@ func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -90,6 +114,11 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -226,10 +255,28 @@ type VoyageGuideResponse struct {
 }
 
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership via Voyage
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		// If voyage not found, guide also not found
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -270,10 +317,27 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 

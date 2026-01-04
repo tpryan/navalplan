@@ -35,15 +35,29 @@ function updateUIForLogin(person) {
 
     const menu = document.createElement('div');
     menu.id = 'user-floating-menu';
-    
-    menu.innerHTML = `
-        <img src="${person.picture_url || ''}" class="avatar" alt="${person.name}" title="${person.name}" />
-        <div class="menu-actions">
-            <a href="/auth/logout" class="btn-icon" title="Logout">
-                <span class="material-symbols-outlined">logout</span>
-            </a>
-        </div>
-    `;
+
+    const img = document.createElement('img');
+    img.src = person.picture_url || '';
+    img.className = 'avatar';
+    img.alt = person.name;
+    img.title = person.name;
+
+    const actions = document.createElement('div');
+    actions.className = 'menu-actions';
+
+    const logoutLink = document.createElement('a');
+    logoutLink.href = '/auth/logout';
+    logoutLink.className = 'btn-icon';
+    logoutLink.title = 'Logout';
+
+    const logoutIcon = document.createElement('span');
+    logoutIcon.className = 'material-symbols-outlined';
+    logoutIcon.textContent = 'logout';
+
+    logoutLink.appendChild(logoutIcon);
+    actions.appendChild(logoutLink);
+    menu.appendChild(img);
+    menu.appendChild(actions);
     
     container.appendChild(menu);
 }

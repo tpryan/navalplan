@@ -98,7 +98,7 @@ func main() {
 	}
 
 	l := full.NewLauncher()
-	err = l.Execute(ctx, config, []string{"web", "-read-timeout", "60s", "-write-timeout", "60s", "-port", port, "api"})
+	err = l.Execute(ctx, config, []string{"web", "-read-timeout", "300s", "-write-timeout", "300s", "-port", port, "api"})
 	if err != nil {
 		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}

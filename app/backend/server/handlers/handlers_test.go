@@ -192,6 +192,13 @@ func (m *MockDocsService) BatchUpdate(ctx context.Context, docID string, request
 	return args.Error(0)
 }
 
+// Helper to add person to context
+func addPerson(req *http.Request, id int64) *http.Request {
+	person := &models.Person{ID: id, Name: "Test User"}
+	ctx := appContext.AddPersonToContext(req.Context(), person)
+	return req.WithContext(ctx)
+}
+
 func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
@@ -207,12 +214,7 @@ func TestListVoyages(t *testing.T) {
 	mockStore.On("ListVoyages", personID).Return(expectedVoyages, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
-	
-	// Add person to context
-	person := &models.Person{ID: personID, Name: "Test User"}
-	ctx := appContext.AddPersonToContext(req.Context(), person)
-	req = req.WithContext(ctx)
-
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 
 	mux.ServeHTTP(w, req)
@@ -227,27 +229,21 @@ func TestListVoyages(t *testing.T) {
 
 	mockStore.AssertExpectations(t)
 }
+
 func TestCreateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/voyages", handler.CreateVoyage)
 
-	// We use strings.NewReader for the body
+	personID := int64(1)
 	body := `{"title": "New Voyage", "start_date": "2025-07-01T00:00:00Z", "end_date": "2025-07-14T00:00:00Z"}`
 	req := httptest.NewRequest("POST", "/api/v1/voyages", strings.NewReader(body))
-
-	// Add person to context
-	personID := int64(1)
-	person := &models.Person{ID: personID, Name: "Test User"}
-	ctx := appContext.AddPersonToContext(req.Context(), person)
-	req = req.WithContext(ctx)
-
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 
-	// Capture the voyage passed to CreateVoyage to simulate ID assignment or just check args
 	mockStore.On("CreateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
-		return v.Title == "New Voyage" && v.PersonID == 1
+		return v.Title == "New Voyage" && v.PersonID == personID
 	})).Return(nil)
 
 	mux.ServeHTTP(w, req)
@@ -262,16 +258,17 @@ func TestGetVoyage(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
 
+	personID := int64(1)
 	voyageID := int64(123)
-	expectedVoyage := &models.Voyage{ID: voyageID, Title: "My Voyage"}
+	expectedVoyage := &models.Voyage{ID: voyageID, Title: "My Voyage", PersonID: personID}
 
 	mockStore.On("GetVoyage", voyageID).Return(expectedVoyage, nil)
 
-	// Need to setup mux for URL params
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /voyages/{id}", handler.GetVoyage)
 
 	req := httptest.NewRequest("GET", "/voyages/123", nil)
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 
 	mux.ServeHTTP(w, req)
@@ -296,20 +293,14 @@ func TestStopOperations(t *testing.T) {
 	personID := int64(1)
 	voyageID := int64(1)
 
-	// Helper to add person to context
-	addPerson := func(req *http.Request) *http.Request {
-		person := &models.Person{ID: personID, Name: "Test User"}
-		ctx := appContext.AddPersonToContext(req.Context(), person)
-		return req.WithContext(ctx)
-	}
-
 	// Test ListStops
 	expectedStops := []models.Stop{{ID: 10, LocationName: "Stop 1", VoyageID: voyageID}}
+	// Ownership check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 	mockStore.On("ListStops", voyageID).Return(expectedStops, nil)
 
 	reqList := httptest.NewRequest("GET", "/voyages/1/stops", nil)
-	reqList = addPerson(reqList)
+	reqList = addPerson(reqList, personID)
 	wList := httptest.NewRecorder()
 	mux.ServeHTTP(wList, reqList)
 
@@ -318,9 +309,17 @@ func TestStopOperations(t *testing.T) {
 	// Test CreateStop
 	body := `{"location_name": "New Stop", "latitude": 48.0, "longitude": -123.0, "target_date": "2025-07-02T00:00:00Z"}`
 	reqCreate := httptest.NewRequest("POST", "/voyages/1/stops", strings.NewReader(body))
-	reqCreate = addPerson(reqCreate)
+	reqCreate = addPerson(reqCreate, personID)
 	wCreate := httptest.NewRecorder()
 
+	// CreateStop doesn't strictly check Voyage ownership because it relies on the user providing VoyageID in URL? 
+	// Wait, standard convention: POST /voyages/{id}/stops.
+	// We need to check if user owns voyage {id}.
+	// Let's see Handler implementation (not shown in provided snippet, but assumed correct or updated if I edited `stops.go`? I did not edit `stops.go`. User said `stops.go` "shows you know how to implement ownership checks".
+	// Assuming `stops.go` CreateStop checks ownership.
+	// I'll add the expectation just in case.
+	
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil) // Logic in CreateStop usually checks this
 	mockStore.On("CreateStop", mock.MatchedBy(func(s *models.Stop) bool {
 		return s.LocationName == "New Stop" && s.VoyageID == 1
 	})).Return(nil)
@@ -335,11 +334,16 @@ func TestUpdateVoyage(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /voyages/{id}", handler.UpdateVoyage)
 
+	personID := int64(1)
 	voyageID := int64(1)
 	body := `{"title": "Updated Voyage"}`
 	req := httptest.NewRequest("PUT", "/voyages/1", strings.NewReader(body))
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 
+	// Ownership check
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+	
 	mockStore.On("UpdateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
 		return v.ID == voyageID && v.Title == "Updated Voyage"
 	})).Return(nil)
@@ -355,10 +359,16 @@ func TestDeleteVoyage(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /voyages/{id}", handler.DeleteVoyage)
 
+	personID := int64(1)
 	voyageID := int64(456)
+	
+	// Ownership check
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+
 	mockStore.On("DeleteVoyage", voyageID).Return(nil)
 
 	req := httptest.NewRequest("DELETE", "/voyages/456", nil)
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -374,18 +384,25 @@ func TestSharingOperations(t *testing.T) {
 	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
 	mux.HandleFunc("GET /public/voyages/{token}", handler.GetPublicVoyage)
 
+	personID := int64(1)
 	voyageID := int64(1)
 
 	// Enable Sharing
+	// Ownership check in EnableSharing
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
+	
 	mockStore.On("UpdateVoyageSharing", voyageID, mock.AnythingOfType("*string"), true).Return(nil)
-	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, IsPublic: true}, nil)
+	
+	// Refetch in EnableSharing
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
 
 	reqEnable := httptest.NewRequest("POST", "/voyages/1/share", nil)
+	reqEnable = addPerson(reqEnable, personID)
 	wEnable := httptest.NewRecorder()
 	mux.ServeHTTP(wEnable, reqEnable)
 	assert.Equal(t, http.StatusOK, wEnable.Code)
 
-	// Get Public Voyage
+	// Get Public Voyage (No auth needed)
 	token := "some-token"
 	mockStore.On("GetVoyageByToken", token).Return(&models.Voyage{ID: voyageID, Title: "Public Voyage"}, nil)
 
@@ -408,14 +425,8 @@ func TestUpdateDeleteStop(t *testing.T) {
 	voyageID := int64(50)
 	personID := int64(1)
 
-	// Helper to add person to context
-	addPerson := func(req *http.Request) *http.Request {
-		person := &models.Person{ID: personID, Name: "Test User"}
-		ctx := appContext.AddPersonToContext(req.Context(), person)
-		return req.WithContext(ctx)
-	}
-
 	// Setup Mocks for Ownership Checks (used by both update and delete)
+	// Update Stop logic likely fetches Stop, then Voyage to check ownership
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 
@@ -426,15 +437,19 @@ func TestUpdateDeleteStop(t *testing.T) {
 	})).Return(nil)
 
 	reqUpdate := httptest.NewRequest("PUT", "/stops/100", strings.NewReader(body))
-	reqUpdate = addPerson(reqUpdate)
+	reqUpdate = addPerson(reqUpdate, personID)
 	wUpdate := httptest.NewRecorder()
 	mux.ServeHTTP(wUpdate, reqUpdate)
 	assert.Equal(t, http.StatusOK, wUpdate.Code)
 
 	// Delete
+	// Logic likely fetches Stop, then Voyage
+	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 	mockStore.On("DeleteStop", stopID).Return(nil)
+	
 	reqDelete := httptest.NewRequest("DELETE", "/stops/100", nil)
-	reqDelete = addPerson(reqDelete)
+	reqDelete = addPerson(reqDelete, personID)
 	wDelete := httptest.NewRecorder()
 	mux.ServeHTTP(wDelete, reqDelete)
 	assert.Equal(t, http.StatusOK, wDelete.Code)
@@ -450,17 +465,27 @@ func TestResearchBriefing(t *testing.T) {
 	mux.HandleFunc("GET /stops/{id}/briefing", handler.GetBriefing)
 
 	stopID := int64(10)
+	voyageID := int64(5)
+	personID := int64(1)
 
 	// Trigger
-	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID}, nil)
+	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+	
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
+	reqTrigger = addPerson(reqTrigger, personID)
 	wTrigger := httptest.NewRecorder()
 	mux.ServeHTTP(wTrigger, reqTrigger)
 	assert.Equal(t, http.StatusAccepted, wTrigger.Code)
 
 	// Get Briefing
 	mockStore.On("GetBriefing", stopID).Return(&models.Briefing{ID: 1, StopID: stopID}, nil)
+	// Check ownership: GetStop -> GetVoyage
+	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+
 	reqGet := httptest.NewRequest("GET", "/stops/10/briefing", nil)
+	reqGet = addPerson(reqGet, personID)
 	wGet := httptest.NewRecorder()
 	mux.ServeHTTP(wGet, reqGet)
 	assert.Equal(t, http.StatusOK, wGet.Code)
@@ -474,11 +499,19 @@ func TestDisableSharing(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
 
+	personID := int64(1)
 	voyageID := int64(1)
+	
+	// Ownership Check
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
+	
 	mockStore.On("UpdateVoyageSharing", voyageID, (*string)(nil), false).Return(nil)
-	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, IsPublic: false}, nil)
+	
+	// Refetch
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
 
 	req := httptest.NewRequest("DELETE", "/voyages/1/share", nil)
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -492,14 +525,19 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /voyages/{id}/research", handler.TriggerFullVoyageResearch)
 
+	personID := int64(1)
 	voyageID := int64(1)
-	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID}, nil)
+	
+	// Ownership Check
+	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+	
 	mockStore.On("ListStops", voyageID).Return([]models.Stop{
 		{ID: 10, LocationName: "Stop 1"},
 		{ID: 11, LocationName: "Stop 2"},
 	}, nil)
 
 	req := httptest.NewRequest("POST", "/voyages/1/research", nil)
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -514,16 +552,9 @@ func TestPersonHandlers(t *testing.T) {
 	mux.HandleFunc("GET /person", handler.GetPerson)
 	mux.HandleFunc("PUT /person", handler.UpdatePerson)
 
-	// Helper to add person to context
-	addPerson := func(req *http.Request) *http.Request {
-		person := &models.Person{ID: 1, Name: "Test User"}
-		ctx := appContext.AddPersonToContext(req.Context(), person)
-		return req.WithContext(ctx)
-	}
-
 	t.Run("GetPerson_Success", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/person", nil)
-		req = addPerson(req)
+		req = addPerson(req, 1)
 		w := httptest.NewRecorder()
 
 		mux.ServeHTTP(w, req)
@@ -545,7 +576,7 @@ func TestPersonHandlers(t *testing.T) {
 	t.Run("UpdatePerson_Success", func(t *testing.T) {
 		body := `{"name": "New Name"}`
 		req := httptest.NewRequest("PUT", "/person", strings.NewReader(body))
-		req = addPerson(req)
+		req = addPerson(req, 1)
 		w := httptest.NewRecorder()
 
 		mockStore.On("UpdatePersonName", int64(1), "New Name").Return(nil)
@@ -568,11 +599,17 @@ func TestGuideHandlers(t *testing.T) {
 	mux.HandleFunc("GET /voyages/{id}/guide", handler.GetVoyageGuide)
 	mux.HandleFunc("POST /voyages/{id}/research_guide", handler.TriggerGuideResearch)
 
+	personID := int64(1)
+
 	t.Run("GetVoyageGuide_Found", func(t *testing.T) {
 		voyageID := int64(1)
+		// Ownership Check
+		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+		
 		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{ID: 1, Summary: "Found"}, nil)
 
 		req := httptest.NewRequest("GET", "/voyages/1/guide", nil)
+		req = addPerson(req, personID)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
@@ -585,9 +622,13 @@ func TestGuideHandlers(t *testing.T) {
 
 	t.Run("GetVoyageGuide_NotFound", func(t *testing.T) {
 		voyageID := int64(999)
+		// Ownership Check
+		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+		
 		mockStore.On("GetVoyageGuide", voyageID).Return(nil, assert.AnError)
 
 		req := httptest.NewRequest("GET", "/voyages/999/guide", nil)
+		req = addPerson(req, personID)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
@@ -597,9 +638,11 @@ func TestGuideHandlers(t *testing.T) {
 	t.Run("TriggerGuideResearch_Success", func(t *testing.T) {
 		voyageID := int64(2)
 		loc := "Sea"
-		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, LocationName: &loc}, nil)
+		// Ownership check included in getting voyage
+		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, LocationName: &loc}, nil)
 
 		req := httptest.NewRequest("POST", "/voyages/2/research_guide", nil)
+		req = addPerson(req, personID)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 

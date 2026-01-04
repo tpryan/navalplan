@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	appcontext "app/context"
 	"app/models"
 
 	"github.com/charmbracelet/log"
@@ -52,11 +53,17 @@ func cleanJSON(s string) string {
 	s = strings.TrimPrefix(s, "```")
 	s = strings.TrimSuffix(s, "```")
 	// Fix common LLM JSON error: unescaped single quotes or unnecessary escapes
-	s = strings.ReplaceAll(s, `\'`, `'`)
+	s = strings.ReplaceAll(s, `\'`,`'`) 
 	return strings.TrimSpace(s)
 }
 
 func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -67,6 +74,17 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	stop, err := h.DB.GetStop(r.Context(), stopID)
 	if err != nil {
 		http.Error(w, "Stop not found", http.StatusNotFound)
+		return
+	}
+
+	// Check ownership via Voyage
+	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -188,6 +206,12 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -201,11 +225,33 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check ownership via Stop -> Voyage
+	stop, err := h.DB.GetStop(r.Context(), briefing.StopID)
+	if err != nil {
+		http.Error(w, "Stop not found", http.StatusInternalServerError)
+		return
+	}
+	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusInternalServerError)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(briefing)
 }
 
 func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -216,6 +262,10 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -243,7 +293,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}        // Acquire token
+			sem <- struct{}{}		// Acquire token
 			defer func() { <-sem }() // Release token
 
 			log.Infof("Starting guide research for voyage %d", voyageID)
@@ -255,7 +305,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			wg.Add(1)
 			go func(s models.Stop) {
 				defer wg.Done()
-				sem <- struct{}{}        // Acquire token
+				sem <- struct{}{}		// Acquire token
 				defer func() { <-sem }() // Release token
 
 				log.Infof("Starting stop research for stop %d", s.ID)

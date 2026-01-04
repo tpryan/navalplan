@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -14,15 +14,32 @@ import (
 func generateToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
-	return hex.EncodeToString(b)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // EnableSharing generates a public share token for a voyage.
 func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if v.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -32,17 +49,34 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, _ := h.DB.GetVoyage(r.Context(), id)
+	v, _ = h.DB.GetVoyage(r.Context(), id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
 
 // DisableSharing revokes the public share token for a voyage.
 func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if v.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -51,7 +85,7 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, _ := h.DB.GetVoyage(r.Context(), id)
+	v, _ = h.DB.GetVoyage(r.Context(), id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
@@ -141,6 +175,12 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 
 // GetVoyage retrieves a specific voyage by ID.
 func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -154,16 +194,38 @@ func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if v.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
 
 // UpdateVoyage updates an existing voyage.
 func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership first
+	existing, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if existing.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
@@ -173,6 +235,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v.ID = id
+	v.PersonID = person.ID // Ensure PersonID isn't changed/spoofed in body
 
 	if err := h.DB.UpdateVoyage(r.Context(), &v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -185,10 +248,27 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 
 // DeleteVoyage deletes a voyage by ID.
 func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check ownership
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if v.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
