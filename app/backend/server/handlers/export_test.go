@@ -19,11 +19,13 @@ func TestExportVoyage_Success(t *testing.T) {
 	mockDocs := new(MockDocsService)
 	handler := handlers.New(mockStore, mockDocs, "test_content", "http://test-agent")
 
+	personID := int64(1)
 	voyageID := int64(1)
 	now := time.Now()
 	voyage := &models.Voyage{
 		ID:        voyageID,
 		Title:     "Test Voyage",
+		PersonID:  personID,
 		StartDate: now,
 		EndDate:   now.Add(24 * time.Hour),
 	}
@@ -48,6 +50,7 @@ func TestExportVoyage_Success(t *testing.T) {
 	r.Post("/voyages/{id}/export", handler.ExportVoyage)
 
 	req := httptest.NewRequest("POST", "/voyages/1/export", nil)
+	req = addPerson(req, personID)
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -63,4 +66,46 @@ func TestExportVoyage_Success(t *testing.T) {
 	assert.Greater(t, len(resp.Requests), 2)
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestExportVoyage_Unauthorized(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+
+	personID := int64(1)
+	otherPersonID := int64(2)
+	voyageID := int64(1)
+	voyage := &models.Voyage{
+		ID:       voyageID,
+		PersonID: otherPersonID,
+	}
+
+	mockStore.On("GetVoyage", voyageID).Return(voyage, nil)
+
+	r := chi.NewRouter()
+	r.Post("/voyages/{id}/export", handler.ExportVoyage)
+
+	req := httptest.NewRequest("POST", "/voyages/1/export", nil)
+	req = addPerson(req, personID)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockStore.AssertExpectations(t)
+}
+
+func TestExportVoyage_Unauthenticated(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+
+	r := chi.NewRouter()
+	r.Post("/voyages/{id}/export", handler.ExportVoyage)
+
+	req := httptest.NewRequest("POST", "/voyages/1/export", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

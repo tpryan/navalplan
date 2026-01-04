@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	appcontext "app/context"
 	"app/models"
 
 	"google.golang.org/api/docs/v1"
@@ -21,6 +22,12 @@ type ExportResponse struct {
 }
 
 func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -32,6 +39,11 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+
+	if voyage.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
