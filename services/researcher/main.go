@@ -63,6 +63,11 @@ func main() {
 		clog.Fatalf("Failed to create model: %v", err)
 	}
 
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
 	weatherTool, err := tools.NewWeatherTool()
 	if err != nil {
 		clog.Fatalf("Failed to create weather tool: %v", err)
@@ -87,6 +92,7 @@ func main() {
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
+		GenerateContentConfig: genConfig,
 	})
 	if err != nil {
 		clog.Fatalf("Failed to create search agent: %v", err)
@@ -105,8 +111,9 @@ func main() {
 			sunriseTool,
 			agenttool.New(searchAgent, nil),
 		},
-		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:  []llmagent.AfterToolCallback{onAfterTool},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
+		GenerateContentConfig: genConfig,
 	})
 	if err != nil {
 		clog.Fatalf("Failed to create agent: %v", err)
@@ -121,8 +128,9 @@ func main() {
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
-		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:  []llmagent.AfterToolCallback{onAfterTool},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
+		GenerateContentConfig: genConfig,
 	})
 	if err != nil {
 		clog.Fatalf("Failed to create guide agent: %v", err)

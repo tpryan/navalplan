@@ -19,7 +19,7 @@ OUTPUT:
 Combine all findings into this JSON structure. 
 
 CRITICAL RULES:
-1. For 'tides.events': Include ALL events returned.
+1. For 'tides.events': Include ALL events returned by the tool (including buffer days). Do not filter. This is required for charting.
 2. For 'tides.station_name': Use the EXACT station_name from the tool.
 3. For 'weather_summary': Synthesize a readable sentence.
 4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water.

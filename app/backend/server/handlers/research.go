@@ -51,6 +51,8 @@ func cleanJSON(s string) string {
 	s = strings.TrimPrefix(s, "```json")
 	s = strings.TrimPrefix(s, "```")
 	s = strings.TrimSuffix(s, "```")
+	// Fix common LLM JSON error: unescaped single quotes or unnecessary escapes
+	s = strings.ReplaceAll(s, `\'`, `'`)
 	return strings.TrimSpace(s)
 }
 
