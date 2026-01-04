@@ -112,7 +112,7 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), v.ID)
+	stops, err := h.DB.ListStops(r.Context(), v.ID, 0, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -130,7 +130,17 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voyages, err := h.DB.ListVoyages(r.Context(), person.ID)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	voyages, err := h.DB.ListVoyages(r.Context(), person.ID, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -23,8 +23,8 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) ListVoyages(ctx context.Context, personID int64) ([]models.Voyage, error) {
-	args := m.Called(personID)
+func (m *MockStore) ListVoyages(ctx context.Context, personID int64, limit, offset int) ([]models.Voyage, error) {
+	args := m.Called(personID, limit, offset)
 	return args.Get(0).([]models.Voyage), args.Error(1)
 }
 
@@ -64,8 +64,8 @@ func (m *MockStore) DeleteVoyage(ctx context.Context, id int64) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) ListStops(ctx context.Context, voyageID int64) ([]models.Stop, error) {
-	args := m.Called(voyageID)
+func (m *MockStore) ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]models.Stop, error) {
+	args := m.Called(voyageID, limit, offset)
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
 
@@ -211,7 +211,7 @@ func TestListVoyages(t *testing.T) {
 		{ID: 2, Title: "Test Voyage 2", PersonID: personID},
 	}
 
-	mockStore.On("ListVoyages", personID).Return(expectedVoyages, nil)
+	mockStore.On("ListVoyages", personID, 20, 0).Return(expectedVoyages, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/voyages", nil)
 	req = addPerson(req, personID)
@@ -297,7 +297,7 @@ func TestStopOperations(t *testing.T) {
 	expectedStops := []models.Stop{{ID: 10, LocationName: "Stop 1", VoyageID: voyageID}}
 	// Ownership check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-	mockStore.On("ListStops", voyageID).Return(expectedStops, nil)
+	mockStore.On("ListStops", voyageID, 50, 0).Return(expectedStops, nil)
 
 	reqList := httptest.NewRequest("GET", "/voyages/1/stops", nil)
 	reqList = addPerson(reqList, personID)
@@ -531,7 +531,7 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 	// Ownership Check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 	
-	mockStore.On("ListStops", voyageID).Return([]models.Stop{
+	mockStore.On("ListStops", voyageID, 0, 0).Return([]models.Stop{
 		{ID: 10, LocationName: "Stop 1"},
 		{ID: 11, LocationName: "Stop 2"},
 	}, nil)

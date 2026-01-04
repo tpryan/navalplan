@@ -6,9 +6,21 @@ import (
 	"app/models"
 )
 
-func (db *DB) ListStops(ctx context.Context, voyageID int64) ([]models.Stop, error) {
+func (db *DB) ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]models.Stop, error) {
 	stops := []models.Stop{}
-	query := `SELECT * FROM stop WHERE voyage_id = $1 ORDER BY target_date ASC`
+	// Explicit columns to avoid over-fetching
+	query := `
+		SELECT id, voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes, created_at, updated_at
+		FROM stop 
+		WHERE voyage_id = $1 
+		ORDER BY target_date ASC`
+
+	if limit > 0 {
+		query += " LIMIT $2 OFFSET $3"
+		err := db.SelectContext(ctx, &stops, query, voyageID, limit, offset)
+		return stops, err
+	}
+
 	err := db.SelectContext(ctx, &stops, query, voyageID)
 	return stops, err
 }

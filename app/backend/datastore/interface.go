@@ -9,7 +9,7 @@ import (
 
 type Store interface {
 	// Voyages
-	ListVoyages(ctx context.Context, personID int64) ([]models.Voyage, error)
+	ListVoyages(ctx context.Context, personID int64, limit, offset int) ([]models.Voyage, error)
 	CreateVoyage(ctx context.Context, v *models.Voyage) error
 	GetVoyage(ctx context.Context, id int64) (*models.Voyage, error)
 	UpdateVoyage(ctx context.Context, v *models.Voyage) error
@@ -18,7 +18,7 @@ type Store interface {
 	DeleteVoyage(ctx context.Context, id int64) error
 
 	// Stops
-	ListStops(ctx context.Context, voyageID int64) ([]models.Stop, error)
+	ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]models.Stop, error)
 	CreateStop(ctx context.Context, s *models.Stop) error
 	GetStop(ctx context.Context, id int64) (*models.Stop, error)
 	UpdateStop(ctx context.Context, s *models.Stop) error

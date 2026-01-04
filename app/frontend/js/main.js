@@ -234,10 +234,13 @@ function initUI() {
                           }
 
                           // Check Stops
-                          for (let i = pendingStops.length - 1; i >= 0; i--) {
-                              const stop = pendingStops[i];
-                              try {
-                                  const b = await API.getBriefing(stop.id);
+                          try {
+                              const briefings = await API.getVoyageBriefings(currentVoyage.id);
+                              
+                              for (let i = pendingStops.length - 1; i >= 0; i--) {
+                                  const stop = pendingStops[i];
+                                  const b = briefings.find(br => br.stop_id === stop.id);
+                                  
                                   if (b && isNewData(b, 'stop', stop.id)) {
                                       // 1. Mark as done in our list
                                       pendingStops.splice(i, 1);
@@ -251,9 +254,9 @@ function initUI() {
                                           btn.classList.remove('spin'); 
                                       }
                                   }
-                              } catch (e) {
-                                  // Ignore 404 or network blips, keep polling
                               }
+                          } catch (e) {
+                              // Ignore error
                           }
 
                           // If all done

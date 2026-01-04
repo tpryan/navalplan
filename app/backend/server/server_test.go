@@ -23,8 +23,8 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) ListVoyages(ctx context.Context, personID int64) ([]models.Voyage, error) {
-	args := m.Called(personID)
+func (m *MockStore) ListVoyages(ctx context.Context, personID int64, limit, offset int) ([]models.Voyage, error) {
+	args := m.Called(personID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -61,8 +61,8 @@ func (m *MockStore) DeleteVoyage(ctx context.Context, id int64) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) ListStops(ctx context.Context, voyageID int64) ([]models.Stop, error) {
-	args := m.Called(voyageID)
+func (m *MockStore) ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]models.Stop, error) {
+	args := m.Called(voyageID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

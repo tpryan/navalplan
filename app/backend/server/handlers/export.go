@@ -47,18 +47,24 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), voyageID)
+	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
 	if err != nil {
 		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
 		return
 	}
 
+	// Fetch all briefings in one go (Fix N+1)
+	allBriefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
+	if err != nil {
+		// Log error but proceed? Or fail? The original code ignored errors for individual briefings.
+		// We'll proceed with an empty map if fetch fails, to match partial behavior, 
+		// but ideally we should probably log it.
+		allBriefings = []models.Briefing{}
+	}
+
 	briefings := make(map[int64]*models.Briefing)
-	for _, s := range stops {
-		b, err := h.DB.GetBriefing(r.Context(), s.ID)
-		if err == nil {
-			briefings[s.ID] = b
-		}
+	for i := range allBriefings {
+		briefings[allBriefings[i].StopID] = &allBriefings[i]
 	}
 
 	// Build Content

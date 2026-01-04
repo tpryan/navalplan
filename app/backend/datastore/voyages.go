@@ -7,9 +7,21 @@ import (
 )
 
 // ListVoyages retrieves all voyages for a given person, ordered by start date descending.
-func (db *DB) ListVoyages(ctx context.Context, personID int64) ([]models.Voyage, error) {
+func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int) ([]models.Voyage, error) {
 	var voyages []models.Voyage
-	query := `SELECT * FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
+	// Explicit selection for performance (Issue #5)
+	query := `
+		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, share_token, is_public, created_at, updated_at
+		FROM voyage 
+		WHERE person_id = $1 
+		ORDER BY start_date DESC`
+
+	if limit > 0 {
+		query += " LIMIT $2 OFFSET $3"
+		err := db.SelectContext(ctx, &voyages, query, personID, limit, offset)
+		return voyages, err
+	}
+
 	err := db.SelectContext(ctx, &voyages, query, personID)
 	return voyages, err
 }

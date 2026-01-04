@@ -34,7 +34,17 @@ func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), voyageID)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
+
+	stops, err := h.DB.ListStops(r.Context(), voyageID, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

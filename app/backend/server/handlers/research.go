@@ -87,7 +87,10 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) performStopResearch(stop *models.Stop) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
+	h.performStopResearchLogic(stop)
+}
 
+func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	log.SetPrefix("researcher-agent")
 
 	agentURL := h.AgentURL
@@ -244,7 +247,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), voyageID)
+	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
 	if err != nil {
 		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
 		return
@@ -273,10 +276,12 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		// 2. Research each stop (Parallel)
 		for _, stop := range stops {
 			wg.Add(1)
+			h.ResearchSem <- struct{}{} // Block until a slot is available
 			go func(s models.Stop) {
 				defer wg.Done()
+				defer func() { <-h.ResearchSem }() // Release slot
 				log.Infof("Starting stop research for stop %d", s.ID)
-				h.performStopResearch(&s)
+				h.performStopResearchLogic(&s)
 			}(stop)
 		}
 

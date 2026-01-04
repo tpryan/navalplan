@@ -40,8 +40,9 @@ func TestExportVoyage_Success(t *testing.T) {
 
 	// DB Expectations
 	mockStore.On("GetVoyage", voyageID).Return(voyage, nil)
-	mockStore.On("ListStops", voyageID).Return(stops, nil)
-	mockStore.On("GetBriefing", int64(10)).Return(briefing, nil)
+	mockStore.On("ListStops", voyageID, 0, 0).Return(stops, nil)
+	mockStore.On("ListVoyageBriefings", voyageID).Return([]models.Briefing{*briefing}, nil)
+	// mockStore.On("GetBriefing", int64(10)).Return(briefing, nil) // Removed in N+1 fix
 
 	// Note: DB is NOT updated in this handler anymore (frontend handles the actual export)
 
