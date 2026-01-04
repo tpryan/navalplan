@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	"google.golang.org/api/idtoken"
 
 	appcontext "app/context"
 	"app/models"
@@ -66,6 +65,23 @@ func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	// Validate file content is an image
+	buff := make([]byte, 512)
+	if _, err := file.Read(buff); err != nil {
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "Failed to reset file pointer", http.StatusInternalServerError)
+		return
+	}
+
+	contentType := http.DetectContentType(buff)
+	if !strings.HasPrefix(contentType, "image/") {
+		http.Error(w, "Invalid file type: must be an image", http.StatusBadRequest)
+		return
+	}
 
 	// Ensure maps directory exists
 	mapsDir := filepath.Join(h.ContentDir, "maps")
@@ -131,6 +147,9 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) performGuideResearch(voyage *models.Voyage) {
+	h.ResearchSem <- struct{}{}
+	defer func() { <-h.ResearchSem }()
+
 	log.SetPrefix("guide-agent")
 
 	agentURL := h.AgentURL
@@ -143,30 +162,14 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	sessionID := fmt.Sprintf("voyage_%d", voyage.ID)
 
 	ctx := context.Background()
-
-	// SECURE CLIENT CREATION
-	// If we are calling a Cloud Run service securely, we need an ID Token.
-	var client *http.Client
-	var err error
-
-	if strings.Contains(agentURL, "run.app") {
-		// Create an authenticated client that appends the OIDC token for the specific audience (agentURL)
-		client, err = idtoken.NewClient(ctx, agentURL)
-		if err != nil {
-			log.Errorf("Failed to create authenticated client: %v", err)
-			return
-		}
-	} else {
-		// Default client for localhost development
-		client = http.DefaultClient
-	}
+	client := h.AgentClient
 
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
 		log.Infof("Failed to create agent session: %v", err)
-	} else {
+	} else if respSession != nil {
 		respSession.Body.Close()
 	}
 

@@ -8,14 +8,12 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 
 	appcontext "app/context"
 	"app/models"
 
 	"github.com/charmbracelet/log"
-	"google.golang.org/api/idtoken"
 )
 
 type AgentRunRequest struct {
@@ -45,16 +43,6 @@ type AgentOutput struct {
 	SunPhase       json.RawMessage `json:"sun_phase"`
 	Tides          json.RawMessage `json:"tides"`
 	Facilities     json.RawMessage `json:"facilities"`
-}
-
-func cleanJSON(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	// Fix common LLM JSON error: unescaped single quotes or unnecessary escapes
-	s = strings.ReplaceAll(s, `\'`,`'`) 
-	return strings.TrimSpace(s)
 }
 
 func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +85,9 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) performStopResearch(stop *models.Stop) {
+	h.ResearchSem <- struct{}{}
+	defer func() { <-h.ResearchSem }()
+
 	log.SetPrefix("researcher-agent")
 
 	agentURL := h.AgentURL
@@ -109,30 +100,14 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 	sessionID := fmt.Sprintf("stop_%d", stop.ID)
 
 	ctx := context.Background()
-
-	// SECURE CLIENT CREATION
-	// If we are calling a Cloud Run service securely, we need an ID Token.
-	var client *http.Client
-	var err error
-
-	if strings.Contains(agentURL, "run.app") {
-		// Create an authenticated client that appends the OIDC token for the specific audience (agentURL)
-		client, err = idtoken.NewClient(ctx, agentURL)
-		if err != nil {
-			log.Errorf("Failed to create authenticated client: %v", err)
-			return
-		}
-	} else {
-		// Default client for localhost development
-		client = http.DefaultClient
-	}
+	client := h.AgentClient
 
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
 		log.Infof("Failed to create agent session: %v", err)
-	} else {
+	} else if respSession != nil {
 		respSession.Body.Close()
 	}
 
@@ -286,16 +261,11 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		log.SetPrefix("research-coordinator")
 
 		var wg sync.WaitGroup
-		// Semaphore to limit concurrency (e.g., 5 concurrent agent requests)
-		sem := make(chan struct{}, 5)
 
 		// 1. Research Voyage Guide (Parallel)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}		// Acquire token
-			defer func() { <-sem }() // Release token
-
 			log.Infof("Starting guide research for voyage %d", voyageID)
 			h.performGuideResearch(voyage)
 		}()
@@ -305,9 +275,6 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			wg.Add(1)
 			go func(s models.Stop) {
 				defer wg.Done()
-				sem <- struct{}{}		// Acquire token
-				defer func() { <-sem }() // Release token
-
 				log.Infof("Starting stop research for stop %d", s.ID)
 				h.performStopResearch(&s)
 			}(stop)
