@@ -30,7 +30,7 @@ func main() {
 	flag.Parse()
 
 	if os.Getenv("NAVALPLAN_OA_CLIENT") == "" || os.Getenv("NAVALPLAN_OA_SECRET") == "" {
-		log.Warn("NAVALPLAN_OA_CLIENT or NAVALPLAN_OA_SECRET is not set. Authentication will fail.")
+		log.Fatal("NAVALPLAN_OA_CLIENT or NAVALPLAN_OA_SECRET is not set. Authentication is required.")
 	}
 
 	cfg := loadConfig(os.Getenv, *contentDir)
