@@ -21,6 +21,7 @@ type Server struct {
 	DB           datastore.Store
 	GoogleConfig *oauth2.Config
 	Env          string
+	BaseURL      string
 	Handler      *handlers.Handler
 }
 
@@ -48,6 +49,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		Mux:     http.NewServeMux(),
 		DB:      db,
 		Env:     cfg.Env,
+		BaseURL: cfg.BaseURL,
 		Handler: h,
 		GoogleConfig: &oauth2.Config{
 			RedirectURL:  cfg.BaseURL + "/auth/google/callback",
@@ -74,8 +76,17 @@ func (s *Server) Middleware(h http.Handler) http.Handler {
 			}
 		}()
 
-		// 2. CORS (Simplified)
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Adjust for production
+		// 2. CORS
+		origin := r.Header.Get("Origin")
+		allowedOrigins := map[string]bool{
+			s.BaseURL:               true,
+			"http://localhost:5173": true, // Vite default
+		}
+
+		if allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
