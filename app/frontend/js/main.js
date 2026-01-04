@@ -177,7 +177,8 @@ function initUI() {
               // 1. Visual Indicators: Spin all microscope icons
               const researchBtns = document.querySelectorAll('.day-actions .research');
               researchBtns.forEach(btn => {
-                  if (!btn.querySelector('.spin')) { // Don't double spin if already spinning
+                  // Only spin if not already done/spinning
+                  if (!btn.querySelector('.spin') && !btn.querySelector('.material-symbols-outlined').textContent.includes('check_circle')) {
                      btn.dataset.originalContent = btn.innerHTML;
                      btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
                      btn.disabled = true;
@@ -185,14 +186,38 @@ function initUI() {
               });
 
               try {
+                  // 1b. Snapshot timestamps to distinguish new data from old
+                  const initialTimestamps = {};
+                  try {
+                      const existingGuide = await API.getVoyageGuide(currentVoyage.id);
+                      if (existingGuide) initialTimestamps['guide'] = new Date(existingGuide.created_at).getTime();
+                      
+                      // Fetch existing briefings just for the list we have
+                      const existingBriefings = await Promise.all(
+                          currentStops.map(s => API.getBriefing(s.id).catch(()=>null))
+                      );
+                      existingBriefings.forEach(b => {
+                          if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
+                      });
+                  } catch (e) { console.warn("Failed to snapshot timestamps", e); }
+
+                  // Helper to check freshness
+                  const isNewData = (item, type, id) => {
+                      const key = type + (id ? '_' + id : '');
+                      const prevTime = initialTimestamps[key];
+                      if (!prevTime) return true; // No previous data, so this must be new
+                      const newTime = new Date(item.created_at).getTime();
+                      return newTime > prevTime;
+                  };
+
                   await API.triggerFullResearch(currentVoyage.id);
-                  showNotification('Research Started', 'Full voyage research has started. The agent is analyzing the destination guide and all stops in the background.');
+                  showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
                   
                   // 2. Poll for completion
                   const startTime = Date.now();
-                  const TIMEOUT_MS = 120000; // 2 minutes timeout
+                  const TIMEOUT_MS = 300000; // 5 minutes timeout (research all is heavy)
                   
-                  const pendingStops = [...currentStops]; // Clone
+                  const pendingStops = [...currentStops]; 
                   let guideComplete = false;
                   
                   const poll = setInterval(async () => {
@@ -202,13 +227,12 @@ function initUI() {
                           btnResearchAll.innerHTML = originalContent;
                           btnResearchAll.disabled = false;
                           // Revert stuck spinners
-                          researchBtns.forEach(btn => {
-                             if (btn.disabled) {
+                          const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
+                          stuckBtns.forEach(btn => {
                                  btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
                                  btn.disabled = false;
-                             }
                           });
-                          showNotification('Research Timeout', 'Research is taking longer than expected. Please check individual stops.');
+                          showNotification('Research Timeout', 'Research is taking longer than expected. Some stops may still be processing.');
                           return;
                       }
 
@@ -216,24 +240,29 @@ function initUI() {
                           // Check Guide
                           if (!guideComplete) {
                               const g = await API.getVoyageGuide(currentVoyage.id);
-                              if (g) guideComplete = true;
+                              if (g && isNewData(g, 'guide')) guideComplete = true;
                           }
 
                           // Check Stops
-                          // We iterate backwards to remove completed ones
                           for (let i = pendingStops.length - 1; i >= 0; i--) {
                               const stop = pendingStops[i];
-                              const b = await API.getBriefing(stop.id);
-                              if (b) {
-                                  // Find button and update
-                                  // We can't easily query by ID unless we add ID to button, but we can rely on DOM order if stable
-                                  // Better: Find stop in currentStops to get index?
-                                  // For now, let's just mark the stop as done.
-                                  // To update UI, we re-render itinerary? That might be disruptive.
-                                  // Let's just find the button row.
-                                  // Implementation Detail: In renderItinerary, we didn't add IDs to buttons.
-                                  // We can assume renderItinerary hasn't changed structure.
-                                  pendingStops.splice(i, 1);
+                              try {
+                                  const b = await API.getBriefing(stop.id);
+                                  if (b && isNewData(b, 'stop', stop.id)) {
+                                      // 1. Mark as done in our list
+                                      pendingStops.splice(i, 1);
+
+                                      // 2. Update the specific button UI immediately
+                                      const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
+                                      if (btn) {
+                                          btn.innerHTML = '<span class="material-symbols-outlined" style="color: var(--brand-green);">check_circle</span>';
+                                          btn.disabled = false;
+                                          btn.title = "View Briefing";
+                                          btn.classList.remove('spin'); 
+                                      }
+                                  }
+                              } catch (e) {
+                                  // Ignore 404 or network blips, keep polling
                               }
                           }
 
@@ -243,24 +272,22 @@ function initUI() {
                               btnResearchAll.innerHTML = originalContent;
                               btnResearchAll.disabled = false;
                               
-                              // Re-render to show normal buttons (microscopes) or maybe checkmarks?
-                              // Simple approach: re-render itinerary to reset buttons to interactive state
-                              renderItinerary(); 
-                              renderMapStops();
+                              renderMapStops(); // Refresh map with new data markers
                               
                               showNotification('Research Complete', 'All research tasks have been completed successfully.');
                           }
 
                       } catch (err) {
-                          console.error("Polling error", err);
+                          console.error("Polling cycle error", err);
                       }
-                  }, 4000); // Poll every 4 seconds
+                  }, 5000); // Poll every 5 seconds (slightly slower to be nice)
 
               } catch (err) {
                   console.error(err);
                   btnResearchAll.innerHTML = originalContent;
                   btnResearchAll.disabled = false;
                   // Revert spinners
+                  const researchBtns = document.querySelectorAll('.day-actions .research');
                   researchBtns.forEach(btn => {
                      btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
                      btn.disabled = false;
@@ -728,7 +755,7 @@ function renderItinerary() {
         if (stop) {
             html += `
                 <div class="day-actions">
-                    <button class="btn-icon research" title="Research">
+                    <button class="btn-icon research" title="Research" data-stop-id="${stop.id}">
                         <span class="material-symbols-outlined">science</span>
                     </button>
                     <button class="btn-icon delete-stop" title="Delete Stop">

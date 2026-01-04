@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
+	"sync"
 
 	"app/models"
 
@@ -231,20 +231,37 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	})
 
 	go func() {
-		// logger := log.New(os.Stderr)
 		log.SetPrefix("research-coordinator")
 
-		// 1. Research Voyage Guide
-		log.Infof("Starting guide research for voyage %d", voyageID)
-		h.performGuideResearch(voyage)
+		var wg sync.WaitGroup
+		// Semaphore to limit concurrency (e.g., 5 concurrent agent requests)
+		sem := make(chan struct{}, 5)
 
-		// 2. Research each stop
+		// 1. Research Voyage Guide (Parallel)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}        // Acquire token
+			defer func() { <-sem }() // Release token
+
+			log.Infof("Starting guide research for voyage %d", voyageID)
+			h.performGuideResearch(voyage)
+		}()
+
+		// 2. Research each stop (Parallel)
 		for _, stop := range stops {
-			// We can throttle this if needed, but for now let's just launch them
-			// Maybe a small delay to not overwhelm the agent service if it's rate limited
-			log.Infof("Starting stop research for stop %d", stop.ID)
-			h.performStopResearch(&stop)
-			time.Sleep(500 * time.Millisecond)
+			wg.Add(1)
+			go func(s models.Stop) {
+				defer wg.Done()
+				sem <- struct{}{}        // Acquire token
+				defer func() { <-sem }() // Release token
+
+				log.Infof("Starting stop research for stop %d", s.ID)
+				h.performStopResearch(&s)
+			}(stop)
 		}
+
+		wg.Wait()
+		log.Infof("Full research complete for voyage %d", voyageID)
 	}()
 }
