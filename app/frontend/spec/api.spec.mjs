@@ -33,7 +33,7 @@ describe('API Service', () => {
 
     const voyages = await API.getVoyages();
     
-    expect(window.fetch).toHaveBeenCalledWith('/api/v1/voyages', jasmine.any(Object));
+    expect(window.fetch).toHaveBeenCalledWith('/api/v1/voyages?page=1&limit=20', jasmine.any(Object));
     expect(voyages).toEqual(mockVoyages);
   });
 });

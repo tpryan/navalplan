@@ -17,6 +17,12 @@ let map = null;
 let markers = [];
 let editingVoyageId = null;
 
+// Pagination
+let currentVoyagePage = 1;
+const VOYAGE_PAGE_LIMIT = 20;
+let currentStopPage = 1;
+const STOP_PAGE_LIMIT = 50;
+
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
@@ -578,7 +584,7 @@ async function loadVoyages() {
   listContainer.innerHTML = '<p class="loading-text">Loading voyages...</p>';
 
   try {
-    voyages = await API.getVoyages();
+    voyages = await API.getVoyages(currentVoyagePage, VOYAGE_PAGE_LIMIT);
     renderVoyageList();
   } catch (err) {
     console.error(err);
@@ -590,7 +596,7 @@ function renderVoyageList() {
   const listContainer = document.getElementById('voyage-list');
   listContainer.innerHTML = '';
 
-  if (!voyages || voyages.length === 0) {
+  if ((!voyages || voyages.length === 0) && currentVoyagePage === 1) {
     listContainer.innerHTML = '<p class="loading-text">No voyages yet. Plan your first trip!</p>';
     return;
   }
@@ -647,6 +653,43 @@ function renderVoyageList() {
 
     listContainer.appendChild(el);
   });
+
+  // Pagination Controls
+  const paginationControls = document.createElement('div');
+  paginationControls.className = 'flex justify-center align-center gap-md mt-md p-sm';
+  
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'btn secondary';
+  prevBtn.disabled = currentVoyagePage === 1;
+  prevBtn.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+  prevBtn.onclick = () => {
+      if (currentVoyagePage > 1) {
+          currentVoyagePage--;
+          loadVoyages();
+      }
+  };
+
+  const pageLabel = document.createElement('span');
+  pageLabel.className = 'text-gray font-sm';
+  pageLabel.textContent = `Page ${currentVoyagePage}`;
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'btn secondary';
+  // If we got fewer items than limit, we are likely on the last page
+  nextBtn.disabled = voyages.length < VOYAGE_PAGE_LIMIT;
+  nextBtn.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+  nextBtn.onclick = () => {
+      currentVoyagePage++;
+      loadVoyages();
+  };
+
+  paginationControls.appendChild(prevBtn);
+  paginationControls.appendChild(pageLabel);
+  paginationControls.appendChild(nextBtn);
+
+  if (voyages.length > 0 || currentVoyagePage > 1) {
+      listContainer.appendChild(paginationControls);
+  }
 }
 
 function openEditModal(voyage) {
@@ -701,9 +744,17 @@ async function selectVoyage(voyage) {
 
     updateItineraryHeader(voyage);
 
-    // Load Stops
+    // Reset pagination
+    currentStopPage = 1;
+    loadStops();
+}
+
+async function loadStops() {
+    const list = document.getElementById('itinerary-list');
+    list.innerHTML = '<div class="loading-state"><p>Loading stops...</p></div>';
+
     try {
-        currentStops = await API.getStops(voyage.id);
+        currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
         renderItinerary();
         renderMapStops();
 
@@ -711,17 +762,18 @@ async function selectVoyage(voyage) {
             if (currentStops.length > 0) {
                 const bounds = new mapboxgl.LngLatBounds();
                 currentStops.forEach(stop => bounds.extend([stop.longitude, stop.latitude]));
-                if (voyage.latitude != null && voyage.longitude != null) {
-                    bounds.extend([voyage.longitude, voyage.latitude]);
+                if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
+                    bounds.extend([currentVoyage.longitude, currentVoyage.latitude]);
                 }
                 map.fitBounds(bounds, { padding: 50, maxZoom: 12 });
-            } else if (voyage.latitude != null && voyage.longitude != null) {
-                map.flyTo({ center: [voyage.longitude, voyage.latitude], zoom: 9 });
+            } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
+                map.flyTo({ center: [currentVoyage.longitude, currentVoyage.latitude], zoom: 9 });
             }
         }
     } catch (err) {
         console.error(err);
         alert('Failed to load stops');
+        list.innerHTML = '<div class="error-state"><p>Failed to load stops.</p></div>';
     }
 }
 
@@ -793,6 +845,42 @@ function renderItinerary() {
         list.appendChild(el);
         
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    // Pagination Controls
+    const paginationControls = document.createElement('div');
+    paginationControls.className = 'flex justify-center align-center gap-md mt-md p-sm';
+    
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'btn secondary';
+    prevBtn.disabled = currentStopPage === 1;
+    prevBtn.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+    prevBtn.onclick = () => {
+        if (currentStopPage > 1) {
+            currentStopPage--;
+            loadStops();
+        }
+    };
+
+    const pageLabel = document.createElement('span');
+    pageLabel.className = 'text-gray font-sm';
+    pageLabel.textContent = `Stops Page ${currentStopPage}`;
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'btn secondary';
+    nextBtn.disabled = currentStops.length < STOP_PAGE_LIMIT;
+    nextBtn.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+    nextBtn.onclick = () => {
+        currentStopPage++;
+        loadStops();
+    };
+
+    paginationControls.appendChild(prevBtn);
+    paginationControls.appendChild(pageLabel);
+    paginationControls.appendChild(nextBtn);
+
+    if (currentStops.length > 0 || currentStopPage > 1) {
+        list.appendChild(paginationControls);
     }
 }
 

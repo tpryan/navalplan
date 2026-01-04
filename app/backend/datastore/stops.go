@@ -10,7 +10,7 @@ func (db *DB) ListStops(ctx context.Context, voyageID int64, limit, offset int) 
 	stops := []models.Stop{}
 	// Explicit columns to avoid over-fetching
 	query := `
-		SELECT id, voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes, created_at, updated_at
+		SELECT id, voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes, created_at
 		FROM stop 
 		WHERE voyage_id = $1 
 		ORDER BY target_date ASC`

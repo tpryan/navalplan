@@ -29,8 +29,8 @@ export const API = {
     return res.json();
   },
 
-  async getVoyages() {
-    const res = await apiFetch(`${API_BASE}/voyages`);
+  async getVoyages(page = 1, limit = 20) {
+    const res = await apiFetch(`${API_BASE}/voyages?page=${page}&limit=${limit}`);
     if (!res.ok) throw new Error('Failed to load voyages');
     return res.json();
   },
@@ -82,12 +82,11 @@ export const API = {
 		return res.json();
 	},
 
-	async getStops(voyageId) {
-    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`);
-    if (!res.ok) throw new Error('Failed to load stops');
-    return res.json();
-  },
-
+	  async getStops(voyageId, page = 1, limit = 50) {
+	    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops?page=${page}&limit=${limit}`);
+	    if (!res.ok) throw new Error('Failed to load stops');
+	    return res.json();
+	  },
   async createStop(voyageId, stop) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`, {
       method: 'POST',

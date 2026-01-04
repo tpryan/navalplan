@@ -11,7 +11,7 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 	var voyages []models.Voyage
 	// Explicit selection for performance (Issue #5)
 	query := `
-		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, share_token, is_public, created_at, updated_at
+		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, share_token, is_public, created_at
 		FROM voyage 
 		WHERE person_id = $1 
 		ORDER BY start_date DESC`
