@@ -7,6 +7,17 @@ import { checkSession } from './auth.js';
 // Configuration
 const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
 
+// Helper: Escape HTML to prevent XSS
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // State
 let voyages = [];
 let currentVoyage = null;
@@ -569,9 +580,9 @@ function renderVoyageList() {
     el.className = 'voyage-item';
     el.innerHTML = `
       <div class="voyage-info">
-        <h3>${voyage.title}</h3>
+        <h3>${escapeHTML(voyage.title)}</h3>
         <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
-        ${voyage.location_name ? '<p class="font-sm text-gray">📍 ' + voyage.location_name + '</p>' : ''}
+        ${voyage.location_name ? '<p class="font-sm text-gray">📍 ' + escapeHTML(voyage.location_name) + '</p>' : ''}
       </div>
       <div class="voyage-actions">
         <button class="btn-icon edit" title="Edit">
@@ -709,7 +720,7 @@ function renderItinerary() {
         let html = `
             <div class="day-info flex-1">
                 <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
-                <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+                <span class="day-location ${stop ? 'set' : ''}">${stop ? escapeHTML(stop.location_name) : 'No destination'}</span>
             </div>
         `;
         
@@ -1239,6 +1250,16 @@ function selectDate(dateStr) {
 function initMap() {
   if (!MAPBOX_TOKEN) {
     console.error('Mapbox token is missing. Please set NAVALPLAN_MB_TOKEN environment variable during build.');
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer) {
+        mapContainer.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full text-center p-xl">
+                <span class="material-symbols-outlined icon-xl text-gray mb-md">map</span>
+                <h2 class="text-dark">Map Configuration Missing</h2>
+                <p class="text-gray max-w-sm">The Mapbox access token is not set. Please configure <code>NAVALPLAN_MB_TOKEN</code> in your environment and rebuild the application.</p>
+            </div>
+        `;
+    }
     return;
   }
 
@@ -1781,7 +1802,7 @@ async function captureAndUploadMap(voyageId) {
         
         // 2. Build HTML
         let html = `
-            <h1 class="report-title">${currentVoyage.title}</h1>
+            <h1 class="report-title">${escapeHTML(currentVoyage.title)}</h1>
             <p class="report-dates">
                 ${new Date(currentVoyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(currentVoyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
             </p>
@@ -1820,8 +1841,8 @@ async function captureAndUploadMap(voyageId) {
                     <div class="overview-date">
                         ${dateStr}
                     </div>
-                    <div class="overview-location" title="${stop.location_name}">
-                        ${stop.location_name}
+                    <div class="overview-location" title="${escapeHTML(stop.location_name)}">
+                        ${escapeHTML(stop.location_name)}
                     </div>
                     
                     <div class="overview-weather">
@@ -1966,7 +1987,7 @@ async function captureAndUploadMap(voyageId) {
             const b = briefings[idx];
             html += `
                 <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${stop.location_name}</h2>
+                    <h2 class="report-day-header">Day ${idx + 1}: ${escapeHTML(stop.location_name)}</h2>
                     <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
             

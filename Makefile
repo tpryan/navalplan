@@ -40,6 +40,10 @@ clean-static:
 # 4. BUILD-JS: Installs deps and runs Vite Build
 build-js: clean-static
 	@echo "Building Frontend..."
+	@if [ -z "$$NAVALPLAN_MB_TOKEN" ]; then \
+		echo "Error: NAVALPLAN_MB_TOKEN is not set. Please set it in your environment or .env file."; \
+		exit 1; \
+	fi
 	cd app/frontend && npm install
 	cd app/frontend && npm run build
 
