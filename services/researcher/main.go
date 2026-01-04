@@ -98,28 +98,26 @@ func main() {
 			Your Goal: Produce a comprehensive JSON briefing for a sailing destination.
 
 			RESTRICTIONS:
-			- Do NOT provide conversational updates (e.g., "I am researching...").
+			- Do NOT provide conversational updates.
 			- Do NOT output the JSON structure until you have successfully called the tools and received data.
-			- Do NOT output "Please wait" messages. The user is an API client, not a human chatting.
 
-			EXECUTION PLAN (You MUST execute these tools first):
-			1. WEATHER: Call the 'get_weather_forecast' tool to get precise forecast data for the specific location and date.
-			2. TIDES: Call the 'get_tides' tool to get official NOAA tide predictions for the location and date.
-			3. SUNRISE: Call the 'get_sunrise_sunset' tool to get sunrise and sunset times for the location and date.
-			4. FACILITIES: Call the 'search_specialist' tool to find:
-			   - "Anchorages near [Location] details coordinates"
-			   - "Marina contact info [Location] coordinates"
-			   - "Sailor friendly bars and restaurants near [Location] with dinghy access or near marinas"
+			DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
+			1. Call 'get_weather_forecast' for the location and date.
+			2. Call 'get_tides' for the location and date.
+			3. Call 'get_sunrise_sunset' for the location and date.
+			4. Call 'search_specialist' multiple times (or once with a combined query) for:
+			   - "Anchorages near [Location] details protection holding"
+			   - "Marina contact info [Location] vhf phone"
+			   - "Dinghy accessible bars and restaurants near [Location] waterfront"
 
 			OUTPUT:
-			Combine all findings into this JSON structure. Ensure "details" is always an object with descriptive keys, not a string.
-			Try to find latitude and longitude for facilities if available.
+			Combine all findings into this JSON structure. 
 			
 			CRITICAL RULES:
-			1. For 'tides.events': You MUST include ALL events returned by the 'get_tides' tool, including those from the previous and next days. The frontend needs the full 48-hour dataset for graphing. DO NOT filter the list.
-			2. For 'tides.station_name': Use the EXACT station_name returned by the 'get_tides' tool. DO NOT substitute it with a more general or famous location.
-			3. For 'weather_summary': Synthesize a readable sentence for the summary (e.g., "Expect clear skies with moderate westerly winds...").
-			4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water (dinghy dock) or immediately adjacent to a marina/anchorage.
+			1. For 'tides.events': Include ALL events returned.
+			2. For 'tides.station_name': Use the EXACT station_name from the tool.
+			3. For 'weather_summary': Synthesize a readable sentence.
+			4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water.
 			
 			{
 				"location_name": "Resolved Name",
@@ -138,10 +136,9 @@ func main() {
 					"sunset": "..."
 				},
 				"tides": {
-					"station_name": "COPY_EXACT_STATION_NAME_FROM_TOOL_OUTPUT",
+					"station_name": "...",
 					"events": [
-						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5},
-						{"time": "2025-05-01 12:45", "type": "Low", "height_ft": 1.2}
+						{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5}
 					]
 				},
 				"facilities": [
@@ -155,15 +152,13 @@ func main() {
 							"protection": "...",
 							"vhf": "..."
 						},
-						"references": ["https://...", "https://..."]
+						"references": ["https://..."]
 					}
 				],
 				"sources": [...]
 			}
 
 			Important: Always try to find a relevant URL for facilities. Always provide reference links. 
-
-			Please also return a list of sources where you got the information. Please make sure they are valid and still active urls. Use them to populate urls for the content in the json. 
 		`,
 		Tools: []tool.Tool{
 			weatherTool,
@@ -186,6 +181,17 @@ func main() {
 		Instruction: `
 			You are a Local Knowledge Expert and Sailing Guide.
 			Task: Research the general sailing region for the location.
+			
+			DATA GATHERING (Execute multiple searches in PARALLEL):
+			Call 'google_search' for:
+			- "Sailing season months hurricane season [Location]"
+			- "Sailing hazards coral reefs currents [Location]"
+			- "Major sailing hubs marinas [Location]"
+			- "Yacht charter companies [Location]"
+			- "Nearest airports to [Location]"
+			- "Currency language emergency numbers [Location]"
+			- "Top sailing points of interest [Location]"
+
 			Output: Produce a JSON object strictly following this schema:
 			{
 			  "summary": "A 2-3 sentence overview of sailing in this region.",
@@ -197,52 +203,38 @@ func main() {
 				"references" : ["https://...", "https://..."]
 			  },
 			  "hazards": [
-				{ "title": "Coral Heads", "description": "Numerous uncharted coral heads inside the reef.", "url": "http...", "references" : ["https://...", "https://..."]  },
-				{ "title": "Christmas Winds", "description": "Strong trade winds (25-30kt) common in Dec/Jan.", "url": null, "references" : ["https://...", "https://..."] }
+				{ "title": "...", "description": "...", "url": "...", "references" : [...] }
 			  ],
 			  "hubs": [
-				{ "name": "Road Town", "description": "Major provisioning and charter hub.", "url": "http...", "references" : ["https://...", "https://..."] }
+				{ "name": "...", "description": "...", "url": "...", "references" : [...] }
 			  ],
 			  "charter_info": {
 				 "is_charter_destination": true,
 				 "companies": [
-					 { "name": "Moorings", "url": "https://...", "references" : ["https://...", "https://..."]},
-					 { "name": "Dream Yacht", "url": "https://...", "references" : ["https://...", "https://..."]}
+					 { "name": "...", "url": "...", "references" : [...]}
 				 ]
 			  },
 			  "airports": [
-			     { "name": "Terrance B. Lettsome International Airport", "iata_code": "EIS", "type": "International", "distance_km": 15, "references": ["https://..."] }
+			     { "name": "...", "iata_code": "...", "type": "...", "distance_km": 0, "references": [...] }
 			  ],
 			  "country_info": {
-			     "name": "British Virgin Islands",
-			     "languages": ["English"],
-			     "timezone": "AST (UTC-4)",
-			     "emergency_numbers": { "Police": "999", "Medical": "999" }
+			     "name": "...",
+			     "languages": ["..."],
+			     "timezone": "...",
+			     "emergency_numbers": { "Police": "..." }
 			  },
 			  "currencies": [
-			     { "name": "United States Dollar", "code": "USD", "symbol": "$" }
+			     { "name": "...", "code": "...", "symbol": "..." }
 			  ],
 			  "points_of_interest": [
-			     { "name": "The Baths", "description": "Famous beach area on Virgin Gorda...", "references": ["https://..."] }
+			     { "name": "...", "description": "...", "references": [...] }
 			  ]
 			}
-
-			Tools: Use Google Search to answer these specific questions:
-			1. "Sailing season months for [Location]"
-			2. "Hurricane season [Location]"
-			3. "Sailing hazards and anomalies [Location]"
-			4. "Major marinas and sailing hubs [Location]"
-			5. "Yacht charter companies [Location]"
-			6. "Nearest airports to [Location] for sailing"
-			7. "Currency and language in [Location]"
-			8. "Must-visit sailing points of interest [Location]"
 			
-			Important: Always try to find a relevant URL for hazards, hubs, charter companies, and points of interest. Always provide reference links. 
-
-			Please also return a list of sources where you got the information. Please make sure they are valid and still active urls. Use them to populate urls for the content in the json.  
+			Important: Always provide reference links for every section.
 		`,
 		Tools: []tool.Tool{
-			agenttool.New(searchAgent, nil),
+			geminitool.GoogleSearch{},
 		},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{onBeforeTool},
 		AfterToolCallbacks:  []llmagent.AfterToolCallback{onAfterTool},
@@ -251,7 +243,7 @@ func main() {
 		clog.Fatalf("Failed to create guide agent: %v", err)
 	}
 
-	// 5. Launch the Server
+	// 4. Launch the Server
 	loader, err := agent.NewMultiLoader(researchAgent, guideAgent)
 	if err != nil {
 		clog.Fatalf("Failed to create multi loader: %v", err)
