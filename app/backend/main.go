@@ -22,9 +22,11 @@ import (
 func main() {
 	log.SetPrefix("main")
 	// Load .env file (try current dir, then project root)
-	// We ignore errors because it's okay if one of them is missing, as long as we get the config we need.
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../../.env")
+	err1 := godotenv.Load(".env")
+	err2 := godotenv.Load("../../.env")
+	if err1 != nil && err2 != nil {
+		log.Info("No .env file found, relying on environment variables")
+	}
 
 	contentDir := flag.String("content", "./static.min", "Path to static content to serve")
 	flag.Parse()
