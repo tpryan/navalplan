@@ -10,10 +10,22 @@ DB_USER=navalplan_user
 DB_PASS=navalplan_pass
 DB_PORT=5433
 
+# Migrations
+MIGRATE_IMAGE=migrate/migrate
+MIGRATE_PATH=app/db/migrations
+DB_URL=postgres://$(DB_USER):$(DB_PASS)@localhost:$(DB_PORT)/$(DB_NAME)?sslmode=disable
+
+# Production DB Config
+PROD_INSTANCE=wakelogdb
+PROD_DB_NAME=navalplan
+STORAGE_BUCKET=navalplan-logging-bucket
+# PROD_DB_USER and PROD_DB_PASS should be set in your environment
+# for the migrate-prod target.
+
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev
+.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs
 
 # --- Development ---
 
@@ -80,7 +92,7 @@ db-start:
 		postgres:15-alpine || echo "Container likely already running"
 	@echo "Waiting for DB to accept connections..."
 	@sleep 3
-	@make db-schema
+	@make migrate-up
 	@make db-seed
 
 db-stop:
@@ -89,18 +101,76 @@ db-stop:
 	@podman rm $(DB_CONTAINER_NAME) || true
 
 db-reset: db-stop db-start
-	@echo "Database has been reset and schema applied."
+	@echo "Database has been reset and migrations applied."
 
 db-schema:
-	@echo "Applying schema..."
+	@echo "Applying schema (DEPRECATED: use migrate-up)..."
 	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/schema.sql
 
 db-seed:
 	@echo "Seeding database..."
-	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/user.sql
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/seed.sql
 
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
+
+# --- Migrations ---
+
+migrate-create:
+	@echo "Creating a new migration..."
+	@read -p "Migration name: " name; \
+	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z $(MIGRATE_IMAGE) create -ext sql -dir /migrations -seq $$name
+
+migrate-up:
+	@echo "Applying migrations..."
+	@podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) -path=/migrations/ -database "$(DB_URL)" up
+
+migrate-down:
+	@echo "Rolling back migrations..."
+	@podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) -path=/migrations/ -database "$(DB_URL)" down 1
+
+migrate-version:
+	@podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) -path=/migrations/ -database "$(DB_URL)" version
+
+migrate-force:
+	@read -p "Force version: " version; \
+	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) -path=/migrations/ -database "$(DB_URL)" force $$version
+
+migrate-prod:
+	@echo "Applying migrations to PRODUCTION ($(PROD_INSTANCE)) via Cloud SQL Auth Proxy..."
+	@if [ -z "$(PROD_DB_USER)" ] || [ -z "$(PROD_DB_PASS)" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set."; \
+		exit 1; \
+	fi
+	@echo -n "Are you sure you want to migrate PRODUCTION? [y/N] "; \
+	read ans; \
+	if [ "$$ans" != "y" ]; then \
+		echo "Aborting."; \
+		exit 1; \
+	fi
+	@# Start proxy in background (using port 5434 to avoid conflict with local DB)
+	@gcloud sql auth-proxy --port 5434 $(PROD_INSTANCE) > /dev/null 2>&1 & PID=$$!; \
+	echo "Waiting for Cloud SQL Auth Proxy (PID: $$PID)..."; \
+	sleep 5; \
+	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) \
+		-path=/migrations/ \
+		-database "postgres://$(PROD_DB_USER):$(PROD_DB_PASS)@localhost:5434/$(PROD_DB_NAME)?sslmode=disable" up; \
+	status=$$?; \
+	kill $$PID; \
+	exit $$status
+
+migrate-prod-version:
+	@echo "Checking PRODUCTION schema version..."
+	@if [ -z "$(PROD_DB_USER)" ] || [ -z "$(PROD_DB_PASS)" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set."; \
+		exit 1; \
+	fi
+	@gcloud sql auth-proxy --port 5434 $(PROD_INSTANCE) > /dev/null 2>&1 & PID=$$!; \
+	sleep 5; \
+	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) \
+		-path=/migrations/ \
+		-database "postgres://$(PROD_DB_USER):$(PROD_DB_PASS)@localhost:5434/$(PROD_DB_NAME)?sslmode=disable" version; \
+	kill $$PID
 
 # --- Testing ---
 
@@ -140,22 +210,36 @@ deploy-backend:
 
 # --- Cloud SQL ---
 
-db-publish-prod:
-	@echo "WARNING: This will DROP and RE-CREATE all tables in the PRODUCTION database 'navalplan' on instance 'wakelogdb'."
-	@echo "Target Instance: wakelogdb"
-	@echo "Target Database: navalplan"
-	@echo -n "Are you sure? [y/N] "; \
+migrate-prod-gcs:
+	@read -p "Enter migration version to apply (e.g., 000001): " version; \
+	FILE=$(ls $(MIGRATE_PATH)/${version}_*.up.sql 2>/dev/null); \
+	if [ -z "$FILE" ]; then \
+		echo "Error: Migration version $version not found in $(MIGRATE_PATH)"; \
+		exit 1; \
+	fi; \
+	FILENAME=$(basename $FILE); \
+	echo "Applying $FILENAME to PRODUCTION via GCS..."; \
+	gsutil cp $FILE gs://$(STORAGE_BUCKET)/$FILENAME; \
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$FILENAME --database=$(PROD_DB_NAME) -q; \
+	gsutil rm gs://$(STORAGE_BUCKET)/$FILENAME
+
+deploy-sql:
+	@echo "Deploying SQL to PRODUCTION ($(PROD_INSTANCE)) via GCS Import..."
+	@echo -n "Are you SURE? This is destructive. [y/N] "; \
 	read ans; \
-	if [ "$$ans" != "y" ]; then \
+	if [ "$ans" != "y" ]; then \
 		echo "Aborting."; \
 		exit 1; \
 	fi
-	@echo "Uploading schema to GCS..."
-	gsutil cp app/db/pg-shortkey.sql gs://navalplan-logging-bucket/tmp/pg-shortkey.sql
-	gsutil cp app/db/schema.sql gs://navalplan-logging-bucket/tmp/schema.sql
-	@echo "Importing pg-shortkey.sql into Cloud SQL..."
-	gcloud sql import sql wakelogdb gs://navalplan-logging-bucket/tmp/pg-shortkey.sql --database=navalplan --quiet
-	@echo "Importing schema.sql into Cloud SQL..."
-	gcloud sql import sql wakelogdb gs://navalplan-logging-bucket/tmp/schema.sql --database=navalplan --quiet
-	@echo "Cleaning up GCS bucket..."
-	gsutil rm gs://navalplan-logging-bucket/tmp/pg-shortkey.sql gs://navalplan-logging-bucket/tmp/schema.sql
+	gsutil cp app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
+	gsutil cp app/db/schema.sql gs://$(STORAGE_BUCKET)/
+	gsutil cp app/db/seed.sql gs://$(STORAGE_BUCKET)/
+	
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/pg-shortkey.sql --database=$(PROD_DB_NAME) -q
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/schema.sql --database=$(PROD_DB_NAME) -q
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/seed.sql --database=$(PROD_DB_NAME) -q
+	
+	gsutil rm gs://$(STORAGE_BUCKET)/pg-shortkey.sql
+	gsutil rm gs://$(STORAGE_BUCKET)/schema.sql
+	gsutil rm gs://$(STORAGE_BUCKET)/seed.sql
+db-publish-prod: deploy-sql
