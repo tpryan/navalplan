@@ -12,7 +12,7 @@ type Person struct {
 	GoogleID   string    `json:"google_id" db:"google_id"`
 	Email      string    `json:"email" db:"email"`
 	Name       string    `json:"name" db:"name"`
-	PictureURL string    `json:"picture_url" db:"picture_url"`
+	PictureURL *string   `json:"picture_url" db:"picture_url"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }
 
@@ -82,6 +82,29 @@ type VoyageGuide struct {
 	Currencies       RawJSON   `json:"currencies" db:"currencies"`
 	PointsOfInterest RawJSON   `json:"points_of_interest" db:"points_of_interest"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
+}
+
+// SailingRegion represents a geographic area known for sailing.
+type SailingRegion struct {
+	ID        int64     `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	Geometry  RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon
+	Type      string    `json:"type" db:"type"`         // e.g. "Coastal", "Island Group"
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// RegionSeasonality stores monthly suitability intelligence for a sailing region.
+type RegionSeasonality struct {
+	ID                int64     `json:"id" db:"id"`
+	RegionID          int64     `json:"region_id" db:"region_id"`
+	Month             int       `json:"month" db:"month"` // 1-12
+	SuitabilityScore  int       `json:"suitability_score" db:"suitability_score"`
+	IsHiddenGem       bool      `json:"is_hidden_gem" db:"is_hidden_gem"`
+	Summary           string    `json:"summary" db:"summary"`
+	DeepCutReasoning  string    `json:"deep_cut_reasoning" db:"deep_cut_reasoning"`
+	AvgWindSpeedKnots int       `json:"avg_wind_speed_knots" db:"avg_wind_speed_knots"`
+	AvgTempC          int       `json:"avg_temp_c" db:"avg_temp_c"`
+	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 }
 
 // RawJSON is a helper for JSONB columns

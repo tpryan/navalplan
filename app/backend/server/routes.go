@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,8 @@ type route struct {
 
 // Register registers multiple routes on the server's multiplexer.
 func (s *Server) Register(r ...route) {
-	for _, route := range r {
+	fmt.Println("Registering routes...")
+	for i, route := range r {
 		var finalHandler http.Handler = route.Handler
 
 		// Apply Auth Middleware based on level
@@ -30,8 +32,11 @@ func (s *Server) Register(r ...route) {
 		finalHandler = s.staticCache(s.secureHeaders(finalHandler))
 
 		// Apply gzip at the outermost level
-		s.Mux.Handle(route.Verb+" "+route.Path, s.gzipMiddleware(finalHandler))
+		pattern := route.Verb + " " + route.Path
+		fmt.Printf("[%d] Registering %s\n", i, pattern)
+		s.Mux.Handle(pattern, s.gzipMiddleware(finalHandler))
 	}
+	fmt.Println("All routes registered.")
 }
 
 func (s *Server) Routes(staticPath string) {
@@ -74,6 +79,10 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodDelete, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.DeleteStop), 1},
 		{http.MethodPost, "/api/v1/stops/{id}/research", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerResearch)), 1},
 		{http.MethodGet, "/api/v1/stops/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
+
+		// --- Discovery (The Commodore) ---
+		{http.MethodGet, "/api/v1/discovery/regions", http.HandlerFunc(s.Handler.GetDiscoveryRegions), 0}, // Public
+		{http.MethodPost, "/api/v1/discovery/mine", http.HandlerFunc(s.Handler.DiscoveryMining), 1},      // Protected
 
 		// --- Static Files Catch-All (Public) ---
 		{http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

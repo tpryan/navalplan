@@ -57,14 +57,32 @@ func New(db datastore.Store, docsService DocsService, contentDir string, agentUR
 func cleanJSON(s string) string {
 	s = strings.TrimSpace(s)
 
-	// Find the first '{' and the last '}'
-	start := strings.Index(s, "{")
-	end := strings.LastIndex(s, "}")
+	// Find the first valid start of a JSON ( { or [ )
+	startObj := strings.Index(s, "{")
+	startArr := strings.Index(s, "[")
+
+	start := -1
+	if startObj != -1 && (startArr == -1 || startObj < startArr) {
+		start = startObj
+	} else {
+		start = startArr
+	}
+
+	// Find the last valid end of a JSON ( } or ] )
+	endObj := strings.LastIndex(s, "}")
+	endArr := strings.LastIndex(s, "]")
+
+	end := -1
+	if endObj != -1 && (endArr == -1 || endObj > endArr) {
+		end = endObj
+	} else {
+		end = endArr
+	}
 
 	if start != -1 && end != -1 && end > start {
 		s = s[start : end+1]
 	} else {
-		// No JSON object found
+		// No JSON found
 		return ""
 	}
 

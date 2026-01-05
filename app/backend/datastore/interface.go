@@ -36,11 +36,17 @@ type Store interface {
 	// Person
 	FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error)
 	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
-	CreatePerson(ctx context.Context, googleID, email, name, pictureURL string) (*models.Person, error)
+	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
 
 	// Session
 	CreateSession(ctx context.Context, token string, personID int64, expiresAt time.Time) error
 	GetSession(ctx context.Context, token string) (*models.Session, error)
 	DeleteSession(ctx context.Context, token string) error
+
+	// Discovery
+	ListRegionsByMonth(ctx context.Context, month int) ([]models.SailingRegion, error)
+	GetRegionDetails(ctx context.Context, regionID int, month int) (*models.SailingRegion, *models.RegionSeasonality, error)
+	UpsertRegion(ctx context.Context, region *models.SailingRegion) error
+	UpsertSeasonality(ctx context.Context, seasonality *models.RegionSeasonality) error
 }

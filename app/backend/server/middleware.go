@@ -153,6 +153,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// 1. Get the session cookie
 		cookie, err := r.Cookie("navalplan_session")
 		if err != nil {
+			log.Warn("requireAuth: navalplan_session cookie not found", "error", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -161,22 +162,25 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		sessionToken := cookie.Value
 		session, err := s.DB.GetSession(r.Context(), sessionToken)
 		if err != nil {
-			// Log error if needed
+			log.Error("requireAuth: DB error getting session", "token", sessionToken, "error", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if session == nil {
+			log.Warn("requireAuth: Session not found or expired", "token", sessionToken)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// 3. Check Expiration (if not done in SQL query)
-		// The SQL query already checks expires_at > NOW(), but we can double check or rely on query.
-		// session.IsExpired() method does not exist on model yet, relying on SQL.
-
 		// 4. Get the Person
 		person, err := s.DB.GetPersonByID(r.Context(), session.PersonID)
 		if err != nil {
+			log.Error("requireAuth: Error getting person", "person_id", session.PersonID, "error", err)
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
+		if person == nil {
+			log.Warn("requireAuth: Person not found", "person_id", session.PersonID)
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}

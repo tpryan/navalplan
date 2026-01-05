@@ -32,6 +32,9 @@ var researcherAgentPrompt string
 //go:embed prompts/guide_agent.md
 var guideAgentPrompt string
 
+//go:embed prompts/discovery_agent.md
+var discoveryAgentPrompt string
+
 func main() {
 	// Configure charmbracelet/log
 	clog.SetOutput(os.Stdout)
@@ -71,8 +74,13 @@ func main() {
 		clog.Fatalf("Failed to create guide agent: %v", err)
 	}
 
+	discoveryAgent, err := CreateDiscoveryAgent(model)
+	if err != nil {
+		clog.Fatalf("Failed to create discovery agent: %v", err)
+	}
+
 	// 4. Launch the Server
-	loader, err := agent.NewMultiLoader(researchAgent, guideAgent)
+	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
 	if err != nil {
 		clog.Fatalf("Failed to create multi loader: %v", err)
 	}
@@ -169,6 +177,26 @@ func CreateGuideAgent(model model.LLM) (agent.Agent, error) {
 		Model:       model,
 		Description: "A Local Knowledge Expert and Sailing Guide.",
 		Instruction: guideAgentPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
+}
+
+func CreateDiscoveryAgent(model model.LLM) (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
+	}
+
+	return llmagent.New(llmagent.Config{
+		Name:        "discovery_agent",
+		Model:       model,
+		Description: "The Commodore - Global Seasonal Discovery Expert.",
+		Instruction: discoveryAgentPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},

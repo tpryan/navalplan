@@ -57,7 +57,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if person == nil {
-		person, err = s.DB.CreatePerson(r.Context(), gUser.ID, gUser.Email, gUser.Name, gUser.Picture)
+		person, err = s.DB.CreatePerson(r.Context(), gUser.ID, gUser.Email, gUser.Name, &gUser.Picture)
 		if err != nil {
 			log.Error("db create person", "error", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)

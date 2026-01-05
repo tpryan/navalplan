@@ -30,7 +30,7 @@ func (db *DB) GetPersonByID(ctx context.Context, id int64) (*models.Person, erro
 	return &person, nil
 }
 
-func (db *DB) CreatePerson(ctx context.Context, googleID, email, name, pictureURL string) (*models.Person, error) {
+func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error) {
 	query := `
 		INSERT INTO "person" (google_id, email, name, picture_url)
 		VALUES ($1, $2, $3, $4)
