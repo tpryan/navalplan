@@ -1,7 +1,11 @@
 const API_BASE = '/api/v1';
 
 async function apiFetch(url, options = {}, suppressAuthRedirect = false) {
-  const res = await fetch(url, options);
+  const headers = {
+    'X-Requested-With': 'XMLHttpRequest',
+    ...options.headers
+  };
+  const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
     if (!suppressAuthRedirect) {
         window.location.href = '/auth/google/login'; 

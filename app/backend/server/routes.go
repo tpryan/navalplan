@@ -22,7 +22,7 @@ func (s *Server) Register(r ...route) {
 		// Apply Auth Middleware based on level
 		switch route.AuthLevel {
 		case 1:
-			finalHandler = s.requireAuth(route.Handler)
+			finalHandler = s.requireAuth(s.enforceCSRF(route.Handler))
 		}
 
 		s.Mux.Handle(route.Verb+" "+route.Path, finalHandler)

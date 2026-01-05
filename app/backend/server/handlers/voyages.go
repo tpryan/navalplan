@@ -9,6 +9,8 @@ import (
 
 	appcontext "app/context"
 	"app/models"
+
+	"github.com/charmbracelet/log"
 )
 
 func generateToken() string {
@@ -45,7 +47,8 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 
 	token := generateToken()
 	if err := h.DB.UpdateVoyageSharing(r.Context(), id, &token, true); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to enable sharing", "voyage_id", id, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -81,7 +84,8 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.UpdateVoyageSharing(r.Context(), id, nil, false); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to disable sharing", "voyage_id", id, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -114,7 +118,8 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 
 	stops, err := h.DB.ListStops(r.Context(), v.ID, 0, 0)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to list public stops", "voyage_id", v.ID, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -142,7 +147,8 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 
 	voyages, err := h.DB.ListVoyages(r.Context(), person.ID, limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to list voyages", "person_id", person.ID, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -166,15 +172,26 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 
 	v.PersonID = person.ID
 
+	if v.SearchRadius < 0 {
+		http.Error(w, "Search radius cannot be negative", http.StatusBadRequest)
+		return
+	}
 	if v.SearchRadius == 0 {
 		v.SearchRadius = 60
 	}
-	if v.SearchRadiusUnit == "" {
+	switch v.SearchRadiusUnit {
+	case "nm", "km", "mi":
+		// ok
+	case "":
 		v.SearchRadiusUnit = "nm"
+	default:
+		http.Error(w, "Invalid search radius unit", http.StatusBadRequest)
+		return
 	}
 
 	if err := h.DB.CreateVoyage(r.Context(), &v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to create voyage", "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -248,7 +265,8 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	v.PersonID = person.ID // Ensure PersonID isn't changed/spoofed in body
 
 	if err := h.DB.UpdateVoyage(r.Context(), &v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to update voyage", "voyage_id", id, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -283,7 +301,8 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.DeleteVoyage(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("Failed to delete voyage", "voyage_id", id, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
