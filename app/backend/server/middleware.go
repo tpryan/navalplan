@@ -150,6 +150,16 @@ func (s *Server) enforceCSRF(next http.Handler) http.Handler {
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 0. Check System API Key (for Cloud Scheduler / Internal tasks)
+		if s.SystemAPIKey != "" {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "Bearer "+s.SystemAPIKey {
+				// Bypass session check
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		// 1. Get the session cookie
 		cookie, err := r.Cookie("navalplan_session")
 		if err != nil {

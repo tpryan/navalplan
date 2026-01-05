@@ -208,6 +208,23 @@ deploy-backend:
 		gcloud builds submit --config cloudbuild.yaml --substitutions=_AGENT_URL=$(AGENT_URL) .; \
 	fi
 
+deploy-scheduler:
+	@echo "Deploying Cloud Scheduler Job..."
+	@if [ -z "$(APP_URL)" ] || [ -z "$(SYSTEM_KEY)" ]; then \
+		echo "Error: APP_URL and SYSTEM_KEY must be set."; \
+		echo "Usage: make deploy-scheduler APP_URL=https://... SYSTEM_KEY=..."; \
+		exit 1; \
+	fi
+	gcloud scheduler jobs create http mine-monthly-content \
+		--schedule="0 0 1 * *" \
+		--uri="$(APP_URL)/api/v1/discovery/mine" \
+		--http-method=POST \
+		--headers="Authorization=Bearer $(SYSTEM_KEY),X-Requested-With=CloudScheduler" \
+		--location=$(REGION) \
+		--description="Triggers discovery mining for the current month" \
+		--quiet || \
+	echo "Job may already exist. Try updating it manually or ignore if intended."
+
 # --- Cloud SQL ---
 
 migrate-prod-gcs:

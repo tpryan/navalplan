@@ -17,4 +17,7 @@ type Config struct {
 
 	// External Services
 	NavalPlanAgentURL string
+
+	// System
+	SystemAPIKey string
 }

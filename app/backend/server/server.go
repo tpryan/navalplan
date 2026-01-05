@@ -23,6 +23,7 @@ type Server struct {
 	Env          string
 	BaseURL      string
 	Handler      *handlers.Handler
+	SystemAPIKey string
 }
 
 // New initializes a new Server with the provided database and configuration.
@@ -51,6 +52,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		Env:     cfg.Env,
 		BaseURL: cfg.BaseURL,
 		Handler: h,
+		SystemAPIKey: cfg.SystemAPIKey,
 		GoogleConfig: &oauth2.Config{
 			RedirectURL:  cfg.BaseURL + "/auth/google/callback",
 			ClientID:     cfg.GoogleClientID,

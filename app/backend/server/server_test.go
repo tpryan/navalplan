@@ -277,6 +277,26 @@ func TestAuthMiddleware(t *testing.T) {
 		
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
+
+	t.Run("System API Key", func(t *testing.T) {
+		// Set System Key
+		srv.SystemAPIKey = "test-system-key"
+
+		// Use DiscoveryMining endpoint as it doesn't require person context but requires auth
+		req := httptest.NewRequest("POST", "/api/v1/discovery/mine?month=1", nil)
+		req.Header.Set("Authorization", "Bearer test-system-key")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+		// Mock expected DB call? DiscoveryMining calls ListRegionsByMonth (if it was GET) but POST uses performDiscoveryMining which is async.
+		// Actually, DiscoveryMining (POST) does NOT call DB synchronously.
+		// But wait, if I used a different endpoint like /api/v1/person, it would fail due to missing person context.
+		// DiscoveryMining is perfect here.
+
+		w := httptest.NewRecorder()
+		srv.Mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusAccepted, w.Code)
+	})
 }
 
 func TestStaticAndSPARouting(t *testing.T) {

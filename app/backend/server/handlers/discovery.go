@@ -51,8 +51,8 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	monthStr := r.URL.Query().Get("month")
 	month, err := strconv.Atoi(monthStr)
 	if err != nil || month < 1 || month > 12 {
-		http.Error(w, "Invalid month", http.StatusBadRequest)
-		return
+		month = int(time.Now().Month())
+		log.Infof("Defaulting to current month: %d", month)
 	}
 
 	w.WriteHeader(http.StatusAccepted)

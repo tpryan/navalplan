@@ -141,6 +141,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		GoogleClientSecret: getEnv("NAVALPLAN_OA_SECRET"),
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
+		SystemAPIKey:       getEnv("NAVALPLAN_SYSTEM_KEY"),
 	}
 
 	logdsn := ObscureString(dsn, dbPass)
