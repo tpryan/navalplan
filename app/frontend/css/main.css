@@ -504,6 +504,11 @@
     color: white;
 }
 
+.badge-regional {
+    background-color: #ff9800; /* Orange */
+    color: white;
+}
+
 .badge-standard {
     background-color: #0077be; /* Blue */
     color: white;

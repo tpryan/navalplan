@@ -15,6 +15,7 @@ func (db *DB) ListRegionsByMonth(ctx context.Context, month int) ([]models.Regio
 			r.*,
 			s.suitability_score,
 			s.is_hidden_gem,
+			s.tier,
 			s.summary,
 			s.deep_cut_reasoning,
 			s.avg_wind_speed_knots,
@@ -88,16 +89,17 @@ func (db *DB) DeleteSeasonalityForMonth(ctx context.Context, month int) error {
 func (db *DB) UpsertSeasonality(ctx context.Context, s *models.RegionSeasonality) error {
 	query := `
 		INSERT INTO region_seasonality (
-			region_id, month, suitability_score, is_hidden_gem, summary, 
+			region_id, month, suitability_score, is_hidden_gem, tier, summary, 
 			deep_cut_reasoning, avg_wind_speed_knots, avg_temp_c
 		)
 		VALUES (
-			:region_id, :month, :suitability_score, :is_hidden_gem, :summary, 
+			:region_id, :month, :suitability_score, :is_hidden_gem, :tier, :summary, 
 			:deep_cut_reasoning, :avg_wind_speed_knots, :avg_temp_c
 		)
 		ON CONFLICT (region_id, month) DO UPDATE SET
 			suitability_score = EXCLUDED.suitability_score,
 			is_hidden_gem = EXCLUDED.is_hidden_gem,
+			tier = EXCLUDED.tier,
 			summary = EXCLUDED.summary,
 			deep_cut_reasoning = EXCLUDED.deep_cut_reasoning,
 			avg_wind_speed_knots = EXCLUDED.avg_wind_speed_knots,

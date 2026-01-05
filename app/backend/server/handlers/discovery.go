@@ -19,6 +19,7 @@ type DiscoveryRegionOutput struct {
 	Name              string          `json:"name"`
 	Type              string          `json:"type"`
 	IsHiddenGem       bool            `json:"is_hidden_gem"`
+	Tier              string          `json:"tier"` // "Standard", "Hidden Gem", "Regional Favorite"
 	SuitabilityScore  int             `json:"suitability_score"`
 	Summary           string          `json:"summary"`
 	DeepCutReasoning  string          `json:"deep_cut_reasoning"`
@@ -195,10 +196,23 @@ func (h *Handler) performDiscoveryMining(month int) {
 			Month:             month,
 			SuitabilityScore:  reg.SuitabilityScore,
 			IsHiddenGem:       reg.IsHiddenGem,
+			Tier:              reg.Tier,
 			Summary:           reg.Summary,
 			DeepCutReasoning:  reg.DeepCutReasoning,
 			AvgWindSpeedKnots: reg.AvgWindSpeedKnots,
 			AvgTempC:          reg.AvgTempC,
+		}
+
+		// Backward compatibility: If Tier is set, derive IsHiddenGem
+		if seasonality.Tier != "" {
+			seasonality.IsHiddenGem = (seasonality.Tier == "Hidden Gem")
+		} else {
+			// If Tier missing (old agent output?), derive Tier from IsHiddenGem
+			if seasonality.IsHiddenGem {
+				seasonality.Tier = "Hidden Gem"
+			} else {
+				seasonality.Tier = "Standard"
+			}
 		}
 
 		if err := h.DB.UpsertSeasonality(ctx, seasonality); err != nil {

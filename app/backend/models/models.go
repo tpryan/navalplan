@@ -100,6 +100,7 @@ type RegionSeasonality struct {
 	Month             int       `json:"month" db:"month"` // 1-12
 	SuitabilityScore  int       `json:"suitability_score" db:"suitability_score"`
 	IsHiddenGem       bool      `json:"is_hidden_gem" db:"is_hidden_gem"`
+	Tier              string    `json:"tier" db:"tier"`
 	Summary           string    `json:"summary" db:"summary"`
 	DeepCutReasoning  string    `json:"deep_cut_reasoning" db:"deep_cut_reasoning"`
 	AvgWindSpeedKnots int       `json:"avg_wind_speed_knots" db:"avg_wind_speed_knots"`
@@ -112,6 +113,7 @@ type RegionWithSeasonality struct {
 	SailingRegion
 	SuitabilityScore  int    `json:"suitability_score" db:"suitability_score"`
 	IsHiddenGem       bool   `json:"is_hidden_gem" db:"is_hidden_gem"`
+	Tier              string `json:"tier" db:"tier"`
 	Summary           string `json:"summary" db:"summary"`
 	DeepCutReasoning  string `json:"deep_cut_reasoning" db:"deep_cut_reasoning"`
 	AvgWindSpeedKnots int    `json:"avg_wind_speed_knots" db:"avg_wind_speed_knots"`
