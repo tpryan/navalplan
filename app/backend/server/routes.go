@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // route defines a single HTTP route with its verb, path, handler, and auth level.
@@ -25,7 +26,7 @@ func (s *Server) Register(r ...route) {
 			finalHandler = s.requireAuth(s.enforceCSRF(route.Handler))
 		}
 
-		s.Mux.Handle(route.Verb+" "+route.Path, finalHandler)
+		s.Mux.Handle(route.Verb+" "+route.Path, s.secureHeaders(finalHandler))
 	}
 }
 
@@ -36,7 +37,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("OK")) }), 0},
 		{http.MethodGet, "/auth/google/login", http.HandlerFunc(s.oauthGoogleLogin), 0},
 		{http.MethodGet, "/auth/google/callback", http.HandlerFunc(s.oauthGoogleCallback), 0},
-		{http.MethodGet, "/auth/logout", http.HandlerFunc(s.oauthLogout), 0},
+		{http.MethodPost, "/auth/logout", http.HandlerFunc(s.oauthLogout), 1},
 
 		// --- API Public ---
 		{http.MethodGet, "/api/v1/public/voyages/{token}", http.HandlerFunc(s.Handler.GetPublicVoyage), 0},
@@ -56,8 +57,8 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/export", http.HandlerFunc(s.Handler.ExportVoyage), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/share", http.HandlerFunc(s.Handler.EnableSharing), 1},
 		{http.MethodDelete, "/api/v1/voyages/{id}/share", http.HandlerFunc(s.Handler.DisableSharing), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/research_guide", http.HandlerFunc(s.Handler.TriggerGuideResearch), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/research", http.HandlerFunc(s.Handler.TriggerFullVoyageResearch), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/research_guide", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerGuideResearch)), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/research", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerFullVoyageResearch)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/guide", http.HandlerFunc(s.Handler.GetVoyageGuide), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/briefings", http.HandlerFunc(s.Handler.ListVoyageBriefings), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/guide/map_image", http.HandlerFunc(s.Handler.UploadVoyageMap), 1},
@@ -67,7 +68,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/stops", http.HandlerFunc(s.Handler.CreateStop), 1},
 		{http.MethodPut, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.UpdateStop), 1},
 		{http.MethodDelete, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.DeleteStop), 1},
-		{http.MethodPost, "/api/v1/stops/{id}/research", http.HandlerFunc(s.Handler.TriggerResearch), 1},
+		{http.MethodPost, "/api/v1/stops/{id}/research", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerResearch)), 1},
 		{http.MethodGet, "/api/v1/stops/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
 
 		// --- Static Files Catch-All (Public) ---

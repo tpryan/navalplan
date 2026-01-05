@@ -45,10 +45,22 @@ function updateUIForLogin(person) {
     const actions = document.createElement('div');
     actions.className = 'menu-actions';
 
-    const logoutLink = document.createElement('a');
-    logoutLink.href = '/auth/logout';
+    const logoutLink = document.createElement('button');
     logoutLink.className = 'btn-icon';
     logoutLink.title = 'Logout';
+    logoutLink.onclick = async (e) => {
+        e.preventDefault();
+        try {
+            // Using API fetch automatically adds CSRF header
+            // We use 'suppressAuthRedirect' = true to avoid infinite loops if already out
+            await API.logout(); 
+            window.location.href = '/'; 
+        } catch (err) {
+            console.error('Logout failed', err);
+            // Force reload anyway
+            window.location.href = '/';
+        }
+    };
 
     const logoutIcon = document.createElement('span');
     logoutIcon.className = 'material-symbols-outlined';

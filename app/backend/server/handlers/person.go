@@ -32,6 +32,11 @@ func (h *Handler) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Name) == 0 || len(req.Name) > 255 {
+		http.Error(w, "Name must be between 1 and 255 characters", http.StatusBadRequest)
+		return
+	}
+
 	if err := h.DB.UpdatePersonName(r.Context(), person.ID, req.Name); err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return

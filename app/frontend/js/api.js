@@ -159,5 +159,9 @@ export const API = {
     });
     if (!res.ok) throw new Error('Failed to export voyage');
     return res.json();
+  },
+
+  async logout() {
+    await apiFetch('/auth/logout', { method: 'POST' });
   }
 };
