@@ -18,7 +18,7 @@ DB_URL=postgres://$(DB_USER):$(DB_PASS)@localhost:$(DB_PORT)/$(DB_NAME)?sslmode=
 # Production DB Config
 PROD_INSTANCE=wakelogdb
 PROD_DB_NAME=navalplan
-STORAGE_BUCKET=navalplan-logging-bucket
+STORAGE_BUCKET=navallog-system
 # PROD_DB_USER and PROD_DB_PASS should be set in your environment
 # for the migrate-prod target.
 
@@ -247,16 +247,16 @@ deploy-scheduler:
 
 migrate-prod-gcs:
 	@read -p "Enter migration version to apply (e.g., 000001): " version; \
-	FILE=$(ls $(MIGRATE_PATH)/${version}_*.up.sql 2>/dev/null); \
-	if [ -z "$FILE" ]; then \
-		echo "Error: Migration version $version not found in $(MIGRATE_PATH)"; \
+	FILE=$$(ls $(MIGRATE_PATH)/$${version}_*.up.sql 2>/dev/null); \
+	if [ -z "$$FILE" ]; then \
+		echo "Error: Migration version $$version not found in $(MIGRATE_PATH)"; \
 		exit 1; \
 	fi; \
-	FILENAME=$(basename $FILE); \
-	echo "Applying $FILENAME to PRODUCTION via GCS..."; \
-	gsutil cp $FILE gs://$(STORAGE_BUCKET)/$FILENAME; \
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$FILENAME --database=$(PROD_DB_NAME) -q; \
-	gsutil rm gs://$(STORAGE_BUCKET)/$FILENAME
+	FILENAME=$$(basename $$FILE); \
+	echo "Applying $$FILENAME to PRODUCTION via GCS..."; \
+	gsutil cp $$FILE gs://$(STORAGE_BUCKET)/$$FILENAME; \
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$$FILENAME --database=$(PROD_DB_NAME) -q; \
+	gsutil rm gs://$(STORAGE_BUCKET)/$$FILENAME
 
 deploy-sql:
 	@echo "Deploying SQL to PRODUCTION ($(PROD_INSTANCE)) via GCS Import..."
