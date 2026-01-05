@@ -74,6 +74,24 @@ run-agent:
 
 # --- Combined Dev ---
 
+setup:
+	@echo "Setting up NavalPlan..."
+	@if [ ! -f .env ]; then \
+		echo "Creating .env from .env.example..."; \
+		cp .env.example .env; \
+		echo "WARNING: You must edit .env with your API keys (Google, Mapbox) before running!"; \
+	else \
+		echo ".env already exists. Skipping copy."; \
+	fi
+	@echo "Installing Go dependencies..."
+	@make deps
+	@echo "Installing Frontend dependencies..."
+	@cd app/frontend && npm install
+	@echo "Setup complete."
+	@echo "1. Edit .env"
+	@echo "2. Run 'make db-start' to start the database."
+	@echo "3. Run 'make dev' to start the application."
+
 dev: build-js
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
