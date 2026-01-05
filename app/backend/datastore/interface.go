@@ -49,4 +49,5 @@ type Store interface {
 	GetRegionDetails(ctx context.Context, regionID int, month int) (*models.SailingRegion, *models.RegionSeasonality, error)
 	UpsertRegion(ctx context.Context, region *models.SailingRegion) error
 	UpsertSeasonality(ctx context.Context, seasonality *models.RegionSeasonality) error
+	DeleteSeasonalityForMonth(ctx context.Context, month int) error
 }

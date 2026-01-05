@@ -73,6 +73,17 @@ func (db *DB) UpsertRegion(ctx context.Context, region *models.SailingRegion) er
 	return nil
 }
 
+// DeleteSeasonalityForMonth removes all seasonality entries for a specific month.
+// This is used to clear old data before re-mining.
+func (db *DB) DeleteSeasonalityForMonth(ctx context.Context, month int) error {
+	query := `DELETE FROM region_seasonality WHERE month = $1`
+	_, err := db.ExecContext(ctx, query, month)
+	if err != nil {
+		return fmt.Errorf("failed to delete seasonality for month %d: %w", month, err)
+	}
+	return nil
+}
+
 // UpsertSeasonality inserts or updates monthly seasonality data for a region.
 func (db *DB) UpsertSeasonality(ctx context.Context, s *models.RegionSeasonality) error {
 	query := `

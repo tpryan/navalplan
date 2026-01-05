@@ -155,6 +155,14 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 
 	ctx := context.Background()
+
+	// Clear old data for this month to ensure we replace it
+	if err := h.DB.DeleteSeasonalityForMonth(ctx, month); err != nil {
+		log.Errorf("[discovery-mining] Failed to clear old seasonality for month %d: %v", month, err)
+		// We proceed anyway, or should we return? Proceeding might result in mix of old and new if upsert doesn't cover everything.
+		// But UpsertSeasonality keys on (region_id, month), so effectively we just won't be deleting "stale" regions if we fail here.
+	}
+
 	for _, reg := range output {
 		region := &models.SailingRegion{
 			Name:     reg.Name,

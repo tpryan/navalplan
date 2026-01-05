@@ -204,6 +204,11 @@ func (m *MockStore) UpsertSeasonality(ctx context.Context, seasonality *models.R
 	return args.Error(0)
 }
 
+func (m *MockStore) DeleteSeasonalityForMonth(ctx context.Context, month int) error {
+	args := m.Called(month)
+	return args.Error(0)
+}
+
 var _ datastore.Store = (*MockStore)(nil)
 
 type MockDocsService struct {

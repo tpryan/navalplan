@@ -46,7 +46,7 @@ steps:
   - '--set-secrets=NAVALPLAN_DB_SOCKET=NAVALPLAN_DB_SOCKET:latest'
   - '--set-secrets=NAVALPLAN_OA_CLIENT=NAVALPLAN_OA_CLIENT:latest'
   - '--set-secrets=NAVALPLAN_OA_SECRET=NAVALPLAN_OA_SECRET:latest'
-  - '--set-env-vars=_NAVALPLAN_MB_STYLE=${_NAVALPLAN_MB_STYLE}'
+  - '--set-secrets=NAVALPLAN_SYSTEM_KEY=NAVALPLAN_SYSTEM_KEY:latest'
   - '--set-env-vars=NAVALPLAN_BASE_URL=${_NAVALPLAN_BASE_URL}'
   - '--set-env-vars=NAVALPLAN_PORT=${_NAVALPLAN_PORT}'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
