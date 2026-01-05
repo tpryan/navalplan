@@ -3140,9 +3140,9 @@ async function handleShareClick(guide) {
             if (chk.checked) {
                 const res = await API.enableSharing(currentVoyage.id);
                 currentVoyage.is_public = true;
-                currentVoyage.share_token = res.token;
+                currentVoyage.share_token = res.share_token;
                 
-                linkInput.value = `${window.location.origin}/shared/${res.token}`;
+                linkInput.value = `${window.location.origin}/shared/${res.share_token}`;
                 linkContainer.classList.remove('hidden');
             } else {
                 await API.disableSharing(currentVoyage.id);
