@@ -35,6 +35,21 @@ func TestCleanJSON(t *testing.T) {
 			input:    "   ```json   \n  {\"a\": 1}  \n  ```   ",
 			expected: `{"a": 1}`,
 		},
+		{
+			name:     "Truncated JSON",
+			input:    `[{"a": 1`,
+			expected: "",
+		},
+		{
+			name:     "Garbage after JSON",
+			input:    `{"a": 1} garbage`,
+			expected: `{"a": 1}`,
+		},
+		{
+			name:     "Garbage before JSON",
+			input:    `garbage {"a": 1}`,
+			expected: `{"a": 1}`,
+		},
 	}
 
 	for _, tt := range tests {

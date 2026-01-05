@@ -142,7 +142,7 @@ func (m *MockStore) GetPersonByID(ctx context.Context, id int64) (*models.Person
 	return args.Get(0).(*models.Person), args.Error(1)
 }
 
-func (m *MockStore) CreatePerson(ctx context.Context, googleID, email, name, pictureURL string) (*models.Person, error) {
+func (m *MockStore) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error) {
 	args := m.Called(googleID, email, name, pictureURL)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -170,6 +170,37 @@ func (m *MockStore) GetSession(ctx context.Context, token string) (*models.Sessi
 
 func (m *MockStore) DeleteSession(ctx context.Context, token string) error {
 	args := m.Called(token)
+	return args.Error(0)
+}
+
+func (m *MockStore) ListRegionsByMonth(ctx context.Context, month int) ([]models.RegionWithSeasonality, error) {
+	args := m.Called(month)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.RegionWithSeasonality), args.Error(1)
+}
+
+func (m *MockStore) GetRegionDetails(ctx context.Context, regionID int, month int) (*models.SailingRegion, *models.RegionSeasonality, error) {
+	args := m.Called(regionID, month)
+	var r *models.SailingRegion
+	var s *models.RegionSeasonality
+	if args.Get(0) != nil {
+		r = args.Get(0).(*models.SailingRegion)
+	}
+	if args.Get(1) != nil {
+		s = args.Get(1).(*models.RegionSeasonality)
+	}
+	return r, s, args.Error(2)
+}
+
+func (m *MockStore) UpsertRegion(ctx context.Context, region *models.SailingRegion) error {
+	args := m.Called(region)
+	return args.Error(0)
+}
+
+func (m *MockStore) UpsertSeasonality(ctx context.Context, seasonality *models.RegionSeasonality) error {
+	args := m.Called(seasonality)
 	return args.Error(0)
 }
 

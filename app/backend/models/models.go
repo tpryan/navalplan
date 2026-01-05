@@ -107,6 +107,17 @@ type RegionSeasonality struct {
 	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 }
 
+// RegionWithSeasonality combines region details with its monthly data.
+type RegionWithSeasonality struct {
+	SailingRegion
+	SuitabilityScore  int    `json:"suitability_score" db:"suitability_score"`
+	IsHiddenGem       bool   `json:"is_hidden_gem" db:"is_hidden_gem"`
+	Summary           string `json:"summary" db:"summary"`
+	DeepCutReasoning  string `json:"deep_cut_reasoning" db:"deep_cut_reasoning"`
+	AvgWindSpeedKnots int    `json:"avg_wind_speed_knots" db:"avg_wind_speed_knots"`
+	AvgTempC          int    `json:"avg_temp_c" db:"avg_temp_c"`
+}
+
 // RawJSON is a helper for JSONB columns
 type RawJSON []byte
 

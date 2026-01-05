@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"app/datastore"
 
@@ -38,10 +39,10 @@ func New(db datastore.Store, docsService DocsService, contentDir string, agentUR
 		client, err = idtoken.NewClient(context.Background(), agentURL)
 		if err != nil {
 			log.Errorf("Failed to create authenticated agent client: %v", err)
-			client = http.DefaultClient
+			client = &http.Client{Timeout: 300 * time.Second}
 		}
 	} else {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: 300 * time.Second}
 	}
 
 	return &Handler{

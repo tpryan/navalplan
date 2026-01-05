@@ -153,7 +153,6 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// 1. Get the session cookie
 		cookie, err := r.Cookie("navalplan_session")
 		if err != nil {
-			log.Warn("requireAuth: navalplan_session cookie not found", "error", err)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -162,12 +161,11 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		sessionToken := cookie.Value
 		session, err := s.DB.GetSession(r.Context(), sessionToken)
 		if err != nil {
-			log.Error("requireAuth: DB error getting session", "token", sessionToken, "error", err)
+			// Log error if needed
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if session == nil {
-			log.Warn("requireAuth: Session not found or expired", "token", sessionToken)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -175,12 +173,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// 4. Get the Person
 		person, err := s.DB.GetPersonByID(r.Context(), session.PersonID)
 		if err != nil {
-			log.Error("requireAuth: Error getting person", "person_id", session.PersonID, "error", err)
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}
 		if person == nil {
-			log.Warn("requireAuth: Person not found", "person_id", session.PersonID)
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}

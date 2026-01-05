@@ -149,8 +149,11 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
+	h.performGuideResearchLogic(voyage)
+}
 
-	log.SetPrefix("guide-agent")
+func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
+	log.Infof("[guide-agent] Starting research for voyage %d", voyage.ID)
 
 	agentURL := h.AgentURL
 	if agentURL == "" {

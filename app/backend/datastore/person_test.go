@@ -56,10 +56,10 @@ func TestCreatePerson(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow(1, time.Now())
 
 	mock.ExpectQuery(regexp.QuoteMeta(query)).
-		WithArgs(googleID, email, name, pic).
+		WithArgs(googleID, email, name, &pic).
 		WillReturnRows(rows)
 
-	person, err := db.CreatePerson(context.Background(), googleID, email, name, pic)
+	person, err := db.CreatePerson(context.Background(), googleID, email, name, &pic)
 	assert.NoError(t, err)
 	assert.NotNil(t, person)
 	assert.Equal(t, int64(1), person.ID)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -63,17 +64,15 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) performDiscoveryMining(month int) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Panic in performDiscoveryMining: %v", r)
+			log.Errorf("[discovery-mining] Panic: %v", r)
 		}
 	}()
-	log.SetPrefix("discovery-mining")
-	log.Infof("Starting mining for month %d", month)
+	log.Infof("[discovery-mining] Starting mining for month %d", month)
 
 	agentURL := h.AgentURL
 	if agentURL == "" {
 		agentURL = "http://127.0.0.1:8081"
 	}
-	log.Infof("Agent URL: %s", agentURL)
 
 	appName := "discovery_agent"
 	userID := "system"
@@ -81,19 +80,25 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	client := h.AgentClient
 
-	// 1. Create Session
+	// 1. Create Session with initial state
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	log.Infof("Creating agent session: %s", createSessionURL)
-	respSession, err := client.Post(createSessionURL, "application/json", nil)
+	log.Infof("[discovery-mining] Creating agent session: %s", createSessionURL)
+
+	monthName := time.Month(month).String()
+	state := map[string]any{
+		"Month": monthName,
+	}
+	stateJSON, _ := json.Marshal(map[string]any{"state": state})
+
+	respSession, err := client.Post(createSessionURL, "application/json", bytes.NewBuffer(stateJSON))
 	if err != nil {
-		log.Infof("Failed to create agent session: %v", err)
+		log.Infof("[discovery-mining] Failed to create agent session: %v", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
 
 	// 2. Run Agent
-	monthName := time.Month(month).String()
-	prompt := fmt.Sprintf("Identify top sailing destinations and deep cuts for the month of %s.", monthName)
+	prompt := fmt.Sprintf("Identify top sailing destinations and deep cuts for the month of %s. Return JSON only.", monthName)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
@@ -106,36 +111,46 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}{{Text: prompt}}
 
 	jsonData, _ := json.Marshal(reqBody)
+	log.Infof("[discovery-mining] Calling agent /api/run...")
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Infof("Failed to call discovery agent: %v", err)
+		log.Infof("[discovery-mining] Failed to call discovery agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	var events []AgentEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Infof("Failed to decode agent response: %v", err)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Infof("[discovery-mining] Failed to read agent response body: %v", err)
 		return
 	}
 
+	var events []AgentEvent
+	if err := json.Unmarshal(bodyBytes, &events); err != nil {
+		log.Infof("[discovery-mining] Failed to decode agent response: %v. Raw body: %s", err, string(bodyBytes))
+		return
+	}
+
+	// Find the model response
 	var responseText string
 	for _, e := range events {
 		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			responseText = e.Content.Parts[0].Text
+			responseText += e.Content.Parts[0].Text
 		}
 	}
 
 	if responseText == "" {
-		log.Infof("No response from discovery agent")
+		log.Infof("[discovery-mining] No response text found in events. Full event log: %+v", events)
 		return
 	}
 
-	responseText = cleanJSON(responseText)
+	log.Infof("[discovery-mining] Raw agent response: %s", responseText)
+
+	cleanedResponseText := cleanJSON(responseText)
 
 	var output []DiscoveryRegionOutput
-	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Infof("Failed to unmarshal discovery agent JSON: %v. Raw: %s", err, responseText)
+	if err := json.Unmarshal([]byte(cleanedResponseText), &output); err != nil {
+		log.Infof("[discovery-mining] Failed to unmarshal discovery agent JSON: %v. Cleaned: %s. Raw: %s", err, cleanedResponseText, responseText)
 		return
 	}
 
@@ -148,7 +163,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 		}
 
 		if err := h.DB.UpsertRegion(ctx, region); err != nil {
-			log.Errorf("Failed to upsert region %s: %v", reg.Name, err)
+			log.Errorf("[discovery-mining] Failed to upsert region %s: %v", reg.Name, err)
 			continue
 		}
 
@@ -164,9 +179,9 @@ func (h *Handler) performDiscoveryMining(month int) {
 		}
 
 		if err := h.DB.UpsertSeasonality(ctx, seasonality); err != nil {
-			log.Errorf("Failed to upsert seasonality for %s: %v", reg.Name, err)
+			log.Errorf("[discovery-mining] Failed to upsert seasonality for %s: %v", reg.Name, err)
 		}
 	}
 
-	log.Infof("Discovery mining complete for month %d. Processed %d regions.", month, len(output))
+	log.Infof("[discovery-mining] Discovery mining complete for month %d. Processed %d regions.", month, len(output))
 }

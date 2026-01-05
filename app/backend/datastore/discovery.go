@@ -8,10 +8,18 @@ import (
 )
 
 // ListRegionsByMonth returns all regions that have seasonality data for the given month.
-func (db *DB) ListRegionsByMonth(ctx context.Context, month int) ([]models.SailingRegion, error) {
-	var regions []models.SailingRegion
+func (db *DB) ListRegionsByMonth(ctx context.Context, month int) ([]models.RegionWithSeasonality, error) {
+	var regions []models.RegionWithSeasonality
 	query := `
-		SELECT r.* FROM sailing_regions r
+		SELECT 
+			r.*,
+			s.suitability_score,
+			s.is_hidden_gem,
+			s.summary,
+			s.deep_cut_reasoning,
+			s.avg_wind_speed_knots,
+			s.avg_temp_c
+		FROM sailing_regions r
 		JOIN region_seasonality s ON r.id = s.region_id
 		WHERE s.month = $1
 		ORDER BY r.name ASC`

@@ -91,7 +91,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 }
 
 func (h *Handler) performStopResearchLogic(stop *models.Stop) {
-	log.SetPrefix("researcher-agent")
+	log.Infof("[researcher-agent] Starting research for stop %d", stop.ID)
 
 	agentURL := h.AgentURL
 	if agentURL == "" {
@@ -261,7 +261,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	})
 
 	go func() {
-		log.SetPrefix("research-coordinator")
+		log.Infof("[research-coordinator] Starting full research for voyage %d", voyageID)
 
 		var wg sync.WaitGroup
 

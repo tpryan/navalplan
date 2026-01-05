@@ -433,3 +433,78 @@
 .tide-chart-container {
     height: 200px; width: 100%; position: relative;
 }
+
+/* --- Discovery (Commodore) Styles --- */
+#discovery-controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--surface-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-main);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    z-index: 100;
+    min-width: 350px;
+}
+
+.month-slider-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.month-slider-container label {
+    font-family: var(--font-primary);
+    font-weight: 900;
+    font-size: 1.1rem;
+    color: var(--brand-dark);
+}
+
+#month-slider {
+    width: 100%;
+    cursor: pointer;
+}
+
+#month-display {
+    color: var(--brand-medium);
+}
+
+.region-popup {
+    max-width: 250px;
+}
+
+.region-popup h3 {
+    margin: 0 0 0.5rem 0;
+    font-family: var(--font-primary);
+}
+
+.region-popup p {
+    font-size: 0.9rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-gem {
+    background-color: #9c27b0; /* Purple */
+    color: white;
+}
+
+.badge-standard {
+    background-color: #0077be; /* Blue */
+    color: white;
+}

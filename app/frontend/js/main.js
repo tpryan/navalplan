@@ -33,6 +33,8 @@ let selectedDate = null;
 let map = null;
 let markers = [];
 let editingVoyageId = null;
+let currentMode = 'planner'; // 'planner' or 'discovery'
+let discoveryRegions = [];
 
 // Pagination
 let currentVoyagePage = 1;
@@ -61,6 +63,30 @@ function initUI() {
   const btnBack = document.getElementById('btn-back-voyages');
   const btnExport = document.getElementById('btn-export-voyage');
   const btnEditVoyage = document.getElementById('btn-edit-voyage');
+  const btnDiscover = document.getElementById('btn-discover');
+  const btnCloseDiscovery = document.getElementById('btn-close-discovery');
+  const monthSlider = document.getElementById('month-slider');
+
+  // Discovery Toggle
+  if (btnDiscover) {
+      btnDiscover.addEventListener('click', () => toggleDiscoveryMode(true));
+  }
+  if (btnCloseDiscovery) {
+      btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
+  }
+
+  // Month Slider
+  if (monthSlider) {
+      monthSlider.addEventListener('input', (e) => {
+          const months = [
+              'January', 'February', 'March', 'April', 'May', 'June',
+              'July', 'August', 'September', 'October', 'November', 'December'
+          ];
+          const month = parseInt(e.target.value);
+          document.getElementById('month-display').textContent = months[month - 1];
+          loadDiscoveryRegions(month);
+      });
+  }
 
   // Mobile Menu Logic
   const appContainer = document.getElementById('app');
@@ -2667,4 +2693,185 @@ function showNotification(title, message) {
     } else {
         alert(`${title}\n\n${message}`);
     }
+}
+
+async function toggleDiscoveryMode(active) {
+    currentMode = active ? 'discovery' : 'planner';
+    const discoveryControls = document.getElementById('discovery-controls');
+    const sidebar = document.getElementById('sidebar');
+    
+    if (active) {
+        discoveryControls.classList.remove('hidden');
+        sidebar.classList.add('hidden');
+        const currentMonth = new Date().getMonth() + 1;
+        document.getElementById('month-slider').value = currentMonth;
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        document.getElementById('month-display').textContent = months[currentMonth - 1];
+        
+        clearMap(); // Clear existing markers/routes
+        loadDiscoveryRegions(currentMonth);
+        
+        // Zoom out to world view
+        if (map) map.flyTo({ center: [0, 20], zoom: 2 });
+    } else {
+        discoveryControls.classList.add('hidden');
+        sidebar.classList.remove('hidden');
+        
+        // Remove discovery layers
+        if (map) {
+            if (map.getLayer('discovery-fills')) map.removeLayer('discovery-fills');
+            if (map.getLayer('discovery-borders')) map.removeLayer('discovery-borders');
+            if (map.getSource('discovery')) map.removeSource('discovery');
+        }
+        
+        if (currentVoyage) {
+            selectVoyage(currentVoyage); // Restore voyage view
+        } else {
+            showVoyageList();
+        }
+    }
+}
+
+async function loadDiscoveryRegions(month) {
+    try {
+        discoveryRegions = await API.getDiscoveryRegions(month);
+        renderDiscoveryLayer();
+    } catch (err) {
+        console.error('Failed to load discovery regions:', err);
+    }
+}
+
+async function renderDiscoveryLayer() {
+    if (!map) return;
+    if (!discoveryRegions || !Array.isArray(discoveryRegions)) {
+        console.log('No discovery regions to render.');
+        return;
+    }
+
+    const geojson = {
+        type: 'FeatureCollection',
+        features: discoveryRegions.map(r => ({
+            type: 'Feature',
+            geometry: typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry,
+            properties: {
+                id: r.id,
+                name: r.name,
+                is_hidden_gem: r.is_hidden_gem,
+                summary: r.summary,
+                suitability_score: r.suitability_score
+            }
+        }))
+    };
+
+    if (map.getSource('discovery')) {
+        map.getSource('discovery').setData(geojson);
+    } else {
+        map.addSource('discovery', {
+            type: 'geojson',
+            data: geojson
+        });
+
+        map.addLayer({
+            id: 'discovery-fills',
+            type: 'fill',
+            source: 'discovery',
+            paint: {
+                'fill-color': [
+                    'case',
+                    ['get', 'is_hidden_gem'], '#9c27b0', // Purple for gems
+                    '#0077be' // Blue for standard
+                ],
+                'fill-opacity': 0.3
+            }
+        });
+
+        map.addLayer({
+            id: 'discovery-borders',
+            type: 'line',
+            source: 'discovery',
+            paint: {
+                'line-color': [
+                    'case',
+                    ['get', 'is_hidden_gem'], '#7b1fa2',
+                    '#005fa3'
+                ],
+                'line-width': 2
+            }
+        });
+
+        // Click handler
+        map.on('click', 'discovery-fills', (e) => {
+            const props = e.features[0].properties;
+            const month = document.getElementById('month-slider').value;
+            showRegionBriefing(props, month);
+        });
+
+        // Hover effect
+        map.on('mouseenter', 'discovery-fills', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'discovery-fills', () => {
+            map.getCanvas().style.cursor = '';
+        });
+    }
+}
+
+async function showRegionBriefing(props, month) {
+    const modal = document.getElementById('modal-region-briefing');
+    const title = document.getElementById('region-title');
+    const content = document.getElementById('region-briefing-content');
+    const overlay = document.getElementById('modal-overlay');
+
+    // For now, use the data we already have from the list
+    // In a full implementation, we might fetch detailed stats
+    const region = discoveryRegions.find(r => r.id === props.id);
+    
+    title.textContent = props.name;
+    
+    content.innerHTML = DOMPurify.sanitize(`
+        <div class="briefing-section">
+            <div class="flex justify-between align-center mb-md">
+                <span class="badge ${props.is_hidden_gem ? 'badge-gem' : 'badge-standard'}">
+                    ${props.is_hidden_gem ? 'Hidden Gem' : 'Standard Destination'}
+                </span>
+                <span class="font-sm text-gray">Suitability: <strong>${props.suitability_score}/100</strong></span>
+            </div>
+            
+            <p class="mb-lg"><strong>Summary:</strong> ${props.summary}</p>
+            
+            ${region && region.deep_cut_reasoning ? `
+                <div class="report-guide-bg p-md border-radius">
+                    <h4 class="mt-0">The Deep Cut Factor</h4>
+                    <p class="mb-0">${region.deep_cut_reasoning}</p>
+                </div>
+            ` : ''}
+
+            <div class="weather-box mt-lg">
+                <table class="briefing-table">
+                    <tr>
+                        <th class="briefing-th">Typical Wind</th>
+                        <td class="briefing-td">${region?.avg_wind_speed_knots || '??'} knots</td>
+                    </tr>
+                    <tr>
+                        <th class="briefing-th">Avg Temp</th>
+                        <td class="briefing-td">${region?.avg_temp_c || '??'}°C (${Math.round((region?.avg_temp_c || 0) * 9/5 + 32)}°F)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    `);
+
+    modal.classList.remove('hidden');
+    overlay.classList.remove('hidden');
+
+    const hide = () => {
+        modal.classList.add('hidden');
+        overlay.classList.add('hidden');
+    };
+
+    document.getElementById('btn-close-region-briefing').onclick = hide;
+    overlay.onclick = hide;
 }

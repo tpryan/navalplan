@@ -45,6 +45,10 @@
         
         <div class="sidebar-actions">
            <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
+           <button id="btn-discover" class="btn secondary">
+              <span class="material-symbols-outlined icon-align">explore</span>
+              Discover
+           </button>
         </div>
 
         <div id="voyage-list">
@@ -80,6 +84,15 @@
       </nav>
 
       <main id="map-container"></main>
+      <div id="discovery-controls" class="hidden">
+        <div class="month-slider-container">
+          <label for="month-slider">Month: <span id="month-display">January</span></label>
+          <input type="range" id="month-slider" min="1" max="12" value="1" />
+        </div>
+        <button id="btn-close-discovery" class="btn-icon" title="Close Discovery">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
     </div>
 
     <!-- Modals -->
@@ -148,6 +161,14 @@
         </div>
       </div>
       <div id="guide-content" class="briefing-body modal-content-scroll"></div>
+    </div>
+
+    <div id="modal-region-briefing" class="modal hidden modal-scrollable">
+      <div class="modal-header-row flex justify-between align-center">
+        <h2 id="region-title" class="m-0">Region Briefing</h2>
+        <button id="btn-close-region-briefing" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div id="region-briefing-content" class="briefing-body modal-content-scroll"></div>
     </div>
 
     <!-- Report Modal -->

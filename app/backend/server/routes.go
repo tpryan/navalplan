@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -18,8 +17,7 @@ type route struct {
 
 // Register registers multiple routes on the server's multiplexer.
 func (s *Server) Register(r ...route) {
-	fmt.Println("Registering routes...")
-	for i, route := range r {
+	for _, route := range r {
 		var finalHandler http.Handler = route.Handler
 
 		// Apply Auth Middleware based on level
@@ -32,11 +30,8 @@ func (s *Server) Register(r ...route) {
 		finalHandler = s.staticCache(s.secureHeaders(finalHandler))
 
 		// Apply gzip at the outermost level
-		pattern := route.Verb + " " + route.Path
-		fmt.Printf("[%d] Registering %s\n", i, pattern)
-		s.Mux.Handle(pattern, s.gzipMiddleware(finalHandler))
+		s.Mux.Handle(route.Verb+" "+route.Path, s.gzipMiddleware(finalHandler))
 	}
-	fmt.Println("All routes registered.")
 }
 
 func (s *Server) Routes(staticPath string) {
