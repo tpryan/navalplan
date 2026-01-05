@@ -1,5 +1,7 @@
 # NavalPlan
 
+![NavalPlan Screenshot](images/screenshot.png)
+
 NavalPlan is a web application for planning sailing voyages, researching stops, and discovering new destinations using AI agents.
 
 ## Prerequisites
@@ -69,6 +71,8 @@ Before you begin, ensure you have the following installed:
     ```
 
 ## Architecture
+
+![Architecture Diagram](images/architecture.jpg)
 
 *   **Backend**: Go (Standard Library + `chi`-style routing without the framework).
 *   **Frontend**: Vanilla JS / ES Modules (no framework) bundled with Vite.
