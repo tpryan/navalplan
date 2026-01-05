@@ -171,7 +171,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		log.Infof("Failed to create agent session: %v", err)
+		log.Errorf("Failed to create agent session: %v", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
@@ -197,20 +197,20 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Infof("Failed to call agent: %v", err)
+		log.Errorf("Failed to call agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Infof("Agent returned error: %s", body)
+		log.Errorf("Agent returned error: %s", body)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Infof("Failed to decode agent response: %v", err)
+		log.Errorf("Failed to decode agent response: %v", err)
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	}
 
 	if responseText == "" {
-		log.Info("No response from agent")
+		log.Error("No response from agent")
 		return
 	}
 
@@ -231,7 +231,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Infof("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	}
 
 	if err := h.DB.CreateVoyageGuide(ctx, guide); err != nil {
-		log.Infof("Failed to save voyage guide: %v", err)
+		log.Errorf("Failed to save voyage guide: %v", err)
 	}
 	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
 }

@@ -92,7 +92,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	respSession, err := client.Post(createSessionURL, "application/json", bytes.NewBuffer(stateJSON))
 	if err != nil {
-		log.Infof("[discovery-mining] Failed to create agent session: %v", err)
+		log.Errorf("[discovery-mining] Failed to create agent session: %v", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
@@ -114,20 +114,20 @@ func (h *Handler) performDiscoveryMining(month int) {
 	log.Infof("[discovery-mining] Calling agent /api/run...")
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Infof("[discovery-mining] Failed to call discovery agent: %v", err)
+		log.Errorf("[discovery-mining] Failed to call discovery agent: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Infof("[discovery-mining] Failed to read agent response body: %v", err)
+		log.Errorf("[discovery-mining] Failed to read agent response body: %v", err)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.Unmarshal(bodyBytes, &events); err != nil {
-		log.Infof("[discovery-mining] Failed to decode agent response: %v. Raw body: %s", err, string(bodyBytes))
+		log.Errorf("[discovery-mining] Failed to decode agent response: %v. Raw body: %s", err, string(bodyBytes))
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 
 	if responseText == "" {
-		log.Infof("[discovery-mining] No response text found in events. Full event log: %+v", events)
+		log.Errorf("[discovery-mining] No response text found in events. Full event log: %+v", events)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	var output []DiscoveryRegionOutput
 	if err := json.Unmarshal([]byte(cleanedResponseText), &output); err != nil {
-		log.Infof("[discovery-mining] Failed to unmarshal discovery agent JSON: %v. Cleaned: %s. Raw: %s", err, cleanedResponseText, responseText)
+		log.Errorf("[discovery-mining] Failed to unmarshal discovery agent JSON: %v. Cleaned: %s. Raw: %s", err, cleanedResponseText, responseText)
 		return
 	}
 
