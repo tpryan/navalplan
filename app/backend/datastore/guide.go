@@ -45,3 +45,22 @@ func (db *DB) CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide) erro
 	// If no rows returned, it might mean no update/insert happened, which shouldn't happen with RETURNING
 	return nil
 }
+
+// SaveVoyageMap saves or updates the map snapshot for a voyage.
+func (db *DB) SaveVoyageMap(ctx context.Context, voyageID int64, data []byte) error {
+	query := `
+		INSERT INTO voyage_map (voyage_id, image_data, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (voyage_id) DO UPDATE
+		SET image_data = EXCLUDED.image_data, created_at = NOW()`
+	_, err := db.ExecContext(ctx, query, voyageID, data)
+	return err
+}
+
+// GetVoyageMap retrieves the map snapshot for a voyage.
+func (db *DB) GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, error) {
+	var data []byte
+	query := `SELECT image_data FROM voyage_map WHERE voyage_id = $1`
+	err := db.GetContext(ctx, &data, query, voyageID)
+	return data, err
+}

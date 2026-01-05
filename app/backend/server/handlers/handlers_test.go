@@ -126,6 +126,19 @@ func (m *MockStore) CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide
 	return args.Error(0)
 }
 
+func (m *MockStore) SaveVoyageMap(ctx context.Context, voyageID int64, data []byte) error {
+	args := m.Called(voyageID, data)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 func (m *MockStore) FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error) {
 	args := m.Called(googleID)
 	if args.Get(0) == nil {
@@ -643,6 +656,7 @@ func TestGuideHandlers(t *testing.T) {
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 		
 		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{ID: 1, Summary: "Found"}, nil)
+		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
 
 		req := httptest.NewRequest("GET", "/voyages/1/guide", nil)
 		req = addPerson(req, personID)
@@ -654,6 +668,7 @@ func TestGuideHandlers(t *testing.T) {
 		json.NewDecoder(w.Body).Decode(&resp)
 		assert.NotNil(t, resp.VoyageGuide)
 		assert.Equal(t, "Found", resp.Summary)
+		assert.Contains(t, resp.MapURL, "/api/v1/voyages/1/map_image")
 	})
 
 	t.Run("GetVoyageGuide_NotFound", func(t *testing.T) {
@@ -662,6 +677,7 @@ func TestGuideHandlers(t *testing.T) {
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 		
 		mockStore.On("GetVoyageGuide", voyageID).Return(nil, assert.AnError)
+		mockStore.On("GetVoyageMap", voyageID).Return(nil, assert.AnError)
 
 		req := httptest.NewRequest("GET", "/voyages/999/guide", nil)
 		req = addPerson(req, personID)

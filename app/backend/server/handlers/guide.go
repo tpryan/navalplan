@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -83,34 +81,68 @@ func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure maps directory exists
-	mapsDir := filepath.Join(h.ContentDir, "maps")
-	if err := os.MkdirAll(mapsDir, 0755); err != nil {
-		log.Errorf("Failed to create maps directory: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Save file
-	filename := fmt.Sprintf("voyage_%d.png", voyageID)
-	dstPath := filepath.Join(mapsDir, filename)
-
-	dst, err := os.Create(dstPath)
+	data, err := io.ReadAll(file)
 	if err != nil {
-		log.Errorf("Failed to create map file: %v", err)
+		log.Errorf("Failed to read image data: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
-		log.Errorf("Failed to save map file: %v", err)
+	if err := h.DB.SaveVoyageMap(r.Context(), voyageID, data); err != nil {
+		log.Errorf("Failed to save map image to DB: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": "/maps/" + filename})
+	// Return the new URL (cache busted with timestamp)
+	url := fmt.Sprintf("/api/v1/voyages/%d/map_image?t=%d", voyageID, time.Now().Unix())
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": url})
+}
+
+func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	voyageID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// Auth Check: Public OR Owner
+	isAuthorized := false
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+
+	if voyage.IsPublic {
+		isAuthorized = true
+	} else {
+		// Manual Session Check since this route is Public (Level 0)
+		cookie, err := r.Cookie("navalplan_session")
+		if err == nil {
+			session, _ := h.DB.GetSession(r.Context(), cookie.Value)
+			if session != nil && session.PersonID == voyage.PersonID {
+				isAuthorized = true
+			}
+		}
+	}
+
+	if !isAuthorized {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
+		return
+	}
+
+	data, err := h.DB.GetVoyageMap(r.Context(), voyageID)
+	if err != nil || len(data) == 0 {
+		http.Error(w, "Image not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Write(data)
 }
 
 func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
@@ -290,12 +322,10 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	// We don't error out immediately if guide is not found,
 	// because we might still have a map image.
 
-	// Check for map image
+	// Check for map image in DB
 	var mapURL string
-	mapFilename := fmt.Sprintf("voyage_%d.png", voyageID)
-	mapPath := filepath.Join(h.ContentDir, "maps", mapFilename)
-	if _, statErr := os.Stat(mapPath); statErr == nil {
-		mapURL = "/maps/" + mapFilename
+	if mapData, _ := h.DB.GetVoyageMap(r.Context(), voyageID); len(mapData) > 0 {
+		mapURL = fmt.Sprintf("/api/v1/voyages/%d/map_image", voyageID)
 	}
 
 	// If we have neither a guide nor a map, then it's a 404
@@ -322,6 +352,14 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+type PublicVoyageReport struct {
+	Voyage    *models.Voyage      `json:"voyage"`
+	Guide     *models.VoyageGuide `json:"guide"`
+	Stops     []models.Stop       `json:"stops"`
+	Briefings []models.Briefing   `json:"briefings"`
+	MapURL    string              `json:"map_url,omitempty"`
+}
+
 func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
@@ -337,23 +375,29 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch Guide
 	guide, err := h.DB.GetVoyageGuide(r.Context(), voyage.ID)
-	// We don't error out immediately if guide is not found,
-	// because we might still have a map image.
+	// We don't error out immediately if guide is not found
 
-	// Check for map image
-	var mapURL string
-	mapFilename := fmt.Sprintf("voyage_%d.png", voyage.ID)
-	mapPath := filepath.Join(h.ContentDir, "maps", mapFilename)
-	if _, statErr := os.Stat(mapPath); statErr == nil {
-		mapURL = "/maps/" + mapFilename
+	// Fetch Stops
+	stops, err := h.DB.ListStops(r.Context(), voyage.ID, 0, 0)
+	if err != nil {
+		log.Errorf("Failed to list stops for public voyage %d: %v", voyage.ID, err)
+		// Continue? Or fail? Let's continue with empty stops
+		stops = []models.Stop{}
 	}
 
-	// If we have neither a guide nor a map, then it's a 404
-	if err != nil && mapURL == "" {
-		log.Warnf("Voyage guide not found for public voyage %d: %v", voyage.ID, err)
-		http.Error(w, "Voyage guide not found", http.StatusNotFound)
-		return
+	// Fetch Briefings
+	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyage.ID)
+	if err != nil {
+		log.Errorf("Failed to list briefings for public voyage %d: %v", voyage.ID, err)
+		briefings = []models.Briefing{}
+	}
+
+	// Check for map image in DB
+	var mapURL string
+	if mapData, _ := h.DB.GetVoyageMap(r.Context(), voyage.ID); len(mapData) > 0 {
+		mapURL = fmt.Sprintf("/api/v1/voyages/%d/map_image", voyage.ID)
 	}
 
 	if guide == nil {
@@ -362,9 +406,12 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := VoyageGuideResponse{
-		VoyageGuide: guide,
-		MapURL:      mapURL,
+	resp := PublicVoyageReport{
+		Voyage:    voyage,
+		Guide:     guide,
+		Stops:     stops,
+		Briefings: briefings,
+		MapURL:    mapURL,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

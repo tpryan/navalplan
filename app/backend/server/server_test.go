@@ -118,6 +118,19 @@ func (m *MockStore) CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide
 	return args.Error(0)
 }
 
+func (m *MockStore) SaveVoyageMap(ctx context.Context, voyageID int64, data []byte) error {
+	args := m.Called(voyageID, data)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 func (m *MockStore) FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error) {
 	args := m.Called(googleID)
 	if args.Get(0) == nil {

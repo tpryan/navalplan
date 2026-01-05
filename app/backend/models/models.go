@@ -84,6 +84,13 @@ type VoyageGuide struct {
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
 
+// VoyageMap stores the static map snapshot for a voyage.
+type VoyageMap struct {
+	VoyageID  int64     `json:"voyage_id" db:"voyage_id"`
+	ImageData []byte    `json:"-" db:"image_data"` // Don't expose raw bytes in JSON default
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
 // SailingRegion represents a geographic area known for sailing.
 type SailingRegion struct {
 	ID        int64     `json:"id" db:"id"`

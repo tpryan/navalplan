@@ -32,6 +32,8 @@ type Store interface {
 	// Voyage Guide
 	GetVoyageGuide(ctx context.Context, voyageID int64) (*models.VoyageGuide, error)
 	CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide) error
+	SaveVoyageMap(ctx context.Context, voyageID int64, data []byte) error
+	GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, error)
 
 	// Person
 	FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error)
