@@ -605,7 +605,11 @@ async function loadVoyages() {
     renderVoyageList();
   } catch (err) {
     console.error(err);
-    listContainer.innerHTML = '<p class="loading-text error">Failed to load voyages.</p>';
+    if (err.message === 'Unauthorized') {
+        listContainer.innerHTML = '<p class="loading-text">Login to view and plan your voyages.</p>';
+    } else {
+        listContainer.innerHTML = '<p class="loading-text error">Failed to load voyages.</p>';
+    }
   }
 }
 

@@ -1,15 +1,12 @@
 const API_BASE = '/api/v1';
 
-async function apiFetch(url, options = {}, suppressAuthRedirect = false) {
+async function apiFetch(url, options = {}) {
   const headers = {
     'X-Requested-With': 'XMLHttpRequest',
     ...options.headers
   };
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
-    if (!suppressAuthRedirect) {
-        window.location.href = '/auth/google/login'; 
-    }
     throw new Error('Unauthorized');
   }
   return res;
@@ -17,8 +14,7 @@ async function apiFetch(url, options = {}, suppressAuthRedirect = false) {
 
 export const API = {
   async getPerson() {
-    // Suppress redirect so checkSession can handle UI state
-    const res = await apiFetch(`${API_BASE}/person`, {}, true);
+    const res = await apiFetch(`${API_BASE}/person`);
     if (!res.ok) throw new Error('Failed to load person');
     return res.json();
   },

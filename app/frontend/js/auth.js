@@ -22,12 +22,14 @@ function updateUIForLogin(person) {
     const container = document.getElementById('auth-container');
     const sidebar = document.getElementById('sidebar');
     const mapContainer = document.getElementById('map-container');
+    const btnNewVoyage = document.getElementById('btn-new-voyage');
 
     if (!container) return;
 
     // Show App Content
     if (sidebar) sidebar.classList.remove('hidden');
     if (mapContainer) mapContainer.classList.remove('hidden');
+    if (btnNewVoyage) btnNewVoyage.classList.remove('hidden');
 
     // Reset Container Style (remove modal class)
     container.className = ''; 
@@ -79,22 +81,20 @@ function updateUIForLogout() {
     const container = document.getElementById('auth-container');
     const sidebar = document.getElementById('sidebar');
     const mapContainer = document.getElementById('map-container');
+    const btnNewVoyage = document.getElementById('btn-new-voyage');
     
     if (!container) return;
 
-    // Hide App Content
-    if (sidebar) sidebar.classList.add('hidden');
-    if (mapContainer) mapContainer.classList.add('hidden');
+    // Show App Content (allow exploration without login)
+    if (sidebar) sidebar.classList.remove('hidden');
+    if (mapContainer) mapContainer.classList.remove('hidden');
+    if (btnNewVoyage) btnNewVoyage.classList.add('hidden');
 
-    // Show Full Screen Modal
-    container.className = 'full-screen-modal';
+    // Show simple floating login button
+    container.className = ''; 
     container.innerHTML = `
-        <div class="login-box">
-            <h1>NavalPlan</h1>
-            <p>Plan your next voyage with ease.</p>
-            <a href="/auth/google/login" class="btn primary login-btn-full">
-                Login with Google
-            </a>
-        </div>
+        <a href="/auth/google/login" id="btn-login-floating" class="btn primary">
+            Login
+        </a>
     `;
 }
