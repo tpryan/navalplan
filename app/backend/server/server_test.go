@@ -288,7 +288,7 @@ func TestAuthMiddleware(t *testing.T) {
 		srv.SystemAPIKey = "test-system-key"
 
 		// Use DiscoveryMining endpoint as it doesn't require person context but requires auth
-		req := httptest.NewRequest("POST", "/api/v1/discovery/mine?month=1", nil)
+		req := httptest.NewRequest("POST", "/api/v1/discovery/mine?month=all", nil)
 		req.Header.Set("Authorization", "Bearer test-system-key")
 		req.Header.Set("X-Requested-With", "XMLHttpRequest")
 

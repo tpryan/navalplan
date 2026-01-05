@@ -46,9 +46,24 @@ func (h *Handler) GetDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
-	log.Infof("DiscoveryMining request received for month %s", r.URL.Query().Get("month"))
-	// This should ideally be protected or internal
 	monthStr := r.URL.Query().Get("month")
+	log.Infof("DiscoveryMining request received for month %s", monthStr)
+
+	if monthStr == "all" {
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprintf(w, "Discovery mining started for all months")
+
+		go func() {
+			log.Info("[discovery-mining] Starting full year mining cycle...")
+			for m := 1; m <= 12; m++ {
+				h.performDiscoveryMining(m)
+			}
+			log.Info("[discovery-mining] Full year mining cycle complete.")
+		}()
+		return
+	}
+
+	// This should ideally be protected or internal
 	month, err := strconv.Atoi(monthStr)
 	if err != nil || month < 1 || month > 12 {
 		month = int(time.Now().Month())

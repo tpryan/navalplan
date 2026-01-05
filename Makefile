@@ -235,11 +235,11 @@ deploy-scheduler:
 	fi
 	gcloud scheduler jobs create http mine-monthly-content \
 		--schedule="0 0 1 * *" \
-		--uri="$(APP_URL)/api/v1/discovery/mine" \
+		--uri="$(APP_URL)/api/v1/discovery/mine?month=all" \
 		--http-method=POST \
 		--headers="Authorization=Bearer $(SYSTEM_KEY),X-Requested-With=CloudScheduler" \
 		--location=$(REGION) \
-		--description="Triggers discovery mining for the current month" \
+		--description="Triggers discovery mining for all months" \
 		--quiet || \
 	echo "Job may already exist. Try updating it manually or ignore if intended."
 
