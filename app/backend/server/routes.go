@@ -46,6 +46,7 @@ func (s *Server) Routes(staticPath string) {
 		// --- API Public ---
 		{http.MethodGet, "/api/v1/public/voyages/{token}", http.HandlerFunc(s.Handler.GetPublicVoyage), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/stops", http.HandlerFunc(s.Handler.GetPublicStops), 0},
+		{http.MethodGet, "/api/v1/public/voyages/{token}/guide", http.HandlerFunc(s.Handler.GetPublicVoyageGuide), 0},
 
 		// --- API Protected (Level 1) ---
 		// Person
@@ -65,7 +66,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/research", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerFullVoyageResearch)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/guide", http.HandlerFunc(s.Handler.GetVoyageGuide), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/briefings", http.HandlerFunc(s.Handler.ListVoyageBriefings), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/guide/map_image", http.HandlerFunc(s.Handler.UploadVoyageMap), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/guide/snapshot", http.HandlerFunc(s.Handler.UploadVoyageSnapshot), 1},
 
 		// Stops
 		{http.MethodGet, "/api/v1/voyages/{id}/stops", http.HandlerFunc(s.Handler.ListStops), 1},

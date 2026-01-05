@@ -31,7 +31,7 @@ type GuideAgentOutput struct {
 	PointsOfInterest json.RawMessage `json:"points_of_interest"`
 }
 
-func (h *Handler) UploadVoyageMap(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -310,6 +310,55 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	if guide == nil {
 		guide = &models.VoyageGuide{
 			VoyageID: voyageID,
+		}
+	}
+
+	resp := VoyageGuideResponse{
+		VoyageGuide: guide,
+		MapURL:      mapURL,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		http.Error(w, "Token required", http.StatusBadRequest)
+		return
+	}
+
+	// Find Public Voyage
+	voyage, err := h.DB.GetVoyageByToken(r.Context(), token)
+	if err != nil {
+		// This likely means not found or not public
+		http.Error(w, "Voyage not found or not public", http.StatusNotFound)
+		return
+	}
+
+	guide, err := h.DB.GetVoyageGuide(r.Context(), voyage.ID)
+	// We don't error out immediately if guide is not found,
+	// because we might still have a map image.
+
+	// Check for map image
+	var mapURL string
+	mapFilename := fmt.Sprintf("voyage_%d.png", voyage.ID)
+	mapPath := filepath.Join(h.ContentDir, "maps", mapFilename)
+	if _, statErr := os.Stat(mapPath); statErr == nil {
+		mapURL = "/maps/" + mapFilename
+	}
+
+	// If we have neither a guide nor a map, then it's a 404
+	if err != nil && mapURL == "" {
+		log.Warnf("Voyage guide not found for public voyage %d: %v", voyage.ID, err)
+		http.Error(w, "Voyage guide not found", http.StatusNotFound)
+		return
+	}
+
+	if guide == nil {
+		guide = &models.VoyageGuide{
+			VoyageID: voyage.ID,
 		}
 	}
 

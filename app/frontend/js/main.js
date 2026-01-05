@@ -48,6 +48,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   console.log('NavalPlan: Initializing...');
+  
+  // Shared/Public View Handler
+  if (window.location.pathname.startsWith('/shared/')) {
+      const token = window.location.pathname.replace('/shared/', '');
+      if (token) {
+          initSharedMode(token);
+          return;
+      }
+  }
+
   checkSession();
   initMap();
   initUI();
@@ -2495,6 +2505,62 @@ function showVoyageGuide(guide) {
     const btnRedo = document.getElementById('btn-redo-guide');
     const modalOverlay = document.getElementById('modal-overlay');
 
+    // Inject Share/Snapshot controls if not present
+    const headerControls = modal.querySelector('.modal-header-row .flex.gap-sm');
+    if (!document.getElementById('btn-share-guide')) {
+        const btnSnapshot = document.createElement('button');
+        btnSnapshot.id = 'btn-snapshot-guide';
+        btnSnapshot.className = 'btn secondary p-xs font-sm';
+        btnSnapshot.title = 'Update Map Snapshot';
+        btnSnapshot.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">camera_alt</span>';
+        btnSnapshot.onclick = async () => {
+             btnSnapshot.disabled = true;
+             const icon = btnSnapshot.querySelector('span');
+             icon.classList.add('spin');
+             icon.textContent = 'sync';
+             
+             // We need to briefly hide the modal to capture the map if it's behind
+             modal.classList.add('hidden');
+             modalOverlay.classList.add('hidden');
+             
+             // Small delay to allow render
+             await new Promise(r => setTimeout(r, 200));
+
+             const success = await captureAndUploadMap(guide.voyage_id);
+             
+             modal.classList.remove('hidden');
+             modalOverlay.classList.remove('hidden');
+             
+             icon.classList.remove('spin');
+             icon.textContent = 'camera_alt';
+             btnSnapshot.disabled = false;
+             
+             if (success) {
+                 showNotification('Snapshot Saved', 'The map view has been updated for the public report.');
+                 // Refresh image in modal if present
+                 const img = document.querySelector('#guide-content .report-map-img');
+                 if (img) {
+                     // Cache bust
+                     const src = img.src.split('?')[0];
+                     img.src = `${src}?t=${Date.now()}`;
+                 }
+             } else {
+                 alert('Failed to capture map. Ensure the map is visible.');
+             }
+        };
+        headerControls.insertBefore(btnSnapshot, headerControls.firstChild);
+
+        const btnShare = document.createElement('button');
+        btnShare.id = 'btn-share-guide';
+        btnShare.className = 'btn secondary p-xs font-sm ml-sm';
+        btnShare.title = 'Share Guide';
+        btnShare.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">share</span>';
+        btnShare.onclick = () => {
+             handleShareClick(guide);
+        };
+        headerControls.insertBefore(btnShare, headerControls.firstChild);
+    }
+
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
         return `<div class="ref-link">
@@ -2885,4 +2951,225 @@ async function showRegionBriefing(props, month) {
 
     document.getElementById('btn-close-region-briefing').onclick = hide;
     overlay.onclick = hide;
+}
+
+async function initSharedMode(token) {
+    document.body.classList.add('shared-view');
+    const app = document.getElementById('app');
+    // Clear existing UI
+    app.innerHTML = "<div class=\"loading-state\"><span class=\"material-symbols-outlined spin loading-icon\">sync</span><p>Loading Captain's Report...</p></div>";
+
+    try {
+        const resp = await API.getPublicVoyageGuide(token);
+        renderSharedReport(resp, app);
+    } catch (err) {
+        console.error(err);
+        app.innerHTML = '<div class="error-state text-center p-xl"><h2 class="text-dark">Report Not Found</h2><p>This link may have expired or is invalid.</p></div>';
+    }
+}
+
+function renderSharedReport(data, container) {
+    const guide = data.voyage_guide || {};
+    const mapUrl = data.map_url;
+
+    const renderReferences = (refs) => {
+        if (!refs || refs.length === 0) return '';
+        return `<div class="ref-link">
+            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
+        </div>`;
+    };
+
+    let html = `
+        <div class="shared-container max-w-4xl mx-auto p-md">
+            <header class="mb-xl text-center">
+                <h1 class="brand-font text-xxl brand-blue mb-sm">NavalPlan</h1>
+                <h2 class="text-dark">Captain's Report</h2>
+            </header>
+
+            ${mapUrl ? `
+            <div class="report-map-container mb-xl shadow-lg border-radius overflow-hidden">
+                <img src="${mapUrl}" alt="Voyage Map" class="w-full block" />
+            </div>
+            ` : ''}
+
+            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius">
+                <h3 class="brand-green mt-0 mb-md">Voyage Summary</h3>
+                <p>${DOMPurify.sanitize(guide.summary || 'No summary available.')}</p>
+            </div>
+    `;
+
+    // Sailing Season
+    if (guide.sailing_season) {
+        const s = guide.sailing_season;
+        html += `
+            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
+                <h3 class="brand-green mt-0 mb-md">Sailing Season</h3>
+                <ul class="facility-list">
+                    <li class="facility-item"><strong>Best Months:</strong> ${(s.primary_season_months || []).join(', ') || 'N/A'}</li>
+                    <li class="facility-item"><strong>Storm Season:</strong> ${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</li>
+                    <li class="facility-item"><strong>Notes:</strong> ${s.notes || ''} ${renderReferences(s.references)}</li>
+                </ul>
+            </div>
+        `;
+    }
+
+    // Hazards
+    if (guide.hazards && guide.hazards.length > 0) {
+        html += `<div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
+            <h3 class="brand-red mt-0 mb-md">⚠️ Hazards</h3>
+            <ul class="facility-list">`;
+        guide.hazards.forEach(h => {
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
+            html += `<li class="facility-item">
+                <h4 class="brand-red">${h.title}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Hubs
+    if (guide.hubs && guide.hubs.length > 0) {
+        html += `<div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
+            <h3 class="brand-green mt-0 mb-md">Major Hubs</h3>
+            <ul class="facility-list">`;
+        guide.hubs.forEach(h => {
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
+            html += `<li class="facility-item">
+                <h4>${h.name}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Country Info
+    if (guide.country_info || guide.currencies) {
+        const c = guide.country_info || {};
+        const curs = guide.currencies || [];
+        
+        let currencyHtml = 'N/A';
+        if (curs.length > 0) {
+            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
+        }
+
+        html += `
+            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
+                <h3 class="brand-green mt-0 mb-md">Country & Culture</h3>
+                <ul class="facility-list">
+                    <li class="facility-item"><strong>Country:</strong> ${c.name || 'N/A'}</li>
+                    <li class="facility-item"><strong>Language:</strong> ${c.languages ? c.languages.join(', ') : 'N/A'}</li>
+                    <li class="facility-item"><strong>Timezone:</strong> ${c.timezone || 'N/A'}</li>
+                    <li class="facility-item"><strong>Emergency:</strong> ${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</li>
+                    <li class="facility-item"><strong>Currency:</strong> ${currencyHtml}</li>
+                </ul>
+            </div>
+        `;
+    }
+
+    html += `
+        <footer class="mt-xl text-center text-gray font-sm p-lg">
+            <p>Generated by NavalPlan</p>
+        </footer>
+        </div>
+    `;
+
+    container.innerHTML = DOMPurify.sanitize(html);
+}
+
+async function handleShareClick(guide) {
+    if (!currentVoyage || currentVoyage.id !== guide.voyage_id) {
+         alert('Error: Voyage context lost.');
+         return;
+    }
+
+    const content = `
+        <div class="text-left">
+            <h3 class="mt-0">Public Sharing</h3>
+            <p class="text-gray mb-md">Share this guide with friends and crew.</p>
+            
+            <div class="form-group">
+                <label class="flex align-center gap-sm" style="cursor:pointer;">
+                    <input type="checkbox" id="chk-share-public">
+                    <strong>Enable Public Link</strong>
+                </label>
+            </div>
+
+            <div id="share-link-container" class="hidden mt-md">
+                <label>Public Link</label>
+                <div class="flex gap-sm">
+                    <input type="text" id="share-link-input" readonly value="" class="w-full p-sm border-radius border">
+                    <button id="btn-copy-share" class="btn secondary">Copy</button>
+                </div>
+            </div>
+            
+            <div class="mt-xl text-right">
+                <button id="btn-close-share" class="btn primary">Done</button>
+            </div>
+        </div>
+    `;
+    
+    let shareModal = document.getElementById('modal-share-dynamic');
+    if (!shareModal) {
+        shareModal = document.createElement('div');
+        shareModal.id = 'modal-share-dynamic';
+        shareModal.className = 'modal hidden';
+        document.body.appendChild(shareModal);
+    }
+    
+    shareModal.innerHTML = DOMPurify.sanitize(content);
+    
+    const chk = shareModal.querySelector('#chk-share-public');
+    const linkInput = shareModal.querySelector('#share-link-input');
+    const linkContainer = shareModal.querySelector('#share-link-container');
+
+    // Init State
+    chk.checked = currentVoyage.is_public;
+    if (currentVoyage.is_public) {
+        linkInput.value = `${window.location.origin}/shared/${currentVoyage.share_token}`;
+        linkContainer.classList.remove('hidden');
+    }
+    
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    shareModal.classList.remove('hidden');
+    
+    chk.onchange = async () => {
+        try {
+            if (chk.checked) {
+                const res = await API.enableSharing(currentVoyage.id);
+                currentVoyage.is_public = true;
+                currentVoyage.share_token = res.token;
+                
+                linkInput.value = `${window.location.origin}/shared/${res.token}`;
+                linkContainer.classList.remove('hidden');
+            } else {
+                await API.disableSharing(currentVoyage.id);
+                currentVoyage.is_public = false;
+                currentVoyage.share_token = null;
+                linkContainer.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update sharing settings');
+            chk.checked = !chk.checked;
+        }
+    };
+    
+    shareModal.querySelector('#btn-copy-share').onclick = () => {
+        linkInput.select();
+        document.execCommand('copy');
+        const btn = shareModal.querySelector('#btn-copy-share');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 2000);
+    };
+    
+    shareModal.querySelector('#btn-close-share').onclick = () => {
+        shareModal.classList.add('hidden');
+        if (document.getElementById('modal-guide').classList.contains('hidden')) {
+             document.getElementById('modal-overlay').classList.add('hidden');
+        }
+    };
 }

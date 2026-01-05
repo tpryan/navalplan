@@ -134,11 +134,29 @@ export const API = {
     return res.json();
   },
 
+  async getPublicVoyageGuide(token) {
+    const res = await apiFetch(`${API_BASE}/public/voyages/${token}/guide`);
+    if (!res.ok) throw new Error('Failed to load public guide');
+    return res.json();
+  },
+
+  async enableSharing(id) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/share`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to enable sharing');
+    return res.json();
+  },
+
+  async disableSharing(id) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/share`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to disable sharing');
+    return res.json();
+  },
+
   async uploadVoyageMap(id, imageBlob) {
     const formData = new FormData();
     formData.append('image', imageBlob);
     
-    const res = await apiFetch(`${API_BASE}/voyages/${id}/guide/map_image`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/guide/snapshot`, {
       method: 'POST',
       body: formData
     });
