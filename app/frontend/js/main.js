@@ -45,6 +45,23 @@ function initUI() {
   const btnExport = document.getElementById('btn-export-voyage');
   const btnEditVoyage = document.getElementById('btn-edit-voyage');
 
+  // Mobile Menu Logic
+  const appContainer = document.getElementById('app');
+  const btnMobileMenu = document.getElementById('btn-mobile-menu');
+  const btnCloseSidebar = document.getElementById('btn-close-sidebar');
+
+  if (btnMobileMenu) {
+      btnMobileMenu.addEventListener('click', () => {
+          appContainer.classList.add('menu-open');
+      });
+  }
+
+  if (btnCloseSidebar) {
+      btnCloseSidebar.addEventListener('click', () => {
+          appContainer.classList.remove('menu-open');
+      });
+  }
+
   const btnUseMapCenter = document.getElementById('btn-use-map-center');
   const displayCoords = document.getElementById('voyage-coords-display');
   const inputLat = document.getElementById('voyage-lat');
@@ -1350,6 +1367,9 @@ async function redoBriefing(oldBriefing, btn) {
 function selectDate(dateStr) {
     selectedDate = dateStr;
     renderItinerary(); // Re-render to show selection highlight
+    
+    // Auto-close menu on mobile
+    document.getElementById('app').classList.remove('menu-open');
     
     // Zoom to existing stop if present
     const stop = currentStops.find(s => s.target_date.startsWith(dateStr));

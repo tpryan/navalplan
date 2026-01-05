@@ -16,10 +16,16 @@
   </head>
   <body>
     <div id="app">
+      <button id="btn-mobile-menu" class="btn-icon" title="Open Menu">
+         <span class="material-symbols-outlined">menu</span>
+      </button>
       <div id="auth-container"></div>
       <nav id="sidebar">
-        <div class="brand">
+        <div class="brand flex justify-between align-center">
           <h1>Plan</h1>
+          <button id="btn-close-sidebar" class="btn-icon mobile-only" title="View Map">
+            <span class="material-symbols-outlined">map</span>
+          </button>
         </div>
         
         <div class="sidebar-actions">
@@ -112,7 +118,7 @@
             <button id="btn-close-briefing" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
         </div>
       </div>
-      <div id="briefing-content" class="briefing-body"></div>
+      <div id="briefing-content" class="briefing-body modal-content-scroll"></div>
     </div>
 
     <div id="modal-guide" class="modal hidden modal-scrollable">
@@ -126,7 +132,7 @@
             <button id="btn-close-guide" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
         </div>
       </div>
-      <div id="guide-content" class="briefing-body"></div>
+      <div id="guide-content" class="briefing-body modal-content-scroll"></div>
     </div>
 
     <!-- Report Modal -->

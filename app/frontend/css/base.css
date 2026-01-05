@@ -37,4 +37,9 @@ html, body {
   overflow: hidden; /* Prevent scrolling, let map handle it */
   width: 100%; height: 100%;
   font-family: var(--font-secondary);
+  box-sizing: border-box;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
 }
