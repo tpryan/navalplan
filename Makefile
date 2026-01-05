@@ -18,6 +18,7 @@ DB_URL=postgres://$(DB_USER):$(DB_PASS)@localhost:$(DB_PORT)/$(DB_NAME)?sslmode=
 # Production DB Config
 PROD_INSTANCE=wakelogdb
 PROD_DB_NAME=navalplan
+PROD_DB_USER=navalplan_user
 STORAGE_BUCKET=navallog-system
 # PROD_DB_USER and PROD_DB_PASS should be set in your environment
 # for the migrate-prod target.
@@ -255,7 +256,7 @@ migrate-prod-gcs:
 	FILENAME=$$(basename $$FILE); \
 	echo "Applying $$FILENAME to PRODUCTION via GCS..."; \
 	gsutil cp $$FILE gs://$(STORAGE_BUCKET)/$$FILENAME; \
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$$FILENAME --database=$(PROD_DB_NAME) -q; \
+	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$$FILENAME --database=$(PROD_DB_NAME) --user=$(PROD_DB_USER) -q; \
 	gsutil rm gs://$(STORAGE_BUCKET)/$$FILENAME
 
 deploy-sql:
