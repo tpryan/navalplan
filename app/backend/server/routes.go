@@ -26,7 +26,11 @@ func (s *Server) Register(r ...route) {
 			finalHandler = s.requireAuth(s.enforceCSRF(route.Handler))
 		}
 
-		s.Mux.Handle(route.Verb+" "+route.Path, s.secureHeaders(finalHandler))
+		// Apply static cache and security headers
+		finalHandler = s.staticCache(s.secureHeaders(finalHandler))
+
+		// Apply gzip at the outermost level
+		s.Mux.Handle(route.Verb+" "+route.Path, s.gzipMiddleware(finalHandler))
 	}
 }
 

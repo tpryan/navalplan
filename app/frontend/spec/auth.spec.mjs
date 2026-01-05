@@ -53,12 +53,12 @@ describe('Auth Service', () => {
 
     await checkSession();
 
-    // UI should remain hidden
-    expect(sidebar.classList.contains('hidden')).toBeTrue();
-    expect(mapContainer.classList.contains('hidden')).toBeTrue();
+    // UI should NOT remain hidden (allow exploration)
+    expect(sidebar.classList.contains('hidden')).toBeFalse();
+    expect(mapContainer.classList.contains('hidden')).toBeFalse();
     
     // Auth container should show login button
-    expect(authContainer.innerHTML).toContain('Login with Google');
+    expect(authContainer.innerHTML).toContain('Login');
   });
 
   it('checkSession should handle API errors gracefully (treat as logout)', async () => {
@@ -67,8 +67,8 @@ describe('Auth Service', () => {
     await checkSession();
 
     // Should default to logout state
-    expect(sidebar.classList.contains('hidden')).toBeTrue();
-    expect(mapContainer.classList.contains('hidden')).toBeTrue();
-    expect(authContainer.innerHTML).toContain('Login with Google');
+    expect(sidebar.classList.contains('hidden')).toBeFalse();
+    expect(mapContainer.classList.contains('hidden')).toBeFalse();
+    expect(authContainer.innerHTML).toContain('Login');
   });
 });

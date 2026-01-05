@@ -1,6 +1,4 @@
-@import './base.css';
-@import './components/buttons.css';
-@import './layout.css';
+/* Direct CSS files are now linked in index.html for better parallel loading */
 
 /* --- Report Specific Styles --- */
 .report-body {

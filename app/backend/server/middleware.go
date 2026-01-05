@@ -1,8 +1,10 @@
 package server
 
 import (
+	"compress/gzip"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -65,12 +67,60 @@ func (s *Server) rateLimit(limit int, window time.Duration) func(http.Handler) h
 	}
 }
 
+// secureHeaders sets security-related headers on the response.
 func (s *Server) secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		// w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains") // TODO: Enable once HTTPS is enforced
 		next.ServeHTTP(w, r)
+	})
+}
+
+// staticCache adds Cache-Control headers to static assets.
+func (s *Server) staticCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Assets with hashes in their names can be cached for a long time.
+		if strings.Contains(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else if strings.HasSuffix(r.URL.Path, ".html") || r.URL.Path == "/" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	Writer *gzip.Writer
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	return g.Writer.Write(b)
+}
+
+// gzipMiddleware compresses the response using gzip if the client supports it.
+func (s *Server) gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Don't compress small responses or images
+		// http.ServeFile might set content type later, so we check extension
+		ext := filepath.Ext(r.URL.Path)
+		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" || ext == ".ico" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+
+		gzw := &gzipResponseWriter{ResponseWriter: w, Writer: gz}
+		next.ServeHTTP(gzw, r)
 	})
 }
 

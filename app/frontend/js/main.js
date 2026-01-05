@@ -1,9 +1,26 @@
-import mapboxgl from 'mapbox-gl';
-import Chart from 'chart.js/auto';
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { exportToGoogleDocs } from './google_export.js';
 import { checkSession } from './auth.js';
+
+// Dynamic library loading
+let mapboxglLib = null;
+async function loadMapbox() {
+    if (mapboxglLib) return mapboxglLib;
+    mapboxglLib = (await import('mapbox-gl')).default;
+    return mapboxglLib;
+}
+
+let ChartLib = null;
+async function loadChart() {
+    if (ChartLib) return ChartLib;
+    ChartLib = (await import('chart.js/auto')).default;
+    return ChartLib;
+}
+
+// Start loading large libraries immediately
+loadMapbox();
+loadChart();
 
 // Configuration
 const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
@@ -630,7 +647,7 @@ function renderVoyageList() {
     
     el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
-        <h3>${voyage.title}</h3>
+        <h2>${voyage.title}</h2>
         <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
         ${locationHtml}
       </div>
@@ -781,6 +798,7 @@ async function loadStops() {
 
         if (map) {
             if (currentStops.length > 0) {
+                const mapboxgl = await loadMapbox();
                 const bounds = new mapboxgl.LngLatBounds();
                 currentStops.forEach(stop => bounds.extend([stop.longitude, stop.latitude]));
                 if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
@@ -954,7 +972,7 @@ async function handleResearchClick(stop, button) {
     }
 }
 
-function renderTideChart(canvasId, tideData, targetDateStr) {
+async function renderTideChart(canvasId, tideData, targetDateStr) {
     if (!tideData || !tideData.events) return;
 
     // Helper to parse strings as wall-clock time (browser local)
@@ -984,6 +1002,7 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
 
     points.sort((a, b) => a.x - b.x);
 
+    const Chart = await loadChart();
     const ctx = document.getElementById(canvasId).getContext('2d');
     
     new Chart(ctx, {
@@ -1057,7 +1076,7 @@ function renderTideChart(canvasId, tideData, targetDateStr) {
     });
 }
 
-function showBriefing(briefing) {
+async function showBriefing(briefing) {
     const modal = document.getElementById('modal-briefing');
     const content = document.getElementById('briefing-content');
     const btnClose = document.getElementById('btn-close-briefing');
@@ -1308,7 +1327,7 @@ function showBriefing(briefing) {
     // Render Chart (must happen after modal is visible for size calc)
     // Pass ALL events to chart for smooth interpolation
     if (allEvents.length > 0) {
-        renderTideChart('tideChartModal', tides, targetDateFull);
+        await renderTideChart('tideChartModal', tides, targetDateFull);
     }
 
     const hide = () => {
@@ -1382,7 +1401,7 @@ function selectDate(dateStr) {
     }
 }
 
-function initMap() {
+async function initMap() {
   if (!MAPBOX_TOKEN) {
     console.error('Mapbox token is missing. Please set NAVALPLAN_MB_TOKEN environment variable during build.');
     const mapContainer = document.getElementById('map-container');
@@ -1398,6 +1417,7 @@ function initMap() {
     return;
   }
 
+  const mapboxgl = await loadMapbox();
   mapboxgl.accessToken = MAPBOX_TOKEN;
 
   map = new mapboxgl.Map({
@@ -1466,6 +1486,8 @@ function initMap() {
       clearMap();
       if (!map) return;
   
+      const mapboxgl = await loadMapbox();
+
       // Sort stops by date
       const sortedStops = [...currentStops].sort((a, b) => 
           new Date(a.target_date) - new Date(b.target_date)
@@ -1652,7 +1674,7 @@ function initMap() {
       }
   }
   
-function renderMiniTideChart(canvasId, tideData, targetDateStr) {
+async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
 
@@ -1682,6 +1704,7 @@ function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     });
     points.sort((a, b) => a.x - b.x);
 
+    const Chart = await loadChart();
     const tideLevels = {
   
           id: 'tideLevels',
@@ -2362,15 +2385,15 @@ async function captureAndUploadMap(voyageId) {
         modalOverlay.classList.remove('hidden');
 
         // Render all charts (including mini ones)
-        sortedStops.forEach((stop, idx) => {
+        for (const [idx, stop] of sortedStops.entries()) {
             const b = briefings[idx];
             if (b && b.tides && b.tides.events) {
                 // Main Chart
-                renderTideChart(`tideChart_${idx}`, b.tides, stop.target_date);
+                await renderTideChart(`tideChart_${idx}`, b.tides, stop.target_date);
                 // Mini Chart
-                renderMiniTideChart(`miniTideChart_${idx}`, b.tides, stop.target_date);
+                await renderMiniTideChart(`miniTideChart_${idx}`, b.tides, stop.target_date);
             }
-        });
+        }
 
     } catch (err) {
         console.error(err);
