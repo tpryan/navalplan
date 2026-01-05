@@ -159,9 +159,9 @@ func (m *MockStore) DeleteSession(ctx context.Context, token string) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) ListRegionsByMonth(ctx context.Context, month int) ([]models.SailingRegion, error) {
+func (m *MockStore) ListRegionsByMonth(ctx context.Context, month int) ([]models.RegionWithSeasonality, error) {
 	args := m.Called(month)
-	return args.Get(0).([]models.SailingRegion), args.Error(1)
+	return args.Get(0).([]models.RegionWithSeasonality), args.Error(1)
 }
 
 func (m *MockStore) GetRegionDetails(ctx context.Context, regionID int, month int) (*models.SailingRegion, *models.RegionSeasonality, error) {

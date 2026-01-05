@@ -2792,6 +2792,10 @@ async function renderDiscoveryLayer() {
             id: 'discovery-borders',
             type: 'line',
             source: 'discovery',
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
             paint: {
                 'line-color': [
                     'case',
