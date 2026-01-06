@@ -93,6 +93,14 @@ setup:
 	@echo "2. Run 'make db-start' to start the database."
 	@echo "3. Run 'make dev' to start the application."
 
+setup-secrets:
+	@chmod +x scripts/setup_secrets.sh
+	@./scripts/setup_secrets.sh
+
+setup-infra:
+	@chmod +x scripts/setup_infra.sh
+	@./scripts/setup_infra.sh
+
 dev: build-js
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."

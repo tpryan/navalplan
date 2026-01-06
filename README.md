@@ -81,7 +81,11 @@ Before you begin, ensure you have the following installed:
 
 ## Deployment
 
-Deployment is handled via Google Cloud Build.
+For detailed instructions on setting up Google Cloud infrastructure and deploying the application, see the [Deployment Guide](docs/DEPLOYMENT.md).
+
+Quick commands:
+*   `make setup-infra`: Provision GCP resources (APIs, SQL, Buckets).
+*   `make setup-secrets`: Configure application secrets.
 *   `make deploy-backend`: Deploys the main application.
 *   `make deploy-agent`: Deploys the researcher agent.
-*   `make deploy-scheduler`: Deploys the Cloud Scheduler job for monthly discovery.
+*   `make deploy-sql`: Initializes the production database.
