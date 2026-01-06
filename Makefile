@@ -98,6 +98,12 @@ dev: build-js
 	@echo "Press Ctrl+C to stop all."
 	@(trap 'kill 0' SIGINT; make run-backend & make run-agent & (sleep 3 && make run-frontend) & wait)
 
+dev-mine: 
+	curl -X POST "localhost:8080/api/v1/discovery/mine?month=all" \
+		-H "Cookie: navalplan_session=test-token" \
+		-H "X-Requested-With: XMLHttpRequest"
+
+
 # --- Database (Podman/Docker) ---
 
 db-start:
