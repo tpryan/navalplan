@@ -2505,61 +2505,70 @@ function showVoyageGuide(guide) {
     const btnRedo = document.getElementById('btn-redo-guide');
     const modalOverlay = document.getElementById('modal-overlay');
 
-    // Inject Share/Snapshot controls if not present
+    // Inject Share/Snapshot controls if not present (create only once, update handler always)
     const headerControls = modal.querySelector('.modal-header-row .flex.gap-sm');
-    if (!document.getElementById('btn-share-guide')) {
-        const btnSnapshot = document.createElement('button');
+    
+    let btnSnapshot = document.getElementById('btn-snapshot-guide');
+    if (!btnSnapshot) {
+        btnSnapshot = document.createElement('button');
         btnSnapshot.id = 'btn-snapshot-guide';
         btnSnapshot.className = 'btn secondary p-xs font-sm';
         btnSnapshot.title = 'Update Map Snapshot';
         btnSnapshot.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">camera_alt</span>';
-        btnSnapshot.onclick = async () => {
-             btnSnapshot.disabled = true;
-             const icon = btnSnapshot.querySelector('span');
-             icon.classList.add('spin');
-             icon.textContent = 'sync';
-             
-             // We need to briefly hide the modal to capture the map if it's behind
-             modal.classList.add('hidden');
-             modalOverlay.classList.add('hidden');
-             
-             // Small delay to allow render
-             await new Promise(r => setTimeout(r, 200));
-
-             const success = await captureAndUploadMap(guide.voyage_id);
-             
-             modal.classList.remove('hidden');
-             modalOverlay.classList.remove('hidden');
-             
-             icon.classList.remove('spin');
-             icon.textContent = 'camera_alt';
-             btnSnapshot.disabled = false;
-             
-             if (success) {
-                 showNotification('Snapshot Saved', 'The map view has been updated for the public report.');
-                 // Refresh image in modal if present
-                 const img = document.querySelector('#guide-content .report-map-img');
-                 if (img) {
-                     // Cache bust
-                     const src = img.src.split('?')[0];
-                     img.src = `${src}?t=${Date.now()}`;
-                 }
-             } else {
-                 alert('Failed to capture map. Ensure the map is visible.');
-             }
-        };
         headerControls.insertBefore(btnSnapshot, headerControls.firstChild);
+    }
 
-        const btnShare = document.createElement('button');
+    // Always update handler to use current guide context
+    btnSnapshot.onclick = async () => {
+            btnSnapshot.disabled = true;
+            const icon = btnSnapshot.querySelector('span');
+            icon.classList.add('spin');
+            icon.textContent = 'sync';
+            
+            // We need to briefly hide the modal to capture the map if it's behind
+            modal.classList.add('hidden');
+            modalOverlay.classList.add('hidden');
+            
+            // Small delay to allow render
+            await new Promise(r => setTimeout(r, 200));
+
+            const success = await captureAndUploadMap(guide.voyage_id);
+            
+            modal.classList.remove('hidden');
+            modalOverlay.classList.remove('hidden');
+            
+            icon.classList.remove('spin');
+            icon.textContent = 'camera_alt';
+            btnSnapshot.disabled = false;
+            
+            if (success) {
+                showNotification('Snapshot Saved', 'The map view has been updated for the public report.');
+                // Refresh image in modal if present
+                const img = document.querySelector('#guide-content .report-map-img');
+                if (img) {
+                    // Cache bust
+                    const src = img.src.split('?')[0];
+                    img.src = `${src}?t=${Date.now()}`;
+                }
+            } else {
+                alert('Failed to capture map. Ensure the map is visible.');
+            }
+    };
+
+    let btnShare = document.getElementById('btn-share-guide');
+    if (!btnShare) {
+        btnShare = document.createElement('button');
         btnShare.id = 'btn-share-guide';
         btnShare.className = 'btn secondary p-xs font-sm ml-sm';
         btnShare.title = 'Share Guide';
         btnShare.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">share</span>';
-        btnShare.onclick = () => {
-             handleShareClick(guide);
-        };
         headerControls.insertBefore(btnShare, headerControls.firstChild);
     }
+    
+    // Always update handler
+    btnShare.onclick = () => {
+            handleShareClick(guide);
+    };
 
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
