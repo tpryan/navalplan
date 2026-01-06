@@ -141,7 +141,7 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(data)
 }
 

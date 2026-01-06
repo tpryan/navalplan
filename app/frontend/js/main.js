@@ -2577,7 +2577,21 @@ function showVoyageGuide(guide) {
         </div>`;
     };
 
-    let html = `
+    let html = '';
+    
+    // Map Snapshot
+    if (guide.map_url) {
+        // Cache bust
+        const sep = guide.map_url.includes('?') ? '&' : '?';
+        const url = `${guide.map_url}${sep}t=${Date.now()}`;
+        html += `
+            <div class="briefing-section">
+                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
+            </div>
+        `;
+    }
+
+    html += `
         <div class="briefing-section">
             <h3>Overview</h3>
             <p>${guide.summary || 'No summary available.'}</p>
