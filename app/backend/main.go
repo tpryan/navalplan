@@ -36,6 +36,14 @@ func main() {
 		log.Fatal("NAVALPLAN_OA_CLIENT or NAVALPLAN_OA_SECRET is not set. Authentication is required.")
 	}
 
+	if os.Getenv("NAVALPLAN_SYSTEM_KEY") == "" {
+		log.Fatal("NAVALPLAN_SYSTEM_KEY is not set. System API Key is required.")
+	}
+
+	if os.Getenv("NAVALPLAN_MB_TOKEN") == "" {
+		log.Fatal("NAVALPLAN_MB_TOKEN is not set. Mapbox Token is required.")
+	}
+
 	cfg := loadConfig(os.Getenv, *contentDir)
 
 	if err := run(context.Background(), cfg); err != nil {
@@ -88,7 +96,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		q := make(url.Values)
 		q.Set("host", dbSocket)
 		q.Set("sslmode", dbMode)
-		
+
 		u := url.URL{
 			Scheme:   "postgres",
 			User:     url.UserPassword(dbUser, dbPass),
@@ -99,7 +107,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 	} else {
 		q := make(url.Values)
 		q.Set("sslmode", dbMode)
-		
+
 		u := url.URL{
 			Scheme:   "postgres",
 			User:     url.UserPassword(dbUser, dbPass),
@@ -142,10 +150,14 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 		SystemAPIKey:       getEnv("NAVALPLAN_SYSTEM_KEY"),
+		MapboxToken:        getEnv("NAVALPLAN_MB_TOKEN"),
 	}
 
 	logdsn := ObscureString(dsn, dbPass)
+	result.ObscuredDSN = logdsn
 	logSecret := ObscureString(result.GoogleClientSecret, result.GoogleClientSecret)
+	logSystemKey := ObscureString(result.SystemAPIKey, result.SystemAPIKey)
+	logMapboxToken := ObscureString(result.MapboxToken, result.MapboxToken)
 
 	log.Info("config", "Env", result.Env)
 	log.Info("config", "Port", result.Port)
@@ -155,9 +167,10 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 	log.Info("config", "GoogleClientSecret", logSecret)
 	log.Info("config", "BaseURL", result.BaseURL)
 	log.Info("config", "NavalPlanAgentURL", result.NavalPlanAgentURL)
+	log.Info("config", "SystemAPIKey", logSystemKey)
+	log.Info("config", "MapboxToken", logMapboxToken)
 
 	return result
-
 }
 
 // ObscureString replaces the input string with asterisks of the same length.
@@ -173,7 +186,7 @@ func run(ctx context.Context, cfg *config.Config) error {
 	// 2. Initialize DB
 	db, err := datastore.New(cfg.DatabaseDSN)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return fmt.Errorf("failed to connect to database (%s): %w", cfg.ObscuredDSN, err)
 	}
 	defer db.Close()
 

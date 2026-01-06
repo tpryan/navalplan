@@ -17,7 +17,11 @@ type Config struct {
 
 	// External Services
 	NavalPlanAgentURL string
+	MapboxToken       string
 
 	// System
 	SystemAPIKey string
+
+	// Logging
+	ObscuredDSN string
 }
