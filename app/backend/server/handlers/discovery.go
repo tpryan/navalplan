@@ -114,7 +114,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 
 	// 2. Run Agent
-	prompt := fmt.Sprintf("Identify top sailing destinations and deep cuts for the month of %s. Return JSON only.", monthName)
+	prompt := fmt.Sprintf("Identify top sailing destinations and deep cuts for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
