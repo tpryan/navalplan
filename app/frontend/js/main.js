@@ -2844,7 +2844,7 @@ async function renderDiscoveryLayer() {
         type: 'FeatureCollection',
         features: discoveryRegions.map(r => ({
             type: 'Feature',
-            geometry: typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry,
+            geometry: JSON.parse(JSON.stringify(typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry)),
             properties: {
                 id: r.id,
                 name: r.name,
@@ -2855,6 +2855,9 @@ async function renderDiscoveryLayer() {
             }
         }))
     };
+    
+    // Smooth the polygons (Chaikin's Algorithm)
+    smoothGeoJSON(geojson);
 
     if (map.getSource('discovery')) {
         map.getSource('discovery').setData(geojson);
@@ -2898,7 +2901,8 @@ async function renderDiscoveryLayer() {
                     'Standard', '#005fa3',          // Darker Blue
                     '#005fa3'                       // Fallback
                 ],
-                'line-width': 2
+                'line-width': 2,
+                'line-blur': 1
             }
         });
 
@@ -3523,4 +3527,62 @@ async function handleShareClick(guide) {
              document.getElementById('modal-overlay').classList.add('hidden');
         }
     };
+}
+
+// --- Geometry Smoothing (Chaikin's Algorithm) ---
+
+function smoothGeoJSON(geojson) {
+    if (!geojson || !geojson.features) return geojson;
+    
+    geojson.features.forEach(feature => {
+        if (!feature.geometry) return;
+        
+        const type = feature.geometry.type;
+        const coords = feature.geometry.coordinates;
+        
+        if (type === 'Polygon') {
+            feature.geometry.coordinates = coords.map(ring => smoothRing(ring));
+        } else if (type === 'MultiPolygon') {
+            feature.geometry.coordinates = coords.map(poly => poly.map(ring => smoothRing(ring)));
+        }
+    });
+    
+    return geojson;
+}
+
+function smoothRing(ring) {
+    // Chaikin's algorithm for closed paths (iterations=3 for a natural, softened look)
+    let currentRing = ring;
+    for (let i = 0; i < 3; i++) {
+        const nextRing = [];
+        const len = currentRing.length;
+        if (len < 3) return currentRing; // Cannot smooth line with < 3 points
+
+        // We assume the ring is closed (first point == last point)
+        // Process segments
+        for (let j = 0; j < len - 1; j++) {
+            const p0 = currentRing[j];
+            const p1 = currentRing[j + 1];
+            
+            // Q = 0.75*P0 + 0.25*P1
+            const q = [
+                0.75 * p0[0] + 0.25 * p1[0],
+                0.75 * p0[1] + 0.25 * p1[1]
+            ];
+            
+            // R = 0.25*P0 + 0.75*P1
+            const r = [
+                0.25 * p0[0] + 0.75 * p1[0],
+                0.25 * p0[1] + 0.75 * p1[1]
+            ];
+            
+            nextRing.push(q);
+            nextRing.push(r);
+        }
+        
+        // Close the ring
+        nextRing.push(nextRing[0]);
+        currentRing = nextRing;
+    }
+    return currentRing;
 }
