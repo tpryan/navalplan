@@ -111,7 +111,7 @@ dev: build-js
 
 dev-mine: 
 	curl -X POST "http://localhost:8080/api/v1/discovery/mine?month=all" \
-		-H "Cookie: navalplan_session=aFVMSIgIZL2sNFHbynQaiHR-f3SOFRV78DNbsZ2Be_U=" \
+		-H "Cookie: navalplan_session=MRihSQBmU0ONgse2dGzMNc5AqTC81wo84hBWxO0Eviw=" \
 		-H "X-Requested-With: XMLHttpRequest"
 
 
