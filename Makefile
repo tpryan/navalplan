@@ -1,4 +1,9 @@
 # Makefile
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
 PROJECT_ID=your-project-id # Replace with actual ID later
 REGION=us-central1
 REPO_NAME=navalplan
@@ -33,10 +38,8 @@ GO_FILES=$(shell find . -name '*.go')
 # 1. RUN: Builds the frontend first, then runs Go serving that static folder
 run: build-js
 	@echo "Starting NavalPlan backend (Production Mode)..."
-	# We assume .env is sourced or variables are set in your shell
-	# For convenience, you can add a local .env loader here
+	# Variables are automatically loaded from .env
 	cd app/backend && go run -mod=vendor main.go --content=./static.min
-
 # 2. BUILD: The master build command
 build: build-js
 
