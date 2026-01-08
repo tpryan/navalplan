@@ -13,6 +13,8 @@ import (
 	"app/models"
 
 	"github.com/charmbracelet/log"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
 )
 
 type DiscoveryRegionOutput struct {
@@ -46,6 +48,31 @@ func (h *Handler) GetDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(regions)
 }
 
+func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *http.Request) {
+	regionIDStr := r.PathValue("regionID")
+	monthStr := r.PathValue("month")
+
+	regionID, err := strconv.Atoi(regionIDStr)
+	if err != nil {
+		http.Error(w, "Invalid region ID", http.StatusBadRequest)
+		return
+	}
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil || month < 1 || month > 12 {
+		http.Error(w, "Invalid month", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.DB.DeleteSeasonality(r.Context(), regionID, month); err != nil {
+		log.Errorf("Failed to delete seasonality: %v", err)
+		http.Error(w, "Failed to delete seasonality", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	monthStr := r.URL.Query().Get("month")
 	log.Infof("DiscoveryMining request received for month %s", monthStr)
@@ -75,6 +102,29 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Discovery mining started for month %d", month)
 
 	go h.performDiscoveryMining(month)
+}
+
+func computeIoU(b1, b2 orb.Bound) float64 {
+	// Intersect bounds
+	minX := max(b1.Min.X(), b2.Min.X())
+	minY := max(b1.Min.Y(), b2.Min.Y())
+	maxX := min(b1.Max.X(), b2.Max.X())
+	maxY := min(b1.Max.Y(), b2.Max.Y())
+
+	if minX >= maxX || minY >= maxY {
+		return 0
+	}
+
+	intersectArea := (maxX - minX) * (maxY - minY)
+
+	area1 := (b1.Max.X() - b1.Min.X()) * (b1.Max.Y() - b1.Min.Y())
+	area2 := (b2.Max.X() - b2.Min.X()) * (b2.Max.Y() - b2.Min.Y())
+
+	unionArea := area1 + area2 - intersectArea
+	if unionArea <= 0 {
+		return 0
+	}
+	return intersectArea / unionArea
 }
 
 func (h *Handler) performDiscoveryMining(month int) {
@@ -172,14 +222,65 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	ctx := context.Background()
 
-	// Clear old data for this month to ensure we replace it
-	if err := h.DB.DeleteSeasonalityForMonth(ctx, month); err != nil {
-		log.Errorf("[discovery-mining] Failed to clear old seasonality for month %d: %v", month, err)
-		// We proceed anyway, or should we return? Proceeding might result in mix of old and new if upsert doesn't cover everything.
-		// But UpsertSeasonality keys on (region_id, month), so effectively we just won't be deleting "stale" regions if we fail here.
+	// Load existing regions for duplicate detection
+	existingRegions, err := h.DB.GetAllRegions(ctx)
+	if err != nil {
+		log.Errorf("[discovery-mining] Failed to load existing regions for duplicate check: %v", err)
 	}
 
+	// Pre-parse existing geometries
+	type existingReg struct {
+		Name string
+		Geom *geojson.Geometry
+	}
+	var parsedExisting []existingReg
+	if existingRegions != nil {
+		for _, er := range existingRegions {
+			g, err := geojson.UnmarshalGeometry(er.Geometry)
+			if err == nil {
+				parsedExisting = append(parsedExisting, existingReg{
+					Name: er.Name,
+					Geom: g,
+				})
+			}
+		}
+	}
+
+	// Note: We do NOT clear old data anymore, as we want to accumulate results.
+
 	for _, reg := range output {
+		// Check for spatial duplicates
+		newGeom, err := geojson.UnmarshalGeometry(reg.Geometry)
+		if err != nil {
+			log.Errorf("[discovery-mining] Failed to parse geometry for new region %s: %v", reg.Name, err)
+			continue
+		}
+
+		isDuplicate := false
+		for _, ex := range parsedExisting {
+			// If names match, we assume it's an update to the same region, so we proceed (UpsertRegion will handle it).
+			if ex.Name == reg.Name {
+				continue
+			}
+
+			// If names differ, check for spatial overlap.
+			// Calculate BBox IoU
+			b1 := newGeom.Geometry().Bound()
+			b2 := ex.Geom.Geometry().Bound()
+			iou := computeIoU(b1, b2)
+
+			// Threshold for "mostly the same area". 0.6 is a heuristic.
+			if iou > 0.6 {
+				log.Infof("[discovery-mining] Skipping region '%s' as it spatially duplicates existing '%s' (IoU: %.2f)", reg.Name, ex.Name, iou)
+				isDuplicate = true
+				break
+			}
+		}
+
+		if isDuplicate {
+			continue
+		}
+
 		region := &models.SailingRegion{
 			Name:     reg.Name,
 			Geometry: models.RawJSON(reg.Geometry),

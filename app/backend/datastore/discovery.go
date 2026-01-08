@@ -112,11 +112,36 @@ func (db *DB) UpsertSeasonality(ctx context.Context, s *models.RegionSeasonality
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		if err := rows.Scan(&s.ID, &s.CreatedAt); err != nil {
-			return fmt.Errorf("failed to scan upserted seasonality: %w", err)
-		}
+	return nil
+
+}
+
+// GetAllRegions returns all sailing regions.
+
+func (db *DB) GetAllRegions(ctx context.Context) ([]models.SailingRegion, error) {
+
+	var regions []models.SailingRegion
+
+	query := `SELECT * FROM sailing_regions`
+
+	err := db.SelectContext(ctx, &regions, query)
+
+	if err != nil {
+
+		return nil, fmt.Errorf("failed to list all regions: %w", err)
+
 	}
 
+	return regions, nil
+
+}
+
+// DeleteSeasonality removes a specific seasonality entry.
+func (db *DB) DeleteSeasonality(ctx context.Context, regionID int, month int) error {
+	query := `DELETE FROM region_seasonality WHERE region_id = $1 AND month = $2`
+	_, err := db.ExecContext(ctx, query, regionID, month)
+	if err != nil {
+		return fmt.Errorf("failed to delete seasonality: %w", err)
+	}
 	return nil
 }

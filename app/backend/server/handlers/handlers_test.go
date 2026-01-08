@@ -222,6 +222,19 @@ func (m *MockStore) DeleteSeasonalityForMonth(ctx context.Context, month int) er
 	return args.Error(0)
 }
 
+func (m *MockStore) GetAllRegions(ctx context.Context) ([]models.SailingRegion, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.SailingRegion), args.Error(1)
+}
+
+func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month int) error {
+	args := m.Called(regionID, month)
+	return args.Error(0)
+}
+
 var _ datastore.Store = (*MockStore)(nil)
 
 type MockDocsService struct {

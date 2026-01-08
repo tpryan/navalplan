@@ -185,9 +185,28 @@ export const API = {
     return res.json();
   },
 
-  async triggerDiscoveryMining(month) {
-    const res = await apiFetch(`${API_BASE}/discovery/mine?month=${month}`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to trigger discovery mining');
-    return res;
-  }
-};
+      async triggerDiscoveryMining(month) {
+
+          const res = await apiFetch(`${API_BASE}/discovery/mine?month=${month}`, { method: 'POST' });
+
+          if (!res.ok) throw new Error('Failed to trigger discovery mining');
+
+          return res;
+
+      },
+
+  
+
+      async deleteDiscoverySeasonality(regionID, month) {
+
+          const res = await apiFetch(`${API_BASE}/discovery/regions/${regionID}/months/${month}`, { method: 'DELETE' });
+
+          if (!res.ok) throw new Error('Failed to delete discovery seasonality');
+
+          return res;
+
+      }
+
+  };
+
+  

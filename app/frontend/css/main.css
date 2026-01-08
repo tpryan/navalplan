@@ -533,6 +533,25 @@
 .p-xl { padding: 3rem; }
 .mx-md { margin-left: 1rem; margin-right: 1rem; }
 
+.btn-danger {
+    color: #d9534f !important;
+}
+
+.btn-danger:hover {
+    color: #c9302c !important;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: bold;
+}
+
 /* Shared View Specifics */
 .shared-view {
     overflow-y: auto !important; /* Allow scrolling for the report */

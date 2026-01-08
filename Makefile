@@ -10,10 +10,10 @@ REPO_NAME=navalplan
 
 # Database Local Config
 DB_CONTAINER_NAME=navalplan-db
-DB_NAME=navalplan
-DB_USER=navalplan_user
-DB_PASS=navalplan_pass
-DB_PORT=5433
+DB_NAME=${NAVALPLAN_DB_NAME}
+DB_USER=${NAVALPLAN_DB_USER}
+DB_PASS=${NAVALPLAN_DB_PASS}
+DB_PORT=${NAVALPLAN_DB_PORT}
 
 # Migrations
 MIGRATE_IMAGE=migrate/migrate
@@ -111,7 +111,7 @@ dev: build-js
 
 dev-mine: 
 	curl -X POST "http://localhost:8080/api/v1/discovery/mine?month=all" \
-		-H "Cookie: navalplan_session=MRihSQBmU0ONgse2dGzMNc5AqTC81wo84hBWxO0Eviw=" \
+		-H "Cookie: navalplan_session=${NAVALPLAN_SYSTEM_KEY}" \
 		-H "X-Requested-With: XMLHttpRequest"
 
 
