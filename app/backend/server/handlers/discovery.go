@@ -104,27 +104,53 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	go h.performDiscoveryMining(month)
 }
 
-func computeIoU(b1, b2 orb.Bound) float64 {
+func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) {
 	// Intersect bounds
 	minX := max(b1.Min.X(), b2.Min.X())
 	minY := max(b1.Min.Y(), b2.Min.Y())
 	maxX := min(b1.Max.X(), b2.Max.X())
 	maxY := min(b1.Max.Y(), b2.Max.Y())
 
-	if minX >= maxX || minY >= maxY {
-		return 0
+	var intersectArea float64
+	if minX < maxX && minY < maxY {
+		intersectArea = (maxX - minX) * (maxY - minY)
 	}
-
-	intersectArea := (maxX - minX) * (maxY - minY)
 
 	area1 := (b1.Max.X() - b1.Min.X()) * (b1.Max.Y() - b1.Min.Y())
 	area2 := (b2.Max.X() - b2.Min.X()) * (b2.Max.Y() - b2.Min.Y())
 
 	unionArea := area1 + area2 - intersectArea
-	if unionArea <= 0 {
-		return 0
+
+	if unionArea > 0 {
+		iou = intersectArea / unionArea
 	}
-	return intersectArea / unionArea
+
+	minArea := min(area1, area2)
+	maxArea := max(area1, area2)
+
+	if minArea > 0 {
+		containment = intersectArea / minArea
+	}
+
+	if maxArea > 0 {
+		sizeRatio = minArea / maxArea
+	}
+
+	return iou, containment, sizeRatio
+}
+
+func getTierPriority(tier string, isHiddenGem bool) int {
+	if tier == "Challenging" {
+		return 4
+	}
+	if isHiddenGem || tier == "Hidden Gem" || tier == "Deep Cut" {
+		return 3
+	}
+	if tier == "Regional Favorite" {
+		return 2
+	}
+	// Standard or unknown
+	return 1
 }
 
 func (h *Handler) performDiscoveryMining(month int) {
@@ -164,7 +190,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 
 	// 2. Run Agent
-	prompt := fmt.Sprintf("Identify top sailing destinations and deep cuts for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
+	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
@@ -222,31 +248,34 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	ctx := context.Background()
 
-	// Load existing regions for duplicate detection
-	existingRegions, err := h.DB.GetAllRegions(ctx)
+	// Load existing regions ACTIVE IN THIS MONTH for intelligent replacement
+	activeRegions, err := h.DB.ListRegionsByMonth(ctx, month)
 	if err != nil {
-		log.Errorf("[discovery-mining] Failed to load existing regions for duplicate check: %v", err)
+		log.Errorf("[discovery-mining] Failed to load active regions for month %d: %v", month, err)
 	}
 
-	// Pre-parse existing geometries
-	type existingReg struct {
-		Name string
-		Geom *geojson.Geometry
+	type activeReg struct {
+		ID       int64
+		Name     string
+		Tier     string
+		IsHidden bool
+		Geom     *geojson.Geometry
 	}
-	var parsedExisting []existingReg
-	if existingRegions != nil {
-		for _, er := range existingRegions {
+	var parsedActive []activeReg
+	if activeRegions != nil {
+		for _, er := range activeRegions {
 			g, err := geojson.UnmarshalGeometry(er.Geometry)
 			if err == nil {
-				parsedExisting = append(parsedExisting, existingReg{
-					Name: er.Name,
-					Geom: g,
+				parsedActive = append(parsedActive, activeReg{
+					ID:       er.SailingRegion.ID,
+					Name:     er.Name,
+					Tier:     er.Tier,
+					IsHidden: er.IsHiddenGem,
+					Geom:     g,
 				})
 			}
 		}
 	}
-
-	// Note: We do NOT clear old data anymore, as we want to accumulate results.
 
 	for _, reg := range output {
 		// Check for spatial duplicates
@@ -256,28 +285,59 @@ func (h *Handler) performDiscoveryMining(month int) {
 			continue
 		}
 
-		isDuplicate := false
-		for _, ex := range parsedExisting {
+		shouldSkip := false
+		for i, ex := range parsedActive {
 			// If names match, we assume it's an update to the same region, so we proceed (UpsertRegion will handle it).
 			if ex.Name == reg.Name {
 				continue
 			}
 
 			// If names differ, check for spatial overlap.
-			// Calculate BBox IoU
 			b1 := newGeom.Geometry().Bound()
 			b2 := ex.Geom.Geometry().Bound()
-			iou := computeIoU(b1, b2)
+			iou, containment, sizeRatio := computeBoundsStats(b1, b2)
 
-			// Threshold for "mostly the same area". 0.6 is a heuristic.
-			if iou > 0.6 {
-				log.Infof("[discovery-mining] Skipping region '%s' as it spatially duplicates existing '%s' (IoU: %.2f)", reg.Name, ex.Name, iou)
+			// Conflict Criteria:
+			// 1. IoU > 0.5 (Significant direct overlap)
+			// 2. Containment > 0.8 (One is mostly inside other) AND SizeRatio > 0.3 (They are comparable in size, avoiding "St Lucia vs Caribbean")
+			isDuplicate := false
+			if iou > 0.5 {
 				isDuplicate = true
-				break
+			} else if containment > 0.8 && sizeRatio > 0.3 {
+				isDuplicate = true
+			}
+
+			if isDuplicate {
+				// Conflict! Compare priorities.
+				newPriority := getTierPriority(reg.Tier, reg.IsHiddenGem)
+				oldPriority := getTierPriority(ex.Tier, ex.IsHidden)
+
+				// Resolution:
+				// If New is HIGHER priority, we replace Old.
+				// If New is EQUAL priority, we keep Old (stable).
+				// If New is LOWER priority, we keep Old.
+
+				if newPriority > oldPriority {
+					log.Infof("[discovery-mining] Replacing existing '%s' (Tier: %s) with new superior '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
+						ex.Name, ex.Tier, reg.Name, reg.Tier, iou, containment)
+
+					// Delete the old seasonality
+					if err := h.DB.DeleteSeasonality(ctx, int(ex.ID), month); err != nil {
+						log.Errorf("[discovery-mining] Failed to remove inferior region %s: %v", ex.Name, err)
+					}
+
+					// Remove from parsedActive so we don't match against it again
+					parsedActive[i].Name = ""
+				} else {
+					log.Infof("[discovery-mining] Skipping new region '%s' (Tier: %s) in favor of existing '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
+						reg.Name, reg.Tier, ex.Name, ex.Tier, iou, containment)
+					shouldSkip = true
+					break
+				}
 			}
 		}
 
-		if isDuplicate {
+		if shouldSkip {
 			continue
 		}
 

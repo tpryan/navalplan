@@ -2872,14 +2872,16 @@ async function renderDiscoveryLayer() {
             type: 'fill',
             source: 'discovery',
             paint: {
-                'fill-color': [
-                    'match',
-                    ['get', 'tier'],
-                    'Hidden Gem', '#9c27b0',        // Purple
-                    'Regional Favorite', '#ff9800', // Orange
-                    'Standard', '#0077be',          // Blue
-                    '#0077be'                       // Fallback
-                ],
+                            'fill-color': [
+                                'match',
+                                ['get', 'tier'],
+                                'Hidden Gem', '#9c27b0',        // Purple
+                                'Regional Favorite', '#ff9800', // Orange
+                                'Challenging', '#d32f2f',       // Red
+                                'Standard', '#0077be',          // Blue
+                                '#0077be'                       // Fallback
+                            ],
+                
                 'fill-opacity': 0.3
             }
         });
@@ -2898,6 +2900,7 @@ async function renderDiscoveryLayer() {
                     ['get', 'tier'],
                     'Hidden Gem', '#7b1fa2',        // Darker Purple
                     'Regional Favorite', '#e65100', // Darker Orange
+                    'Challenging', '#b71c1c',       // Darker Red
                     'Standard', '#005fa3',          // Darker Blue
                     '#005fa3'                       // Fallback
                 ],
@@ -2938,7 +2941,7 @@ async function showRegionBriefing(props, month) {
     content.innerHTML = DOMPurify.sanitize(`
         <div class="briefing-section">
             <div class="flex justify-between align-center mb-md">
-                <span class="badge ${props.tier === 'Hidden Gem' ? 'badge-gem' : props.tier === 'Regional Favorite' ? 'badge-regional' : 'badge-standard'}">
+                <span class="badge ${props.tier === 'Hidden Gem' ? 'badge-gem' : props.tier === 'Regional Favorite' ? 'badge-regional' : props.tier === 'Challenging' ? 'badge-challenging' : 'badge-standard'}">
                     ${props.tier || (props.is_hidden_gem ? 'Hidden Gem' : 'Standard Destination')}
                 </span>
                 <span class="font-sm text-gray">Suitability: <strong>${props.suitability_score}/100</strong></span>

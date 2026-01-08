@@ -476,6 +476,35 @@
     color: var(--brand-medium);
 }
 
+.discovery-legend {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-standard { background-color: #0077be; }
+.dot-regional { background-color: #ff9800; }
+.dot-gem { background-color: #9c27b0; }
+.dot-challenging { background-color: #d32f2f; }
+
 .region-popup {
     max-width: 250px;
 }
@@ -511,6 +540,11 @@
 
 .badge-standard {
     background-color: #0077be; /* Blue */
+    color: white;
+}
+
+.badge-challenging {
+    background-color: #d32f2f; /* Red */
     color: white;
 }
 
