@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -14,9 +16,10 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
-	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/server/adkrest"
+	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
 	"google.golang.org/adk/tool/geminitool"
@@ -34,6 +37,25 @@ var guideAgentPrompt string
 
 //go:embed prompts/discovery_agent.md
 var discoveryAgentPrompt string
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(ww, r)
+		clog.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, time.Since(start)))
+	})
+}
 
 func main() {
 	// Configure charmbracelet/log
@@ -86,7 +108,8 @@ func main() {
 	}
 
 	config := &launcher.Config{
-		AgentLoader: loader,
+		AgentLoader:    loader,
+		SessionService: session.InMemoryService(),
 	}
 
 	// Recovery for main process
@@ -105,10 +128,18 @@ func main() {
 		port = "8081" // Default fallback
 	}
 
-	l := full.NewLauncher()
-	err = l.Execute(ctx, config, []string{"web", "-read-timeout", "300s", "-write-timeout", "300s", "-port", port, "api"})
-	if err != nil {
-		clog.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
+	// Create the ADK HTTP Handler
+	adkHandler := adkrest.NewHandler(config, 120*time.Second)
+
+	// Start Custom Server
+	mux := http.NewServeMux()
+
+	// Mount ADK under /api/
+	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
+
+	clog.Info("Starting custom server", "port", port)
+	if err := http.ListenAndServe(":"+port, loggingMiddleware(mux)); err != nil {
+		clog.Fatalf("Server failed: %v", err)
 	}
 }
 
