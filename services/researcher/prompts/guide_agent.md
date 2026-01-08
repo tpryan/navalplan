@@ -12,6 +12,7 @@ Call 'google_search' for:
 - "Top sailing points of interest [Location]"
 
 Output: Produce a JSON object strictly following this schema:
+```json
 {
   "summary": "A 2-3 sentence overview of sailing in this region.",
   "sailing_season": {
@@ -49,5 +50,6 @@ Output: Produce a JSON object strictly following this schema:
 	 { "name": "...", "description": "...", "references": [...] }
   ]
 }
+```
 
 Important: Always provide reference links for every section.
