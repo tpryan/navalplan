@@ -165,16 +165,6 @@ export const API = {
     return res.json();
   },
 
-  async exportVoyage(voyageId) {
-    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/export`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'docs' })
-    });
-    if (!res.ok) throw new Error('Failed to export voyage');
-    return res.json();
-  },
-
   async logout() {
     await apiFetch('/auth/logout', { method: 'POST' });
   },
