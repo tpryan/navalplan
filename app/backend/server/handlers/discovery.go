@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	appcontext "app/context"
 	"app/models"
 
 	"github.com/charmbracelet/log"
@@ -49,6 +50,13 @@ func (h *Handler) GetDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *http.Request) {
+	// Check for admin
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil || !person.IsAdmin {
+		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+		return
+	}
+
 	regionIDStr := r.PathValue("regionID")
 	monthStr := r.PathValue("month")
 

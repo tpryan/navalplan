@@ -13,6 +13,7 @@ type Person struct {
 	Email      string    `json:"email" db:"email"`
 	Name       string    `json:"name" db:"name"`
 	PictureURL *string   `json:"picture_url" db:"picture_url"`
+	IsAdmin    bool      `json:"is_admin" db:"is_admin"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }
 

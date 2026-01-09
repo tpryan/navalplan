@@ -1,18 +1,23 @@
 import { API } from './api.js';
 
+export let currentUser = null;
+
 export async function checkSession() {
     console.log('Auth: Checking session...');
     try {
         const person = await API.getPerson();
         console.log('Auth: Session found', person);
         if (person) {
+            currentUser = person;
             updateUIForLogin(person);
         } else {
             console.warn('Auth: No person returned');
+            currentUser = null;
             updateUIForLogout();
         }
     } catch (e) {
         console.error('Auth: Session check failed', e);
+        currentUser = null;
         updateUIForLogout();
     }
 }

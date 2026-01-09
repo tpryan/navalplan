@@ -1,7 +1,7 @@
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { exportToGoogleDocs } from './google_export.js';
-import { checkSession } from './auth.js';
+import { checkSession, currentUser } from './auth.js';
 
 // Dynamic library loading
 let mapboxglLib = null;
@@ -3012,12 +3012,13 @@ async function showRegionBriefing(props, month) {
                 </table>
             </div>
 
+            ${(currentUser && currentUser.is_admin) ? `
             <div class="mt-xl flex justify-end">
                 <button id="btn-delete-region-seasonality" class="btn-text btn-danger font-sm">
                     <span class="material-symbols-outlined font-md">delete</span>
                     Remove for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}
                 </button>
-            </div>
+            </div>` : ''}
         </div>
     `);
 
@@ -3032,21 +3033,24 @@ async function showRegionBriefing(props, month) {
     document.getElementById('btn-close-region-briefing').onclick = hide;
     overlay.onclick = hide;
 
-    document.getElementById('btn-delete-region-seasonality').onclick = async () => {
-        if (!confirm(`Are you sure you want to remove ${props.name} from the discovery list for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`)) {
-            return;
-        }
+    const btnDelete = document.getElementById('btn-delete-region-seasonality');
+    if (btnDelete) {
+        btnDelete.onclick = async () => {
+            if (!confirm(`Are you sure you want to remove ${props.name} from the discovery list for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`)) {
+                return;
+            }
 
-        try {
-            await API.deleteDiscoverySeasonality(props.id, month);
-            hide();
-            // Refresh discovery regions
-            loadDiscoveryRegions(month);
-        } catch (err) {
-            console.error('Failed to delete region seasonality:', err);
-            alert('Failed to remove region. Please try again.');
-        }
-    };
+            try {
+                await API.deleteDiscoverySeasonality(props.id, month);
+                hide();
+                // Refresh discovery regions
+                loadDiscoveryRegions(month);
+            } catch (err) {
+                console.error('Failed to delete region seasonality:', err);
+                alert('Failed to remove region. Please try again.');
+            }
+        };
+    }
 }
 
 async function initSharedMode(token) {
