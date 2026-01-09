@@ -270,18 +270,16 @@ func (h *Handler) performDiscoveryMining(month int) {
 		Geom     *geojson.Geometry
 	}
 	var parsedActive []activeReg
-	if activeRegions != nil {
-		for _, er := range activeRegions {
-			g, err := geojson.UnmarshalGeometry(er.Geometry)
-			if err == nil {
-				parsedActive = append(parsedActive, activeReg{
-					ID:       er.SailingRegion.ID,
-					Name:     er.Name,
-					Tier:     er.Tier,
-					IsHidden: er.IsHiddenGem,
-					Geom:     g,
-				})
-			}
+	for _, er := range activeRegions {
+		g, err := geojson.UnmarshalGeometry(er.Geometry)
+		if err == nil {
+			parsedActive = append(parsedActive, activeReg{
+				ID:       er.SailingRegion.ID,
+				Name:     er.Name,
+				Tier:     er.Tier,
+				IsHidden: er.IsHiddenGem,
+				Geom:     g,
+			})
 		}
 	}
 
