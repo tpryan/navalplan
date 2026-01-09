@@ -8,3 +8,4 @@ services/researcher/researcher
 services/researcher/vendor
 .env
 app/backend/navalplan-backend
+.gemini/settings.json
