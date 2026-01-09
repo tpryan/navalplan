@@ -84,6 +84,14 @@ function initUI() {
   if (btnCloseDiscovery) {
       btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
   }
+  
+  const btnCloseDiscoveryIntro = document.getElementById('btn-close-discovery-intro');
+  if (btnCloseDiscoveryIntro) {
+      btnCloseDiscoveryIntro.addEventListener('click', () => {
+          document.getElementById('modal-discovery-intro').classList.add('hidden');
+          document.getElementById('modal-overlay').classList.add('hidden');
+      });
+  }
 
   // Month Slider
   if (monthSlider) {
@@ -2798,6 +2806,17 @@ async function toggleDiscoveryMode(active) {
         
         // Zoom out to world view
         if (map) map.flyTo({ center: [0, 20], zoom: 2 });
+
+        // Show Intro Modal if first time
+        if (!localStorage.getItem('seenDiscoveryIntro')) {
+            const introModal = document.getElementById('modal-discovery-intro');
+            const overlay = document.getElementById('modal-overlay');
+            if (introModal && overlay) {
+                introModal.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+                localStorage.setItem('seenDiscoveryIntro', 'true');
+            }
+        }
     } else {
         discoveryControls.classList.add('hidden');
         sidebar.classList.remove('hidden');
@@ -2832,6 +2851,14 @@ async function renderDiscoveryLayer() {
         console.log('No discovery regions to render.');
         return;
     }
+
+    // Sort by area (descending) so large areas are drawn first (bottom) and small on top.
+    // We parse geometry if it's a string to calculate area, but we don't modify the original object structure yet
+    discoveryRegions.sort((a, b) => {
+        const geomA = typeof a.geometry === 'string' ? JSON.parse(a.geometry) : a.geometry;
+        const geomB = typeof b.geometry === 'string' ? JSON.parse(b.geometry) : b.geometry;
+        return calculateGeometryArea(geomB) - calculateGeometryArea(geomA);
+    });
 
     const geojson = {
         type: 'FeatureCollection',
@@ -2918,6 +2945,29 @@ async function renderDiscoveryLayer() {
         });
     }
 }
+
+function calculateGeometryArea(geometry) {
+    if (!geometry) return 0;
+    if (geometry.type === 'Polygon') {
+        return calculatePolygonArea(geometry.coordinates);
+    } else if (geometry.type === 'MultiPolygon') {
+        return geometry.coordinates.reduce((sum, polygonCoords) => sum + calculatePolygonArea(polygonCoords), 0);
+    }
+    return 0;
+}
+
+function calculatePolygonArea(coordinates) {
+    let area = 0;
+    if (coordinates && coordinates.length > 0) {
+        // Outer ring is the first element
+        const ring = coordinates[0]; 
+        for (let i = 0; i < ring.length - 1; i++) {
+            area += ring[i][0] * ring[i+1][1] - ring[i+1][0] * ring[i][1];
+        }
+    }
+    return Math.abs(area / 2);
+}
+
 
 async function showRegionBriefing(props, month) {
     const modal = document.getElementById('modal-region-briefing');
