@@ -2004,16 +2004,13 @@ async function captureAndUploadMap(voyageId) {
         `;
 
         // --- Consolidated View ---
+        const gridCols = Math.min(sortedStops.length, 4);
         html += `<div class="report-section-wrapper">
             <h2 class="report-day-header brand-blue">Voyage Overview</h2>
-            <table class="overview-table">
+            <div class="overview-grid grid-cols-${gridCols}">
         `;
             
         sortedStops.forEach((stop, idx) => {
-            if (idx % 4 === 0) {
-                html += '<tr>';
-            }
-
             const briefing = briefings[idx] || {};
             const date = new Date(stop.target_date);
             const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -2031,7 +2028,7 @@ async function captureAndUploadMap(voyageId) {
             const canvasId = `miniTideChart_${idx}`;
 
             html += `
-                <td class="overview-card">
+                <div class="overview-card">
                     <div class="overview-date">
                         ${dateStr}
                     </div>
@@ -2052,14 +2049,10 @@ async function captureAndUploadMap(voyageId) {
                     <div class="overview-chart">
                         <canvas id="${canvasId}"></canvas>
                     </div>
-                </td>
+                </div>
             `;
-
-            if (idx % 4 === 3 || idx === sortedStops.length - 1) {
-                html += '</tr>';
-            }
         });
-        html += `</table></div><hr />`;
+        html += `</div></div><hr />`;
 
         // --- Add Destination Guide Section ---
         if (guide) {

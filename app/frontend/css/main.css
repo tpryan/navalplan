@@ -307,20 +307,54 @@
 .error-text { color: red; }
 
 /* Voyage Overview (Report) */
-.overview-table {
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* Default fallback */
+    gap: 10px;
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 10px;
+    margin-bottom: 1rem;
 }
+
+.overview-grid.grid-cols-1 { grid-template-columns: 1fr; }
+.overview-grid.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.overview-grid.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.overview-grid.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 1000px) {
+    .overview-grid, 
+    .overview-grid.grid-cols-4, 
+    .overview-grid.grid-cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .overview-grid, 
+    .overview-grid.grid-cols-4, 
+    .overview-grid.grid-cols-3, 
+    .overview-grid.grid-cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .overview-grid, 
+    .overview-grid.grid-cols-4, 
+    .overview-grid.grid-cols-3, 
+    .overview-grid.grid-cols-2,
+    .overview-grid.grid-cols-1 {
+        grid-template-columns: 1fr;
+    }
+}
+
 .overview-card {
     border: 1px solid #ccc;
     border-radius: 8px;
     padding: 10px;
-    width: 21%;
-    min-width: 150px;
     background: #fff;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    vertical-align: top;
+    display: flex;
+    flex-direction: column;
 }
 .overview-date {
     font-weight: bold;
