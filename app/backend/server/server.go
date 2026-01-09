@@ -48,8 +48,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		log.Warn("Initializing server with EMPTY Google Client ID!")
 	}
 
-	docsService := handlers.NewGoogleDocsService()
-	h := handlers.New(db, docsService, cfg.ContentDir, cfg.NavalPlanAgentURL)
+	h := handlers.New(db, cfg.ContentDir, cfg.NavalPlanAgentURL)
 
 	s := &Server{
 		Mux:          http.NewServeMux(),

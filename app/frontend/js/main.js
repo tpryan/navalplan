@@ -1,6 +1,5 @@
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
-import { exportToGoogleDocs } from './google_export.js';
 import { checkSession, currentUser } from './auth.js';
 
 // Dynamic library loading

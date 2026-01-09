@@ -14,8 +14,6 @@ tags:
     description: Operations for specific days/locations within a voyage
   - name: Research
     description: AI Agent interaction for destination data
-  - name: Export
-    description: Generation of Google Docs logbooks
 
 components:
   securitySchemes:
@@ -71,13 +69,6 @@ components:
           type: string
           default: "nm"
           enum: ["nm", "km", "mi"]
-        google_doc_id:
-          type: string
-          nullable: true
-        last_exported_at:
-          type: string
-          format: date-time
-          nullable: true
         share_token:
           type: string
           nullable: true
@@ -283,24 +274,6 @@ components:
             type: string
 
     # --- Requests ---
-    ExportRequest:
-      type: object
-      properties:
-        mode:
-          type: string
-          enum: [create, append]
-          default: create
-        existing_doc_id:
-          type: string
-          description: Required if mode is 'append'
-
-    ExportResponse:
-      type: object
-      properties:
-        doc_url:
-          type: string
-        doc_id:
-          type: string
 
 paths:
   # --- System ---
@@ -668,29 +641,3 @@ paths:
                 $ref: '#/components/schemas/Briefing'
         '404':
           description: Briefing not found (or research still in progress)
-
-  # --- Export ---
-  /api/v1/voyages/{id}/export:
-    post:
-      tags: [Export]
-      summary: Generate a Google Doc Logbook
-      security:
-        - SessionAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExportRequest'
-      responses:
-        '200':
-          description: Export Successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExportResponse'

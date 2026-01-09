@@ -60,8 +60,9 @@ func TestGetVoyage(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "My Voyage")
-	query := `SELECT * FROM voyage WHERE id = $1`
-	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
+	// Match any select fields
+	query := `SELECT .+ FROM voyage WHERE id = \$1`
+	mock.ExpectQuery(query).WithArgs(1).WillReturnRows(rows)
 
 	v, err := db.GetVoyage(context.Background(), 1)
 	assert.NoError(t, err)
@@ -85,8 +86,8 @@ func TestGetVoyageByToken(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Public Voyage")
-	query := `SELECT * FROM voyage WHERE share_token = $1 AND is_public = true`
-	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs("abc").WillReturnRows(rows)
+	query := `SELECT .+ FROM voyage WHERE share_token = \$1 AND is_public = true`
+	mock.ExpectQuery(query).WithArgs("abc").WillReturnRows(rows)
 
 	v, err := db.GetVoyageByToken(context.Background(), "abc")
 	assert.NoError(t, err)

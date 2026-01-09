@@ -37,8 +37,6 @@ type Voyage struct {
 	Longitude        *float64   `json:"longitude" db:"longitude"`
 	SearchRadius     int        `json:"search_radius" db:"search_radius"`
 	SearchRadiusUnit string     `json:"search_radius_unit" db:"search_radius_unit"`
-	GoogleDocID      *string    `json:"google_doc_id" db:"google_doc_id"`
-	LastExportedAt   *time.Time `json:"last_exported_at" db:"last_exported_at"`
 	ShareToken       *string    `json:"share_token" db:"share_token"`
 	IsPublic         bool       `json:"is_public" db:"is_public"`
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`

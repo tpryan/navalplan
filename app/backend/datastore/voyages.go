@@ -69,7 +69,11 @@ func (db *DB) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *str
 // GetVoyageByToken retrieves a public voyage using its share token.
 func (db *DB) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	var v models.Voyage
-	query := `SELECT * FROM voyage WHERE share_token = $1 AND is_public = true`
+	query := `
+		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, 
+		       search_radius, search_radius_unit, share_token, is_public, created_at
+		FROM voyage 
+		WHERE share_token = $1 AND is_public = true`
 	err := db.GetContext(ctx, &v, query, token)
 	if err != nil {
 		return nil, err
@@ -80,7 +84,11 @@ func (db *DB) GetVoyageByToken(ctx context.Context, token string) (*models.Voyag
 // GetVoyage retrieves a voyage by its ID.
 func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 	var v models.Voyage
-	query := `SELECT * FROM voyage WHERE id = $1`
+	query := `
+		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, 
+		       search_radius, search_radius_unit, share_token, is_public, created_at
+		FROM voyage 
+		WHERE id = $1`
 	err := db.GetContext(ctx, &v, query, id)
 	if err != nil {
 		return nil, err

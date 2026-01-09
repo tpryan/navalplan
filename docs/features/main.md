@@ -87,23 +87,14 @@ The **Researcher** is a stateless service built with `google.golang.org/adk`. It
 
 ---
 
-### 4. Feature: Export to Google Docs
-
-This feature turns the digital plan into a printable/offline "Voyage Logbook."
-
-* **Technology:** Google Docs API v1 (specifically `batchUpdate`).
-* **Format:** **Document Tabs** (New Feature).
-* **Tab 1: Voyage Overview.** Map image of the whole route, itinerary table, total distance.
-* **Tabs 2..N: Daily Briefings.** One tab per Stop (labeled "July 12 - Roche Harbor").
-
-
-* **Content per Tab:**
-* **Header:** Date & Location Name.
-* **Conditions:** Table showing Morning/Afternoon/Evening wind & wave forecasts.
-* **Tides:** Simple list of High/Low times.
-* **Local Knowledge:** Bulleted list of Anchorages (Holding info) and Marinas (Contact info).
-* **Log Entry:** Empty space/lines for the user to write manual logs while underway.
-
+### 4. Feature: Voyage Sharing
+* **Goal:** Allow users to share a read-only view of their voyage with friends/family via a secret link.
+* **Technology:** Unique Token generation, Public API endpoints.
+* **Flow:**
+    1. User clicks "Share".
+    2. Server generates a random URL-safe token (saved to `voyage` table).
+    3. User gets a link: `https://navalplan.app/shared/{token}`.
+    4. Anyone with the link can view the Itinerary and Guide (Read-Only).
 
 
 ---
@@ -138,4 +129,3 @@ We will expose a standard REST API.
 * `POST /api/v1/voyages/{id}/stops`: Add a stop (User clicks map).
 * `POST /api/v1/stops/{id}/research`: Trigger the Agent (Async).
 * `GET /api/v1/stops/{id}/briefing`: Poll for agent results.
-* `POST /api/v1/voyages/{id}/export`: Trigger Google Doc generation.

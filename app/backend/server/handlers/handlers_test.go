@@ -16,7 +16,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/api/docs/v1"
 )
 
 type MockStore struct {
@@ -237,23 +236,6 @@ func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month i
 
 var _ datastore.Store = (*MockStore)(nil)
 
-type MockDocsService struct {
-	mock.Mock
-}
-
-func (m *MockDocsService) Create(ctx context.Context, title string) (*docs.Document, error) {
-	args := m.Called(ctx, title)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*docs.Document), args.Error(1)
-}
-
-func (m *MockDocsService) BatchUpdate(ctx context.Context, docID string, requests []*docs.Request) error {
-	args := m.Called(ctx, docID, requests)
-	return args.Error(0)
-}
-
 // Helper to add person to context
 func addPerson(req *http.Request, id int64) *http.Request {
 	person := &models.Person{ID: id, Name: "Test User"}
@@ -263,7 +245,7 @@ func addPerson(req *http.Request, id int64) *http.Request {
 
 func TestListVoyages(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/voyages", handler.ListVoyages)
 
@@ -294,7 +276,7 @@ func TestListVoyages(t *testing.T) {
 
 func TestCreateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/voyages", handler.CreateVoyage)
 
@@ -318,7 +300,7 @@ func TestCreateVoyage(t *testing.T) {
 
 func TestGetVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 
 	personID := int64(1)
 	voyageID := int64(123)
@@ -347,7 +329,7 @@ func TestGetVoyage(t *testing.T) {
 
 func TestStopOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /voyages/{id}/stops", handler.ListStops)
 	mux.HandleFunc("POST /voyages/{id}/stops", handler.CreateStop)
@@ -392,7 +374,7 @@ func TestStopOperations(t *testing.T) {
 
 func TestUpdateVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /voyages/{id}", handler.UpdateVoyage)
 
@@ -417,7 +399,7 @@ func TestUpdateVoyage(t *testing.T) {
 
 func TestDeleteVoyage(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /voyages/{id}", handler.DeleteVoyage)
 
@@ -440,7 +422,7 @@ func TestDeleteVoyage(t *testing.T) {
 
 func TestSharingOperations(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /voyages/{id}/share", handler.EnableSharing)
 	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
@@ -478,7 +460,7 @@ func TestSharingOperations(t *testing.T) {
 
 func TestUpdateDeleteStop(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /stops/{id}", handler.UpdateStop)
 	mux.HandleFunc("DELETE /stops/{id}", handler.DeleteStop)
@@ -521,7 +503,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 
 func TestResearchBriefing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /stops/{id}/research", handler.TriggerResearch)
 	mux.HandleFunc("GET /stops/{id}/briefing", handler.GetBriefing)
@@ -557,7 +539,7 @@ func TestResearchBriefing(t *testing.T) {
 
 func TestDisableSharing(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /voyages/{id}/share", handler.DisableSharing)
 
@@ -583,7 +565,7 @@ func TestDisableSharing(t *testing.T) {
 
 func TestTriggerFullVoyageResearch(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /voyages/{id}/research", handler.TriggerFullVoyageResearch)
 
@@ -609,7 +591,7 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 func TestPersonHandlers(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, nil, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /person", handler.GetPerson)
 	mux.HandleFunc("PUT /person", handler.UpdatePerson)
@@ -656,7 +638,7 @@ func TestGuideHandlers(t *testing.T) {
 	mockStore := new(MockStore)
 	// Use a temp dir for content to test map upload/retrieval
 	tempDir := t.TempDir()
-	handler := handlers.New(mockStore, nil, tempDir, "http://test-agent")
+	handler := handlers.New(mockStore, tempDir, "http://test-agent")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /voyages/{id}/guide", handler.GetVoyageGuide)
 	mux.HandleFunc("POST /voyages/{id}/research_guide", handler.TriggerGuideResearch)

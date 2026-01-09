@@ -2,8 +2,6 @@ module app
 
 go 1.25.4
 
-require github.com/go-chi/chi/v5 v5.2.3
-
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -32,7 +30,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
