@@ -57,7 +57,7 @@ func (h *Handler) ExportVoyage(w http.ResponseWriter, r *http.Request) {
 	allBriefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
 	if err != nil {
 		// Log error but proceed? Or fail? The original code ignored errors for individual briefings.
-		// We'll proceed with an empty map if fetch fails, to match partial behavior, 
+		// We'll proceed with an empty map if fetch fails, to match partial behavior,
 		// but ideally we should probably log it.
 		allBriefings = []models.Briefing{}
 	}

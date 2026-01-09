@@ -374,13 +374,13 @@ func TestStopOperations(t *testing.T) {
 	reqCreate = addPerson(reqCreate, personID)
 	wCreate := httptest.NewRecorder()
 
-	// CreateStop doesn't strictly check Voyage ownership because it relies on the user providing VoyageID in URL? 
+	// CreateStop doesn't strictly check Voyage ownership because it relies on the user providing VoyageID in URL?
 	// Wait, standard convention: POST /voyages/{id}/stops.
 	// We need to check if user owns voyage {id}.
 	// Let's see Handler implementation (not shown in provided snippet, but assumed correct or updated if I edited `stops.go`? I did not edit `stops.go`. User said `stops.go` "shows you know how to implement ownership checks".
 	// Assuming `stops.go` CreateStop checks ownership.
 	// I'll add the expectation just in case.
-	
+
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil) // Logic in CreateStop usually checks this
 	mockStore.On("CreateStop", mock.MatchedBy(func(s *models.Stop) bool {
 		return s.LocationName == "New Stop" && s.VoyageID == 1
@@ -405,7 +405,7 @@ func TestUpdateVoyage(t *testing.T) {
 
 	// Ownership check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-	
+
 	mockStore.On("UpdateVoyage", mock.MatchedBy(func(v *models.Voyage) bool {
 		return v.ID == voyageID && v.Title == "Updated Voyage"
 	})).Return(nil)
@@ -423,7 +423,7 @@ func TestDeleteVoyage(t *testing.T) {
 
 	personID := int64(1)
 	voyageID := int64(456)
-	
+
 	// Ownership check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 
@@ -452,9 +452,9 @@ func TestSharingOperations(t *testing.T) {
 	// Enable Sharing
 	// Ownership check in EnableSharing
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
-	
+
 	mockStore.On("UpdateVoyageSharing", voyageID, mock.AnythingOfType("*string"), true).Return(nil)
-	
+
 	// Refetch in EnableSharing
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
 
@@ -509,7 +509,7 @@ func TestUpdateDeleteStop(t *testing.T) {
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 	mockStore.On("DeleteStop", stopID).Return(nil)
-	
+
 	reqDelete := httptest.NewRequest("DELETE", "/stops/100", nil)
 	reqDelete = addPerson(reqDelete, personID)
 	wDelete := httptest.NewRecorder()
@@ -533,7 +533,7 @@ func TestResearchBriefing(t *testing.T) {
 	// Trigger
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-	
+
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
 	reqTrigger = addPerson(reqTrigger, personID)
 	wTrigger := httptest.NewRecorder()
@@ -563,12 +563,12 @@ func TestDisableSharing(t *testing.T) {
 
 	personID := int64(1)
 	voyageID := int64(1)
-	
+
 	// Ownership Check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
-	
+
 	mockStore.On("UpdateVoyageSharing", voyageID, (*string)(nil), false).Return(nil)
-	
+
 	// Refetch
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
 
@@ -589,10 +589,10 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 	personID := int64(1)
 	voyageID := int64(1)
-	
+
 	// Ownership Check
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-	
+
 	mockStore.On("ListStops", voyageID, 0, 0).Return([]models.Stop{
 		{ID: 10, LocationName: "Stop 1"},
 		{ID: 11, LocationName: "Stop 2"},
@@ -667,7 +667,7 @@ func TestGuideHandlers(t *testing.T) {
 		voyageID := int64(1)
 		// Ownership Check
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-		
+
 		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{ID: 1, Summary: "Found"}, nil)
 		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
 
@@ -688,7 +688,7 @@ func TestGuideHandlers(t *testing.T) {
 		voyageID := int64(999)
 		// Ownership Check
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-		
+
 		mockStore.On("GetVoyageGuide", voyageID).Return(nil, assert.AnError)
 		mockStore.On("GetVoyageMap", voyageID).Return(nil, assert.AnError)
 

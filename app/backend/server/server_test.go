@@ -274,7 +274,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// We need to define a route that uses the middleware.
 	// The existing /api/v1/person uses it.
-	
+
 	t.Run("No Cookie", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/person", nil)
 		w := httptest.NewRecorder()
@@ -285,7 +285,7 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("Invalid Session", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/v1/person", nil)
 		req.AddCookie(&http.Cookie{Name: "navalplan_session", Value: "invalid-token"})
-		
+
 		mockStore.On("GetSession", mock.Anything, "invalid-token").Return(nil, nil)
 
 		w := httptest.NewRecorder()
@@ -296,16 +296,16 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("Valid Session", func(t *testing.T) {
 		token := "valid-token"
 		personID := int64(1)
-		
+
 		req := httptest.NewRequest("GET", "/api/v1/person", nil)
 		req.AddCookie(&http.Cookie{Name: "navalplan_session", Value: token})
 
 		mockStore.On("GetSession", mock.Anything, token).Return(&models.Session{Token: token, PersonID: personID}, nil)
 		mockStore.On("GetPersonByID", mock.Anything, personID).Return(&models.Person{ID: personID, Name: "Test User"}, nil)
-		
+
 		w := httptest.NewRecorder()
 		srv.Mux.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 

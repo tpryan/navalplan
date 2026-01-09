@@ -26,13 +26,13 @@ func TestTideBufferRange(t *testing.T) {
 	// Verify the 48h buffer logic
 	dateStr := "2026-05-29"
 	parsedDate, _ := time.Parse("2006-01-02", dateStr)
-	
+
 	beginDate := parsedDate.Add(-48 * time.Hour)
 	endDate := parsedDate.Add(48 * time.Hour)
-	
+
 	expectedBegin := parsedDate.AddDate(0, 0, -2)
 	expectedEnd := parsedDate.AddDate(0, 0, 2)
-	
+
 	if !beginDate.Equal(expectedBegin) {
 		t.Errorf("Begin date mismatch: got %v, want %v", beginDate, expectedBegin)
 	}

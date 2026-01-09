@@ -13,7 +13,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 	ctx := context.Background()
 	// Use a mock model if possible, or just check configuration
 	// For now, let's see if it instantiates without error (requires API key if real)
-	
+
 	modelName := "gemini-2.0-flash-001"
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {

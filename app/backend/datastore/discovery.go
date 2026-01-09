@@ -112,8 +112,13 @@ func (db *DB) UpsertSeasonality(ctx context.Context, s *models.RegionSeasonality
 	}
 	defer rows.Close()
 
-	return nil
+	if rows.Next() {
+		if err := rows.Scan(&s.ID, &s.CreatedAt); err != nil {
+			return fmt.Errorf("failed to scan upserted seasonality: %w", err)
+		}
+	}
 
+	return nil
 }
 
 // GetAllRegions returns all sailing regions.
