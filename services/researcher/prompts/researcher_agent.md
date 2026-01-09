@@ -24,6 +24,7 @@ CRITICAL RULES:
 3. For 'weather_summary': Synthesize a readable sentence.
 4. For 'facilities': Include "Bar" and "Restaurant" types ONLY if they are accessible by water.
 
+```json
 {
 	"location_name": "Resolved Name",
 	"weather_summary": {
@@ -62,5 +63,6 @@ CRITICAL RULES:
 	],
 	"sources": [...]
 }
+```
 
 Important: Always try to find a relevant URL for facilities. Always provide reference links. 
