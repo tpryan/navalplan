@@ -4,16 +4,21 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"app/config"
 	"app/datastore"
 	"app/server/handlers"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+var timeWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
+var timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 
 // Server holds the application dependencies and router.
 type Server struct {
@@ -47,11 +52,11 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 	h := handlers.New(db, docsService, cfg.ContentDir, cfg.NavalPlanAgentURL)
 
 	s := &Server{
-		Mux:     http.NewServeMux(),
-		DB:      db,
-		Env:     cfg.Env,
-		BaseURL: cfg.BaseURL,
-		Handler: h,
+		Mux:          http.NewServeMux(),
+		DB:           db,
+		Env:          cfg.Env,
+		BaseURL:      cfg.BaseURL,
+		Handler:      h,
 		SystemAPIKey: cfg.SystemAPIKey,
 		GoogleConfig: &oauth2.Config{
 			RedirectURL:  cfg.BaseURL + "/auth/google/callback",
@@ -104,8 +109,21 @@ func (s *Server) Middleware(h http.Handler) http.Handler {
 
 		h.ServeHTTP(ww, r)
 
-		// 4. Log
-		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, time.Since(start)))
+		if !strings.Contains(r.URL.Path, "/.well-known") {
+
+			timesince := time.Since(start)
+			str := timesince.String()
+
+			switch {
+			case timesince > time.Second*2:
+				str = timeUrgentWarn.Render(str)
+			case timesince > time.Millisecond*100:
+				str = timeWarn.Render(str)
+
+			}
+
+			log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
+		}
 	})
 }
 
@@ -119,4 +137,3 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
-

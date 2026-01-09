@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	clog "github.com/charmbracelet/log"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
@@ -25,6 +26,12 @@ import (
 	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
 )
+
+var timeWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
+var timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+
+var thresholdWarn = time.Second * 5
+var thresholdUrgentWarn = time.Second * 30
 
 //go:embed prompts/search_specialist.md
 var searchSpecialistPrompt string
@@ -53,7 +60,19 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(ww, r)
-		clog.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, time.Since(start)))
+
+		timesince := time.Since(start)
+		str := timesince.String()
+
+		switch {
+		case timesince > time.Second*2:
+			str = timeUrgentWarn.Render(str)
+		case timesince > time.Millisecond*100:
+			str = timeWarn.Render(str)
+
+		}
+
+		clog.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 	})
 }
 
@@ -253,8 +272,18 @@ func onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[strin
 
 func onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
 	if startTime, ok := toolTimings.LoadAndDelete(ctx.FunctionCallID()); ok {
-		duration := time.Since(startTime.(time.Time))
-		clog.Info("Tool performance", "tool", t.Name(), "duration", duration)
+		timesince := time.Since(startTime.(time.Time))
+		str := timesince.String()
+
+		switch {
+		case timesince > thresholdUrgentWarn:
+			str = timeUrgentWarn.Render(str)
+		case timesince > thresholdWarn:
+			str = timeWarn.Render(str)
+
+		}
+
+		clog.Info(fmt.Sprintf("tool:%s  %s", t.Name(), str))
 	}
 	return result, nil
 }

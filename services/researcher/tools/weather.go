@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/tpryan/openmeteogo"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
@@ -45,6 +46,7 @@ func NewWeatherTool() (tool.Tool, error) {
 
 func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 	start := time.Now()
+	log.Infof("tool:get_weather Fetching weather for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
 	// 1. Parse Inputs
 	targetDate, err := time.Parse("2006-01-02", args.Date)
 	if err != nil {
