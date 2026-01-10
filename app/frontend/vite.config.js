@@ -2,8 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   define: {
-    '__MAPBOX_TOKEN__': JSON.stringify(process.env.NAVALPLAN_MB_TOKEN || ''),
-    '__MAPBOX_STYLE__': JSON.stringify(process.env.NAVALPLAN_MB_STYLE || 'mapbox://styles/mapbox/outdoors-v12'),
+    '__GOOGLE_MAPS_API_KEY__': JSON.stringify(process.env.NAVALPLAN_FRONTEND_MAPS_API_KEY || ''),
   },
   server: {
     proxy: {

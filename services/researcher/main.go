@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	clog "github.com/charmbracelet/log"
+	"github.com/joho/godotenv"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -86,6 +87,20 @@ func main() {
 	stdLog := clog.StandardLog()
 	log.SetOutput(stdLog.Writer())
 	log.SetFlags(0)
+
+	// Load .env
+	godotenv.Load("../../.env")
+
+	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
+	if mapsKey != "" {
+		if len(mapsKey) > 5 {
+			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
+		} else {
+			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
+		}
+	} else {
+		clog.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
+	}
 
 	ctx := context.Background()
 
@@ -183,6 +198,11 @@ func CreateResearcherAgent(model model.LLM) (agent.Agent, error) {
 		return nil, err
 	}
 
+	placesTool, err := tools.NewPlacesTool()
+	if err != nil {
+		return nil, err
+	}
+
 	// 2. Define Sub-Agent (Search Specialist)
 	searchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "search_specialist",
@@ -208,6 +228,7 @@ func CreateResearcherAgent(model model.LLM) (agent.Agent, error) {
 			weatherTool,
 			tideTool,
 			sunriseTool,
+			placesTool,
 			agenttool.New(searchAgent, nil),
 		},
 		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},

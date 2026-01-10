@@ -27,19 +27,20 @@ type Session struct {
 
 // Voyage represents a planned trip.
 type Voyage struct {
-	ID               int64      `json:"id" db:"id"`
-	PersonID         int64      `json:"person_id" db:"person_id"`
-	Title            string     `json:"title" db:"title"`
-	StartDate        time.Time  `json:"start_date" db:"start_date"`
-	EndDate          time.Time  `json:"end_date" db:"end_date"`
-	LocationName     *string    `json:"location_name" db:"location_name"`
-	Latitude         *float64   `json:"latitude" db:"latitude"`
-	Longitude        *float64   `json:"longitude" db:"longitude"`
-	SearchRadius     int        `json:"search_radius" db:"search_radius"`
-	SearchRadiusUnit string     `json:"search_radius_unit" db:"search_radius_unit"`
-	ShareToken       *string    `json:"share_token" db:"share_token"`
-	IsPublic         bool       `json:"is_public" db:"is_public"`
-	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
+	ID               int64     `json:"id" db:"id"`
+	PersonID         int64     `json:"person_id" db:"person_id"`
+	Title            string    `json:"title" db:"title"`
+	StartDate        time.Time `json:"start_date" db:"start_date"`
+	EndDate          time.Time `json:"end_date" db:"end_date"`
+	LocationName     *string   `json:"location_name" db:"location_name"`
+	PreciseLocation  *string   `json:"precise_location" db:"precise_location"`
+	Latitude         *float64  `json:"latitude" db:"latitude"`
+	Longitude        *float64  `json:"longitude" db:"longitude"`
+	SearchRadius     int       `json:"search_radius" db:"search_radius"`
+	SearchRadiusUnit string    `json:"search_radius_unit" db:"search_radius_unit"`
+	ShareToken       *string   `json:"share_token" db:"share_token"`
+	IsPublic         bool      `json:"is_public" db:"is_public"`
+	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
 
 // Stop represents a specific stop or waypoint within a voyage.
@@ -48,6 +49,7 @@ type Stop struct {
 	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
 	TargetDate       time.Time `json:"target_date" db:"target_date"`
 	LocationName     string    `json:"location_name" db:"location_name"`
+	PreciseLocation  string    `json:"precise_location" db:"precise_location"`
 	Latitude         float64   `json:"latitude" db:"latitude"`
 	Longitude        float64   `json:"longitude" db:"longitude"`
 	SearchRadius     int       `json:"search_radius" db:"search_radius"`

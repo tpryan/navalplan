@@ -1,13 +1,20 @@
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { checkSession, currentUser } from './auth.js';
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+
+const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
+setOptions({
+  key: GOOGLE_MAPS_API_KEY,
+  version: "weekly",
+});
 
 // Dynamic library loading
-let mapboxglLib = null;
-async function loadMapbox() {
-    if (mapboxglLib) return mapboxglLib;
-    mapboxglLib = (await import('mapbox-gl')).default;
-    return mapboxglLib;
+let googleMapsLib = null;
+async function loadGoogleMaps() {
+    if (googleMapsLib) return googleMapsLib;
+    googleMapsLib = await importLibrary("maps");
+    return googleMapsLib;
 }
 
 let ChartLib = null;
@@ -18,11 +25,10 @@ async function loadChart() {
 }
 
 // Start loading large libraries immediately
-loadMapbox();
+loadGoogleMaps();
 loadChart();
 
 // Configuration
-const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
 
 // State
 let voyages = [];
@@ -31,6 +37,8 @@ let currentStops = [];
 let selectedDate = null;
 let map = null;
 let markers = [];
+let routePolyline = null;
+let facilityMarkers = [];
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -40,6 +48,62 @@ let currentVoyagePage = 1;
 const VOYAGE_PAGE_LIMIT = 20;
 let currentStopPage = 1;
 const STOP_PAGE_LIMIT = 50;
+
+/**
+ * Strips Plus Codes (e.g. "82GQ+6Q ") from location names for cleaner UI display
+ */
+function displayLocationName(name) {
+    if (!name) return "";
+    // Regular expression to match Plus Codes at the start of the string
+    // Matches 4-8 alphanumeric chars + '+' + 2-3 alphanumeric chars followed by space
+    return name.replace(/^[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\s*/i, "").trim();
+}
+
+/**
+ * Smoothing algorithm for polygons (Chaikin's)
+ */
+function smoothPolygon(coordinates, iterations = 2) {
+    if (!coordinates || coordinates.length < 3) return coordinates;
+    
+    let result = coordinates;
+    for (let i = 0; i < iterations; i++) {
+        result = chaikin(result);
+    }
+    return result;
+}
+
+function chaikin(coords) {
+    const newCoords = [];
+    // Handle the closed loop: if last point == first point, we smooth across it
+    const isClosed = coords[0][0] === coords[coords.length-1][0] && coords[0][1] === coords[coords.length-1][1];
+    
+    for (let i = 0; i < coords.length - 1; i++) {
+        const p0 = coords[i];
+        const p1 = coords[i + 1];
+        
+        const q = [
+            0.75 * p0[0] + 0.25 * p1[0],
+            0.75 * p0[1] + 0.25 * p1[1]
+        ];
+        const r = [
+            0.25 * p0[0] + 0.75 * p1[0],
+            0.25 * p0[1] + 0.75 * p1[1]
+        ];
+        
+        newCoords.push(q);
+        newCoords.push(r);
+    }
+    
+    if (isClosed) {
+        newCoords.push(newCoords[0]); // Re-close
+    } else {
+        // If not closed, keep endpoints (less ideal for smoothing)
+        newCoords.unshift(coords[0]);
+        newCoords.push(coords[coords.length-1]);
+    }
+    
+    return newCoords;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -155,6 +219,7 @@ function initUI() {
     displayCoords.textContent = '';
     inputLat.value = '';
     inputLng.value = '';
+    document.getElementById('voyage-precise-location').value = '';
     editingVoyageId = null;
   };
 
@@ -175,12 +240,51 @@ function initUI() {
 
   // Use Map Center
   if (btnUseMapCenter) {
-    btnUseMapCenter.addEventListener('click', () => {
+    btnUseMapCenter.addEventListener('click', async () => {
       if (!map) return;
       const center = map.getCenter();
-      inputLat.value = center.lat;
-      inputLng.value = center.lng;
-      displayCoords.textContent = `Lat: ${center.lat.toFixed(4)}, Lng: ${center.lng.toFixed(4)}`;
+      const lat = center.lat();
+      const lng = center.lng();
+      inputLat.value = lat;
+      inputLng.value = lng;
+      displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+      // Reverse Geocode
+      try {
+          const { Geocoder } = await importLibrary("geocoding");
+          const geocoder = new Geocoder();
+          const response = await geocoder.geocode({ location: { lat, lng } });
+          if (response.results[0]) {
+              const r = response.results[0];
+              
+              // Extract descriptive name
+              let descName = r.formatted_address;
+              const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
+              
+              const locality = getComp('locality') || getComp('sublocality'); 
+              const region = getComp('administrative_area_level_1');
+              const country = getComp('country');
+              
+              if (locality && country) {
+                  descName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
+              } else if (region && country) {
+                  descName = `${region}, ${country}`;
+              } else if (country) {
+                  descName = country;
+              }
+
+              document.getElementById('voyage-location-name').value = descName;
+
+              if (r.plus_code) {
+                  const pc = r.plus_code;
+                  document.getElementById('voyage-precise-location').value = pc.compound_code || pc.global_code || "";
+              } else {
+                  document.getElementById('voyage-precise-location').value = "";
+              }
+          }
+      } catch (e) {
+          console.warn("Failed to geocode map center", e);
+      }
     });
   }
 
@@ -193,6 +297,7 @@ function initUI() {
       start_date: formData.get('start_date') + 'T00:00:00Z',
       end_date: formData.get('end_date') + 'T00:00:00Z',
       location_name: formData.get('location_name'),
+      precise_location: formData.get('precise_location'),
       latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
       longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
     };
@@ -513,6 +618,53 @@ function initUI() {
             modifiedLists.push({ ul, container, originalItems });
         });
 
+        // 2c. Convert Overview Grid to Table
+        const overviewGrid = content.querySelector('.overview-grid');
+        const overviewReplacements = [];
+
+        if (overviewGrid) {
+            const table = document.createElement('table');
+            table.style.width = '100%';
+            table.style.borderCollapse = 'separate';
+            table.style.borderSpacing = '10px';
+            
+            const cards = Array.from(overviewGrid.querySelectorAll('.overview-card'));
+            let currentRow = null;
+            
+            cards.forEach((card, index) => {
+                // Assuming max 4 columns based on existing logic
+                if (index % 4 === 0) {
+                    currentRow = document.createElement('tr');
+                    table.appendChild(currentRow);
+                }
+                
+                const td = document.createElement('td');
+                td.style.border = '1px solid #ccc';
+                td.style.borderRadius = '8px';
+                td.style.padding = '10px';
+                td.style.backgroundColor = '#fff';
+                td.style.verticalAlign = 'top';
+                td.style.width = '25%'; // Distribute evenly
+                
+                // Move card content to TD
+                while (card.firstChild) {
+                    td.appendChild(card.firstChild);
+                }
+                
+                currentRow.appendChild(td);
+            });
+            
+            // Insert table before grid
+            overviewGrid.parentNode.insertBefore(table, overviewGrid);
+            overviewGrid.style.display = 'none';
+            
+            overviewReplacements.push({
+                grid: overviewGrid,
+                table: table,
+                originalCards: cards
+            });
+        }
+
         // 3. Strip Styles and Classes
         const allElements = content.querySelectorAll('*');
         const originalAttributes = [];
@@ -522,6 +674,8 @@ function initUI() {
             if (tempImages.some(t => t.img === el)) return;
             // Skip the original ULs we just hid
             if (modifiedLists.some(m => m.ul === el)) return;
+            // Skip the original Grid we just hid
+            if (overviewReplacements.some(r => r.grid === el)) return;
 
             originalAttributes.push({
                 el: el,
@@ -645,6 +799,22 @@ function initUI() {
                 img.remove();
             });
             
+            // Restore Overview Grid
+            overviewReplacements.forEach(({ grid, table, originalCards }) => {
+                 // We need to move content back from TDs to Cards
+                 const tds = table.querySelectorAll('td');
+                 tds.forEach((td, i) => {
+                     const card = originalCards[i];
+                     if (card) {
+                         while (td.firstChild) {
+                             card.appendChild(td.firstChild);
+                         }
+                     }
+                 });
+                 table.remove();
+                 grid.style.display = '';
+            });
+
             // Restore Remote Images
             processedImages.forEach(({ el, src }) => {
                 el.src = src;
@@ -686,7 +856,7 @@ function renderVoyageList() {
     const el = document.createElement('div');
     el.className = 'voyage-item';
     
-    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(voyage.location_name)}</p>` : '';
+    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>` : '';
     
     el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
@@ -787,6 +957,7 @@ function openEditModal(voyage) {
     document.getElementById('voyage-start').value = voyage.start_date.split('T')[0];
     document.getElementById('voyage-end').value = voyage.end_date.split('T')[0];
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
+    document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
         document.getElementById('voyage-lat').value = voyage.latitude;
@@ -841,15 +1012,16 @@ async function loadStops() {
 
         if (map) {
             if (currentStops.length > 0) {
-                const mapboxgl = await loadMapbox();
-                const bounds = new mapboxgl.LngLatBounds();
-                currentStops.forEach(stop => bounds.extend([stop.longitude, stop.latitude]));
+                const { LatLngBounds } = await importLibrary("core");
+                const bounds = new LatLngBounds();
+                currentStops.forEach(stop => bounds.extend({ lat: stop.latitude, lng: stop.longitude }));
                 if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                    bounds.extend([currentVoyage.longitude, currentVoyage.latitude]);
+                    bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
                 }
-                map.fitBounds(bounds, { padding: 50, maxZoom: 12 });
+                map.fitBounds(bounds, 100);
             } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                map.flyTo({ center: [currentVoyage.longitude, currentVoyage.latitude], zoom: 9 });
+                map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
+                map.setZoom(8);
             }
         }
     } catch (err) {
@@ -877,7 +1049,7 @@ function renderItinerary() {
         let html = `
             <div class="day-info flex-1">
                 <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
-                <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+                <span class="day-location ${stop ? 'set' : ''}">${stop ? displayLocationName(stop.location_name) : 'No destination'}</span>
             </div>
         `;
         
@@ -898,7 +1070,7 @@ function renderItinerary() {
         el.innerHTML = DOMPurify.sanitize(html);
         
         // Handlers
-        el.querySelector('.day-info').addEventListener('click', () => selectDate(dateStr));
+        el.addEventListener('click', () => selectDate(dateStr));
         
         if (stop) {
             const btnResearch = el.querySelector('.research');
@@ -910,7 +1082,7 @@ function renderItinerary() {
             const btnDelete = el.querySelector('.delete-stop');
             btnDelete.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (confirm(`Remove stop at ${stop.location_name}?`)) {
+                if (confirm(`Remove stop at ${displayLocationName(stop.location_name)}?`)) {
                     try {
                         await API.deleteStop(stop.id);
                         currentStops = currentStops.filter(s => s.id !== stop.id);
@@ -1306,9 +1478,9 @@ async function showBriefing(briefing) {
                     } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
                         let rows = `
-                            <tr>
-                                <th class="briefing-th briefing-table-label-width">Type</th>
-                                <td class="briefing-td">${f.type}</td>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                             </tr>
                         `;
                         
@@ -1319,23 +1491,37 @@ async function showBriefing(briefing) {
                                 return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                             })
                             .map(([k, v]) => `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td">${v}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                         locHtml = `
                             <p class="map-link-p">
                                 <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                 <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let websiteHtml = '';
+                    if (f.website) {
+                        websiteHtml = `
+                            <p class="map-link-p" style="margin-top: 0;">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                             </p>
                         `;
                     }
@@ -1347,6 +1533,7 @@ async function showBriefing(briefing) {
                                 ${f.name}
                             </h4>
                             ${locHtml}
+                            ${websiteHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -1431,75 +1618,86 @@ async function redoBriefing(oldBriefing, btn) {
 
 
 function selectDate(dateStr) {
-    selectedDate = dateStr;
+    if (selectedDate === dateStr) {
+        selectedDate = null; // Toggle off
+    } else {
+        selectedDate = dateStr; // Select new
+    }
+    
     renderItinerary(); // Re-render to show selection highlight
     
     // Auto-close menu on mobile
     document.getElementById('app').classList.remove('menu-open');
     
-    // Zoom to existing stop if present
-    const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
-    if (stop && map) {
-        map.flyTo({ center: [stop.longitude, stop.latitude], zoom: 10 });
+    // Zoom to existing stop if present (only if selected)
+    if (selectedDate) {
+        const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
+        if (stop && map) {
+            map.panTo({ lat: stop.latitude, lng: stop.longitude });
+            map.setZoom(14);
+        }
     }
 }
 
 async function initMap() {
-  if (!MAPBOX_TOKEN) {
-    console.error('Mapbox token is missing. Please set NAVALPLAN_MB_TOKEN environment variable during build.');
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.error('Google Maps API key is missing. Please set NAVALPLAN_FRONTEND_MAPS_API_KEY environment variable during build.');
     const mapContainer = document.getElementById('map-container');
     if (mapContainer) {
         mapContainer.innerHTML = `
             <div class="flex flex-col items-center justify-center h-full text-center p-xl">
                 <span class="material-symbols-outlined icon-xl text-gray mb-md">map</span>
                 <h2 class="text-dark">Map Configuration Missing</h2>
-                <p class="text-gray max-w-sm">The Mapbox access token is not set. Please configure <code>NAVALPLAN_MB_TOKEN</code> in your environment and rebuild the application.</p>
+                <p class="text-gray max-w-sm">The Google Maps API key is not set. Please configure <code>NAVALPLAN_FRONTEND_MAPS_API_KEY</code> in your environment and rebuild the application.</p>
             </div>
         `;
     }
     return;
   }
 
-  const mapboxgl = await loadMapbox();
-  mapboxgl.accessToken = MAPBOX_TOKEN;
+  const { Map } = await loadGoogleMaps();
+  const { Geocoder } = await importLibrary("geocoding");
 
-  map = new mapboxgl.Map({
-    container: 'map-container',
-    style: __MAPBOX_STYLE__,
-    center: [-98.5795, 39.8283], // Center of USA
+  map = new Map(document.getElementById("map-container"), {
+    center: { lat: 20, lng: 0 },
     zoom: 3,
-    preserveDrawingBuffer: true
+    mapId: __GOOGLE_MAPS_MAP_ID__, 
+    disableDefaultUI: false,
+    clickableIcons: false
   });
 
-      map.on('load', () => {
-      console.log('NavalPlan: Map Loaded Successfully');
-    });
+  console.log('NavalPlan: Map Loaded Successfully');
   
-    map.addControl(new mapboxgl.NavigationControl());
-  
-    map.on('click', async (e) => {
+  map.addListener('click', async (e) => {
       if (!currentVoyage || !selectedDate) return;
   
-      const {lng, lat} = e.lngLat;
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
       const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
   
-      // Get features at click point
-      const features = map.queryRenderedFeatures(e.point);
-      console.log('Clicked Features:', features);
-      
-      // Attempt to find a label
+      // Reverse Geocoding
+      const geocoder = new Geocoder();
       let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-      const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
+      let preciseLocation = "";
       
-      if (labelFeature) {
-          locationName = labelFeature.properties.name || labelFeature.properties.name_en;
-          console.log('Found Label:', locationName);
+      try {
+          const response = await geocoder.geocode({ location: e.latLng });
+          if (response.results[0]) {
+              locationName = response.results[0].formatted_address;
+              if (response.results[0].plus_code) {
+                  const pc = response.results[0].plus_code;
+                  preciseLocation = pc.compound_code || pc.global_code || "";
+              }
+          }
+      } catch (err) {
+          console.error("Geocoding failed: " + err);
       }
   
       // Create or Update
       const stopData = {
           target_date: selectedDate + 'T00:00:00Z',
           location_name: locationName,
+          precise_location: preciseLocation,
           latitude: lat,
           longitude: lng,
           search_radius: 5,
@@ -1518,6 +1716,24 @@ async function initMap() {
           }
           renderItinerary();
           renderMapStops();
+
+          // Auto-advance to next empty date
+          if (currentVoyage && selectedDate) {
+              const current = new Date(selectedDate);
+              const next = new Date(current);
+              next.setDate(next.getDate() + 1);
+              
+              // Helper to format YYYY-MM-DD
+              const nextStr = next.toISOString().split('T')[0];
+              const endStr = new Date(currentVoyage.end_date).toISOString().split('T')[0];
+
+              if (nextStr <= endStr) {
+                  const nextStop = currentStops.find(s => s.target_date.startsWith(nextStr));
+                  if (!nextStop) {
+                      selectDate(nextStr);
+                  }
+              }
+          }
       } catch (err) {
           console.error(err);
           alert('Failed to save stop');
@@ -1526,197 +1742,140 @@ async function initMap() {
   }
   
   async function renderMapStops() {
-      clearMap();
-      if (!map) return;
-  
-      const mapboxgl = await loadMapbox();
+    clearMap();
+    if (!map) return;
 
-      // Sort stops by date
-      const sortedStops = [...currentStops].sort((a, b) => 
-          new Date(a.target_date) - new Date(b.target_date)
-      );
-  
-      // Add Markers
-      sortedStops.forEach((stop, index) => {
-          const el = document.createElement('div');
-          el.className = 'marker';
-          el.innerHTML = `<span><b>${index + 1}</b></span>`;
-  
-          const marker = new mapboxgl.Marker(el)
-              .setLngLat([stop.longitude, stop.latitude])
-              .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(`${stop.location_name} (Day ${index + 1})`))
-              .addTo(map);
-          markers.push(marker);
-      });
-  
-      // Fetch and Draw Facilities
-      // We do this async but don't block the line drawing
-      (async () => {
-          const features = [];
-          
-          for (const stop of sortedStops) {
-              try {
-                  const b = await API.getBriefing(stop.id);
-                  if (b && b.facilities) {
-                      b.facilities.forEach(f => {
-                           if (f.latitude && f.longitude) {
-                               let icon = 'marker-15';
-                               const type = (f.type || '').toLowerCase();
-                               if (type.includes('anchorage')) icon = 'harbor-15';
-                               else if (type.includes('marina')) icon = 'warehouse-15';
-                               else if (type.includes('bar')) icon = 'bar-15';
-                               else if (type.includes('restaurant')) icon = 'restaurant-15';
-                               
-                               features.push({
-                                   type: 'Feature',
-                                   geometry: {
-                                       type: 'Point',
-                                       coordinates: [f.longitude, f.latitude]
-                                   },
-                                   properties: {
-                                       title: f.name,
-                                       icon: icon,
-                                       description: f.type,
-                                       lat: f.latitude,
-                                       lng: f.longitude
-                                   }
-                               });
-                           }
-                      });
-                  }
-              } catch (err) {
-                 // Ignore errors fetching briefings for map
-              }
-          }
-          
-          if (features.length > 0) {
-              if (map.getSource('facilities')) {
-                  map.getSource('facilities').setData({
-                      type: 'FeatureCollection',
-                      features: features
-                  });
-              } else {
-                  map.addSource('facilities', {
-                      type: 'geojson',
-                      data: {
-                          type: 'FeatureCollection',
-                          features: features
-                      }
-                  });
-  
-                  map.addLayer({
-                      id: 'facilities-circles',
-                      type: 'circle',
-                      source: 'facilities',
-                      paint: {
-                          'circle-radius': 15,
-                          'circle-opacity': 1,
-                          'circle-color': '#000',
-                          'circle-stroke-width': 1,
-                          'circle-stroke-color': '#314c3b'
-                      }
-                  });
-                  
-                  map.addLayer({
-                      id: 'facilities',
-                      type: 'symbol',
-                      source: 'facilities',
-                      layout: {
-                          'icon-image': ['get', 'icon'],
-                          'icon-size': 1.0,
-                          'icon-allow-overlap': true
-                      }
-                  });
-  
-                  // Click event for facilities
-                  map.on('click', 'facilities', (e) => {
-                      const coords = e.features[0].geometry.coordinates.slice();
-                      const props = e.features[0].properties;
-                      
-                      new mapboxgl.Popup()
-                          .setLngLat(coords)
-                          .setHTML(`
-                              <strong>${props.title}</strong><br>
-                              ${props.description}<br>
-                              <a href="https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}" target="_blank">View on Google Maps</a>
-                          `)
-                          .addTo(map);
-                  });
-                  
-                  // Cursor style
-                  map.on('mouseenter', 'facilities', () => {
-                      map.getCanvas().style.cursor = 'pointer';
-                  });
-                  map.on('mouseleave', 'facilities', () => {
-                      map.getCanvas().style.cursor = '';
-                  });
-              }
-          }
-      })();
-  
-      // Draw Line
-      const coords = sortedStops.map(s => [s.longitude, s.latitude]);
-      
-      if (map.getSource('route')) {
-          map.getSource('route').setData({
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                  type: 'LineString',
-                  coordinates: coords
-              }
-          });
-      } else {
-          map.addSource('route', {
-              type: 'geojson',
-              data: {
-                  type: 'Feature',
-                  properties: {},
-                  geometry: {
-                      type: 'LineString',
-                      coordinates: coords
-                  }
-              }
-          });
-  
-          map.addLayer({
-              id: 'route',
-              type: 'line',
-              source: 'route',
-              layout: {
-                  'line-join': 'round',
-                  'line-cap': 'round'
-              },
-              paint: {
-                  'line-color': '#314c3b', // Brand Green
-                  'line-width': 4,
-                  'line-dasharray': [2, 1]
-              }
-          });
-      }
-  }
+    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
+    const { InfoWindow } = await importLibrary("maps");
+    const { Polyline } = await importLibrary("maps");
+
+    // Sort stops by date
+    const sortedStops = [...currentStops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    // Add Markers
+    sortedStops.forEach((stop, index) => {
+        const pin = new PinElement({
+            glyphText: `${index + 1}`,
+            glyphColor: "white",
+            background: "#EA4335", // Google Maps Red
+            borderColor: "#B31412",
+        });
+
+        const marker = new AdvancedMarkerElement({
+            map: map,
+            position: { lat: stop.latitude, lng: stop.longitude },
+            content: pin.element,
+            title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`
+        });
+        
+        marker.addListener('click', () => {
+             const infoWindow = new InfoWindow({
+                content: `<div style="color: black;"><b>${displayLocationName(stop.location_name)}</b><br>Day ${index + 1}</div>`
+             });
+             infoWindow.open(map, marker);
+        });
+
+        markers.push(marker);
+    });
+
+    // Fetch and Draw Facilities
+    (async () => {
+        for (const stop of sortedStops) {
+            try {
+                const b = await API.getBriefing(stop.id);
+                if (b && b.facilities) {
+                    b.facilities.forEach(f => {
+                         if (f.latitude && f.longitude) {
+                             let iconName = 'location_on'; // default
+                             const type = (f.type || '').toLowerCase();
+                             if (type.includes('anchorage')) iconName = 'anchor';
+                             else if (type.includes('marina')) iconName = 'directions_boat';
+                             else if (type.includes('bar')) iconName = 'local_bar';
+                             else if (type.includes('restaurant')) iconName = 'restaurant';
+                             
+                             const iconDiv = document.createElement('div');
+                             iconDiv.style.backgroundColor = '#000000';
+                             iconDiv.style.borderRadius = '50%';
+                             iconDiv.style.width = '28px';
+                             iconDiv.style.height = '28px';
+                             iconDiv.style.display = 'flex';
+                             iconDiv.style.alignItems = 'center';
+                             iconDiv.style.justifyContent = 'center';
+                             iconDiv.style.border = '2px solid #ffffff';
+                             iconDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)';
+                             iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${iconName}</span>`;
+
+                             const fMarker = new AdvancedMarkerElement({
+                                 map: map,
+                                 position: { lat: f.latitude, lng: f.longitude },
+                                 content: iconDiv,
+                                 title: f.name
+                             });
+
+                             fMarker.addListener('click', () => {
+                                 let query = f.latitude + "," + f.longitude;
+                                 if (f.address) {
+                                     query = f.name + ", " + f.address;
+                                 }
+                                 const infoWindow = new InfoWindow({
+                                     content: `
+                                         <div style="color: black;">
+                                             <strong>${f.name}</strong><br>
+                                             ${f.type}<br>
+                                             <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}" target="_blank">View on Google Maps</a>
+                                         </div>
+                                     `
+                                 });
+                                 infoWindow.open(map, fMarker);
+                             });
+
+                             facilityMarkers.push(fMarker);
+                         }
+                    });
+                }
+            } catch (err) {
+               // Ignore errors
+            }
+        }
+    })();
+
+    // Draw Line
+    const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
+    
+    routePolyline = new Polyline({
+      path: coords,
+      geodesic: true,
+      strokeColor: "#314c3b",
+      strokeOpacity: 0,
+      icons: [{
+        icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+        offset: '0',
+        repeat: '20px'
+      }],
+      map: map
+    });
+}
   
   function clearMap() {
-      markers.forEach(m => m.remove());
+      markers.forEach(m => m.map = null);
       markers = [];
-      if (map && map.getSource('route')) {
-          map.getSource('route').setData({
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                  type: 'LineString',
-                  coordinates: []
-              }
-          });
+      
+      if (routePolyline) {
+          routePolyline.setMap(null);
+          routePolyline = null;
       }
-      if (map && map.getSource('facilities')) {
-          map.getSource('facilities').setData({
-              type: 'FeatureCollection',
-              features: []
-          });
-      }
-  }
   
+      facilityMarkers.forEach(m => m.map = null);
+      facilityMarkers = [];
+  
+      if (map && map.data) {
+          map.data.forEach((feature) => {
+              map.data.remove(feature);
+          });
+      }
+  }  
 async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -1941,23 +2100,45 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   }
 
 async function captureAndUploadMap(voyageId) {
-    if (!map) return false;
-    return new Promise((resolve) => {
-        map.getCanvas().toBlob(async (blob) => {
-            if (!blob) {
-                console.warn('Failed to generate map image');
-                resolve(false);
-                return;
-            }
-            try {
-                await API.uploadVoyageMap(voyageId, blob);
-                resolve(true);
-            } catch (err) {
-                console.error('Failed to upload map image', err);
-                resolve(false);
-            }
-        });
+    if (!currentStops || currentStops.length === 0) return false;
+
+    const sortedStops = [...currentStops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    // Construct Static Map URL
+    const baseUrl = "https://maps.googleapis.com/maps/api/staticmap";
+    const size = "600x400";
+    const scale = "2";
+    const mapType = "roadmap";
+    const key = GOOGLE_MAPS_API_KEY;
+
+    let markersParam = "";
+    const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
+    
+    // Draw markers in reverse order (N to 1) so that the first marker (1) is drawn last and appears on top of others
+    for (let i = stopsToDraw.length - 1; i >= 0; i--) {
+        const s = stopsToDraw[i];
+        markersParam += `&markers=color:red%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
+    }
+
+    let pathParam = "&path=color:0x314c3bff|weight:4";
+    stopsToDraw.forEach(s => {
+        pathParam += `|${s.latitude},${s.longitude}`;
     });
+
+    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${markersParam}${pathParam}&key=${key}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch static map');
+        const blob = await response.blob();
+        await API.uploadVoyageMap(voyageId, blob);
+        return true;
+    } catch (err) {
+        console.error('Failed to upload map image', err);
+        return false;
+    }
 }
 
     async function handleShowReport() {
@@ -1993,6 +2174,8 @@ async function captureAndUploadMap(voyageId) {
         const [briefings] = await Promise.all([
             Promise.all(briefingPromises)
         ]);
+
+        const firstStopName = sortedStops.length > 0 ? displayLocationName(sortedStops[0].location_name) : null;
 
         const renderReferences = (refs) => {
             if (!refs || refs.length === 0) return '';
@@ -2040,7 +2223,7 @@ async function captureAndUploadMap(voyageId) {
                         ${dateStr}
                     </div>
                     <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                        ${DOMPurify.sanitize(stop.location_name)}
+                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
                     </div>
                     
                     <div class="overview-weather">
@@ -2181,7 +2364,7 @@ async function captureAndUploadMap(voyageId) {
             const b = briefings[idx];
             html += `
                 <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(stop.location_name)}</h2>
+                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
                     <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
             
@@ -2202,32 +2385,32 @@ async function captureAndUploadMap(voyageId) {
                                 Weather
                             </h3>
                             <div class="weather-box">
-                                <table class="briefing-table">
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Summary</th>
-                                        <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
+                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
                                     ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Temp</th>
-                                        <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Wind</th>
-                                        <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Waves</th>
-                                        <td class="briefing-td">${w.wave_height_ft} ft</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -2257,14 +2440,14 @@ async function captureAndUploadMap(voyageId) {
                             Sun Phase
                         </h3>
                         <div class="weather-box">
-                            <table class="briefing-table">
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunrise</th>
-                                    <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
                                 </tr>
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunset</th>
-                                    <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
                                 </tr>
                             </table>
                         </div>
@@ -2292,10 +2475,10 @@ async function captureAndUploadMap(voyageId) {
                             }
                         } catch (ignore) {}
 
-                        return `<tr>
-                            <td class="briefing-td">${timeStr}</td>
-                            <td class="briefing-td">${e.type}</td>
-                            <td class="briefing-td">${e.height_ft} ft</td>
+                        return `<tr style="border: 1px solid #ddd;">
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
                         </tr>`;
                     }).join('');
 
@@ -2312,16 +2495,16 @@ async function captureAndUploadMap(voyageId) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
                                 </div>
-                                <table class="briefing-table">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
                                     <thead>
-                                        <tr>
-                                            <th class="briefing-th">Time</th>
-                                            <th class="briefing-th">Type</th>
-                                            <th class="briefing-th">Height</th>
+                                        <tr style="background-color: #f4f4f4;">
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
+                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
@@ -2330,8 +2513,21 @@ async function captureAndUploadMap(voyageId) {
                 }
                 
                 // Facilities
+                const stopName = displayLocationName(stop.location_name);
+                const isLastStopLoop = (idx === sortedStops.length - 1 && sortedStops.length > 1 && stopName === firstStopName);
+
                 if (b.facilities && b.facilities.length > 0) {
-                     html += `
+                    if (isLastStopLoop) {
+                        html += `
+                        <div class="briefing-section">
+                            <h3 class="briefing-header-icon">
+                                <span class="material-symbols-outlined">warehouse</span>
+                                Facilities
+                            </h3>
+                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
+                        </div>`;
+                    } else {
+                        html += `
                         <div class="briefing-section">
                             <h3 class="briefing-header-icon">
                                 <span class="material-symbols-outlined">warehouse</span>
@@ -2354,9 +2550,9 @@ async function captureAndUploadMap(voyageId) {
                          } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
                         let rows = `
-                            <tr>
-                                <th class="briefing-th briefing-table-label-width">Type</th>
-                                <td class="briefing-td">${f.type}</td>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                             </tr>
                         `;
                         
@@ -2367,23 +2563,37 @@ async function captureAndUploadMap(voyageId) {
                                 return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                             })
                             .map(([k, v]) => `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td">${v}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                         locHtml = `
                             <p class="map-link-p">
                                 <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                 <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let websiteHtml = '';
+                    if (f.website) {
+                        websiteHtml = `
+                            <p class="map-link-p" style="margin-top: 0;">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                             </p>
                         `;
                     }
@@ -2395,6 +2605,7 @@ async function captureAndUploadMap(voyageId) {
                                 ${f.name}
                             </h4>
                             ${locHtml}
+                            ${websiteHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -2403,6 +2614,7 @@ async function captureAndUploadMap(voyageId) {
             </ul>
         </div>
     `;
+                    }
                 }
             } else {
                 html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;
@@ -2804,7 +3016,10 @@ async function toggleDiscoveryMode(active) {
         loadDiscoveryRegions(currentMonth);
         
         // Zoom out to world view
-        if (map) map.flyTo({ center: [0, 20], zoom: 2 });
+        if (map) {
+             map.panTo({ lat: 20, lng: 0 });
+             map.setZoom(3);
+        }
 
         // Show Intro Modal if first time
         if (!localStorage.getItem('seenDiscoveryIntro')) {
@@ -2821,10 +3036,10 @@ async function toggleDiscoveryMode(active) {
         sidebar.classList.remove('hidden');
         
         // Remove discovery layers
-        if (map) {
-            if (map.getLayer('discovery-fills')) map.removeLayer('discovery-fills');
-            if (map.getLayer('discovery-borders')) map.removeLayer('discovery-borders');
-            if (map.getSource('discovery')) map.removeSource('discovery');
+        if (map && map.data) {
+             map.data.forEach((feature) => {
+                map.data.remove(feature);
+            });
         }
         
         if (currentVoyage) {
@@ -2846,103 +3061,86 @@ async function loadDiscoveryRegions(month) {
 
 async function renderDiscoveryLayer() {
     if (!map) return;
-    if (!discoveryRegions || !Array.isArray(discoveryRegions)) {
-        console.log('No discovery regions to render.');
-        return;
-    }
 
-    // Sort by area (descending) so large areas are drawn first (bottom) and small on top.
-    // We parse geometry if it's a string to calculate area, but we don't modify the original object structure yet
-    discoveryRegions.sort((a, b) => {
-        const geomA = typeof a.geometry === 'string' ? JSON.parse(a.geometry) : a.geometry;
-        const geomB = typeof b.geometry === 'string' ? JSON.parse(b.geometry) : b.geometry;
-        return calculateGeometryArea(geomB) - calculateGeometryArea(geomA);
+    // Clear existing data
+    map.data.forEach((feature) => {
+        map.data.remove(feature);
     });
 
+    // Convert to GeoJSON
     const geojson = {
         type: 'FeatureCollection',
         features: discoveryRegions.map(r => ({
             type: 'Feature',
-            geometry: JSON.parse(JSON.stringify(typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry)),
+            geometry: {
+                type: 'Polygon',
+                coordinates: r.geometry.coordinates.map(ring => smoothPolygon(ring, 3))
+            },
             properties: {
                 id: r.id,
                 name: r.name,
-                is_hidden_gem: r.is_hidden_gem,
                 tier: r.tier,
+                suitability_score: r.suitability_score,
+                is_hidden_gem: r.is_hidden_gem,
                 summary: r.summary,
-                suitability_score: r.suitability_score
+                avg_wind_speed_knots: r.avg_wind_speed_knots,
+                avg_temp_c: r.avg_temp_c,
+                deep_cut_reasoning: r.deep_cut_reasoning
             }
         }))
     };
-    
-    // Smooth the polygons (Chaikin's Algorithm)
-    smoothGeoJSON(geojson);
 
-    if (map.getSource('discovery')) {
-        map.getSource('discovery').setData(geojson);
-    } else {
-        map.addSource('discovery', {
-            type: 'geojson',
-            data: geojson
-        });
+    map.data.addGeoJson(geojson);
 
-        map.addLayer({
-            id: 'discovery-fills',
-            type: 'fill',
-            source: 'discovery',
-            paint: {
-                            'fill-color': [
-                                'match',
-                                ['get', 'tier'],
-                                'Hidden Gem', '#9c27b0',        // Purple
-                                'Regional Favorite', '#ff9800', // Orange
-                                'Challenging', '#d32f2f',       // Red
-                                'Standard', '#0077be',          // Blue
-                                '#0077be'                       // Fallback
-                            ],
-                
-                'fill-opacity': 0.3
-            }
-        });
+    // Styling
+    map.data.setStyle((feature) => {
+        const tier = feature.getProperty('tier');
+        let color = '#0077be'; // Standard Blue
+        let strokeColor = '#005fa3';
 
-        map.addLayer({
-            id: 'discovery-borders',
-            type: 'line',
-            source: 'discovery',
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: {
-                'line-color': [
-                    'match',
-                    ['get', 'tier'],
-                    'Hidden Gem', '#7b1fa2',        // Darker Purple
-                    'Regional Favorite', '#e65100', // Darker Orange
-                    'Challenging', '#b71c1c',       // Darker Red
-                    'Standard', '#005fa3',          // Darker Blue
-                    '#005fa3'                       // Fallback
-                ],
-                'line-width': 2,
-                'line-blur': 1
-            }
-        });
+        if (tier === 'Hidden Gem') {
+            color = '#9c27b0'; // Purple
+            strokeColor = '#6a1b9a';
+        } else if (tier === 'Regional Favorite') {
+            color = '#ff9800'; // Orange
+            strokeColor = '#ef6c00';
+        } else if (tier === 'Challenging') {
+            color = '#d32f2f'; // Red
+            strokeColor = '#b71c1c';
+        }
 
-        // Click handler
-        map.on('click', 'discovery-fills', (e) => {
-            const props = e.features[0].properties;
-            const month = document.getElementById('month-slider').value;
-            showRegionBriefing(props, month);
-        });
+        return {
+            fillColor: color,
+            fillOpacity: 0.6,
+            strokeColor: strokeColor,
+            strokeWeight: 2
+        };
+    });
 
-        // Hover effect
-        map.on('mouseenter', 'discovery-fills', () => {
-            map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'discovery-fills', () => {
-            map.getCanvas().style.cursor = '';
-        });
-    }
+    // Click handler
+    map.data.addListener('click', (event) => {
+        const props = {
+            id: event.feature.getProperty('id'),
+            name: event.feature.getProperty('name'),
+            tier: event.feature.getProperty('tier'),
+            suitability_score: event.feature.getProperty('suitability_score'),
+            is_hidden_gem: event.feature.getProperty('is_hidden_gem'),
+            summary: event.feature.getProperty('summary'),
+            avg_wind_speed_knots: event.feature.getProperty('avg_wind_speed_knots'),
+            avg_temp_c: event.feature.getProperty('avg_temp_c'),
+            deep_cut_reasoning: event.feature.getProperty('deep_cut_reasoning')
+        };
+        const month = document.getElementById('month-slider').value;
+        showRegionBriefing(props, month);
+    });
+
+    // Hover effect
+    map.data.addListener('mouseover', () => {
+        map.setOptions({ draggableCursor: 'pointer' });
+    });
+    map.data.addListener('mouseout', () => {
+        map.setOptions({ draggableCursor: '' });
+    });
 }
 
 function calculateGeometryArea(geometry) {
@@ -3077,6 +3275,8 @@ function renderSharedReport(data, container) {
     // Sort stops
     stops.sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
 
+    const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
+
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
         return `<div class="ref-link">
@@ -3108,7 +3308,7 @@ function renderSharedReport(data, container) {
 
             <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mb-xl">
                 <h3 class="brand-blue mt-0 mb-md">Voyage Overview</h3>
-                <table class="overview-table">
+                <table class="overview-table" style="width: 100%; border-collapse: separate; border-spacing: 10px; font-family: "Lato", sans-serif;">
                     ${(() => {
                         let tableHtml = '';
                         stops.forEach((stop, idx) => {
@@ -3131,20 +3331,20 @@ function renderSharedReport(data, container) {
                             const canvasId = `sharedMiniTideChart_${idx}`;
 
                             tableHtml += `
-                                <td class="overview-card">
-                                    <div class="overview-date">${dateStr}</div>
-                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                                        ${DOMPurify.sanitize(stop.location_name)}
+                                <td class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; vertical-align: top; width: 25%; min-width: 150px;">
+                                    <div class="overview-date" style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">${dateStr}</div>
+                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
                                     </div>
-                                    <div class="overview-weather">
+                                    <div class="overview-weather" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
                                         <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                                        <span class="overview-temp">${temp}</span>
+                                        <span class="overview-temp" style="font-size: 1rem; font-weight: bold;">${temp}</span>
                                     </div>
-                                    <div class="overview-sun">
+                                    <div class="overview-sun" style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
                                         <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
                                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                                     </div>
-                                    <div class="overview-chart">
+                                    <div class="overview-chart" style="position: relative; height: 120px; width: 100%;">
                                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                     </div>
                                 </td>
@@ -3244,7 +3444,7 @@ function renderSharedReport(data, container) {
             
             html += `
                 <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-                    <h3 class="brand-green mt-0 mb-xs">Day ${idx + 1}: ${DOMPurify.sanitize(stop.location_name)}</h3>
+                    <h3 class="brand-green mt-0 mb-xs">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h3>
                     <p class="text-gray mb-md font-sm"><strong>Date:</strong> ${dateStr}</p>
             `;
 
@@ -3259,32 +3459,32 @@ function renderSharedReport(data, container) {
                                 Weather
                             </h4>
                             <div class="weather-box">
-                                <table class="briefing-table">
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Summary</th>
-                                        <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
+                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
                                     ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Temp</th>
-                                        <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Wind</th>
-                                        <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Waves</th>
-                                        <td class="briefing-td">${w.wave_height_ft} ft</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -3314,14 +3514,14 @@ function renderSharedReport(data, container) {
                             Sun Phase
                         </h4>
                         <div class="weather-box">
-                            <table class="briefing-table">
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunrise</th>
-                                    <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
                                 </tr>
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunset</th>
-                                    <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
                                 </tr>
                             </table>
                         </div>
@@ -3349,10 +3549,10 @@ function renderSharedReport(data, container) {
                             }
                         } catch (ignore) {}
 
-                        return `<tr>
-                            <td class="briefing-td">${timeStr}</td>
-                            <td class="briefing-td">${e.type}</td>
-                            <td class="briefing-td">${e.height_ft} ft</td>
+                        return `<tr style="border: 1px solid #ddd;">
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
                         </tr>`;
                     }).join('');
 
@@ -3369,16 +3569,16 @@ function renderSharedReport(data, container) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                 </div>
-                                <table class="briefing-table">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
                                     <thead>
-                                        <tr>
-                                            <th class="briefing-th">Time</th>
-                                            <th class="briefing-th">Type</th>
-                                            <th class="briefing-th">Height</th>
+                                        <tr style="background-color: #f4f4f4;">
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
+                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
@@ -3387,7 +3587,20 @@ function renderSharedReport(data, container) {
                 }
 
                 // Facilities
+                const stopName = displayLocationName(stop.location_name);
+                const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
+
                 if (b.facilities && b.facilities.length > 0) {
+                    if (isLastStopLoop) {
+                        html += `
+                        <div class="briefing-section">
+                            <h4 class="briefing-header-icon">
+                                <span class="material-symbols-outlined">warehouse</span>
+                                Facilities
+                            </h4>
+                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
+                        </div>`;
+                    } else {
                      html += `
                         <div class="briefing-section">
                             <h4 class="briefing-header-icon">
@@ -3409,9 +3622,9 @@ function renderSharedReport(data, container) {
                              detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                          } else if (f.details && typeof f.details === 'object') {
                             let rows = `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Type</th>
-                                    <td class="briefing-td">${f.type}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                                 </tr>
                             `;
                             rows += Object.entries(f.details)
@@ -3421,22 +3634,36 @@ function renderSharedReport(data, container) {
                                     return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                                 })
                                 .map(([k, v]) => `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                        <td class="briefing-td">${v}</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                     </tr>
                                 `).join('');
-                            detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                            detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                         }
 
                         let locHtml = '';
                         if (f.latitude && f.longitude) {
-                            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                            let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                             locHtml = `
                                 <p class="map-link-p">
                                     <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                     ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                     <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                                </p>
+                            `;
+                        }
+
+                        let websiteHtml = '';
+                        if (f.website) {
+                            websiteHtml = `
+                                <p class="map-link-p" style="margin-top: 0;">
+                                    <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                    <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                                 </p>
                             `;
                         }
@@ -3448,12 +3675,14 @@ function renderSharedReport(data, container) {
                                     ${f.name}
                                 </h4>
                                 ${locHtml}
+                                ${websiteHtml}
                                 ${detailsHtml}
                                 ${renderReferences(f.references)}
                             </li>
                         `;
                     }).join('')}
                     </ul></div>`;
+                    }
                 }
             } else {
                  html += `<p class="text-gray italic">No briefing data available.</p>`;
