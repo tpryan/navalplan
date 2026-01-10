@@ -1538,7 +1538,7 @@ async function initMap() {
     clearMap();
     if (!map) return;
 
-    const { AdvancedMarkerElement } = await importLibrary("marker");
+    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
     const { InfoWindow } = await importLibrary("maps");
     const { Polyline } = await importLibrary("maps");
 
@@ -1549,14 +1549,17 @@ async function initMap() {
 
     // Add Markers
     sortedStops.forEach((stop, index) => {
-        const el = document.createElement('div');
-        el.className = 'marker';
-        el.innerHTML = `<span><b>${index + 1}</b></span>`;
+        const pin = new PinElement({
+            glyph: `${index + 1}`,
+            glyphColor: "white",
+            background: "#314c3b",
+            borderColor: "#1e2f25",
+        });
 
         const marker = new AdvancedMarkerElement({
             map: map,
             position: { lat: stop.latitude, lng: stop.longitude },
-            content: el,
+            content: pin.element,
             title: `${stop.location_name} (Day ${index + 1})`
         });
         
