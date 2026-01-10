@@ -56,16 +56,37 @@ type Facility struct {
 	References []string        `json:"references"`
 }
 
-func (h *Handlers) getStaticMap(lat, lng float64) ([]byte, error) {
+func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
 	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
 	}
 
+	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=12&size=600x400&maptype=roadmap&markers=color:red%%7C%f,%f&key=%s",
+		lat, lng, lat, lng, apiKey)
+
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("static map request failed with status: %s", resp.Status)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
+	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
+	if apiKey == "" {
+		return 0, 0, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
+	}
+
 	query := fmt.Sprintf("%s, %s", name, vicinity)
 	
 	// Create a bounding box roughly +/- 0.5 degrees around the stop (approx 30 miles)
-	// Format: south,west|north,east
 	bounds := fmt.Sprintf("%f,%f|%f,%f", centerLat-0.5, centerLng-0.5, centerLat+0.5, centerLng+0.5)
 
 	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s", 
