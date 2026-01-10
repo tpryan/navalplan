@@ -214,7 +214,11 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		locName = *voyage.LocationName
 	}
 
-	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locName)
+	locDetail := locName
+	if voyage.PreciseLocation != nil && *voyage.PreciseLocation != "" {
+		locDetail = fmt.Sprintf("%s (Lat: %f, Lng: %f)", locName, *voyage.Latitude, *voyage.Longitude)
+	}
+	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
@@ -259,11 +263,15 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		return
 	}
 
-	responseText = cleanJSON(responseText)
+	cleanedResponse := cleanJSON(responseText)
+	if cleanedResponse == "" {
+		log.Errorf("Agent returned non-JSON response: %s", responseText)
+		return
+	}
 
 	var output GuideAgentOutput
-	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+	if err := json.Unmarshal([]byte(cleanedResponse), &output); err != nil {
+		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, cleanedResponse)
 		return
 	}
 

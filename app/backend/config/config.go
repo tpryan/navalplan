@@ -17,7 +17,7 @@ type Config struct {
 
 	// External Services
 	NavalPlanAgentURL string
-	MapboxToken       string
+	GoogleMapsAPIKey  string
 
 	// System
 	SystemAPIKey string

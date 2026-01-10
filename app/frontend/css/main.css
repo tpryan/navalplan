@@ -310,9 +310,10 @@
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr); /* Default fallback */
-    gap: 10px;
+    gap: 8px;
     width: 100%;
     margin-bottom: 1rem;
+    box-sizing: border-box;
 }
 
 .overview-grid.grid-cols-1 { grid-template-columns: 1fr; }
@@ -341,7 +342,7 @@
     .overview-grid, 
     .overview-grid.grid-cols-4, 
     .overview-grid.grid-cols-3, 
-    .overview-grid.grid-cols-2,
+    .overview-grid.grid-cols-2, 
     .overview-grid.grid-cols-1 {
         grid-template-columns: 1fr;
     }
@@ -350,11 +351,13 @@
 .overview-card {
     border: 1px solid #ccc;
     border-radius: 8px;
-    padding: 10px;
+    padding: 8px;
     background: #fff;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    box-sizing: border-box;
 }
 .overview-date {
     font-weight: bold;

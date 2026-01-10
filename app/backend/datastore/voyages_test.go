@@ -19,7 +19,7 @@ func TestListVoyages(t *testing.T) {
 		AddRow(1, "Voyage 1", 1, time.Now(), time.Now(), 60, "nm", time.Now()).
 		AddRow(2, "Voyage 2", 1, time.Now(), time.Now(), 60, "nm", time.Now())
 
-	query := `SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, share_token, is_public, created_at FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
+	query := `SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, share_token, is_public, created_at FROM voyage WHERE person_id = $1 ORDER BY start_date DESC`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
 	voyages, err := db.ListVoyages(context.Background(), 1, 0, 0)

@@ -10,7 +10,7 @@ func (db *DB) ListStops(ctx context.Context, voyageID int64, limit, offset int) 
 	stops := []models.Stop{}
 	// Explicit columns to avoid over-fetching
 	query := `
-		SELECT id, voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes, created_at
+		SELECT id, voyage_id, target_date, location_name, precise_location, latitude, longitude, search_radius, search_radius_unit, notes, created_at
 		FROM stop 
 		WHERE voyage_id = $1 
 		ORDER BY target_date ASC`
@@ -27,8 +27,8 @@ func (db *DB) ListStops(ctx context.Context, voyageID int64, limit, offset int) 
 
 func (db *DB) CreateStop(ctx context.Context, s *models.Stop) error {
 	query := `
-		INSERT INTO stop (voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes)
-		VALUES (:voyage_id, :target_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit, :notes)
+		INSERT INTO stop (voyage_id, target_date, location_name, precise_location, latitude, longitude, search_radius, search_radius_unit, notes)
+		VALUES (:voyage_id, :target_date, :location_name, :precise_location, :latitude, :longitude, :search_radius, :search_radius_unit, :notes)
 		RETURNING id, created_at`
 
 	rows, err := db.NamedQueryContext(ctx, query, s)
@@ -56,7 +56,7 @@ func (db *DB) GetStop(ctx context.Context, id int64) (*models.Stop, error) {
 func (db *DB) UpdateStop(ctx context.Context, s *models.Stop) error {
 	query := `
 		UPDATE stop 
-		SET target_date = :target_date, location_name = :location_name, latitude = :latitude, 
+		SET target_date = :target_date, location_name = :location_name, precise_location = :precise_location, latitude = :latitude, 
 		    longitude = :longitude, search_radius = :search_radius, search_radius_unit = :search_radius_unit, notes = :notes
 		WHERE id = :id`
 	_, err := db.NamedExecContext(ctx, query, s)

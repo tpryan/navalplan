@@ -9,25 +9,21 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://api.mapbox.com">
-    <link rel="preconnect" href="https://events.mapbox.com">
 
     <link rel="preload" href="/css/base.css" as="style">
     <link rel="preload" href="/css/components/buttons.css" as="style">
     <link rel="preload" href="/css/layout.css" as="style">
     <link rel="preload" href="/css/main.css" as="style">
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Sue+Ellen+Francisco&family=Lato:wght@900&family=Raleway:wght@900&display=swap" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Sue+Ellen+Francisco&family=Lato:wght@100;400;900&family=Raleway:wght@100;400;900&display=swap" as="style">
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@40,700,0,0&display=swap" as="style">
 
-    <link href="https://fonts.googleapis.com/css2?family=Sue+Ellen+Francisco&family=Lato:wght@900&family=Raleway:wght@900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sue+Ellen+Francisco&family=Lato:wght@100;400;900&family=Raleway:wght@100;400;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@40,700,0,0&display=swap" />
     
     <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/components/buttons.css" />
     <link rel="stylesheet" href="/css/layout.css" />
     <link rel="stylesheet" href="/css/main.css" />
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript><link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet"></noscript>
   </head>
   <body>
     <div id="app">
@@ -120,6 +116,7 @@
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />
           <input type="hidden" id="voyage-lng" name="longitude" />
+          <input type="hidden" id="voyage-precise-location" name="precise_location" />
           <p id="voyage-coords-display" class="font-sm text-gray mt-xs"></p>
         </div>
         

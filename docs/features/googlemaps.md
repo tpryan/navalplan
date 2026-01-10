@@ -9,6 +9,17 @@ Here is a comprehensive technical plan to migrate the NavalPlan application from
 1. **Google Cloud Project:** Enable **Maps JavaScript API** and **Geocoding API**.
 2. **API Key:** Generate an API Key restricted to the application's domain.
 
+### **Troubleshooting API Errors**
+
+**Issue:** `REQUEST_DENIED`
+**Cause:** This error typically indicates that the API key is restricted or the specific API service is not enabled.
+**Resolution:**
+1.  **Enable Geocoding API:** Go to the Google Cloud Console > APIs & Services > Library and ensure the "Geocoding API" is enabled for your project.
+2.  **Check API Key Restrictions:**
+    *   If using an API key for the **Backend** (server-side), ensure it has **NO** "HTTP referrers" restrictions. Server-side requests do not send a referrer. You can restrict it by IP address if needed.
+    *   If using an API key for the **Frontend** (client-side), "HTTP referrers" restrictions are appropriate (e.g., `localhost:8080`, `yourdomain.com`).
+    *   **Recommendation:** Create two separate API keys: one for the Frontend (restricted by Referrer) and one for the Backend (restricted by IP or unrestricted for dev).
+
 ---
 
 ### **Phase 1: Backend & Configuration Updates**
@@ -181,7 +192,7 @@ const locationName = response.results[0]?.formatted_address || "Unknown Location
 * **Solution (Google Static Maps API):**
 * Instead of screenshotting the live map, construct a **Google Static Maps URL**.
 * Include path parameters (encodable polylines) and marker parameters to match the voyage.
-* Fetch this URL as a Blob in JS (`fetch(staticMapUrl).then(r => r.blob())`).
+* Fetch this blob in JS (`fetch(staticMapUrl).then(r => r.blob())`).
 * Pass this blob to the existing `API.uploadVoyageMap` function.
 * *Note:* This ensures high-quality images for the reports without browser rendering quirks.
 
