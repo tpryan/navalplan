@@ -3290,14 +3290,31 @@ function renderSharedReport(data, container) {
         return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
     };
 
-    let html = `
-        <div class="shared-container max-w-4xl mx-auto p-md">
-            <header class="mb-xl text-center">
-                <h1 class="brand-font text-xxl brand-blue mb-sm">NavalPlan</h1>
-                <h2 class="text-dark">${DOMPurify.sanitize(voyage.title || "Captain's Report")}</h2>
-                <p class="text-gray italic">
-                    ${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
-                </p>
+    const facilHtml = `
+        <div class="shared-container max-w-6xl mx-auto p-md">
+            <div class="flex items-center justify-center mb-lg">
+                 <span class="material-symbols-outlined brand-green" style="font-size: 2rem; margin-right: 0.5rem;">sailing</span>
+                 <span style="font-family: 'Raleway', sans-serif; font-size: 1.5rem; font-weight: 900; color: #333; letter-spacing: 1px;">NAVALPLAN</span>
+            </div>
+
+            <header class="report-header bg-white p-lg shadow-sm border-radius mb-xl text-center">
+                <h1 class="brand-blue mt-0 mb-xs" style="font-size: 2rem;">${DOMPurify.sanitize(voyage.title)}</h1>
+                <p class="text-gray italic mb-md" style="font-size: 0.9rem;">Voyage Intelligence Report &bull; Generated ${new Date().toLocaleDateString()}</p>
+                
+                <div class="flex justify-center gap-xl mt-md pt-md" style="border-top: 1px solid #eee;">
+                    <div class="text-center">
+                        <span class="block font-bold text-dark text-xl">${stops.length}</span>
+                        <span class="text-xs uppercase text-gray tracking-wide">Stops</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-bold text-dark text-xl">${new Date(voyage.start_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                        <span class="text-xs uppercase text-gray tracking-wide">Start</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-bold text-dark text-xl">${new Date(voyage.end_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                        <span class="text-xs uppercase text-gray tracking-wide">End</span>
+                    </div>
+                </div>
             </header>
 
             ${mapUrl ? `
@@ -3308,53 +3325,51 @@ function renderSharedReport(data, container) {
 
             <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mb-xl">
                 <h3 class="brand-blue mt-0 mb-md">Voyage Overview</h3>
-                <table class="overview-table" style="width: 100%; border-collapse: separate; border-spacing: 10px; font-family: "Lato", sans-serif;">
-                    ${(() => {
-                        let tableHtml = '';
-                        stops.forEach((stop, idx) => {
-                            if (idx % 4 === 0) tableHtml += '<tr>';
-                            
-                            const b = briefings.find(br => br.stop_id === stop.id) || {};
-                            const date = new Date(stop.target_date);
-                            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-                            
-                            // Weather
-                            const w = b.weather_summary || {};
-                            const weatherIcon = getIconForWeather(w.condition);
-                            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+                <div class="overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; font-family: 'Lato', sans-serif;">
+                    ${stops.map((stop, idx) => {
+                        const b = briefings.find(br => br.stop_id === stop.id) || {};
+                        const date = new Date(stop.target_date);
+                        const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+                        
+                        // Weather
+                        const w = b.weather_summary || {};
+                        const weatherIcon = getIconForWeather(w.condition);
+                        const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
 
-                            // Sun
-                            const sun = b.sun_phase || {};
-                            const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-                            const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+                        // Sun
+                        const sun = b.sun_phase || {};
+                        const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+                        const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
 
-                            const canvasId = `sharedMiniTideChart_${idx}`;
+                        const canvasId = `sharedMiniTideChart_${idx}`;
 
-                            tableHtml += `
-                                <td class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; vertical-align: top; width: 25%; min-width: 150px;">
-                                    <div class="overview-date" style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">${dateStr}</div>
-                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        return `
+                            <div class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; min-width: 0; display: flex; flex-direction: column;">
+                                <div style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; text-align: center;">
+                                    <div class="overview-date" style="font-weight: bold; font-size: 0.9rem;">${dateStr}</div>
+                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
                                     </div>
-                                    <div class="overview-weather" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
-                                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                                        <span class="overview-temp" style="font-size: 1rem; font-weight: bold;">${temp}</span>
+                                </div>
+                                <div style="display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 8px;">
+                                    <div style="display: flex; flex-direction: column; gap: 5px; flex: 0 0 auto;">
+                                        <div class="overview-weather" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 18px; color: #555;">${weatherIcon}</span>
+                                            <span class="overview-temp" style="font-weight: bold;">${temp}</span>
+                                        </div>
+                                        <div class="overview-sun" style="font-size: 0.75rem; color: #666;">
+                                            <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                                            <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                                        </div>
                                     </div>
-                                    <div class="overview-sun" style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
-                                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                                    </div>
-                                    <div class="overview-chart" style="position: relative; height: 120px; width: 100%;">
+                                    <div class="overview-chart" style="flex: 1; height: 80px; position: relative; min-width: 100px;">
                                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                     </div>
-                                </td>
-                            `;
-
-                            if (idx % 4 === 3 || idx === stops.length - 1) tableHtml += '</tr>';
-                        });
-                        return tableHtml;
-                    })()}
-                </table>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
             </div>
 
             <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius">
@@ -3362,6 +3377,8 @@ function renderSharedReport(data, container) {
                 <p>${DOMPurify.sanitize(guide.summary || 'No summary available.')}</p>
             </div>
     `;
+
+    let html = facilHtml;
 
     // Sailing Season
     if (guide.sailing_season) {
