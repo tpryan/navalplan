@@ -64,3 +64,5 @@ Example structure:
 
 Be precise with the `geometry`. It should be a simplified, smooth, and generalized GeoJSON Polygon (max 20 points) that roughly encompasses the sailing area. Avoid sharp, irregular spikes.
 Focus on the month of: {{Month}}
+
+If no regions are found, return an empty array `[]`.

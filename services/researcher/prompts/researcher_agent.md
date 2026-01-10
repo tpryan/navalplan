@@ -65,4 +65,8 @@ CRITICAL RULES:
 }
 ```
 
-Important: Always try to find a relevant URL for facilities. Always provide reference links. 
+Important: 
+- Limit "references" to a maximum of 2 URLs per facility.
+- Prefer direct source URLs over long redirect URLs.
+- If data is missing, leave fields null or empty but maintain the JSON structure.
+- Do NOT return conversational text outside the JSON.
