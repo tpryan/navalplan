@@ -8,9 +8,7 @@ steps:
 - name: 'gcr.io/cloud-builders/npm'
   args: ['run', 'build']
   dir: 'app/frontend'
-  secretEnv: ['NAVALPLAN_MB_TOKEN']
-  env:
-  - 'NAVALPLAN_MB_STYLE=${_NAVALPLAN_MB_STYLE}'
+  secretEnv: ['GOOGLE_MAPS_API_KEY']
 
 # 3. Verify Static Assets
 - name: 'ubuntu'
@@ -38,7 +36,7 @@ steps:
   - '${PROJECT_ID}'
   - '--allow-unauthenticated' # Publicly accessible
   - '--set-secrets=NAVALPLAN_AGENT_URL=NAVALPLAN_AGENT_URL:latest'
-  - '--set-secrets=NAVALPLAN_MB_TOKEN=NAVALPLAN_MB_TOKEN:latest'
+  - '--set-secrets=GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest'
   - '--set-secrets=NAVALPLAN_DB_USER=NAVALPLAN_DB_USER:latest'
   - '--set-secrets=NAVALPLAN_DB_PASS=NAVALPLAN_DB_PASS:latest'
   - '--set-secrets=NAVALPLAN_DB_PORT=NAVALPLAN_DB_PORT:latest'
@@ -53,10 +51,9 @@ steps:
   dir: 'app/backend'
 availableSecrets:
   secretManager:
-  - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_MB_TOKEN/versions/latest
-    env: 'NAVALPLAN_MB_TOKEN'
+  - versionName: projects/${PROJECT_ID}/secrets/GOOGLE_MAPS_API_KEY/versions/latest
+    env: 'GOOGLE_MAPS_API_KEY'
 substitutions:
-  _NAVALPLAN_MB_STYLE: 'mapbox://styles/tpryan/cmc9ofgil01hi01r70dnx3n7x'
   _NAVALPLAN_BASE_URL: 'https://plan.wakelog.app'
   _NAVALPLAN_PORT: "8080"
   _NAVALPLAN_AGENT_MODEL: "gemini-2.5-flash"

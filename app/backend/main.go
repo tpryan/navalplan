@@ -40,8 +40,8 @@ func main() {
 		log.Fatal("NAVALPLAN_SYSTEM_KEY is not set. System API Key is required.")
 	}
 
-	if os.Getenv("NAVALPLAN_MB_TOKEN") == "" {
-		log.Fatal("NAVALPLAN_MB_TOKEN is not set. Mapbox Token is required.")
+	if os.Getenv("GOOGLE_MAPS_API_KEY") == "" {
+		log.Fatal("GOOGLE_MAPS_API_KEY is not set. Google Maps API Key is required.")
 	}
 
 	cfg := loadConfig(os.Getenv, *contentDir)
@@ -150,14 +150,14 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 		SystemAPIKey:       getEnv("NAVALPLAN_SYSTEM_KEY"),
-		MapboxToken:        getEnv("NAVALPLAN_MB_TOKEN"),
+		GoogleMapsAPIKey:   getEnv("GOOGLE_MAPS_API_KEY"),
 	}
 
 	logdsn := ObscureString(dsn, dbPass)
 	result.ObscuredDSN = logdsn
 	logSecret := ObscureString(result.GoogleClientSecret, result.GoogleClientSecret)
 	logSystemKey := ObscureString(result.SystemAPIKey, result.SystemAPIKey)
-	logMapboxToken := ObscureString(result.MapboxToken, result.MapboxToken)
+	logGoogleMapsKey := ObscureString(result.GoogleMapsAPIKey, result.GoogleMapsAPIKey)
 
 	log.Info("config", "Env", result.Env)
 	log.Info("config", "Port", result.Port)
@@ -168,7 +168,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 	log.Info("config", "BaseURL", result.BaseURL)
 	log.Info("config", "NavalPlanAgentURL", result.NavalPlanAgentURL)
 	log.Info("config", "SystemAPIKey", logSystemKey)
-	log.Info("config", "MapboxToken", logMapboxToken)
+	log.Info("config", "GoogleMapsAPIKey", logGoogleMapsKey)
 
 	return result
 }

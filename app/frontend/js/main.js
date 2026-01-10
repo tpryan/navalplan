@@ -1,13 +1,20 @@
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { checkSession, currentUser } from './auth.js';
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+
+const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
+setOptions({
+  key: GOOGLE_MAPS_API_KEY,
+  version: "weekly",
+});
 
 // Dynamic library loading
-let mapboxglLib = null;
-async function loadMapbox() {
-    if (mapboxglLib) return mapboxglLib;
-    mapboxglLib = (await import('mapbox-gl')).default;
-    return mapboxglLib;
+let googleMapsLib = null;
+async function loadGoogleMaps() {
+    if (googleMapsLib) return googleMapsLib;
+    googleMapsLib = await importLibrary("maps");
+    return googleMapsLib;
 }
 
 let ChartLib = null;
@@ -18,11 +25,10 @@ async function loadChart() {
 }
 
 // Start loading large libraries immediately
-loadMapbox();
+loadGoogleMaps();
 loadChart();
 
 // Configuration
-const MAPBOX_TOKEN = __MAPBOX_TOKEN__; 
 
 // State
 let voyages = [];
@@ -31,6 +37,8 @@ let currentStops = [];
 let selectedDate = null;
 let map = null;
 let markers = [];
+let routePolyline = null;
+let facilityMarkers = [];
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -841,15 +849,16 @@ async function loadStops() {
 
         if (map) {
             if (currentStops.length > 0) {
-                const mapboxgl = await loadMapbox();
-                const bounds = new mapboxgl.LngLatBounds();
-                currentStops.forEach(stop => bounds.extend([stop.longitude, stop.latitude]));
+                const { LatLngBounds } = await importLibrary("core");
+                const bounds = new LatLngBounds();
+                currentStops.forEach(stop => bounds.extend({ lat: stop.latitude, lng: stop.longitude }));
                 if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                    bounds.extend([currentVoyage.longitude, currentVoyage.latitude]);
+                    bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
                 }
-                map.fitBounds(bounds, { padding: 50, maxZoom: 12 });
+                map.fitBounds(bounds, 50);
             } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                map.flyTo({ center: [currentVoyage.longitude, currentVoyage.latitude], zoom: 9 });
+                map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
+                map.setZoom(9);
             }
         }
     } catch (err) {
@@ -1440,60 +1449,58 @@ function selectDate(dateStr) {
     // Zoom to existing stop if present
     const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
     if (stop && map) {
-        map.flyTo({ center: [stop.longitude, stop.latitude], zoom: 10 });
+        map.panTo({ lat: stop.latitude, lng: stop.longitude });
+        map.setZoom(10);
     }
 }
 
 async function initMap() {
-  if (!MAPBOX_TOKEN) {
-    console.error('Mapbox token is missing. Please set NAVALPLAN_MB_TOKEN environment variable during build.');
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.error('Google Maps API key is missing. Please set GOOGLE_MAPS_API_KEY environment variable during build.');
     const mapContainer = document.getElementById('map-container');
     if (mapContainer) {
         mapContainer.innerHTML = `
             <div class="flex flex-col items-center justify-center h-full text-center p-xl">
                 <span class="material-symbols-outlined icon-xl text-gray mb-md">map</span>
                 <h2 class="text-dark">Map Configuration Missing</h2>
-                <p class="text-gray max-w-sm">The Mapbox access token is not set. Please configure <code>NAVALPLAN_MB_TOKEN</code> in your environment and rebuild the application.</p>
+                <p class="text-gray max-w-sm">The Google Maps API key is not set. Please configure <code>GOOGLE_MAPS_API_KEY</code> in your environment and rebuild the application.</p>
             </div>
         `;
     }
     return;
   }
 
-  const mapboxgl = await loadMapbox();
-  mapboxgl.accessToken = MAPBOX_TOKEN;
+  const { Map } = await loadGoogleMaps();
+  const { Geocoder } = await importLibrary("geocoding");
 
-  map = new mapboxgl.Map({
-    container: 'map-container',
-    style: __MAPBOX_STYLE__,
-    center: [-98.5795, 39.8283], // Center of USA
+  map = new Map(document.getElementById("map-container"), {
+    center: { lat: 39.8283, lng: -98.5795 },
     zoom: 3,
-    preserveDrawingBuffer: true
+    mapId: __GOOGLE_MAPS_MAP_ID__, 
+    disableDefaultUI: false,
+    clickableIcons: false
   });
 
-      map.on('load', () => {
-      console.log('NavalPlan: Map Loaded Successfully');
-    });
+  console.log('NavalPlan: Map Loaded Successfully');
   
-    map.addControl(new mapboxgl.NavigationControl());
-  
-    map.on('click', async (e) => {
+  map.addListener('click', async (e) => {
       if (!currentVoyage || !selectedDate) return;
   
-      const {lng, lat} = e.lngLat;
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
       const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
   
-      // Get features at click point
-      const features = map.queryRenderedFeatures(e.point);
-      console.log('Clicked Features:', features);
-      
-      // Attempt to find a label
+      // Reverse Geocoding
+      const geocoder = new Geocoder();
       let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-      const labelFeature = features.find(f => f.properties && (f.properties.name || f.properties.name_en));
       
-      if (labelFeature) {
-          locationName = labelFeature.properties.name || labelFeature.properties.name_en;
-          console.log('Found Label:', locationName);
+      try {
+          const response = await geocoder.geocode({ location: e.latLng });
+          if (response.results[0]) {
+              locationName = response.results[0].formatted_address;
+          }
+      } catch (err) {
+          console.error("Geocoding failed: " + err);
       }
   
       // Create or Update
@@ -1526,197 +1533,124 @@ async function initMap() {
   }
   
   async function renderMapStops() {
-      clearMap();
-      if (!map) return;
-  
-      const mapboxgl = await loadMapbox();
+    clearMap();
+    if (!map) return;
 
-      // Sort stops by date
-      const sortedStops = [...currentStops].sort((a, b) => 
-          new Date(a.target_date) - new Date(b.target_date)
-      );
-  
-      // Add Markers
-      sortedStops.forEach((stop, index) => {
-          const el = document.createElement('div');
-          el.className = 'marker';
-          el.innerHTML = `<span><b>${index + 1}</b></span>`;
-  
-          const marker = new mapboxgl.Marker(el)
-              .setLngLat([stop.longitude, stop.latitude])
-              .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(`${stop.location_name} (Day ${index + 1})`))
-              .addTo(map);
-          markers.push(marker);
-      });
-  
-      // Fetch and Draw Facilities
-      // We do this async but don't block the line drawing
-      (async () => {
-          const features = [];
-          
-          for (const stop of sortedStops) {
-              try {
-                  const b = await API.getBriefing(stop.id);
-                  if (b && b.facilities) {
-                      b.facilities.forEach(f => {
-                           if (f.latitude && f.longitude) {
-                               let icon = 'marker-15';
-                               const type = (f.type || '').toLowerCase();
-                               if (type.includes('anchorage')) icon = 'harbor-15';
-                               else if (type.includes('marina')) icon = 'warehouse-15';
-                               else if (type.includes('bar')) icon = 'bar-15';
-                               else if (type.includes('restaurant')) icon = 'restaurant-15';
-                               
-                               features.push({
-                                   type: 'Feature',
-                                   geometry: {
-                                       type: 'Point',
-                                       coordinates: [f.longitude, f.latitude]
-                                   },
-                                   properties: {
-                                       title: f.name,
-                                       icon: icon,
-                                       description: f.type,
-                                       lat: f.latitude,
-                                       lng: f.longitude
-                                   }
-                               });
-                           }
-                      });
-                  }
-              } catch (err) {
-                 // Ignore errors fetching briefings for map
-              }
-          }
-          
-          if (features.length > 0) {
-              if (map.getSource('facilities')) {
-                  map.getSource('facilities').setData({
-                      type: 'FeatureCollection',
-                      features: features
-                  });
-              } else {
-                  map.addSource('facilities', {
-                      type: 'geojson',
-                      data: {
-                          type: 'FeatureCollection',
-                          features: features
-                      }
-                  });
-  
-                  map.addLayer({
-                      id: 'facilities-circles',
-                      type: 'circle',
-                      source: 'facilities',
-                      paint: {
-                          'circle-radius': 15,
-                          'circle-opacity': 1,
-                          'circle-color': '#000',
-                          'circle-stroke-width': 1,
-                          'circle-stroke-color': '#314c3b'
-                      }
-                  });
-                  
-                  map.addLayer({
-                      id: 'facilities',
-                      type: 'symbol',
-                      source: 'facilities',
-                      layout: {
-                          'icon-image': ['get', 'icon'],
-                          'icon-size': 1.0,
-                          'icon-allow-overlap': true
-                      }
-                  });
-  
-                  // Click event for facilities
-                  map.on('click', 'facilities', (e) => {
-                      const coords = e.features[0].geometry.coordinates.slice();
-                      const props = e.features[0].properties;
-                      
-                      new mapboxgl.Popup()
-                          .setLngLat(coords)
-                          .setHTML(`
-                              <strong>${props.title}</strong><br>
-                              ${props.description}<br>
-                              <a href="https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}" target="_blank">View on Google Maps</a>
-                          `)
-                          .addTo(map);
-                  });
-                  
-                  // Cursor style
-                  map.on('mouseenter', 'facilities', () => {
-                      map.getCanvas().style.cursor = 'pointer';
-                  });
-                  map.on('mouseleave', 'facilities', () => {
-                      map.getCanvas().style.cursor = '';
-                  });
-              }
-          }
-      })();
-  
-      // Draw Line
-      const coords = sortedStops.map(s => [s.longitude, s.latitude]);
-      
-      if (map.getSource('route')) {
-          map.getSource('route').setData({
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                  type: 'LineString',
-                  coordinates: coords
-              }
-          });
-      } else {
-          map.addSource('route', {
-              type: 'geojson',
-              data: {
-                  type: 'Feature',
-                  properties: {},
-                  geometry: {
-                      type: 'LineString',
-                      coordinates: coords
-                  }
-              }
-          });
-  
-          map.addLayer({
-              id: 'route',
-              type: 'line',
-              source: 'route',
-              layout: {
-                  'line-join': 'round',
-                  'line-cap': 'round'
-              },
-              paint: {
-                  'line-color': '#314c3b', // Brand Green
-                  'line-width': 4,
-                  'line-dasharray': [2, 1]
-              }
-          });
-      }
-  }
+    const { AdvancedMarkerElement } = await importLibrary("marker");
+    const { InfoWindow } = await importLibrary("maps");
+    const { Polyline } = await importLibrary("maps");
+
+    // Sort stops by date
+    const sortedStops = [...currentStops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    // Add Markers
+    sortedStops.forEach((stop, index) => {
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.innerHTML = `<span><b>${index + 1}</b></span>`;
+
+        const marker = new AdvancedMarkerElement({
+            map: map,
+            position: { lat: stop.latitude, lng: stop.longitude },
+            content: el,
+            title: `${stop.location_name} (Day ${index + 1})`
+        });
+        
+        marker.addListener('click', () => {
+             const infoWindow = new InfoWindow({
+                content: `<div style="color: black;"><b>${stop.location_name}</b><br>Day ${index + 1}</div>`
+             });
+             infoWindow.open(map, marker);
+        });
+
+        markers.push(marker);
+    });
+
+    // Fetch and Draw Facilities
+    (async () => {
+        for (const stop of sortedStops) {
+            try {
+                const b = await API.getBriefing(stop.id);
+                if (b && b.facilities) {
+                    b.facilities.forEach(f => {
+                         if (f.latitude && f.longitude) {
+                             let iconName = 'location_on'; // default
+                             const type = (f.type || '').toLowerCase();
+                             if (type.includes('anchorage')) iconName = 'anchor';
+                             else if (type.includes('marina')) iconName = 'directions_boat';
+                             else if (type.includes('bar')) iconName = 'local_bar';
+                             else if (type.includes('restaurant')) iconName = 'restaurant';
+                             
+                             const iconDiv = document.createElement('div');
+                             iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 20px; color: #d32f2f;">${iconName}</span>`;
+
+                             const fMarker = new AdvancedMarkerElement({
+                                 map: map,
+                                 position: { lat: f.latitude, lng: f.longitude },
+                                 content: iconDiv,
+                                 title: f.name
+                             });
+
+                             fMarker.addListener('click', () => {
+                                 const infoWindow = new InfoWindow({
+                                     content: `
+                                         <div style="color: black;">
+                                             <strong>${f.name}</strong><br>
+                                             ${f.type}<br>
+                                             <a href="https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}" target="_blank">View on Google Maps</a>
+                                         </div>
+                                     `
+                                 });
+                                 infoWindow.open(map, fMarker);
+                             });
+
+                             facilityMarkers.push(fMarker);
+                         }
+                    });
+                }
+            } catch (err) {
+               // Ignore errors
+            }
+        }
+    })();
+
+    // Draw Line
+    const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
+    
+    routePolyline = new Polyline({
+      path: coords,
+      geodesic: true,
+      strokeColor: "#314c3b",
+      strokeOpacity: 0,
+      icons: [{
+        icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+        offset: '0',
+        repeat: '20px'
+      }],
+      map: map
+    });
+}
   
   function clearMap() {
-      markers.forEach(m => m.remove());
+      markers.forEach(m => m.map = null);
       markers = [];
-      if (map && map.getSource('route')) {
-          map.getSource('route').setData({
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                  type: 'LineString',
-                  coordinates: []
-              }
-          });
+      
+      if (routePolyline) {
+          routePolyline.setMap(null);
+          routePolyline = null;
       }
-      if (map && map.getSource('facilities')) {
-          map.getSource('facilities').setData({
-              type: 'FeatureCollection',
-              features: []
-          });
-      }
-  }
   
+      facilityMarkers.forEach(m => m.map = null);
+      facilityMarkers = [];
+  
+      if (map && map.data) {
+          map.data.forEach((feature) => {
+              map.data.remove(feature);
+          });
+      }
+  }  
 async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -1941,23 +1875,42 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   }
 
 async function captureAndUploadMap(voyageId) {
-    if (!map) return false;
-    return new Promise((resolve) => {
-        map.getCanvas().toBlob(async (blob) => {
-            if (!blob) {
-                console.warn('Failed to generate map image');
-                resolve(false);
-                return;
-            }
-            try {
-                await API.uploadVoyageMap(voyageId, blob);
-                resolve(true);
-            } catch (err) {
-                console.error('Failed to upload map image', err);
-                resolve(false);
-            }
-        });
+    if (!currentStops || currentStops.length === 0) return false;
+
+    const sortedStops = [...currentStops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    // Construct Static Map URL
+    const baseUrl = "https://maps.googleapis.com/maps/api/staticmap";
+    const size = "600x400";
+    const scale = "2";
+    const mapType = "roadmap";
+    const key = GOOGLE_MAPS_API_KEY;
+
+    let markersParam = "";
+    const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
+    stopsToDraw.forEach((s, i) => {
+        markersParam += `&markers=color:red%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
     });
+
+    let pathParam = "&path=color:0x314c3bff|weight:4";
+    stopsToDraw.forEach(s => {
+        pathParam += `|${s.latitude},${s.longitude}`;
+    });
+
+    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${markersParam}${pathParam}&key=${key}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch static map');
+        const blob = await response.blob();
+        await API.uploadVoyageMap(voyageId, blob);
+        return true;
+    } catch (err) {
+        console.error('Failed to upload map image', err);
+        return false;
+    }
 }
 
     async function handleShowReport() {
@@ -2804,7 +2757,10 @@ async function toggleDiscoveryMode(active) {
         loadDiscoveryRegions(currentMonth);
         
         // Zoom out to world view
-        if (map) map.flyTo({ center: [0, 20], zoom: 2 });
+        if (map) {
+             map.panTo({ lat: 20, lng: 0 });
+             map.setZoom(2);
+        }
 
         // Show Intro Modal if first time
         if (!localStorage.getItem('seenDiscoveryIntro')) {
@@ -2821,10 +2777,10 @@ async function toggleDiscoveryMode(active) {
         sidebar.classList.remove('hidden');
         
         // Remove discovery layers
-        if (map) {
-            if (map.getLayer('discovery-fills')) map.removeLayer('discovery-fills');
-            if (map.getLayer('discovery-borders')) map.removeLayer('discovery-borders');
-            if (map.getSource('discovery')) map.removeSource('discovery');
+        if (map && map.data) {
+             map.data.forEach((feature) => {
+                map.data.remove(feature);
+            });
         }
         
         if (currentVoyage) {
@@ -2846,103 +2802,86 @@ async function loadDiscoveryRegions(month) {
 
 async function renderDiscoveryLayer() {
     if (!map) return;
-    if (!discoveryRegions || !Array.isArray(discoveryRegions)) {
-        console.log('No discovery regions to render.');
-        return;
-    }
 
-    // Sort by area (descending) so large areas are drawn first (bottom) and small on top.
-    // We parse geometry if it's a string to calculate area, but we don't modify the original object structure yet
-    discoveryRegions.sort((a, b) => {
-        const geomA = typeof a.geometry === 'string' ? JSON.parse(a.geometry) : a.geometry;
-        const geomB = typeof b.geometry === 'string' ? JSON.parse(b.geometry) : b.geometry;
-        return calculateGeometryArea(geomB) - calculateGeometryArea(geomA);
+    // Clear existing data
+    map.data.forEach((feature) => {
+        map.data.remove(feature);
     });
 
+    // Convert to GeoJSON
     const geojson = {
         type: 'FeatureCollection',
         features: discoveryRegions.map(r => ({
             type: 'Feature',
-            geometry: JSON.parse(JSON.stringify(typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry)),
+            geometry: {
+                type: 'Polygon',
+                coordinates: r.geometry.coordinates
+            },
             properties: {
                 id: r.id,
                 name: r.name,
-                is_hidden_gem: r.is_hidden_gem,
                 tier: r.tier,
+                suitability_score: r.suitability_score,
+                is_hidden_gem: r.is_hidden_gem,
                 summary: r.summary,
-                suitability_score: r.suitability_score
+                avg_wind_speed_knots: r.avg_wind_speed_knots,
+                avg_temp_c: r.avg_temp_c,
+                deep_cut_reasoning: r.deep_cut_reasoning
             }
         }))
     };
-    
-    // Smooth the polygons (Chaikin's Algorithm)
-    smoothGeoJSON(geojson);
 
-    if (map.getSource('discovery')) {
-        map.getSource('discovery').setData(geojson);
-    } else {
-        map.addSource('discovery', {
-            type: 'geojson',
-            data: geojson
-        });
+    map.data.addGeoJson(geojson);
 
-        map.addLayer({
-            id: 'discovery-fills',
-            type: 'fill',
-            source: 'discovery',
-            paint: {
-                            'fill-color': [
-                                'match',
-                                ['get', 'tier'],
-                                'Hidden Gem', '#9c27b0',        // Purple
-                                'Regional Favorite', '#ff9800', // Orange
-                                'Challenging', '#d32f2f',       // Red
-                                'Standard', '#0077be',          // Blue
-                                '#0077be'                       // Fallback
-                            ],
-                
-                'fill-opacity': 0.3
-            }
-        });
+    // Styling
+    map.data.setStyle((feature) => {
+        const tier = feature.getProperty('tier');
+        let color = '#3498db'; // Standard
+        let strokeColor = '#005fa3';
 
-        map.addLayer({
-            id: 'discovery-borders',
-            type: 'line',
-            source: 'discovery',
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: {
-                'line-color': [
-                    'match',
-                    ['get', 'tier'],
-                    'Hidden Gem', '#7b1fa2',        // Darker Purple
-                    'Regional Favorite', '#e65100', // Darker Orange
-                    'Challenging', '#b71c1c',       // Darker Red
-                    'Standard', '#005fa3',          // Darker Blue
-                    '#005fa3'                       // Fallback
-                ],
-                'line-width': 2,
-                'line-blur': 1
-            }
-        });
+        if (tier === 'Hidden Gem') {
+            color = '#8e44ad';
+            strokeColor = '#5e2c73';
+        } else if (tier === 'Regional Favorite') {
+            color = '#27ae60';
+            strokeColor = '#196f3d';
+        } else if (tier === 'Challenging') {
+            color = '#e74c3c';
+            strokeColor = '#922b21';
+        }
 
-        // Click handler
-        map.on('click', 'discovery-fills', (e) => {
-            const props = e.features[0].properties;
-            const month = document.getElementById('month-slider').value;
-            showRegionBriefing(props, month);
-        });
+        return {
+            fillColor: color,
+            fillOpacity: 0.6,
+            strokeColor: strokeColor,
+            strokeWeight: 2
+        };
+    });
 
-        // Hover effect
-        map.on('mouseenter', 'discovery-fills', () => {
-            map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'discovery-fills', () => {
-            map.getCanvas().style.cursor = '';
-        });
-    }
+    // Click handler
+    map.data.addListener('click', (event) => {
+        const props = {
+            id: event.feature.getProperty('id'),
+            name: event.feature.getProperty('name'),
+            tier: event.feature.getProperty('tier'),
+            suitability_score: event.feature.getProperty('suitability_score'),
+            is_hidden_gem: event.feature.getProperty('is_hidden_gem'),
+            summary: event.feature.getProperty('summary'),
+            avg_wind_speed_knots: event.feature.getProperty('avg_wind_speed_knots'),
+            avg_temp_c: event.feature.getProperty('avg_temp_c'),
+            deep_cut_reasoning: event.feature.getProperty('deep_cut_reasoning')
+        };
+        const month = document.getElementById('month-slider').value;
+        showRegionBriefing(props, month);
+    });
+
+    // Hover effect
+    map.data.addListener('mouseover', () => {
+        map.setOptions({ draggableCursor: 'pointer' });
+    });
+    map.data.addListener('mouseout', () => {
+        map.setOptions({ draggableCursor: '' });
+    });
 }
 
 function calculateGeometryArea(geometry) {

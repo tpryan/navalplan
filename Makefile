@@ -56,8 +56,8 @@ clean-static:
 # 4. BUILD-JS: Installs deps and runs Vite Build
 build-js: clean-static
 	@echo "Building Frontend..."
-	@if [ -z "$$NAVALPLAN_MB_TOKEN" ]; then \
-		echo "Error: NAVALPLAN_MB_TOKEN is not set. Please set it in your environment or .env file."; \
+	@if [ -z "$$GOOGLE_MAPS_API_KEY" ]; then \
+		echo "Error: GOOGLE_MAPS_API_KEY is not set. Please set it in your environment or .env file."; \
 		exit 1; \
 	fi
 	cd app/frontend && npm install
@@ -83,7 +83,7 @@ setup:
 	@if [ ! -f .env ]; then \
 		echo "Creating .env from .env.example..."; \
 		cp .env.example .env; \
-		echo "WARNING: You must edit .env with your API keys (Google, Mapbox) before running!"; \
+		echo "WARNING: You must edit .env with your API keys (Google, Google Maps) before running!"; \
 	else \
 		echo ".env already exists. Skipping copy."; \
 	fi
