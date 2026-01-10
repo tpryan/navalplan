@@ -579,6 +579,53 @@ function initUI() {
             modifiedLists.push({ ul, container, originalItems });
         });
 
+        // 2c. Convert Overview Grid to Table
+        const overviewGrid = content.querySelector('.overview-grid');
+        const overviewReplacements = [];
+
+        if (overviewGrid) {
+            const table = document.createElement('table');
+            table.style.width = '100%';
+            table.style.borderCollapse = 'separate';
+            table.style.borderSpacing = '10px';
+            
+            const cards = Array.from(overviewGrid.querySelectorAll('.overview-card'));
+            let currentRow = null;
+            
+            cards.forEach((card, index) => {
+                // Assuming max 4 columns based on existing logic
+                if (index % 4 === 0) {
+                    currentRow = document.createElement('tr');
+                    table.appendChild(currentRow);
+                }
+                
+                const td = document.createElement('td');
+                td.style.border = '1px solid #ccc';
+                td.style.borderRadius = '8px';
+                td.style.padding = '10px';
+                td.style.backgroundColor = '#fff';
+                td.style.verticalAlign = 'top';
+                td.style.width = '25%'; // Distribute evenly
+                
+                // Move card content to TD
+                while (card.firstChild) {
+                    td.appendChild(card.firstChild);
+                }
+                
+                currentRow.appendChild(td);
+            });
+            
+            // Insert table before grid
+            overviewGrid.parentNode.insertBefore(table, overviewGrid);
+            overviewGrid.style.display = 'none';
+            
+            overviewReplacements.push({
+                grid: overviewGrid,
+                table: table,
+                originalCards: cards
+            });
+        }
+
         // 3. Strip Styles and Classes
         const allElements = content.querySelectorAll('*');
         const originalAttributes = [];
@@ -588,6 +635,8 @@ function initUI() {
             if (tempImages.some(t => t.img === el)) return;
             // Skip the original ULs we just hid
             if (modifiedLists.some(m => m.ul === el)) return;
+            // Skip the original Grid we just hid
+            if (overviewReplacements.some(r => r.grid === el)) return;
 
             originalAttributes.push({
                 el: el,
@@ -711,6 +760,22 @@ function initUI() {
                 img.remove();
             });
             
+            // Restore Overview Grid
+            overviewReplacements.forEach(({ grid, table, originalCards }) => {
+                 // We need to move content back from TDs to Cards
+                 const tds = table.querySelectorAll('td');
+                 tds.forEach((td, i) => {
+                     const card = originalCards[i];
+                     if (card) {
+                         while (td.firstChild) {
+                             card.appendChild(td.firstChild);
+                         }
+                     }
+                 });
+                 table.remove();
+                 grid.style.display = '';
+            });
+
             // Restore Remote Images
             processedImages.forEach(({ el, src }) => {
                 el.src = src;
@@ -1373,9 +1438,9 @@ async function showBriefing(briefing) {
                     } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
                         let rows = `
-                            <tr>
-                                <th class="briefing-th briefing-table-label-width">Type</th>
-                                <td class="briefing-td">${f.type}</td>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                             </tr>
                         `;
                         
@@ -1386,13 +1451,13 @@ async function showBriefing(briefing) {
                                 return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                             })
                             .map(([k, v]) => `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td">${v}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
@@ -2225,32 +2290,32 @@ async function captureAndUploadMap(voyageId) {
                                 Weather
                             </h3>
                             <div class="weather-box">
-                                <table class="briefing-table">
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Summary</th>
-                                        <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
+                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
                                     ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Temp</th>
-                                        <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Wind</th>
-                                        <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Waves</th>
-                                        <td class="briefing-td">${w.wave_height_ft} ft</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -2280,14 +2345,14 @@ async function captureAndUploadMap(voyageId) {
                             Sun Phase
                         </h3>
                         <div class="weather-box">
-                            <table class="briefing-table">
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunrise</th>
-                                    <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
                                 </tr>
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunset</th>
-                                    <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
                                 </tr>
                             </table>
                         </div>
@@ -2315,10 +2380,10 @@ async function captureAndUploadMap(voyageId) {
                             }
                         } catch (ignore) {}
 
-                        return `<tr>
-                            <td class="briefing-td">${timeStr}</td>
-                            <td class="briefing-td">${e.type}</td>
-                            <td class="briefing-td">${e.height_ft} ft</td>
+                        return `<tr style="border: 1px solid #ddd;">
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
                         </tr>`;
                     }).join('');
 
@@ -2335,16 +2400,16 @@ async function captureAndUploadMap(voyageId) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
                                 </div>
-                                <table class="briefing-table">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif;">
                                     <thead>
-                                        <tr>
-                                            <th class="briefing-th">Time</th>
-                                            <th class="briefing-th">Type</th>
-                                            <th class="briefing-th">Height</th>
+                                        <tr style="background-color: #f4f4f4;">
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
+                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
@@ -2377,9 +2442,9 @@ async function captureAndUploadMap(voyageId) {
                          } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
                         let rows = `
-                            <tr>
-                                <th class="briefing-th briefing-table-label-width">Type</th>
-                                <td class="briefing-td">${f.type}</td>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                             </tr>
                         `;
                         
@@ -2390,13 +2455,13 @@ async function captureAndUploadMap(voyageId) {
                                 return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                             })
                             .map(([k, v]) => `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td">${v}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
@@ -3117,7 +3182,7 @@ function renderSharedReport(data, container) {
 
             <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mb-xl">
                 <h3 class="brand-blue mt-0 mb-md">Voyage Overview</h3>
-                <table class="overview-table">
+                <table class="overview-table" style="width: 100%; border-collapse: separate; border-spacing: 10px; font-family: sans-serif;">
                     ${(() => {
                         let tableHtml = '';
                         stops.forEach((stop, idx) => {
@@ -3140,20 +3205,20 @@ function renderSharedReport(data, container) {
                             const canvasId = `sharedMiniTideChart_${idx}`;
 
                             tableHtml += `
-                                <td class="overview-card">
-                                    <div class="overview-date">${dateStr}</div>
-                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
+                                <td class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; vertical-align: top; width: 25%; min-width: 150px;">
+                                    <div class="overview-date" style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">${dateStr}</div>
+                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         ${DOMPurify.sanitize(displayLocationName(stop.location_name))}
                                     </div>
-                                    <div class="overview-weather">
+                                    <div class="overview-weather" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
                                         <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                                        <span class="overview-temp">${temp}</span>
+                                        <span class="overview-temp" style="font-size: 1rem; font-weight: bold;">${temp}</span>
                                     </div>
-                                    <div class="overview-sun">
+                                    <div class="overview-sun" style="display: flex; justify-content: space-around; font-size: 0.75rem; color: #666; margin-bottom: 5px;">
                                         <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
                                         <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
                                     </div>
-                                    <div class="overview-chart">
+                                    <div class="overview-chart" style="position: relative; height: 120px; width: 100%;">
                                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                     </div>
                                 </td>
@@ -3268,32 +3333,32 @@ function renderSharedReport(data, container) {
                                 Weather
                             </h4>
                             <div class="weather-box">
-                                <table class="briefing-table">
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Summary</th>
-                                        <td class="briefing-td">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
                                     </tr>
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon">
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
+                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
                                             <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
                                             ${isInvalid(w.condition) ? 'N/A' : w.condition}
                                         </td>
                                     </tr>
                                     ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Temp</th>
-                                        <td class="briefing-td">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Wind</th>
-                                        <td class="briefing-td">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
                                     </tr>
                                     ${w.wave_height_ft > 0 ? `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width">Waves</th>
-                                        <td class="briefing-td">${w.wave_height_ft} ft</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -3323,14 +3388,14 @@ function renderSharedReport(data, container) {
                             Sun Phase
                         </h4>
                         <div class="weather-box">
-                            <table class="briefing-table">
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunrise</th>
-                                    <td class="briefing-td">${formatTime(sun.sunrise)}</td>
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
                                 </tr>
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Sunset</th>
-                                    <td class="briefing-td">${formatTime(sun.sunset)}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
                                 </tr>
                             </table>
                         </div>
@@ -3358,10 +3423,10 @@ function renderSharedReport(data, container) {
                             }
                         } catch (ignore) {}
 
-                        return `<tr>
-                            <td class="briefing-td">${timeStr}</td>
-                            <td class="briefing-td">${e.type}</td>
-                            <td class="briefing-td">${e.height_ft} ft</td>
+                        return `<tr style="border: 1px solid #ddd;">
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
+                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
                         </tr>`;
                     }).join('');
 
@@ -3378,16 +3443,16 @@ function renderSharedReport(data, container) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                 </div>
-                                <table class="briefing-table">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif;">
                                     <thead>
-                                        <tr>
-                                            <th class="briefing-th">Time</th>
-                                            <th class="briefing-th">Type</th>
-                                            <th class="briefing-th">Height</th>
+                                        <tr style="background-color: #f4f4f4;">
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
+                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
+                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
@@ -3418,9 +3483,9 @@ function renderSharedReport(data, container) {
                              detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                          } else if (f.details && typeof f.details === 'object') {
                             let rows = `
-                                <tr>
-                                    <th class="briefing-th briefing-table-label-width">Type</th>
-                                    <td class="briefing-td">${f.type}</td>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                                 </tr>
                             `;
                             rows += Object.entries(f.details)
@@ -3430,12 +3495,12 @@ function renderSharedReport(data, container) {
                                     return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                                 })
                                 .map(([k, v]) => `
-                                    <tr>
-                                        <th class="briefing-th briefing-table-label-width capitalize">${k.replace(/_/g, ' ')}</th>
-                                        <td class="briefing-td">${v}</td>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                     </tr>
                                 `).join('');
-                            detailsHtml = `<table class="briefing-table mt-0">${rows}</table>`;
+                            detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                         }
 
                         let locHtml = '';
