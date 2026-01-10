@@ -1533,7 +1533,7 @@ async function initMap() {
 
   map = new Map(document.getElementById("map-container"), {
     center: { lat: 20, lng: 0 },
-    zoom: 2,
+    zoom: 3,
     mapId: __GOOGLE_MAPS_MAP_ID__, 
     disableDefaultUI: false,
     clickableIcons: false
@@ -2829,7 +2829,7 @@ async function toggleDiscoveryMode(active) {
         // Zoom out to world view
         if (map) {
              map.panTo({ lat: 20, lng: 0 });
-             map.setZoom(2);
+             map.setZoom(3);
         }
 
         // Show Intro Modal if first time
