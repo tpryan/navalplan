@@ -237,12 +237,7 @@ deploy-agent:
 
 deploy-backend:
 	@echo "Deploying Backend..."
-	@if [ -z "$(AGENT_URL)" ]; then \
-		echo "Warning: AGENT_URL is not set. Use 'make deploy-backend AGENT_URL=...'"; \
-		gcloud builds submit --config cloudbuild.yaml .; \
-	else \
-		gcloud builds submit --config cloudbuild.yaml --substitutions=_AGENT_URL=$(AGENT_URL) .; \
-	fi
+	gcloud builds submit --config cloudbuild.yaml .
 
 deploy-scheduler:
 	@echo "Deploying Cloud Scheduler Job..."

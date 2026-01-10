@@ -599,6 +599,7 @@
 .block { display: block; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .max-w-4xl { max-width: 900px; }
+.max-w-6xl { max-width: 1200px; }
 .p-md { padding: 1rem; }
 .p-lg { padding: 1.5rem; }
 .p-xl { padding: 3rem; }
