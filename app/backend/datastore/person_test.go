@@ -51,15 +51,16 @@ func TestCreatePerson(t *testing.T) {
 	email := "test@example.com"
 	name := "Tester"
 	pic := "http://pic.url"
+	var invitedBy *int64 = nil
 
-	query := `INSERT INTO "person" (google_id, email, name, picture_url) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
-	rows := sqlmock.NewRows([]string{"id", "created_at"}).AddRow(1, time.Now())
+	query := `INSERT INTO "person" (google_id, email, name, picture_url, invited_by) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, is_admin`
+	rows := sqlmock.NewRows([]string{"id", "created_at", "is_admin"}).AddRow(1, time.Now(), false)
 
 	mock.ExpectQuery(regexp.QuoteMeta(query)).
-		WithArgs(googleID, email, name, &pic).
+		WithArgs(googleID, email, name, &pic, invitedBy).
 		WillReturnRows(rows)
 
-	person, err := db.CreatePerson(context.Background(), googleID, email, name, &pic)
+	person, err := db.CreatePerson(context.Background(), googleID, email, name, &pic, invitedBy)
 	assert.NoError(t, err)
 	assert.NotNil(t, person)
 	assert.Equal(t, int64(1), person.ID)

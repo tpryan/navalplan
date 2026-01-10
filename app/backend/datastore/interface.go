@@ -38,8 +38,15 @@ type Store interface {
 	// Person
 	FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error)
 	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
-	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error)
+	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
+	ListPeople(ctx context.Context) ([]models.Person, error)
+
+	// Invitations
+	GetInvitation(ctx context.Context, email string) (*models.Invitation, error)
+	CreateInvitation(ctx context.Context, email string, invitedBy int64) error
+	DeleteInvitation(ctx context.Context, email string) error
+	ListInvitations(ctx context.Context) ([]models.Invitation, error)
 
 	// Session
 	CreateSession(ctx context.Context, token string, personID int64, expiresAt time.Time) error

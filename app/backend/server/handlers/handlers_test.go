@@ -154,12 +154,46 @@ func (m *MockStore) GetPersonByID(ctx context.Context, id int64) (*models.Person
 	return args.Get(0).(*models.Person), args.Error(1)
 }
 
-func (m *MockStore) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error) {
-	args := m.Called(googleID, email, name, pictureURL)
+func (m *MockStore) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error) {
+	args := m.Called(googleID, email, name, pictureURL, invitedBy)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Person), args.Error(1)
+}
+
+func (m *MockStore) GetInvitation(ctx context.Context, email string) (*models.Invitation, error) {
+	args := m.Called(email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Invitation), args.Error(1)
+}
+
+func (m *MockStore) CreateInvitation(ctx context.Context, email string, invitedBy int64) error {
+	args := m.Called(email, invitedBy)
+	return args.Error(0)
+}
+
+func (m *MockStore) DeleteInvitation(ctx context.Context, email string) error {
+	args := m.Called(email)
+	return args.Error(0)
+}
+
+func (m *MockStore) ListInvitations(ctx context.Context) ([]models.Invitation, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Invitation), args.Error(1)
+}
+
+func (m *MockStore) ListPeople(ctx context.Context) ([]models.Person, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Person), args.Error(1)
 }
 
 func (m *MockStore) UpdatePersonName(ctx context.Context, id int64, name string) error {

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"app/datastore"
+
 	"github.com/charmbracelet/log"
 )
 
@@ -57,11 +59,29 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if person == nil {
-		person, err = s.DB.CreatePerson(r.Context(), gUser.ID, gUser.Email, gUser.Name, &gUser.Picture)
+		// Check for invitation
+		invitation, err := s.DB.GetInvitation(r.Context(), gUser.Email)
+		if err != nil {
+			if err == datastore.ErrInvitationNotFound {
+				log.Info("uninvited user attempted to log in", "email", gUser.Email)
+				http.Redirect(w, r, "/unauthorized.html", http.StatusTemporaryRedirect)
+				return
+			}
+			log.Error("failed to get invitation", "error", err)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		person, err = s.DB.CreatePerson(r.Context(), gUser.ID, gUser.Email, gUser.Name, &gUser.Picture, invitation.InvitedBy)
 		if err != nil {
 			log.Error("db create person", "error", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
+		}
+
+		// Cleanup Invitation
+		if err := s.DB.DeleteInvitation(r.Context(), gUser.Email); err != nil {
+			log.Error("failed to delete invitation", "email", gUser.Email, "error", err)
 		}
 	}
 

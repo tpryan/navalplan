@@ -85,11 +85,11 @@ func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float
 	}
 
 	query := fmt.Sprintf("%s, %s", name, vicinity)
-	
+
 	// Create a bounding box roughly +/- 0.5 degrees around the stop (approx 30 miles)
 	bounds := fmt.Sprintf("%f,%f|%f,%f", centerLat-0.5, centerLng-0.5, centerLat+0.5, centerLng+0.5)
 
-	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s", 
+	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s",
 		url.QueryEscape(query), url.QueryEscape(bounds), apiKey)
 
 	resp, err := http.Get(endpoint)

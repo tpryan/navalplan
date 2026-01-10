@@ -30,19 +30,20 @@ func (db *DB) GetPersonByID(ctx context.Context, id int64) (*models.Person, erro
 	return &person, nil
 }
 
-func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string) (*models.Person, error) {
+func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error) {
 	query := `
-		INSERT INTO "person" (google_id, email, name, picture_url)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, created_at`
+		INSERT INTO "person" (google_id, email, name, picture_url, invited_by)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at, is_admin`
 
 	var person models.Person
 	person.GoogleID = googleID
 	person.Email = email
 	person.Name = name
 	person.PictureURL = pictureURL
+	person.InvitedBy = invitedBy
 
-	err := db.QueryRowContext(ctx, query, googleID, email, name, pictureURL).Scan(&person.ID, &person.CreatedAt)
+	err := db.QueryRowContext(ctx, query, googleID, email, name, pictureURL, invitedBy).Scan(&person.ID, &person.CreatedAt, &person.IsAdmin)
 	if err != nil {
 		return nil, err
 	}
