@@ -1497,7 +1497,7 @@ async function showBriefing(briefing) {
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
@@ -2385,7 +2385,7 @@ async function captureAndUploadMap(voyageId) {
                                 Weather
                             </h3>
                             <div class="weather-box">
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
                                     <tr style="border-bottom: 1px solid #eee;">
                                         <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
                                         <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
@@ -2440,7 +2440,7 @@ async function captureAndUploadMap(voyageId) {
                             Sun Phase
                         </h3>
                         <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
                                 <tr style="border-bottom: 1px solid #eee;">
                                     <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
                                     <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
@@ -2495,7 +2495,7 @@ async function captureAndUploadMap(voyageId) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}"></canvas>
                                 </div>
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif;">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
                                     <thead>
                                         <tr style="background-color: #f4f4f4;">
                                             <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
@@ -2569,7 +2569,7 @@ async function captureAndUploadMap(voyageId) {
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
                     let locHtml = '';
@@ -3308,7 +3308,7 @@ function renderSharedReport(data, container) {
 
             <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mb-xl">
                 <h3 class="brand-blue mt-0 mb-md">Voyage Overview</h3>
-                <table class="overview-table" style="width: 100%; border-collapse: separate; border-spacing: 10px; font-family: sans-serif;">
+                <table class="overview-table" style="width: 100%; border-collapse: separate; border-spacing: 10px; font-family: "Lato", sans-serif;">
                     ${(() => {
                         let tableHtml = '';
                         stops.forEach((stop, idx) => {
@@ -3459,7 +3459,7 @@ function renderSharedReport(data, container) {
                                 Weather
                             </h4>
                             <div class="weather-box">
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
                                     <tr style="border-bottom: 1px solid #eee;">
                                         <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
                                         <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
@@ -3514,7 +3514,7 @@ function renderSharedReport(data, container) {
                             Sun Phase
                         </h4>
                         <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em;">
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
                                 <tr style="border-bottom: 1px solid #eee;">
                                     <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
                                     <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
@@ -3569,7 +3569,7 @@ function renderSharedReport(data, container) {
                                 <div style="height:200px; width:100%; position:relative;">
                                     <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                                 </div>
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif;">
+                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
                                     <thead>
                                         <tr style="background-color: #f4f4f4;">
                                             <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
@@ -3639,7 +3639,7 @@ function renderSharedReport(data, container) {
                                         <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
                                     </tr>
                                 `).join('');
-                            detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
+                            detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                         }
 
                         let locHtml = '';
