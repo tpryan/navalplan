@@ -124,6 +124,7 @@ function initApp() {
   checkSession();
   initMap();
   initUI();
+  initAdminUI();
   loadVoyages();
 }
 
@@ -3904,3 +3905,113 @@ function smoothRing(ring) {
     }
     return currentRing;
 }
+
+function initAdminUI() {
+    // Listen for Admin Button (delegation)
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#btn-open-admin');
+        if (btn) {
+            const modal = document.getElementById('modal-admin');
+            const overlay = document.getElementById('modal-overlay');
+            if (modal && overlay) {
+                modal.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+                loadAdminUsers();
+            }
+        }
+    });
+
+    // Close Handler
+    const btnClose = document.getElementById('btn-close-admin');
+    if (btnClose) {
+        btnClose.addEventListener('click', () => {
+             document.getElementById('modal-admin').classList.add('hidden');
+             document.getElementById('modal-overlay').classList.add('hidden');
+        });
+    }
+
+    // Invite Form
+    const formInvite = document.getElementById('form-invite-user');
+    if (formInvite) {
+        formInvite.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('invite-email');
+            const email = input.value;
+            const btn = formInvite.querySelector('button');
+            const originalText = btn.textContent;
+            
+            btn.disabled = true;
+            btn.textContent = 'Inviting...';
+
+            try {
+                await API.inviteUser(email);
+                input.value = '';
+                loadAdminUsers();
+                showNotification('User Invited', `${email} has been added to the allowlist.`);
+            } catch (err) {
+                console.error(err);
+                alert('Failed to invite user');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+    }
+}
+
+async function loadAdminUsers() {
+    const tbody = document.getElementById('admin-users-list');
+    tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">Loading...</td></tr>';
+    
+    try {
+        const data = await API.listAdminUsers();
+        const users = data.users || [];
+        
+        tbody.innerHTML = '';
+        
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No users found</td></tr>';
+            return;
+        }
+        
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b';
+            
+            let status = '';
+            let action = '';
+            
+            if (u.invited) {
+                status = '<span class="badge badge-standard">Pending Invite</span>';
+                action = `<button class="btn-text btn-danger font-sm p-0" onclick="revokeInvite('${u.email}')">Revoke</button>`;
+            } else {
+                status = '<span class="badge badge-regional">Active User</span>';
+                if (u.is_admin) status += ' <span class="badge badge-gem">Admin</span>';
+                action = '<span class="text-gray font-sm">-</span>';
+            }
+            
+            tr.innerHTML = DOMPurify.sanitize(`
+                <td class="p-sm">${u.email}</td>
+                <td class="p-sm">${status}</td>
+                <td class="p-sm">${action}</td>
+            `);
+            tbody.appendChild(tr);
+        });
+        
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center error-text">Failed to load users</td></tr>';
+    }
+}
+
+// Make global for onclick handler
+window.revokeInvite = async (email) => {
+    if (!confirm(`Are you sure you want to revoke the invitation for ${email}?`)) return;
+    try {
+        await API.revokeInvitation(email);
+        loadAdminUsers();
+    } catch (err) {
+        console.error(err);
+        alert('Failed to revoke invitation');
+    }
+};

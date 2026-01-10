@@ -195,8 +195,32 @@ export const API = {
 
           return res;
 
-      }
+      },
 
+    // Admin
+    async listAdminUsers() {
+        const res = await apiFetch('/api/admin/users');
+        if (!res.ok) throw new Error('Failed to load users');
+        return res.json();
+    },
+
+    async inviteUser(email) {
+        const res = await apiFetch('/api/admin/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (!res.ok) throw new Error('Failed to invite user');
+        return res.json();
+    },
+
+    async revokeInvitation(email) {
+        const res = await apiFetch(`/api/admin/invite/${encodeURIComponent(email)}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Failed to revoke invitation');
+        return true;
+    }
   };
 
   

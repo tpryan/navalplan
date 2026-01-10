@@ -74,6 +74,17 @@ function updateUIForLogin(person) {
     logoutIcon.textContent = 'logout';
 
     logoutLink.appendChild(logoutIcon);
+    
+    if (person.is_admin) {
+        const adminBtn = document.createElement('button');
+        adminBtn.className = 'btn-icon';
+        adminBtn.title = 'Admin Console';
+        adminBtn.id = 'btn-open-admin'; 
+        adminBtn.innerHTML = '<span class="material-symbols-outlined">admin_panel_settings</span>';
+        // We will attach listener in main.js using event delegation or direct access
+        actions.appendChild(adminBtn);
+    }
+
     actions.appendChild(logoutLink);
     menu.appendChild(img);
     menu.appendChild(actions);

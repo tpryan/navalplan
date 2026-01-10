@@ -196,3 +196,16 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// requireAdmin checks if the authenticated user is an admin.
+// It assumes requireAuth has already run and populated the context.
+func (s *Server) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		person := appcontext.GetPersonFromContext(r.Context())
+		if person == nil || !person.IsAdmin {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

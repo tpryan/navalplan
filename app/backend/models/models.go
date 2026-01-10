@@ -14,7 +14,15 @@ type Person struct {
 	Name       string    `json:"name" db:"name"`
 	PictureURL *string   `json:"picture_url" db:"picture_url"`
 	IsAdmin    bool      `json:"is_admin" db:"is_admin"`
+	InvitedBy  *int64    `json:"-" db:"invited_by"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+}
+
+// Invitation represents an email invite.
+type Invitation struct {
+	Email     string    `json:"email" db:"email"`
+	InvitedBy *int64    `json:"invited_by" db:"invited_by"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 // Session represents a user session.

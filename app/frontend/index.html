@@ -209,6 +209,35 @@
         <button id="btn-close-discovery-intro" class="btn primary w-full">Get Started</button>
     </div>
 
+    <!-- Admin Modal -->
+    <div id="modal-admin" class="modal hidden modal-scrollable">
+      <div class="modal-header-row flex justify-between align-center">
+        <h2 class="m-0">Admin Console</h2>
+        <button id="btn-close-admin" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="p-md">
+        <h3>Invite New User</h3>
+        <form id="form-invite-user" class="flex gap-sm mb-lg">
+           <input type="email" id="invite-email" name="email" required placeholder="user@example.com" class="flex-grow" />
+           <button type="submit" class="btn primary">Invite</button>
+        </form>
+        
+        <h3>Users & Invites</h3>
+        <table id="admin-users-table" class="w-full text-left" style="border-collapse: collapse;">
+            <thead>
+                <tr class="border-b">
+                    <th class="p-sm">Email</th>
+                    <th class="p-sm">Status</th>
+                    <th class="p-sm">Action</th>
+                </tr>
+            </thead>
+            <tbody id="admin-users-list">
+                <!-- Populated via JS -->
+            </tbody>
+        </table>
+      </div>
+    </div>
+
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>

@@ -24,6 +24,8 @@ func (s *Server) Register(r ...route) {
 		switch route.AuthLevel {
 		case 1:
 			finalHandler = s.requireAuth(s.enforceCSRF(route.Handler))
+		case 2:
+			finalHandler = s.requireAuth(s.requireAdmin(s.enforceCSRF(route.Handler)))
 		}
 
 		// Apply static cache and security headers
@@ -75,6 +77,11 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodDelete, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.DeleteStop), 1},
 		{http.MethodPost, "/api/v1/stops/{id}/research", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerResearch)), 1},
 		{http.MethodGet, "/api/v1/stops/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
+
+		// --- Admin ---
+		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},
+		{http.MethodPost, "/api/admin/invite", http.HandlerFunc(s.Handler.InviteUser), 2},
+		{http.MethodDelete, "/api/admin/invite/{email}", http.HandlerFunc(s.Handler.RevokeInvitation), 2},
 
 		// --- Discovery (The Commodore) ---
 		{http.MethodGet, "/api/v1/discovery/regions", http.HandlerFunc(s.Handler.GetDiscoveryRegions), 0}, // Public
