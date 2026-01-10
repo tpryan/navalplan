@@ -1018,10 +1018,10 @@ async function loadStops() {
                 if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                     bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
                 }
-                map.fitBounds(bounds, 50);
+                map.fitBounds(bounds, 100);
             } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                 map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
-                map.setZoom(9);
+                map.setZoom(8);
             }
         }
     } catch (err) {
@@ -1070,7 +1070,7 @@ function renderItinerary() {
         el.innerHTML = DOMPurify.sanitize(html);
         
         // Handlers
-        el.querySelector('.day-info').addEventListener('click', () => selectDate(dateStr));
+        el.addEventListener('click', () => selectDate(dateStr));
         
         if (stop) {
             const btnResearch = el.querySelector('.research');
@@ -1618,17 +1618,24 @@ async function redoBriefing(oldBriefing, btn) {
 
 
 function selectDate(dateStr) {
-    selectedDate = dateStr;
+    if (selectedDate === dateStr) {
+        selectedDate = null; // Toggle off
+    } else {
+        selectedDate = dateStr; // Select new
+    }
+    
     renderItinerary(); // Re-render to show selection highlight
     
     // Auto-close menu on mobile
     document.getElementById('app').classList.remove('menu-open');
     
-    // Zoom to existing stop if present
-    const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
-    if (stop && map) {
-        map.panTo({ lat: stop.latitude, lng: stop.longitude });
-        map.setZoom(10);
+    // Zoom to existing stop if present (only if selected)
+    if (selectedDate) {
+        const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
+        if (stop && map) {
+            map.panTo({ lat: stop.latitude, lng: stop.longitude });
+            map.setZoom(14);
+        }
     }
 }
 
