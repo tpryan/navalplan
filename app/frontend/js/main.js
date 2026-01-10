@@ -2423,8 +2423,18 @@ async function captureAndUploadMap(voyageId) {
                 const stopName = displayLocationName(stop.location_name);
                 const isLastStopLoop = (idx === sortedStops.length - 1 && sortedStops.length > 1 && stopName === firstStopName);
 
-                if (b.facilities && b.facilities.length > 0 && !isLastStopLoop) {
-                     html += `
+                if (b.facilities && b.facilities.length > 0) {
+                    if (isLastStopLoop) {
+                        html += `
+                        <div class="briefing-section">
+                            <h3 class="briefing-header-icon">
+                                <span class="material-symbols-outlined">warehouse</span>
+                                Facilities
+                            </h3>
+                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
+                        </div>`;
+                    } else {
+                        html += `
                         <div class="briefing-section">
                             <h3 class="briefing-header-icon">
                                 <span class="material-symbols-outlined">warehouse</span>
@@ -2496,6 +2506,7 @@ async function captureAndUploadMap(voyageId) {
             </ul>
         </div>
     `;
+                    }
                 }
             } else {
                 html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;
@@ -3471,7 +3482,17 @@ function renderSharedReport(data, container) {
                 const stopName = displayLocationName(stop.location_name);
                 const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
 
-                if (b.facilities && b.facilities.length > 0 && !isLastStopLoop) {
+                if (b.facilities && b.facilities.length > 0) {
+                    if (isLastStopLoop) {
+                        html += `
+                        <div class="briefing-section">
+                            <h4 class="briefing-header-icon">
+                                <span class="material-symbols-outlined">warehouse</span>
+                                Facilities
+                            </h4>
+                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
+                        </div>`;
+                    } else {
                      html += `
                         <div class="briefing-section">
                             <h4 class="briefing-header-icon">
@@ -3538,6 +3559,7 @@ function renderSharedReport(data, container) {
                         `;
                     }).join('')}
                     </ul></div>`;
+                    }
                 }
             } else {
                  html += `<p class="text-gray italic">No briefing data available.</p>`;
