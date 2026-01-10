@@ -49,6 +49,16 @@ const VOYAGE_PAGE_LIMIT = 20;
 let currentStopPage = 1;
 const STOP_PAGE_LIMIT = 50;
 
+/**
+ * Strips Plus Codes (e.g. "82GQ+6Q ") from location names for cleaner UI display
+ */
+function displayLocationName(name) {
+    if (!name) return "";
+    // Regular expression to match Plus Codes at the start of the string
+    // Matches 4-8 alphanumeric chars + '+' + 2-3 alphanumeric chars followed by space
+    return name.replace(/^[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\s*/i, "").trim();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
@@ -696,7 +706,7 @@ function renderVoyageList() {
     const el = document.createElement('div');
     el.className = 'voyage-item';
     
-    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(voyage.location_name)}</p>` : '';
+    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>` : '';
     
     el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
@@ -888,7 +898,7 @@ function renderItinerary() {
         let html = `
             <div class="day-info flex-1">
                 <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
-                <span class="day-location ${stop ? 'set' : ''}">${stop ? stop.location_name : 'No destination'}</span>
+                <span class="day-location ${stop ? 'set' : ''}">${stop ? displayLocationName(stop.location_name) : 'No destination'}</span>
             </div>
         `;
         
@@ -921,7 +931,7 @@ function renderItinerary() {
             const btnDelete = el.querySelector('.delete-stop');
             btnDelete.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (confirm(`Remove stop at ${stop.location_name}?`)) {
+                if (confirm(`Remove stop at ${displayLocationName(stop.location_name)}?`)) {
                     try {
                         await API.deleteStop(stop.id);
                         currentStops = currentStops.filter(s => s.id !== stop.id);
@@ -1552,20 +1562,20 @@ async function initMap() {
         const pin = new PinElement({
             glyph: `${index + 1}`,
             glyphColor: "white",
-            background: "#314c3b",
-            borderColor: "#1e2f25",
+            background: "#EA4335", // Google Maps Red
+            borderColor: "#B31412",
         });
 
         const marker = new AdvancedMarkerElement({
             map: map,
             position: { lat: stop.latitude, lng: stop.longitude },
             content: pin.element,
-            title: `${stop.location_name} (Day ${index + 1})`
+            title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`
         });
         
         marker.addListener('click', () => {
              const infoWindow = new InfoWindow({
-                content: `<div style="color: black;"><b>${stop.location_name}</b><br>Day ${index + 1}</div>`
+                content: `<div style="color: black;"><b>${displayLocationName(stop.location_name)}</b><br>Day ${index + 1}</div>`
              });
              infoWindow.open(map, marker);
         });
@@ -1589,7 +1599,16 @@ async function initMap() {
                              else if (type.includes('restaurant')) iconName = 'restaurant';
                              
                              const iconDiv = document.createElement('div');
-                             iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 20px; color: #d32f2f;">${iconName}</span>`;
+                             iconDiv.style.backgroundColor = '#000000';
+                             iconDiv.style.borderRadius = '50%';
+                             iconDiv.style.width = '28px';
+                             iconDiv.style.height = '28px';
+                             iconDiv.style.display = 'flex';
+                             iconDiv.style.alignItems = 'center';
+                             iconDiv.style.justifyContent = 'center';
+                             iconDiv.style.border = '2px solid #ffffff';
+                             iconDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)';
+                             iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${iconName}</span>`;
 
                              const fMarker = new AdvancedMarkerElement({
                                  map: map,
@@ -1998,7 +2017,7 @@ async function captureAndUploadMap(voyageId) {
                         ${dateStr}
                     </div>
                     <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                        ${DOMPurify.sanitize(stop.location_name)}
+                        ${DOMPurify.sanitize(displayLocationName(stop.location_name))}
                     </div>
                     
                     <div class="overview-weather">
@@ -2139,7 +2158,7 @@ async function captureAndUploadMap(voyageId) {
             const b = briefings[idx];
             html += `
                 <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(stop.location_name)}</h2>
+                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
                     <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
             `;
             
@@ -3078,7 +3097,7 @@ function renderSharedReport(data, container) {
                                 <td class="overview-card">
                                     <div class="overview-date">${dateStr}</div>
                                     <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                                        ${DOMPurify.sanitize(stop.location_name)}
+                                        ${DOMPurify.sanitize(displayLocationName(stop.location_name))}
                                     </div>
                                     <div class="overview-weather">
                                         <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
@@ -3188,7 +3207,7 @@ function renderSharedReport(data, container) {
             
             html += `
                 <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-                    <h3 class="brand-green mt-0 mb-xs">Day ${idx + 1}: ${DOMPurify.sanitize(stop.location_name)}</h3>
+                    <h3 class="brand-green mt-0 mb-xs">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h3>
                     <p class="text-gray mb-md font-sm"><strong>Date:</strong> ${dateStr}</p>
             `;
 
