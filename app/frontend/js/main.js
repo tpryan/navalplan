@@ -2223,7 +2223,7 @@ async function captureAndUploadMap(voyageId) {
                         ${dateStr}
                     </div>
                     <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                        ${DOMPurify.sanitize(displayLocationName(stop.location_name))}
+                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
                     </div>
                     
                     <div class="overview-weather">
@@ -3334,7 +3334,7 @@ function renderSharedReport(data, container) {
                                 <td class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; vertical-align: top; width: 25%; min-width: 150px;">
                                     <div class="overview-date" style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; text-align: center; font-size: 0.9rem;">${dateStr}</div>
                                     <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; text-align: center; margin-bottom: 5px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                        ${DOMPurify.sanitize(displayLocationName(stop.location_name))}
+                                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
                                     </div>
                                     <div class="overview-weather" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px;">
                                         <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
