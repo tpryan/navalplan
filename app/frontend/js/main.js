@@ -59,6 +59,52 @@ function displayLocationName(name) {
     return name.replace(/^[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\s*/i, "").trim();
 }
 
+/**
+ * Smoothing algorithm for polygons (Chaikin's)
+ */
+function smoothPolygon(coordinates, iterations = 2) {
+    if (!coordinates || coordinates.length < 3) return coordinates;
+    
+    let result = coordinates;
+    for (let i = 0; i < iterations; i++) {
+        result = chaikin(result);
+    }
+    return result;
+}
+
+function chaikin(coords) {
+    const newCoords = [];
+    // Handle the closed loop: if last point == first point, we smooth across it
+    const isClosed = coords[0][0] === coords[coords.length-1][0] && coords[0][1] === coords[coords.length-1][1];
+    
+    for (let i = 0; i < coords.length - 1; i++) {
+        const p0 = coords[i];
+        const p1 = coords[i + 1];
+        
+        const q = [
+            0.75 * p0[0] + 0.25 * p1[0],
+            0.75 * p0[1] + 0.25 * p1[1]
+        ];
+        const r = [
+            0.25 * p0[0] + 0.75 * p1[0],
+            0.25 * p0[1] + 0.75 * p1[1]
+        ];
+        
+        newCoords.push(q);
+        newCoords.push(r);
+    }
+    
+    if (isClosed) {
+        newCoords.push(newCoords[0]); // Re-close
+    } else {
+        // If not closed, keep endpoints (less ideal for smoothing)
+        newCoords.unshift(coords[0]);
+        newCoords.push(coords[coords.length-1]);
+    }
+    
+    return newCoords;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
@@ -1486,8 +1532,8 @@ async function initMap() {
   const { Geocoder } = await importLibrary("geocoding");
 
   map = new Map(document.getElementById("map-container"), {
-    center: { lat: 39.8283, lng: -98.5795 },
-    zoom: 3,
+    center: { lat: 20, lng: 0 },
+    zoom: 2,
     mapId: __GOOGLE_MAPS_MAP_ID__, 
     disableDefaultUI: false,
     clickableIcons: false
@@ -1560,7 +1606,7 @@ async function initMap() {
     // Add Markers
     sortedStops.forEach((stop, index) => {
         const pin = new PinElement({
-            glyph: `${index + 1}`,
+            glyphText: `${index + 1}`,
             glyphColor: "white",
             background: "#EA4335", // Google Maps Red
             borderColor: "#B31412",
@@ -2839,7 +2885,7 @@ async function renderDiscoveryLayer() {
             type: 'Feature',
             geometry: {
                 type: 'Polygon',
-                coordinates: r.geometry.coordinates
+                coordinates: r.geometry.coordinates.map(ring => smoothPolygon(ring, 3))
             },
             properties: {
                 id: r.id,
@@ -2860,18 +2906,18 @@ async function renderDiscoveryLayer() {
     // Styling
     map.data.setStyle((feature) => {
         const tier = feature.getProperty('tier');
-        let color = '#3498db'; // Standard
+        let color = '#0077be'; // Standard Blue
         let strokeColor = '#005fa3';
 
         if (tier === 'Hidden Gem') {
-            color = '#8e44ad';
-            strokeColor = '#5e2c73';
+            color = '#9c27b0'; // Purple
+            strokeColor = '#6a1b9a';
         } else if (tier === 'Regional Favorite') {
-            color = '#27ae60';
-            strokeColor = '#196f3d';
+            color = '#ff9800'; // Orange
+            strokeColor = '#ef6c00';
         } else if (tier === 'Challenging') {
-            color = '#e74c3c';
-            strokeColor = '#922b21';
+            color = '#d32f2f'; // Red
+            strokeColor = '#b71c1c';
         }
 
         return {
