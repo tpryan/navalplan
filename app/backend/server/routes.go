@@ -89,6 +89,16 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodDelete, "/api/v1/discovery/regions/{regionID}/months/{month}", http.HandlerFunc(s.Handler.DeleteDiscoveryRegionSeasonality), 1},
 
 		// --- Static Files Catch-All (Public) ---
+		// Explicitly serve assets folder to avoid any regex confusion in catch-all
+		{http.MethodGet, "/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Strip prefix manually if needed, but ServeFile works with full path if constructed right
+			// However, http.ServeFile doesn't strip the prefix from the URL when looking up the file.
+			// So if we request /assets/foo.css, and staticPath is /static, we want /static/assets/foo.css
+			
+			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
+			http.ServeFile(w, r, fpath)
+		}), 0},
+
 		{http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// 1. API Guard: Don't serve HTML for missing API routes
 			if strings.HasPrefix(r.URL.Path, "/api/") {

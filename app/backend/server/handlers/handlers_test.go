@@ -188,12 +188,17 @@ func (m *MockStore) ListInvitations(ctx context.Context) ([]models.Invitation, e
 	return args.Get(0).([]models.Invitation), args.Error(1)
 }
 
-func (m *MockStore) ListPeople(ctx context.Context) ([]models.Person, error) {
-	args := m.Called()
+func (m *MockStore) ListPeople(ctx context.Context, limit, offset int) ([]models.Person, error) {
+	args := m.Called(limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]models.Person), args.Error(1)
+}
+
+func (m *MockStore) CountPeople(ctx context.Context) (int, error) {
+	args := m.Called()
+	return args.Int(0), args.Error(1)
 }
 
 func (m *MockStore) UpdatePersonName(ctx context.Context, id int64, name string) error {

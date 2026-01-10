@@ -40,7 +40,8 @@ type Store interface {
 	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
 	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
-	ListPeople(ctx context.Context) ([]models.Person, error)
+	ListPeople(ctx context.Context, limit, offset int) ([]models.Person, error)
+	CountPeople(ctx context.Context) (int, error)
 
 	// Invitations
 	GetInvitation(ctx context.Context, email string) (*models.Invitation, error)

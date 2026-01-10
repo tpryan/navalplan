@@ -3906,6 +3906,9 @@ function smoothRing(ring) {
     return currentRing;
 }
 
+let currentAdminPage = 1;
+const ADMIN_PAGE_LIMIT = 20;
+
 function initAdminUI() {
     // Listen for Admin Button (delegation)
     document.addEventListener('click', async (e) => {
@@ -3916,6 +3919,7 @@ function initAdminUI() {
             if (modal && overlay) {
                 modal.classList.remove('hidden');
                 overlay.classList.remove('hidden');
+                currentAdminPage = 1;
                 loadAdminUsers();
             }
         }
@@ -3927,6 +3931,26 @@ function initAdminUI() {
         btnClose.addEventListener('click', () => {
              document.getElementById('modal-admin').classList.add('hidden');
              document.getElementById('modal-overlay').classList.add('hidden');
+        });
+    }
+
+    // Pagination Handlers
+    const btnPrev = document.getElementById('btn-admin-prev');
+    const btnNext = document.getElementById('btn-admin-next');
+    
+    if (btnPrev) {
+        btnPrev.addEventListener('click', () => {
+            if (currentAdminPage > 1) {
+                currentAdminPage--;
+                loadAdminUsers();
+            }
+        });
+    }
+
+    if (btnNext) {
+        btnNext.addEventListener('click', () => {
+            currentAdminPage++;
+            loadAdminUsers();
         });
     }
 
@@ -3961,42 +3985,61 @@ function initAdminUI() {
 
 async function loadAdminUsers() {
     const tbody = document.getElementById('admin-users-list');
+    const btnPrev = document.getElementById('btn-admin-prev');
+    const btnNext = document.getElementById('btn-admin-next');
+    const pageDisplay = document.getElementById('admin-page-display');
+
     tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">Loading...</td></tr>';
     
     try {
-        const data = await API.listAdminUsers();
-        const users = data.users || [];
+        const data = await API.listAdminUsers(currentAdminPage, ADMIN_PAGE_LIMIT);
+        const users = data.users.data || [];
+        const total = data.users.total || 0;
+        const invites = data.invites || [];
         
         tbody.innerHTML = '';
         
-        if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No users found</td></tr>';
-            return;
+        // Show Invites First (if on page 1)
+        if (currentAdminPage === 1 && invites.length > 0) {
+            invites.forEach(i => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b bg-gray-light';
+                const safeEmail = DOMPurify.sanitize(i.email);
+                tr.innerHTML = `
+                    <td class="p-sm">${safeEmail}</td>
+                    <td class="p-sm"><span class="badge badge-standard">Pending Invite</span></td>
+                    <td class="p-sm"><button class="btn-text btn-danger font-sm p-0" onclick="revokeInvite('${safeEmail}')">Revoke</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
-        
-        users.forEach(u => {
-            const tr = document.createElement('tr');
-            tr.className = 'border-b';
-            
-            let status = '';
-            let action = '';
-            
-            if (u.invited) {
-                status = '<span class="badge badge-standard">Pending Invite</span>';
-                action = `<button class="btn-text btn-danger font-sm p-0" onclick="revokeInvite('${u.email}')">Revoke</button>`;
-            } else {
-                status = '<span class="badge badge-regional">Active User</span>';
+
+        if (users.length === 0 && invites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No users found</td></tr>';
+        } else {
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b';
+                
+                let status = '<span class="badge badge-regional">Active User</span>';
                 if (u.is_admin) status += ' <span class="badge badge-gem">Admin</span>';
-                action = '<span class="text-gray font-sm">-</span>';
-            }
-            
-            tr.innerHTML = DOMPurify.sanitize(`
-                <td class="p-sm">${u.email}</td>
-                <td class="p-sm">${status}</td>
-                <td class="p-sm">${action}</td>
-            `);
-            tbody.appendChild(tr);
-        });
+                
+                const safeEmail = DOMPurify.sanitize(u.email);
+                tr.innerHTML = `
+                    <td class="p-sm truncate" title="${safeEmail}">${safeEmail}</td>
+                    <td class="p-sm">${status}</td>
+                    <td class="p-sm"><span class="text-gray font-sm">-</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Update Pagination Controls
+        const totalPages = Math.ceil(total / ADMIN_PAGE_LIMIT);
+        pageDisplay.textContent = `Page ${currentAdminPage} of ${totalPages || 1}`;
+        
+        if (btnPrev) btnPrev.disabled = currentAdminPage === 1;
+        if (btnNext) btnNext.disabled = currentAdminPage >= totalPages;
         
     } catch (err) {
         console.error(err);
