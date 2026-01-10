@@ -255,9 +255,28 @@ function initUI() {
           const geocoder = new Geocoder();
           const response = await geocoder.geocode({ location: { lat, lng } });
           if (response.results[0]) {
-              document.getElementById('voyage-location-name').value = response.results[0].formatted_address;
-              if (response.results[0].plus_code) {
-                  const pc = response.results[0].plus_code;
+              const r = response.results[0];
+              
+              // Extract descriptive name
+              let descName = r.formatted_address;
+              const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
+              
+              const locality = getComp('locality') || getComp('sublocality'); 
+              const region = getComp('administrative_area_level_1');
+              const country = getComp('country');
+              
+              if (locality && country) {
+                  descName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
+              } else if (region && country) {
+                  descName = `${region}, ${country}`;
+              } else if (country) {
+                  descName = country;
+              }
+
+              document.getElementById('voyage-location-name').value = descName;
+
+              if (r.plus_code) {
+                  const pc = r.plus_code;
                   document.getElementById('voyage-precise-location').value = pc.compound_code || pc.global_code || "";
               } else {
                   document.getElementById('voyage-precise-location').value = "";
@@ -1690,6 +1709,24 @@ async function initMap() {
           }
           renderItinerary();
           renderMapStops();
+
+          // Auto-advance to next empty date
+          if (currentVoyage && selectedDate) {
+              const current = new Date(selectedDate);
+              const next = new Date(current);
+              next.setDate(next.getDate() + 1);
+              
+              // Helper to format YYYY-MM-DD
+              const nextStr = next.toISOString().split('T')[0];
+              const endStr = new Date(currentVoyage.end_date).toISOString().split('T')[0];
+
+              if (nextStr <= endStr) {
+                  const nextStop = currentStops.find(s => s.target_date.startsWith(nextStr));
+                  if (!nextStop) {
+                      selectDate(nextStr);
+                  }
+              }
+          }
       } catch (err) {
           console.error(err);
           alert('Failed to save stop');
