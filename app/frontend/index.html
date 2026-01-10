@@ -210,7 +210,7 @@
     </div>
 
     <!-- Admin Modal -->
-    <div id="modal-admin" class="modal hidden modal-scrollable">
+    <div id="modal-admin" class="modal hidden modal-scrollable" style="min-width: 600px;">
       <div class="modal-header-row flex justify-between align-center">
         <h2 class="m-0">Admin Console</h2>
         <button id="btn-close-admin" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
@@ -218,23 +218,29 @@
       <div class="p-md">
         <h3>Invite New User</h3>
         <form id="form-invite-user" class="flex gap-sm mb-lg">
-           <input type="email" id="invite-email" name="email" required placeholder="user@example.com" class="flex-grow" />
+           <input type="email" id="invite-email" name="email" required placeholder="user@example.com" class="flex-grow w-full p-sm border-radius border" />
            <button type="submit" class="btn primary">Invite</button>
         </form>
         
         <h3>Users & Invites</h3>
-        <table id="admin-users-table" class="w-full text-left" style="border-collapse: collapse;">
+        <table id="admin-users-table" class="w-full text-left mt-md" style="border-collapse: collapse; table-layout: fixed;">
             <thead>
-                <tr class="border-b">
-                    <th class="p-sm">Email</th>
-                    <th class="p-sm">Status</th>
-                    <th class="p-sm">Action</th>
+                <tr class="border-b" style="background-color: rgba(0,0,0,0.03);">
+                    <th class="p-sm text-left" style="width: 50%;">Email</th>
+                    <th class="p-sm text-left" style="width: 30%;">Status</th>
+                    <th class="p-sm text-left" style="width: 20%;">Action</th>
                 </tr>
             </thead>
             <tbody id="admin-users-list">
                 <!-- Populated via JS -->
             </tbody>
         </table>
+        
+        <div class="flex justify-center align-center gap-md mt-md">
+            <button id="btn-admin-prev" class="btn secondary" disabled>Previous</button>
+            <span id="admin-page-display" class="font-sm text-gray">Page 1</span>
+            <button id="btn-admin-next" class="btn secondary" disabled>Next</button>
+        </div>
       </div>
     </div>
 

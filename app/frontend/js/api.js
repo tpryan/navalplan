@@ -198,8 +198,8 @@ export const API = {
       },
 
     // Admin
-    async listAdminUsers() {
-        const res = await apiFetch('/api/admin/users');
+    async listAdminUsers(page = 1, limit = 20) {
+        const res = await apiFetch(`/api/admin/users?page=${page}&limit=${limit}`);
         if (!res.ok) throw new Error('Failed to load users');
         return res.json();
     },

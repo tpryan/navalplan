@@ -633,3 +633,13 @@
     margin-top: 2rem;
     margin-bottom: 2rem;
 }
+
+/* Utility for text truncation */
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Force alignment */
+.text-left { text-align: left !important; }

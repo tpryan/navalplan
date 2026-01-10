@@ -40,9 +40,16 @@ func (db *DB) ListInvitations(ctx context.Context) ([]models.Invitation, error) 
 	return invitations, err
 }
 
-func (db *DB) ListPeople(ctx context.Context) ([]models.Person, error) {
+func (db *DB) ListPeople(ctx context.Context, limit, offset int) ([]models.Person, error) {
 	var people []models.Person
-	query := `SELECT * FROM person ORDER BY created_at DESC`
-	err := db.SelectContext(ctx, &people, query)
+	query := `SELECT * FROM person ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	err := db.SelectContext(ctx, &people, query, limit, offset)
 	return people, err
+}
+
+func (db *DB) CountPeople(ctx context.Context) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM person`
+	err := db.GetContext(ctx, &count, query)
+	return count, err
 }
