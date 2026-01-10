@@ -2082,6 +2082,8 @@ async function captureAndUploadMap(voyageId) {
             Promise.all(briefingPromises)
         ]);
 
+        const firstStopName = sortedStops.length > 0 ? displayLocationName(sortedStops[0].location_name) : null;
+
         const renderReferences = (refs) => {
             if (!refs || refs.length === 0) return '';
             return `<div class="ref-link">
@@ -2418,7 +2420,10 @@ async function captureAndUploadMap(voyageId) {
                 }
                 
                 // Facilities
-                if (b.facilities && b.facilities.length > 0) {
+                const stopName = displayLocationName(stop.location_name);
+                const isLastStopLoop = (idx === sortedStops.length - 1 && sortedStops.length > 1 && stopName === firstStopName);
+
+                if (b.facilities && b.facilities.length > 0 && !isLastStopLoop) {
                      html += `
                         <div class="briefing-section">
                             <h3 class="briefing-header-icon">
@@ -3151,6 +3156,8 @@ function renderSharedReport(data, container) {
     // Sort stops
     stops.sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
 
+    const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
+
     const renderReferences = (refs) => {
         if (!refs || refs.length === 0) return '';
         return `<div class="ref-link">
@@ -3461,7 +3468,10 @@ function renderSharedReport(data, container) {
                 }
 
                 // Facilities
-                if (b.facilities && b.facilities.length > 0) {
+                const stopName = displayLocationName(stop.location_name);
+                const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
+
+                if (b.facilities && b.facilities.length > 0 && !isLastStopLoop) {
                      html += `
                         <div class="briefing-section">
                             <h4 class="briefing-header-icon">
