@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"sync"
 
@@ -43,6 +45,59 @@ type AgentOutput struct {
 	SunPhase       json.RawMessage `json:"sun_phase"`
 	Tides          json.RawMessage `json:"tides"`
 	Facilities     json.RawMessage `json:"facilities"`
+}
+
+type Facility struct {
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Latitude   float64         `json:"latitude"`
+	Longitude  float64         `json:"longitude"`
+	Details    json.RawMessage `json:"details"`
+	References []string        `json:"references"`
+}
+
+func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
+	apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+	if apiKey == "" {
+		return 0, 0, fmt.Errorf("GOOGLE_MAPS_API_KEY not set")
+	}
+
+	query := fmt.Sprintf("%s, %s", name, vicinity)
+	
+	// Create a bounding box roughly +/- 0.5 degrees around the stop (approx 30 miles)
+	// Format: south,west|north,east
+	bounds := fmt.Sprintf("%f,%f|%f,%f", centerLat-0.5, centerLng-0.5, centerLat+0.5, centerLng+0.5)
+
+	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s", 
+		url.QueryEscape(query), url.QueryEscape(bounds), apiKey)
+
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Results []struct {
+			Geometry struct {
+				Location struct {
+					Lat float64 `json:"lat"`
+					Lng float64 `json:"lng"`
+				} `json:"location"`
+			} `json:"geometry"`
+		} `json:"results"`
+		Status string `json:"status"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, 0, err
+	}
+
+	if result.Status != "OK" || len(result.Results) == 0 {
+		return 0, 0, fmt.Errorf("geocoding failed: %s", result.Status)
+	}
+
+	return result.Results[0].Geometry.Location.Lat, result.Results[0].Geometry.Location.Lng, nil
 }
 
 func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
@@ -115,9 +170,11 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	}
 
 	// 2. Run Agent
-	locInfo := stop.LocationName
+	var locInfo string
 	if stop.PreciseLocation != "" {
-		locInfo = fmt.Sprintf("%s (Precise Location Code: %s)", stop.LocationName, stop.PreciseLocation)
+		locInfo = fmt.Sprintf("%s (Lat: %f, Lng: %f)", stop.LocationName, stop.Latitude, stop.Longitude)
+	} else {
+		locInfo = stop.LocationName
 	}
 
 	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
@@ -172,6 +229,27 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
 		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
 		return
+	}
+
+	// Post-process facilities to fix missing or imprecise coordinates
+	var facilities []Facility
+	if err := json.Unmarshal(output.Facilities, &facilities); err == nil {
+		updated := false
+		for i, f := range facilities {
+			log.Infof("Geocoding facility: %s near %s", f.Name, stop.LocationName)
+			lat, lng, err := GeocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
+			if err == nil {
+				facilities[i].Latitude = lat
+				facilities[i].Longitude = lng
+				updated = true
+			} else {
+				log.Warnf("Failed to geocode facility %s: %v", f.Name, err)
+			}
+		}
+		if updated {
+			newBytes, _ := json.Marshal(facilities)
+			output.Facilities = json.RawMessage(newBytes)
+		}
 	}
 
 	briefing := &models.Briefing{

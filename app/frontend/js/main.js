@@ -1483,12 +1483,26 @@ async function showBriefing(briefing) {
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                         locHtml = `
                             <p class="map-link-p">
                                 <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                 <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let websiteHtml = '';
+                    if (f.website) {
+                        websiteHtml = `
+                            <p class="map-link-p" style="margin-top: 0;">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                             </p>
                         `;
                     }
@@ -1500,6 +1514,7 @@ async function showBriefing(briefing) {
                                 ${f.name}
                             </h4>
                             ${locHtml}
+                            ${websiteHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -1756,12 +1771,16 @@ async function initMap() {
                              });
 
                              fMarker.addListener('click', () => {
+                                 let query = f.latitude + "," + f.longitude;
+                                 if (f.address) {
+                                     query = f.name + ", " + f.address;
+                                 }
                                  const infoWindow = new InfoWindow({
                                      content: `
                                          <div style="color: black;">
                                              <strong>${f.name}</strong><br>
                                              ${f.type}<br>
-                                             <a href="https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}" target="_blank">View on Google Maps</a>
+                                             <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}" target="_blank">View on Google Maps</a>
                                          </div>
                                      `
                                  });
@@ -2508,12 +2527,26 @@ async function captureAndUploadMap(voyageId) {
 
                     let locHtml = '';
                     if (f.latitude && f.longitude) {
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                        let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                         locHtml = `
                             <p class="map-link-p">
                                 <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                 ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                 <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let websiteHtml = '';
+                    if (f.website) {
+                        websiteHtml = `
+                            <p class="map-link-p" style="margin-top: 0;">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                             </p>
                         `;
                     }
@@ -2525,6 +2558,7 @@ async function captureAndUploadMap(voyageId) {
                                 ${f.name}
                             </h4>
                             ${locHtml}
+                            ${websiteHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -3563,12 +3597,26 @@ function renderSharedReport(data, container) {
 
                         let locHtml = '';
                         if (f.latitude && f.longitude) {
-                            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}`;
+                            let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
                             locHtml = `
                                 <p class="map-link-p">
                                     <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
                                     ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
                                     <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                                </p>
+                            `;
+                        }
+
+                        let websiteHtml = '';
+                        if (f.website) {
+                            websiteHtml = `
+                                <p class="map-link-p" style="margin-top: 0;">
+                                    <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                    <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
                                 </p>
                             `;
                         }
@@ -3580,6 +3628,7 @@ function renderSharedReport(data, container) {
                                     ${f.name}
                                 </h4>
                                 ${locHtml}
+                                ${websiteHtml}
                                 ${detailsHtml}
                                 ${renderReferences(f.references)}
                             </li>
