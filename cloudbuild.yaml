@@ -36,7 +36,6 @@ steps:
   - '${PROJECT_ID}'
   - '--allow-unauthenticated' # Publicly accessible
   - '--set-secrets=NAVALPLAN_AGENT_URL=NAVALPLAN_AGENT_URL:latest'
-  - '--set-secrets=GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest'
   - '--set-secrets=NAVALPLAN_DB_USER=NAVALPLAN_DB_USER:latest'
   - '--set-secrets=NAVALPLAN_DB_PASS=NAVALPLAN_DB_PASS:latest'
   - '--set-secrets=NAVALPLAN_DB_PORT=NAVALPLAN_DB_PORT:latest'
