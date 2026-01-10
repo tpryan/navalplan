@@ -186,9 +186,11 @@ function initUI() {
     btnUseMapCenter.addEventListener('click', () => {
       if (!map) return;
       const center = map.getCenter();
-      inputLat.value = center.lat;
-      inputLng.value = center.lng;
-      displayCoords.textContent = `Lat: ${center.lat.toFixed(4)}, Lng: ${center.lng.toFixed(4)}`;
+      const lat = center.lat();
+      const lng = center.lng();
+      inputLat.value = lat;
+      inputLng.value = lng;
+      displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
     });
   }
 
