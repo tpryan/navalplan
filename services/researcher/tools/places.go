@@ -61,7 +61,7 @@ func FindPlaces(args PlacesArgs) (PlacesResponse, error) {
 	ctx := context.Background()
 
 	var clientOpts []option.ClientOption
-	if key := os.Getenv("GOOGLE_MAPS_API_KEY"); key != "" {
+	if key := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY"); key != "" {
 		clientOpts = append(clientOpts, option.WithAPIKey(key))
 	}
 

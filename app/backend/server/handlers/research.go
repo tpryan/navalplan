@@ -56,10 +56,10 @@ type Facility struct {
 	References []string        `json:"references"`
 }
 
-func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
-	apiKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+func (h *Handlers) getStaticMap(lat, lng float64) ([]byte, error) {
+	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
-		return 0, 0, fmt.Errorf("GOOGLE_MAPS_API_KEY not set")
+		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
 	}
 
 	query := fmt.Sprintf("%s, %s", name, vicinity)

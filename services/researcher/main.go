@@ -91,15 +91,15 @@ func main() {
 	// Load .env
 	godotenv.Load("../../.env")
 
-	mapsKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if mapsKey != "" {
 		if len(mapsKey) > 5 {
-			clog.Info("config", "GOOGLE_MAPS_API_KEY", mapsKey[:5]+"...")
+			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
 		} else {
-			clog.Info("config", "GOOGLE_MAPS_API_KEY", "SET (short)")
+			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
 		}
 	} else {
-		clog.Warn("config", "GOOGLE_MAPS_API_KEY", "NOT SET")
+		clog.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
 	}
 
 	ctx := context.Background()

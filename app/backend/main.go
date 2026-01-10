@@ -40,8 +40,8 @@ func main() {
 		log.Fatal("NAVALPLAN_SYSTEM_KEY is not set. System API Key is required.")
 	}
 
-	if os.Getenv("GOOGLE_MAPS_API_KEY") == "" {
-		log.Fatal("GOOGLE_MAPS_API_KEY is not set. Google Maps API Key is required.")
+	if os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY") == "" {
+		log.Fatal("NAVALPLAN_BACKEND_MAPS_API_KEY is not set. Google Maps API Key is required.")
 	}
 
 	cfg := loadConfig(os.Getenv, *contentDir)
@@ -150,7 +150,7 @@ func loadConfig(getEnv func(string) string, contentDir string) *config.Config {
 		BaseURL:            baseURL,
 		NavalPlanAgentURL:  agentURL,
 		SystemAPIKey:       getEnv("NAVALPLAN_SYSTEM_KEY"),
-		GoogleMapsAPIKey:   getEnv("GOOGLE_MAPS_API_KEY"),
+		GoogleMapsAPIKey:   getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY"),
 	}
 
 	logdsn := ObscureString(dsn, dbPass)

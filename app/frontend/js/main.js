@@ -1641,14 +1641,14 @@ function selectDate(dateStr) {
 
 async function initMap() {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.error('Google Maps API key is missing. Please set GOOGLE_MAPS_API_KEY environment variable during build.');
+    console.error('Google Maps API key is missing. Please set NAVALPLAN_FRONTEND_MAPS_API_KEY environment variable during build.');
     const mapContainer = document.getElementById('map-container');
     if (mapContainer) {
         mapContainer.innerHTML = `
             <div class="flex flex-col items-center justify-center h-full text-center p-xl">
                 <span class="material-symbols-outlined icon-xl text-gray mb-md">map</span>
                 <h2 class="text-dark">Map Configuration Missing</h2>
-                <p class="text-gray max-w-sm">The Google Maps API key is not set. Please configure <code>GOOGLE_MAPS_API_KEY</code> in your environment and rebuild the application.</p>
+                <p class="text-gray max-w-sm">The Google Maps API key is not set. Please configure <code>NAVALPLAN_FRONTEND_MAPS_API_KEY</code> in your environment and rebuild the application.</p>
             </div>
         `;
     }

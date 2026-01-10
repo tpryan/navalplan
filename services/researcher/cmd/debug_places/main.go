@@ -13,9 +13,9 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	godotenv.Load("../../.env")
 
-	key := os.Getenv("GOOGLE_MAPS_API_KEY")
+	key := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if key == "" {
-		log.Error("GOOGLE_MAPS_API_KEY is not set")
+		log.Error("NAVALPLAN_BACKEND_MAPS_API_KEY is not set")
 		os.Exit(1)
 	}
 	log.Info("Using API Key: " + key[:5] + "...")
