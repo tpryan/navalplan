@@ -115,8 +115,13 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	}
 
 	// 2. Run Agent
+	locInfo := stop.LocationName
+	if stop.PreciseLocation != "" {
+		locInfo = fmt.Sprintf("%s (Precise Location Code: %s)", stop.LocationName, stop.PreciseLocation)
+	}
+
 	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
-		stop.Latitude, stop.Longitude, stop.LocationName, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+		stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,

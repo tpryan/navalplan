@@ -214,7 +214,12 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		locName = *voyage.LocationName
 	}
 
-	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locName)
+	locDetail := locName
+	if voyage.PreciseLocation != nil && *voyage.PreciseLocation != "" {
+		locDetail = fmt.Sprintf("%s (Precise Location Code: %s)", locName, *voyage.PreciseLocation)
+	}
+
+	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,

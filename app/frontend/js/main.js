@@ -219,6 +219,7 @@ function initUI() {
     displayCoords.textContent = '';
     inputLat.value = '';
     inputLng.value = '';
+    document.getElementById('voyage-precise-location').value = '';
     editingVoyageId = null;
   };
 
@@ -239,7 +240,7 @@ function initUI() {
 
   // Use Map Center
   if (btnUseMapCenter) {
-    btnUseMapCenter.addEventListener('click', () => {
+    btnUseMapCenter.addEventListener('click', async () => {
       if (!map) return;
       const center = map.getCenter();
       const lat = center.lat();
@@ -247,6 +248,24 @@ function initUI() {
       inputLat.value = lat;
       inputLng.value = lng;
       displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+      // Reverse Geocode
+      try {
+          const { Geocoder } = await importLibrary("geocoding");
+          const geocoder = new Geocoder();
+          const response = await geocoder.geocode({ location: { lat, lng } });
+          if (response.results[0]) {
+              document.getElementById('voyage-location-name').value = response.results[0].formatted_address;
+              if (response.results[0].plus_code) {
+                  const pc = response.results[0].plus_code;
+                  document.getElementById('voyage-precise-location').value = pc.compound_code || pc.global_code || "";
+              } else {
+                  document.getElementById('voyage-precise-location').value = "";
+              }
+          }
+      } catch (e) {
+          console.warn("Failed to geocode map center", e);
+      }
     });
   }
 
@@ -259,6 +278,7 @@ function initUI() {
       start_date: formData.get('start_date') + 'T00:00:00Z',
       end_date: formData.get('end_date') + 'T00:00:00Z',
       location_name: formData.get('location_name'),
+      precise_location: formData.get('precise_location'),
       latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
       longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
     };
@@ -918,6 +938,7 @@ function openEditModal(voyage) {
     document.getElementById('voyage-start').value = voyage.start_date.split('T')[0];
     document.getElementById('voyage-end').value = voyage.end_date.split('T')[0];
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
+    document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
         document.getElementById('voyage-lat').value = voyage.latitude;
@@ -1616,11 +1637,16 @@ async function initMap() {
       // Reverse Geocoding
       const geocoder = new Geocoder();
       let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+      let preciseLocation = "";
       
       try {
           const response = await geocoder.geocode({ location: e.latLng });
           if (response.results[0]) {
               locationName = response.results[0].formatted_address;
+              if (response.results[0].plus_code) {
+                  const pc = response.results[0].plus_code;
+                  preciseLocation = pc.compound_code || pc.global_code || "";
+              }
           }
       } catch (err) {
           console.error("Geocoding failed: " + err);
@@ -1630,6 +1656,7 @@ async function initMap() {
       const stopData = {
           target_date: selectedDate + 'T00:00:00Z',
           location_name: locationName,
+          precise_location: preciseLocation,
           latitude: lat,
           longitude: lng,
           search_radius: 5,

@@ -20,7 +20,7 @@ func TestListStops(t *testing.T) {
 		AddRow(2, "Stop 2", 1)
 
 	// We used explicit columns in implementation
-	query := `SELECT id, voyage_id, target_date, location_name, latitude, longitude, search_radius, search_radius_unit, notes, created_at FROM stop WHERE voyage_id = $1 ORDER BY target_date ASC`
+	query := `SELECT id, voyage_id, target_date, location_name, precise_location, latitude, longitude, search_radius, search_radius_unit, notes, created_at FROM stop WHERE voyage_id = $1 ORDER BY target_date ASC`
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(1).WillReturnRows(rows)
 
 	stops, err := db.ListStops(context.Background(), 1, 0, 0)

@@ -11,7 +11,7 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 	var voyages []models.Voyage
 	// Explicit selection for performance (Issue #5)
 	query := `
-		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, share_token, is_public, created_at
+		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, share_token, is_public, created_at
 		FROM voyage 
 		WHERE person_id = $1 
 		ORDER BY start_date DESC`
@@ -29,8 +29,8 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 // CreateVoyage inserts a new voyage into the database.
 func (db *DB) CreateVoyage(ctx context.Context, v *models.Voyage) error {
 	query := `
-		INSERT INTO voyage (person_id, title, start_date, end_date, location_name, latitude, longitude, search_radius, search_radius_unit)
-		VALUES (:person_id, :title, :start_date, :end_date, :location_name, :latitude, :longitude, :search_radius, :search_radius_unit)
+		INSERT INTO voyage (person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, search_radius, search_radius_unit)
+		VALUES (:person_id, :title, :start_date, :end_date, :location_name, :precise_location, :latitude, :longitude, :search_radius, :search_radius_unit)
 		RETURNING id, created_at`
 
 	// Using NamedQueryContext requires a bit more work if sqlx version is old, but standard sqlx has it.
@@ -53,7 +53,7 @@ func (db *DB) UpdateVoyage(ctx context.Context, v *models.Voyage) error {
 	query := `
 		UPDATE voyage
 		SET title = :title, start_date = :start_date, end_date = :end_date,
-		    location_name = :location_name, latitude = :latitude, longitude = :longitude
+		    location_name = :location_name, precise_location = :precise_location, latitude = :latitude, longitude = :longitude
 		WHERE id = :id`
 	_, err := db.NamedExecContext(ctx, query, v)
 	return err
@@ -70,7 +70,7 @@ func (db *DB) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *str
 func (db *DB) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	var v models.Voyage
 	query := `
-		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, 
+		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
 		       search_radius, search_radius_unit, share_token, is_public, created_at
 		FROM voyage 
 		WHERE share_token = $1 AND is_public = true`
@@ -85,7 +85,7 @@ func (db *DB) GetVoyageByToken(ctx context.Context, token string) (*models.Voyag
 func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 	var v models.Voyage
 	query := `
-		SELECT id, person_id, title, start_date, end_date, location_name, latitude, longitude, 
+		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
 		       search_radius, search_radius_unit, share_token, is_public, created_at
 		FROM voyage 
 		WHERE id = $1`
