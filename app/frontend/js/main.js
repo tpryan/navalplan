@@ -2115,9 +2115,12 @@ async function captureAndUploadMap(voyageId) {
 
     let markersParam = "";
     const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
-    stopsToDraw.forEach((s, i) => {
+    
+    // Draw markers in reverse order (N to 1) so that the first marker (1) is drawn last and appears on top of others
+    for (let i = stopsToDraw.length - 1; i >= 0; i--) {
+        const s = stopsToDraw[i];
         markersParam += `&markers=color:red%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
-    });
+    }
 
     let pathParam = "&path=color:0x314c3bff|weight:4";
     stopsToDraw.forEach(s => {
