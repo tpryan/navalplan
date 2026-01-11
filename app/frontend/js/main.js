@@ -1768,7 +1768,8 @@ async function initMap() {
             map: map,
             position: { lat: stop.latitude, lng: stop.longitude },
             content: pin.element,
-            title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`
+            title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`,
+            zIndex: 100
         });
         
         marker.addListener('click', () => {
@@ -1812,7 +1813,8 @@ async function initMap() {
                                  map: map,
                                  position: { lat: f.latitude, lng: f.longitude },
                                  content: iconDiv,
-                                 title: f.name
+                                 title: f.name,
+                                 zIndex: 1
                              });
 
                              fMarker.addListener('click', () => {
