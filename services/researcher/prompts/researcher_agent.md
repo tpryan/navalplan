@@ -31,6 +31,8 @@ CRITICAL RULES:
    - If a facility is a specific business or marina, try to find its actual location.
 7. **Prioritize Nautical Facilities:** Ensure that ALL discovered Anchorages, Marinas, and Moorings are included in the 'facilities' list. You may limit Bars and Restaurants to the top 5-10 most relevant to sailors (e.g. waterfront/dinghy access) to avoid clutter, but NEVER omit a nautical facility found within the radius.
 8. **Websites:** Populate the "website" field using the 'website_uri' returned by the 'find_places_nearby' tool whenever available.
+9. **Sun Phase Formatting:** Ensure 'sun_phase.sunrise' and 'sun_phase.sunset' are strict time strings in the format "HH:MM AM/PM" (e.g. "06:30 AM"). Do NOT include the date or timezone.
+10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
 
 ```json
 {
