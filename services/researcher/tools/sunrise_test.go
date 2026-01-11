@@ -59,3 +59,14 @@ func TestGetSunriseSunset(t *testing.T) {
 		})
 	}
 }
+
+func TestNewSunriseTool(t *testing.T) {
+	tool, err := NewSunriseTool()
+	if err != nil {
+		t.Fatalf("NewSunriseTool() error = %v", err)
+	}
+
+	if tool.Name() != "get_sunrise_sunset" {
+		t.Errorf("NewSunriseTool().Name() = %v, want %v", tool.Name(), "get_sunrise_sunset")
+	}
+}

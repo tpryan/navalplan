@@ -40,3 +40,14 @@ func TestTideBufferRange(t *testing.T) {
 		t.Errorf("End date mismatch: got %v, want %v", endDate, expectedEnd)
 	}
 }
+
+func TestNewTideTool(t *testing.T) {
+	tool, err := NewTideTool()
+	if err != nil {
+		t.Fatalf("NewTideTool() error = %v", err)
+	}
+
+	if tool.Name() != "get_tides" {
+		t.Errorf("NewTideTool().Name() = %v, want %v", tool.Name(), "get_tides")
+	}
+}

@@ -40,3 +40,27 @@ func TestCreateBriefing(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), b.ID)
 }
+
+func TestListVoyageBriefings(t *testing.T) {
+	db, mock := mockDB(t)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"id", "stop_id"}).
+		AddRow(1, 10).
+		AddRow(2, 11)
+
+	query := `
+		SELECT b.*
+		FROM briefing b
+		JOIN stop s ON b.stop_id = s.id
+		WHERE s.voyage_id = $1
+	`
+	// Match whitespace flexibility
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(99).WillReturnRows(rows)
+
+	briefings, err := db.ListVoyageBriefings(context.Background(), 99)
+	assert.NoError(t, err)
+	assert.Len(t, briefings, 2)
+	assert.Equal(t, int64(1), briefings[0].ID)
+	assert.Equal(t, int64(2), briefings[1].ID)
+}

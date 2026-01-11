@@ -29,3 +29,30 @@ func TestDegreesToDirection(t *testing.T) {
 		})
 	}
 }
+
+func TestNewWeatherTool(t *testing.T) {
+	tool, err := NewWeatherTool()
+	if err != nil {
+		t.Fatalf("NewWeatherTool() error = %v", err)
+	}
+
+	if tool.Name() != "get_weather_forecast" {
+		t.Errorf("NewWeatherTool().Name() = %v, want %v", tool.Name(), "get_weather_forecast")
+	}
+}
+
+func TestGetWeatherForecast_InvalidDate(t *testing.T) {
+	args := WeatherArgs{
+		Latitude:  41.497,
+		Longitude: -71.362,
+		Date:      "invalid",
+	}
+
+	got, err := GetWeatherForecast(args)
+	if err != nil {
+		t.Fatalf("GetWeatherForecast() error = %v", err)
+	}
+	if got.Error == "" {
+		t.Errorf("Expected error for invalid date, got none")
+	}
+}

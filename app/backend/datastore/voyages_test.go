@@ -114,3 +114,25 @@ func TestDeleteVoyage(t *testing.T) {
 	err := db.DeleteVoyage(context.Background(), 1)
 	assert.NoError(t, err)
 }
+
+func TestUpdateVoyage(t *testing.T) {
+	db, mock := mockDB(t)
+	defer db.Close()
+
+	v := &models.Voyage{
+		ID:              1,
+		Title:           "Updated Voyage",
+		StartDate:       time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC),
+		EndDate:         time.Date(2025, 8, 14, 0, 0, 0, 0, time.UTC),
+		LocationName:    nil,
+		PreciseLocation: nil,
+		Latitude:        nil,
+		Longitude:       nil,
+	}
+
+	query := `UPDATE voyage`
+	mock.ExpectExec(query).WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := db.UpdateVoyage(context.Background(), v)
+	assert.NoError(t, err)
+}
