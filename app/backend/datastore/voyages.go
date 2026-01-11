@@ -60,10 +60,17 @@ func (db *DB) UpdateVoyage(ctx context.Context, v *models.Voyage) error {
 }
 
 // UpdateVoyageSharing updates the sharing status and token of a voyage.
-func (db *DB) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *string, isPublic bool) error {
-	query := `UPDATE voyage SET share_token = $1, is_public = $2 WHERE id = $3`
-	_, err := db.ExecContext(ctx, query, shareToken, isPublic, id)
-	return err
+func (db *DB) UpdateVoyageSharing(ctx context.Context, id int64, enable bool) (string, error) {
+	if enable {
+		var token string
+		query := `UPDATE voyage SET share_token = generate_voyage_share_token(), is_public = true WHERE id = $1 RETURNING share_token`
+		err := db.QueryRowContext(ctx, query, id).Scan(&token)
+		return token, err
+	} else {
+		query := `UPDATE voyage SET share_token = NULL, is_public = false WHERE id = $1`
+		_, err := db.ExecContext(ctx, query, id)
+		return "", err
+	}
 }
 
 // GetVoyageByToken retrieves a public voyage using its share token.

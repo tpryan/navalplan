@@ -73,12 +73,22 @@ func TestUpdateVoyageSharing(t *testing.T) {
 	db, mock := mockDB(t)
 	defer db.Close()
 
-	query := `UPDATE voyage SET share_token = $1, is_public = $2 WHERE id = $3`
-	token := "token"
-	mock.ExpectExec(regexp.QuoteMeta(query)).WithArgs(token, true, 1).WillReturnResult(sqlmock.NewResult(0, 1))
+	// Enable Sharing
+	queryEnable := `UPDATE voyage SET share_token = generate_voyage_share_token(), is_public = true WHERE id = $1 RETURNING share_token`
+	rows := sqlmock.NewRows([]string{"share_token"}).AddRow("new-token")
+	mock.ExpectQuery(regexp.QuoteMeta(queryEnable)).WithArgs(1).WillReturnRows(rows)
 
-	err := db.UpdateVoyageSharing(context.Background(), 1, &token, true)
+	token, err := db.UpdateVoyageSharing(context.Background(), 1, true)
 	assert.NoError(t, err)
+	assert.Equal(t, "new-token", token)
+
+	// Disable Sharing
+	queryDisable := `UPDATE voyage SET share_token = NULL, is_public = false WHERE id = $1`
+	mock.ExpectExec(regexp.QuoteMeta(queryDisable)).WithArgs(1).WillReturnResult(sqlmock.NewResult(0, 1))
+
+	token, err = db.UpdateVoyageSharing(context.Background(), 1, false)
+	assert.NoError(t, err)
+	assert.Equal(t, "", token)
 }
 
 func TestGetVoyageByToken(t *testing.T) {

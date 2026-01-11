@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -12,12 +10,6 @@ import (
 
 	"github.com/charmbracelet/log"
 )
-
-func generateToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
-}
 
 // EnableSharing generates a public share token for a voyage.
 func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
@@ -45,14 +37,15 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := generateToken()
-	if err := h.DB.UpdateVoyageSharing(r.Context(), id, &token, true); err != nil {
+	token, err := h.DB.UpdateVoyageSharing(r.Context(), id, true)
+	if err != nil {
 		log.Error("Failed to enable sharing", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	v, _ = h.DB.GetVoyage(r.Context(), id)
+	v.ShareToken = &token
+	v.IsPublic = true
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
@@ -83,13 +76,14 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.UpdateVoyageSharing(r.Context(), id, nil, false); err != nil {
+	if _, err := h.DB.UpdateVoyageSharing(r.Context(), id, false); err != nil {
 		log.Error("Failed to disable sharing", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	v, _ = h.DB.GetVoyage(r.Context(), id)
+	v.ShareToken = nil
+	v.IsPublic = false
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
