@@ -3006,8 +3006,13 @@ function generateReportHTML(voyage, stops, briefings, guide) {
 
         // Sun
         const sun = briefing.sun_phase || {};
-        const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-        const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        const formatSunTime = (t) => {
+            if (!t) return '--:--';
+            const d = new Date(t);
+            return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        };
+        const sunrise = formatSunTime(sun.sunrise);
+        const sunset = formatSunTime(sun.sunset);
 
         // Use a consistent ID format based on loop index, caller handles prefix mapping if needed
         // Actually, we need unique IDs. Let's assume the caller will prefix chart rendering.
