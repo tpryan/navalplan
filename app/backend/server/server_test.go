@@ -45,9 +45,9 @@ func (m *MockStore) GetVoyage(ctx context.Context, id int64) (*models.Voyage, er
 	}
 	return args.Get(0).(*models.Voyage), args.Error(1)
 }
-func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *string, isPublic bool) error {
-	args := m.Called(id, shareToken, isPublic)
-	return args.Error(0)
+func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, enable bool) (string, error) {
+	args := m.Called(id, enable)
+	return args.String(0), args.Error(1)
 }
 func (m *MockStore) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	args := m.Called(token)

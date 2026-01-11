@@ -45,9 +45,9 @@ func (m *MockStore) UpdateVoyage(ctx context.Context, v *models.Voyage) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, shareToken *string, isPublic bool) error {
-	args := m.Called(id, shareToken, isPublic)
-	return args.Error(0)
+func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, enable bool) (string, error) {
+	args := m.Called(id, enable)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockStore) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
@@ -472,12 +472,10 @@ func TestSharingOperations(t *testing.T) {
 
 	// Enable Sharing
 	// Ownership check in EnableSharing
+
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
-
-	mockStore.On("UpdateVoyageSharing", voyageID, mock.AnythingOfType("*string"), true).Return(nil)
-
+	mockStore.On("UpdateVoyageSharing", voyageID, true).Return("new-token", nil)
 	// Refetch in EnableSharing
-	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
 
 	reqEnable := httptest.NewRequest("POST", "/voyages/1/share", nil)
 	reqEnable = addPerson(reqEnable, personID)
@@ -586,12 +584,10 @@ func TestDisableSharing(t *testing.T) {
 	voyageID := int64(1)
 
 	// Ownership Check
+
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: true}, nil).Once()
-
-	mockStore.On("UpdateVoyageSharing", voyageID, (*string)(nil), false).Return(nil)
-
+	mockStore.On("UpdateVoyageSharing", voyageID, false).Return("", nil)
 	// Refetch
-	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, IsPublic: false}, nil).Once()
 
 	req := httptest.NewRequest("DELETE", "/voyages/1/share", nil)
 	req = addPerson(req, personID)
