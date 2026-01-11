@@ -2145,514 +2145,61 @@ async function captureAndUploadMap(voyageId) {
     async function handleShowReport() {
     if (!currentVoyage) return;
     
-    const btn = document.getElementById('btn-export-voyage');
+    const btn = document.getElementById("btn-export-voyage");
     const originalContent = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+    btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
 
     try {
         // 1. Check/Capture Map
         let guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
         
-        // If guide doesn't exist or has no map, try to capture
         if (!guide || !guide.map_url) {
              const captured = await captureAndUploadMap(currentVoyage.id);
              if (captured) {
-                 // Re-fetch guide to get the new map_url
                  guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
              }
         }
 
-        // 2. Fetch all data (Briefings)
-        // Sort stops
+        // 2. Fetch all data
         const sortedStops = [...currentStops].sort((a, b) => 
             new Date(a.target_date) - new Date(b.target_date)
         );
         
-        // Fetch Briefings in parallel
         const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
-        
         const [briefings] = await Promise.all([
             Promise.all(briefingPromises)
         ]);
 
-        const firstStopName = sortedStops.length > 0 ? displayLocationName(sortedStops[0].location_name) : null;
-
-        const renderReferences = (refs) => {
-            if (!refs || refs.length === 0) return '';
-            return `<div class="ref-link">
-                <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
-            </div>`;
-        };
+        // 3. Build HTML using shared generator
+        const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide);
         
-        // 2. Build HTML
-        let html = `
-            <h1 class="report-title">${DOMPurify.sanitize(currentVoyage.title)}</h1>
-            <p class="report-dates">
-                ${new Date(currentVoyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(currentVoyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
-            </p>
-            <hr />
-        `;
-
-        // --- Consolidated View ---
-        const gridCols = Math.min(sortedStops.length, 4);
-        html += `<div class="report-section-wrapper">
-            <h2 class="report-day-header brand-blue">Voyage Overview</h2>
-            <div class="overview-grid grid-cols-${gridCols}">
-        `;
-            
-        sortedStops.forEach((stop, idx) => {
-            const briefing = briefings[idx] || {};
-            const date = new Date(stop.target_date);
-            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-            
-            // Weather
-            const w = briefing.weather_summary || {};
-            const weatherIcon = getIconForWeather(w.condition);
-            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-            // Sun
-            const sun = briefing.sun_phase || {};
-            const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-            const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-
-            const canvasId = `miniTideChart_${idx}`;
-
-            html += `
-                <div class="overview-card">
-                    <div class="overview-date">
-                        ${dateStr}
-                    </div>
-                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
-                    </div>
-                    
-                    <div class="overview-weather">
-                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                        <span class="overview-temp">${temp}</span>
-                    </div>
-
-                    <div class="overview-sun">
-                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                    </div>
-
-                    <div class="overview-chart">
-                        <canvas id="${canvasId}"></canvas>
-                    </div>
-                </div>
-            `;
-        });
-        html += `</div></div><hr />`;
-
-        // --- Add Destination Guide Section ---
-        if (guide) {
-            html += `
-                <div class="report-section-wrapper report-guide-bg">
-                    <h2 class="report-day-header brand-green">Destination Guide</h2>
-                    
-                    ${guide.map_url ? `
-                    <div class="report-map-container">
-                        <img src="${guide.map_url}" alt="Voyage Map" class="report-map-img" />
-                    </div>
-                    ` : ''}
-
-                    <h3>Summary</h3>
-                    <p>${guide.summary || 'N/A'}</p>
-                    
-                    ${guide.sailing_season ? `
-                    <div class="mt-md">
-                        <h3>Sailing Season</h3>
-                        <ul class="mt-sm">
-                            <li><strong>Best Months:</strong> ${(guide.sailing_season.primary_season_months || []).join(', ')}</li>
-                            <li><strong>Storm Season:</strong> ${(guide.sailing_season.storm_season_months || []).join(', ')}</li>
-                            <li><strong>Notes:</strong> ${guide.sailing_season.notes || ''} ${renderReferences(guide.sailing_season.references)}</li>
-                        </ul>
-                    </div>
-                    ` : ''}
-
-                    ${(guide.hazards && guide.hazards.length > 0) ? `
-                    <div class="mt-md">
-                        <h3>Hazards</h3>
-                        <ul class="mt-sm">
-                            ${guide.hazards.map(h => {
-                                const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm">(Info)</a>` : '';
-                                return `<li><h4>${h.title}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
-                            }).join('')}
-                        </ul>
-                    </div>
-                    ` : ''}
-                    
-                     ${(guide.hubs && guide.hubs.length > 0) ? `
-                    <div class="mt-md">
-                        <h3>Major Hubs</h3>
-                        <ul class="mt-sm">
-                            ${guide.hubs.map(h => {
-                                const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm">(Website)</a>` : '';
-                                return `<li><h4>${h.name}${link}</h4> <p>${h.description} ${renderReferences(h.references)}</p></li>`;
-                            }).join('')}
-                        </ul>
-                    </div>
-                    ` : ''}
-
-                    ${guide.charter_info ? `
-                    <div class="mt-md">
-                         <h3>Charter Info</h3>
-                         <p class="mb-sm ml-md"><strong>Available:</strong> ${guide.charter_info.is_charter_destination ? 'Yes' : 'No'}</p>
-                         <div class="ml-md">
-                            <strong>Companies:</strong>
-                            ${(guide.charter_info.companies && guide.charter_info.companies.length > 0) ? 
-                                `<ul class="mt-xs">${guide.charter_info.companies.map(comp => {
-                                    if (typeof comp === 'string') return `<li>${comp}</li>`;
-                                    const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
-                                    return `<li><h4>${nameLink}</h4> ${renderReferences(comp.references)}</li>`;
-                                }).join('')}</ul>` : 'None listed'}
-                         </div>
-                    </div>
-                    ` : ''}
-
-                    ${(guide.country_info || guide.currencies) ? `
-                    <div class="mt-md">
-                        <h3>Country & Culture</h3>
-                        <ul class="mt-sm">
-                             ${guide.country_info ? `
-                                <li><strong>Country:</strong> ${guide.country_info.name || 'N/A'}</li>
-                                <li><strong>Language:</strong> ${(guide.country_info.languages || []).join(', ') || 'N/A'}</li>
-                                <li><strong>Timezone:</strong> ${guide.country_info.timezone || 'N/A'}</li>
-                                <li><strong>Emergency:</strong> ${guide.country_info.emergency_numbers ? Object.entries(guide.country_info.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</li>
-                             ` : ''}
-                             ${(guide.currencies && guide.currencies.length > 0) ? `
-                                <li><strong>Currency:</strong> ${guide.currencies.map(c => `${c.name} (${c.code}) - ${c.symbol || ''}`).join(', ')}</li>
-                             ` : ''}
-                        </ul>
-                    </div>
-                    ` : ''}
-
-                    ${(guide.airports && guide.airports.length > 0) ? `
-                    <div class="mt-md">
-                        <h3>Nearest Airports</h3>
-                        <ul class="mt-sm">
-                            ${guide.airports.map(a => `
-                                <li>
-                                    <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
-                                    <p><strong>Type:</strong> ${a.type || 'Unknown'}, ${a.distance_km ? a.distance_km + ' km' : 'Unknown distance'}</p>
-                                    ${renderReferences(a.references)}
-                                </li>
-                            `).join('')}
-                        </ul>
-                    </div>
-                    ` : ''}
-
-                    ${(guide.points_of_interest && guide.points_of_interest.length > 0) ? `
-                    <div class="mt-md">
-                        <h3>Points of Interest</h3>
-                        <ul class="mt-sm">
-                            ${guide.points_of_interest.map(poi => `
-                                <li>
-                                    <h4>${poi.name}</h4>
-                                    <p>${poi.description} ${renderReferences(poi.references)}</p>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    </div>
-                    ` : ''}
-                </div>
-                <hr />
-            `;
-        }
-
-        sortedStops.forEach((stop, idx) => {
-            const b = briefings[idx];
-            html += `
-                <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
-                    <p class="report-day-date"><strong>Date:</strong> ${new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
-            `;
-            
-            if (b) {
-                 const isInvalid = (v) => {
-                    if (!v) return true;
-                    const sv = String(v).toLowerCase().trim();
-                    return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
-                 };
-
-                 // Weather
-                if (b.weather_summary) {
-                    const w = b.weather_summary;
-                    html += `
-                        <div class="briefing-section">
-                            <h3 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
-                                Weather
-                            </h3>
-                            <div class="weather-box">
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
-                                            <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
-                                            ${isInvalid(w.condition) ? 'N/A' : w.condition}
-                                        </td>
-                                    </tr>
-                                    ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
-                                    </tr>
-                                    ` : ''}
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
-                                    </tr>
-                                    ${w.wave_height_ft > 0 ? `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
-                                    </tr>
-                                    ` : ''}
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // Sun Phase
-                if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
-                    const sun = b.sun_phase;
-                    const formatTime = (t) => {
-                        if (!t) return 'N/A';
-                        try {
-                            const d = new Date(t);
-                            if (isNaN(d.getTime())) return t;
-                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        } catch (e) {
-                            return t;
-                        }
-                    };
-
-                    html += `
-                    <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">wb_twilight</span>
-                            Sun Phase
-                        </h3>
-                        <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
-                                </tr>
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
-                                </tr>
-                            </table>
-                        </div>
-                    </div>
-                    `;
-                }
-                
-                // Tides
-                if (b.tides && b.tides.events) {
-                    const canvasId = `tideChart_${idx}`;
-                    const targetDateYMD = stop.target_date.split('T')[0];
-                    const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
-                    
-                    const tideEventsHtml = displayEvents.map(e => {
-                        let timeStr = e.time;
-                        try {
-                            const d = new Date(e.time.replace(' ', 'T'));
-                            if (!isNaN(d.getTime())) {
-                                let hours = d.getHours();
-                                const minutes = String(d.getMinutes()).padStart(2, '0');
-                                const ampm = hours >= 12 ? 'pm' : 'am';
-                                hours = hours % 12;
-                                hours = hours ? hours : 12;
-                                timeStr = `${hours}:${minutes} ${ampm}`;
-                            }
-                        } catch (ignore) {}
-
-                        return `<tr style="border: 1px solid #ddd;">
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
-                        </tr>`;
-                    }).join('');
-
-                    const [y, m, d] = targetDateYMD.split('-');
-                    const displayDateHeader = `${m}/${d}/${y}`;
-
-                    html += `
-                        <div class="briefing-section">
-                            <h3 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">waves</span>
-                                Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
-                            </h3>
-                            <div class="tide-box" style="margin-bottom:1rem;">
-                                <div style="height:200px; width:100%; position:relative;">
-                                    <canvas id="${canvasId}"></canvas>
-                                </div>
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
-                                    <thead>
-                                        <tr style="background-color: #f4f4f4;">
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                // Facilities
-                const stopName = displayLocationName(stop.location_name);
-                const isLastStopLoop = (idx === sortedStops.length - 1 && sortedStops.length > 1 && stopName === firstStopName);
-
-                if (b.facilities && b.facilities.length > 0) {
-                    if (isLastStopLoop) {
-                        html += `
-                        <div class="briefing-section">
-                            <h3 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">warehouse</span>
-                                Facilities
-                            </h3>
-                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
-                        </div>`;
-                    } else {
-                        html += `
-                        <div class="briefing-section">
-                            <h3 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">warehouse</span>
-                                Facilities
-                            </h3>
-                            <ul class="facility-list">
-                                ${b.facilities.map(f => {
-                         // Icon Mapping
-                         let icon = 'place';
-                         const typeLower = (f.type || '').toLowerCase();
-                         if (typeLower.includes('anchorage')) icon = 'anchor';
-                         else if (typeLower.includes('marina')) icon = 'storefront';
-                         else if (typeLower.includes('mooring')) icon = 'crisis_alert';
-                         else if (typeLower.includes('bar')) icon = 'local_bar';
-                         else if (typeLower.includes('restaurant')) icon = 'restaurant';
-
-                         let detailsHtml = '';
-                         if (typeof f.details === 'string') {
-                             detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
-                         } else if (f.details && typeof f.details === 'object') {
-                        // Table format for details
-                        let rows = `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
-                            </tr>
-                        `;
-                        
-                        rows += Object.entries(f.details)
-                            .filter(([_, v]) => {
-                                if (!v) return false;
-                                const sv = String(v).toLowerCase().trim();
-                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                            })
-                            .map(([k, v]) => `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
-                                </tr>
-                            `).join('');
-                        
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
-                    }
-
-                    let locHtml = '';
-                    if (f.latitude && f.longitude) {
-                        let query = f.latitude + "," + f.longitude;
-                        if (f.address) {
-                            query = f.name + ", " + f.address;
-                        }
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                        locHtml = `
-                            <p class="map-link-p">
-                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
-                            </p>
-                        `;
-                    }
-
-                    let websiteHtml = '';
-                    if (f.website) {
-                        websiteHtml = `
-                            <p class="map-link-p" style="margin-top: 0;">
-                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
-                            </p>
-                        `;
-                    }
-
-                    return `
-                        <li class="facility-item">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined icon-lg">${icon}</span>
-                                ${f.name}
-                            </h4>
-                            ${locHtml}
-                            ${websiteHtml}
-                            ${detailsHtml}
-                            ${renderReferences(f.references)}
-                        </li>
-                    `;
-                }).join('') || '<li>No facilities found</li>'}
-            </ul>
-        </div>
-    `;
-                    }
-                }
-            } else {
-                html += `<p style="color: #888; font-style: italic;">No briefing data generated yet.</p>`;
-            }
-            
-            html += `</div>`;
-        });
+        // 4. Show Modal
+        const modal = document.getElementById("modal-report");
+        const content = document.getElementById("report-content");
+        const modalOverlay = document.getElementById("modal-overlay");
         
-        // 3. Show Modal
-        const modal = document.getElementById('modal-report');
-        const content = document.getElementById('report-content');
-        const modalOverlay = document.getElementById('modal-overlay');
-        
-        content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
-        modal.classList.remove('hidden');
-        modalOverlay.classList.remove('hidden');
+        content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
+        modal.classList.remove("hidden");
+        modalOverlay.classList.remove("hidden");
 
-        // Render all charts (including mini ones)
+        // 5. Render charts (matching IDs in generateReportHTML)
         for (const [idx, stop] of sortedStops.entries()) {
             const b = briefings[idx];
             if (b && b.tides && b.tides.events) {
-                // Main Chart
-                await renderTideChart(`tideChart_${idx}`, b.tides, stop.target_date);
-                // Mini Chart
-                await renderMiniTideChart(`miniTideChart_${idx}`, b.tides, stop.target_date);
+                await renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
+                await renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
             }
         }
 
     } catch (err) {
         console.error(err);
-        alert('Failed to generate report.');
+        alert("Failed to generate report.");
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalContent;
     }
 }
-
 function getIconForWeather(description) {
     const d = (description || '').toLowerCase();
     if (d.includes('clear')) return 'clear_day';
@@ -2783,151 +2330,7 @@ function showVoyageGuide(guide) {
             handleShareClick(guide);
     };
 
-    const renderReferences = (refs) => {
-        if (!refs || refs.length === 0) return '';
-        return `<div class="ref-link">
-            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
-        </div>`;
-    };
-
-    let html = '';
-    
-    // Map Snapshot
-    if (guide.map_url) {
-        // Cache bust
-        const sep = guide.map_url.includes('?') ? '&' : '?';
-        const url = `${guide.map_url}${sep}t=${Date.now()}`;
-        html += `
-            <div class="briefing-section">
-                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
-            </div>
-        `;
-    }
-
-    html += `
-        <div class="briefing-section">
-            <h3>Overview</h3>
-            <p>${guide.summary || 'No summary available.'}</p>
-        </div>
-    `;
-
-    // Sailing Season
-    if (guide.sailing_season) {
-        const s = guide.sailing_season;
-        html += `
-            <div class="briefing-section">
-                <h3>Sailing Season</h3>
-                <table class="briefing-table">
-                    <tr><th class="briefing-th">Best Months</th><td class="briefing-td">${(s.primary_season_months || []).join(', ') || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Storm Season</th><td class="briefing-td">${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</td></tr>
-                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''} ${renderReferences(s.references)}</td></tr>
-                </table>
-            </div>
-        `;
-    }
-
-    // Hazards
-    if (guide.hazards && guide.hazards.length > 0) {
-        html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
-        guide.hazards.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${h.title}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    // Hubs
-    if (guide.hubs && guide.hubs.length > 0) {
-        html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
-        guide.hubs.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${h.name}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-    
-    // Charter Info
-    if (guide.charter_info) {
-        const c = guide.charter_info;
-        
-        let companiesHtml = 'None listed';
-        if (c.companies && c.companies.length > 0) {
-             companiesHtml = '<ul class="charter-list">' + 
-             c.companies.map(comp => {
-                if (typeof comp === 'string') return `<li>${comp}</li>`;
-                const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
-                return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
-             }).join('') + 
-             '</ul>';
-        }
-
-        html += `
-            <div class="briefing-section">
-                <h3>Charter Info</h3>
-                <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
-                <div class="mt-sm"><strong>Companies:</strong> ${companiesHtml}</div>
-            </div>
-        `;
-    }
-
-    // Country Info & Currency
-    if (guide.country_info || guide.currencies) {
-        const c = guide.country_info || {};
-        const curs = guide.currencies || [];
-        
-        let currencyHtml = 'N/A';
-        if (curs.length > 0) {
-            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
-        }
-
-        html += `
-            <div class="briefing-section">
-                <h3>Country & Culture</h3>
-                <table class="briefing-table">
-                    <tr><th class="briefing-th">Country</th><td class="briefing-td">${c.name || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Language</th><td class="briefing-td">${c.languages ? c.languages.join(', ') : 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Timezone</th><td class="briefing-td">${c.timezone || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Emergency</th><td class="briefing-td">${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Currency</th><td class="briefing-td">${currencyHtml}</td></tr>
-                </table>
-            </div>
-        `;
-    }
-
-    // Airports
-    if (guide.airports && guide.airports.length > 0) {
-        html += `<div class="briefing-section"><h3>Nearest Airports</h3><ul class="facility-list">`;
-        guide.airports.forEach(a => {
-            html += `<li class="facility-item">
-                <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
-                <p><strong>Type:</strong> ${a.type || 'Unknown'}</p>
-                <p><strong>Distance:</strong> ${a.distance_km ? a.distance_km + ' km' : 'Unknown'}</p>
-                ${renderReferences(a.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    // Points of Interest
-    if (guide.points_of_interest && guide.points_of_interest.length > 0) {
-        html += `<div class="briefing-section"><h3>Points of Interest</h3><ul class="facility-list">`;
-        guide.points_of_interest.forEach(poi => {
-            html += `<li class="facility-item">
-                <h4>${poi.name}</h4>
-                <p>${poi.description}</p>
-                ${renderReferences(poi.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
+    const html = generateGuideHTML(guide);
 
     content.innerHTML = DOMPurify.sanitize(html);
 
@@ -3266,493 +2669,6 @@ async function initSharedMode(token) {
     }
 }
 
-function renderSharedReport(data, container) {
-    const guide = data.guide || {};
-    const voyage = data.voyage || {};
-    const stops = data.stops || [];
-    const briefings = data.briefings || [];
-    const mapUrl = data.map_url;
-
-    // Sort stops
-    stops.sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
-
-    const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
-
-    const renderReferences = (refs) => {
-        if (!refs || refs.length === 0) return '';
-        return `<div class="ref-link">
-            <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
-        </div>`;
-    };
-
-    const isInvalid = (v) => {
-        if (!v) return true;
-        const sv = String(v).toLowerCase().trim();
-        return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
-    };
-
-    const facilHtml = `
-        <div class="shared-container max-w-6xl mx-auto p-md">
-            <div class="flex items-center justify-center mb-lg">
-                 <span class="material-symbols-outlined brand-green" style="font-size: 2rem; margin-right: 0.5rem;">sailing</span>
-                 <span style="font-family: 'Raleway', sans-serif; font-size: 1.5rem; font-weight: 900; color: #333; letter-spacing: 1px;">NAVALPLAN</span>
-            </div>
-
-            <header class="report-header bg-white p-lg shadow-sm border-radius mb-xl text-center">
-                <h1 class="brand-blue mt-0 mb-xs" style="font-size: 2rem;">${DOMPurify.sanitize(voyage.title)}</h1>
-                <p class="text-gray italic mb-md" style="font-size: 0.9rem;">Voyage Intelligence Report &bull; Generated ${new Date().toLocaleDateString()}</p>
-                
-                <div class="flex justify-center gap-xl mt-md pt-md" style="border-top: 1px solid #eee;">
-                    <div class="text-center">
-                        <span class="block font-bold text-dark text-xl">${stops.length}</span>
-                        <span class="text-xs uppercase text-gray tracking-wide">Stops</span>
-                    </div>
-                    <div class="text-center">
-                        <span class="block font-bold text-dark text-xl">${new Date(voyage.start_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
-                        <span class="text-xs uppercase text-gray tracking-wide">Start</span>
-                    </div>
-                    <div class="text-center">
-                        <span class="block font-bold text-dark text-xl">${new Date(voyage.end_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
-                        <span class="text-xs uppercase text-gray tracking-wide">End</span>
-                    </div>
-                </div>
-            </header>
-
-            ${mapUrl ? `
-            <div class="report-map-container mb-xl shadow-lg border-radius overflow-hidden">
-                <img src="${mapUrl}" alt="Voyage Map" class="w-full block" />
-            </div>
-            ` : ''}
-
-            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mb-xl">
-                <h3 class="brand-blue mt-0 mb-md">Voyage Overview</h3>
-                <div class="overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; font-family: 'Lato', sans-serif;">
-                    ${stops.map((stop, idx) => {
-                        const b = briefings.find(br => br.stop_id === stop.id) || {};
-                        const date = new Date(stop.target_date);
-                        const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-                        
-                        // Weather
-                        const w = b.weather_summary || {};
-                        const weatherIcon = getIconForWeather(w.condition);
-                        const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-                        // Sun
-                        const sun = b.sun_phase || {};
-                        const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-                        const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-
-                        const canvasId = `sharedMiniTideChart_${idx}`;
-
-                        return `
-                            <div class="overview-card" style="border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fff; min-width: 0; display: flex; flex-direction: column;">
-                                <div style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; text-align: center;">
-                                    <div class="overview-date" style="font-weight: bold; font-size: 0.9rem;">${dateStr}</div>
-                                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}" style="font-size: 0.8rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
-                                    </div>
-                                </div>
-                                <div style="display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 8px;">
-                                    <div style="display: flex; flex-direction: column; gap: 5px; flex: 0 0 auto;">
-                                        <div class="overview-weather" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem;">
-                                            <span class="material-symbols-outlined" style="font-size: 18px; color: #555;">${weatherIcon}</span>
-                                            <span class="overview-temp" style="font-weight: bold;">${temp}</span>
-                                        </div>
-                                        <div class="overview-sun" style="font-size: 0.75rem; color: #666;">
-                                            <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                                            <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                                        </div>
-                                    </div>
-                                    <div class="overview-chart" style="flex: 1; height: 80px; position: relative; min-width: 100px;">
-                                        <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-
-            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius">
-                <h3 class="brand-green mt-0 mb-md">Voyage Summary</h3>
-                <p>${DOMPurify.sanitize(guide.summary || 'No summary available.')}</p>
-            </div>
-    `;
-
-    let html = facilHtml;
-
-    // Sailing Season
-    if (guide.sailing_season) {
-        const s = guide.sailing_season;
-        html += `
-            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-                <h3 class="brand-green mt-0 mb-md">Sailing Season</h3>
-                <ul class="facility-list">
-                    <li class="facility-item"><strong>Best Months:</strong> ${(s.primary_season_months || []).join(', ') || 'N/A'}</li>
-                    <li class="facility-item"><strong>Storm Season:</strong> ${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</li>
-                    <li class="facility-item"><strong>Notes:</strong> ${s.notes || ''} ${renderReferences(s.references)}</li>
-                </ul>
-            </div>
-        `;
-    }
-
-    // Hazards
-    if (guide.hazards && guide.hazards.length > 0) {
-        html += `<div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-            <h3 class="brand-red mt-0 mb-md">⚠️ Hazards</h3>
-            <ul class="facility-list">`;
-        guide.hazards.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
-            html += `<li class="facility-item">
-                <h4 class="brand-red">${h.title}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    // Hubs
-    if (guide.hubs && guide.hubs.length > 0) {
-        html += `<div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-            <h3 class="brand-green mt-0 mb-md">Major Hubs</h3>
-            <ul class="facility-list">`;
-        guide.hubs.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${h.name}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    // Country Info
-    if (guide.country_info || guide.currencies) {
-        const c = guide.country_info || {};
-        const curs = guide.currencies || [];
-        
-        let currencyHtml = 'N/A';
-        if (curs.length > 0) {
-            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
-        }
-
-        html += `
-            <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-                <h3 class="brand-green mt-0 mb-md">Country & Culture</h3>
-                <ul class="facility-list">
-                    <li class="facility-item"><strong>Country:</strong> ${c.name || 'N/A'}</li>
-                    <li class="facility-item"><strong>Language:</strong> ${c.languages ? c.languages.join(', ') : 'N/A'}</li>
-                    <li class="facility-item"><strong>Timezone:</strong> ${c.timezone || 'N/A'}</li>
-                    <li class="facility-item"><strong>Emergency:</strong> ${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</li>
-                    <li class="facility-item"><strong>Currency:</strong> ${currencyHtml}</li>
-                </ul>
-            </div>
-        `;
-    }
-
-    // STOPS & BRIEFINGS
-    if (stops.length > 0) {
-        html += `<div class="mt-xl"><h2 class="text-center brand-blue mb-lg">Daily Itinerary</h2>`;
-        
-        stops.forEach((stop, idx) => {
-            const b = briefings.find(br => br.stop_id === stop.id);
-            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
-            
-            html += `
-                <div class="report-section-wrapper bg-white p-lg shadow-sm border-radius mt-lg">
-                    <h3 class="brand-green mt-0 mb-xs">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h3>
-                    <p class="text-gray mb-md font-sm"><strong>Date:</strong> ${dateStr}</p>
-            `;
-
-            if (b) {
-                 // Weather
-                if (b.weather_summary) {
-                    const w = b.weather_summary;
-                    html += `
-                        <div class="briefing-section">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
-                                Weather
-                            </h4>
-                            <div class="weather-box">
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
-                                        <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
-                                            <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
-                                            ${isInvalid(w.condition) ? 'N/A' : w.condition}
-                                        </td>
-                                    </tr>
-                                    ${(w.temp_max_f || w.temp_min_f) ? `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
-                                    </tr>
-                                    ` : ''}
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
-                                    </tr>
-                                    ${w.wave_height_ft > 0 ? `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
-                                    </tr>
-                                    ` : ''}
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // Sun Phase
-                if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
-                    const sun = b.sun_phase;
-                    const formatTime = (t) => {
-                        if (!t) return 'N/A';
-                        try {
-                            const d = new Date(t);
-                            if (isNaN(d.getTime())) return t;
-                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        } catch (e) {
-                            return t;
-                        }
-                    };
-
-                    html += `
-                    <div class="briefing-section">
-                        <h4 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">wb_twilight</span>
-                            Sun Phase
-                        </h4>
-                        <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
-                                </tr>
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
-                                </tr>
-                            </table>
-                        </div>
-                    </div>
-                    `;
-                }
-
-                // Tides
-                if (b.tides && b.tides.events) {
-                    const canvasId = `sharedTideChart_${idx}`;
-                    const targetDateYMD = stop.target_date.split('T')[0];
-                    const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
-                    
-                    const tideEventsHtml = displayEvents.map(e => {
-                        let timeStr = e.time;
-                        try {
-                            const d = new Date(e.time.replace(' ', 'T'));
-                            if (!isNaN(d.getTime())) {
-                                let hours = d.getHours();
-                                const minutes = String(d.getMinutes()).padStart(2, '0');
-                                const ampm = hours >= 12 ? 'pm' : 'am';
-                                hours = hours % 12;
-                                hours = hours ? hours : 12;
-                                timeStr = `${hours}:${minutes} ${ampm}`;
-                            }
-                        } catch (ignore) {}
-
-                        return `<tr style="border: 1px solid #ddd;">
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
-                            <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
-                        </tr>`;
-                    }).join('');
-
-                    const [y, m, d] = targetDateYMD.split('-');
-                    const displayDateHeader = `${m}/${d}/${y}`;
-
-                    html += `
-                        <div class="briefing-section">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">waves</span>
-                                Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
-                            </h4>
-                            <div class="tide-box" style="margin-bottom:1rem;">
-                                <div style="height:200px; width:100%; position:relative;">
-                                    <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                                </div>
-                                <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
-                                    <thead>
-                                        <tr style="background-color: #f4f4f4;">
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
-                                            <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // Facilities
-                const stopName = displayLocationName(stop.location_name);
-                const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
-
-                if (b.facilities && b.facilities.length > 0) {
-                    if (isLastStopLoop) {
-                        html += `
-                        <div class="briefing-section">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">warehouse</span>
-                                Facilities
-                            </h4>
-                            <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
-                        </div>`;
-                    } else {
-                     html += `
-                        <div class="briefing-section">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined">warehouse</span>
-                                Facilities
-                            </h4>
-                            <ul class="facility-list">
-                                ${b.facilities.map(f => {
-                         let icon = 'place';
-                         const typeLower = (f.type || '').toLowerCase();
-                         if (typeLower.includes('anchorage')) icon = 'anchor';
-                         else if (typeLower.includes('marina')) icon = 'storefront';
-                         else if (typeLower.includes('mooring')) icon = 'crisis_alert';
-                         else if (typeLower.includes('bar')) icon = 'local_bar';
-                         else if (typeLower.includes('restaurant')) icon = 'restaurant';
-
-                         let detailsHtml = '';
-                         if (typeof f.details === 'string') {
-                             detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
-                         } else if (f.details && typeof f.details === 'object') {
-                            let rows = `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
-                                </tr>
-                            `;
-                            rows += Object.entries(f.details)
-                                .filter(([_, v]) => {
-                                    if (!v) return false;
-                                    const sv = String(v).toLowerCase().trim();
-                                    return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                                })
-                                .map(([k, v]) => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
-                                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
-                                    </tr>
-                                `).join('');
-                            detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
-                        }
-
-                        let locHtml = '';
-                        if (f.latitude && f.longitude) {
-                            let query = f.latitude + "," + f.longitude;
-                        if (f.address) {
-                            query = f.name + ", " + f.address;
-                        }
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                            locHtml = `
-                                <p class="map-link-p">
-                                    <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                    ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                    <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
-                                </p>
-                            `;
-                        }
-
-                        let websiteHtml = '';
-                        if (f.website) {
-                            websiteHtml = `
-                                <p class="map-link-p" style="margin-top: 0;">
-                                    <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                    <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
-                                </p>
-                            `;
-                        }
-
-                        return `
-                            <li class="facility-item">
-                                <h4 class="briefing-header-icon">
-                                    <span class="material-symbols-outlined icon-lg">${icon}</span>
-                                    ${f.name}
-                                </h4>
-                                ${locHtml}
-                                ${websiteHtml}
-                                ${detailsHtml}
-                                ${renderReferences(f.references)}
-                            </li>
-                        `;
-                    }).join('')}
-                    </ul></div>`;
-                    }
-                }
-            } else {
-                 html += `<p class="text-gray italic">No briefing data available.</p>`;
-            }
-            html += `</div>`; // End of report-section-wrapper
-        });
-        html += `</div>`; // End of Stops Wrapper
-    }
-
-    html += `
-        <footer class="mt-xl text-center text-gray font-sm p-lg">
-            <p>Generated by NavalPlan</p>
-        </footer>
-        </div>
-    `;
-
-    container.innerHTML = DOMPurify.sanitize(html);
-
-    // Render Charts
-    setTimeout(() => {
-        // Main Tide Charts
-        const charts = container.querySelectorAll('canvas[id^="sharedTideChart_"]');
-        charts.forEach(canvas => {
-            try {
-                const tideJson = canvas.getAttribute('data-tide-json');
-                const date = canvas.getAttribute('data-date');
-                if (tideJson && date) {
-                    const tideData = JSON.parse(tideJson);
-                    renderTideChart(canvas.id, tideData, date);
-                }
-            } catch (e) {
-                console.error("Failed to render shared tide chart", e);
-            }
-        });
-
-        // Mini Tide Charts
-        const miniCharts = container.querySelectorAll('canvas[id^="sharedMiniTideChart_"]');
-        miniCharts.forEach(canvas => {
-            try {
-                const tideJson = canvas.getAttribute('data-tide-json');
-                const date = canvas.getAttribute('data-date');
-                if (tideJson && date) {
-                    const tideData = JSON.parse(tideJson);
-                    renderMiniTideChart(canvas.id, tideData, date);
-                }
-            } catch (e) {
-                console.error("Failed to render shared mini tide chart", e);
-            }
-        });
-    }, 100);
-}
-
 async function handleShareClick(guide) {
     if (!currentVoyage || currentVoyage.id !== guide.voyage_id) {
          alert('Error: Voyage context lost.');
@@ -3904,6 +2820,542 @@ function smoothRing(ring) {
         currentRing = nextRing;
     }
     return currentRing;
+}
+
+// --- Helpers ---
+
+function renderReferences(refs) {
+    if (!refs || refs.length === 0) return '';
+    return `<div class="ref-link">
+        <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
+    </div>`;
+}
+
+function generateGuideHTML(guide) {
+    let html = '';
+    
+    // Map Snapshot
+    if (guide.map_url) {
+        // Cache bust
+        const sep = guide.map_url.includes('?') ? '&' : '?';
+        const url = `${guide.map_url}${sep}t=${Date.now()}`;
+        html += `
+            <div class="briefing-section">
+                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
+            </div>
+        `;
+    }
+
+    html += `
+        <div class="briefing-section">
+            <h3>Overview</h3>
+            <p>${guide.summary || 'No summary available.'}</p>
+        </div>
+    `;
+
+    // Sailing Season
+    if (guide.sailing_season) {
+        const s = guide.sailing_season;
+        html += `
+            <div class="briefing-section">
+                <h3>Sailing Season</h3>
+                <table class="briefing-table">
+                    <tr><th class="briefing-th">Best Months</th><td class="briefing-td">${(s.primary_season_months || []).join(', ') || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Storm Season</th><td class="briefing-td">${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</td></tr>
+                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''} ${renderReferences(s.references)}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Hazards
+    if (guide.hazards && guide.hazards.length > 0) {
+        html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
+        guide.hazards.forEach(h => {
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
+            html += `<li class="facility-item">
+                <h4>${h.title}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Hubs
+    if (guide.hubs && guide.hubs.length > 0) {
+        html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
+        guide.hubs.forEach(h => {
+            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
+            html += `<li class="facility-item">
+                <h4>${h.name}${link}</h4>
+                <p>${h.description}</p>
+                ${renderReferences(h.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+    
+    // Charter Info
+    if (guide.charter_info) {
+        const c = guide.charter_info;
+        
+        let companiesHtml = 'None listed';
+        if (c.companies && c.companies.length > 0) {
+             companiesHtml = '<ul class="charter-list">' + 
+             c.companies.map(comp => {
+                if (typeof comp === 'string') return `<li>${comp}</li>`;
+                const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
+                return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
+             }).join('') + 
+             '</ul>';
+        }
+
+        html += `
+            <div class="briefing-section">
+                <h3>Charter Info</h3>
+                <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
+                <div class="mt-sm"><strong>Companies:</strong> ${companiesHtml}</div>
+            </div>
+        `;
+    }
+
+    // Country Info & Currency
+    if (guide.country_info || guide.currencies) {
+        const c = guide.country_info || {};
+        const curs = guide.currencies || [];
+        
+        let currencyHtml = 'N/A';
+        if (curs.length > 0) {
+            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
+        }
+
+        html += `
+            <div class="briefing-section">
+                <h3>Country & Culture</h3>
+                <table class="briefing-table">
+                    <tr><th class="briefing-th">Country</th><td class="briefing-td">${c.name || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Language</th><td class="briefing-td">${c.languages ? c.languages.join(', ') : 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Timezone</th><td class="briefing-td">${c.timezone || 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Emergency</th><td class="briefing-td">${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</td></tr>
+                    <tr><th class="briefing-th">Currency</th><td class="briefing-td">${currencyHtml}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Airports
+    if (guide.airports && guide.airports.length > 0) {
+        html += `<div class="briefing-section"><h3>Nearest Airports</h3><ul class="facility-list">`;
+        guide.airports.forEach(a => {
+            html += `<li class="facility-item">
+                <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
+                <p><strong>Type:</strong> ${a.type || 'Unknown'}</p>
+                <p><strong>Distance:</strong> ${a.distance_km ? a.distance_km + ' km' : 'Unknown'}</p>
+                ${renderReferences(a.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    // Points of Interest
+    if (guide.points_of_interest && guide.points_of_interest.length > 0) {
+        html += `<div class="briefing-section"><h3>Points of Interest</h3><ul class="facility-list">`;
+        guide.points_of_interest.forEach(poi => {
+            html += `<li class="facility-item">
+                <h4>${poi.name}</h4>
+                <p>${poi.description}</p>
+                ${renderReferences(poi.references)}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    return html;
+}
+
+function generateReportHTML(voyage, stops, briefings, guide) {
+    const sortedStops = [...stops].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    let html = `
+        <h1 class="report-title">${DOMPurify.sanitize(voyage.title)}</h1>
+        <p class="report-dates">
+            ${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
+        </p>
+        <hr />
+    `;
+
+    // --- Consolidated View ---
+    const gridCols = Math.min(sortedStops.length, 4);
+    html += `<div class="report-section-wrapper">
+        <h2 class="report-day-header brand-blue">Voyage Overview</h2>
+        <div class="overview-grid grid-cols-${gridCols}">
+    `;
+        
+    sortedStops.forEach((stop, idx) => {
+        const briefing = briefings.find(br => br.stop_id === stop.id) || {};
+        const date = new Date(stop.target_date);
+        const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+        
+        // Weather
+        const w = briefing.weather_summary || {};
+        const weatherIcon = getIconForWeather(w.condition);
+        const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+
+        // Sun
+        const sun = briefing.sun_phase || {};
+        const sunrise = sun.sunrise ? new Date(sun.sunrise).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        const sunset = sun.sunset ? new Date(sun.sunset).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+        // Use a consistent ID format based on loop index, caller handles prefix mapping if needed
+        // Actually, we need unique IDs. Let's assume the caller will prefix chart rendering.
+        // We will use a placeholder here and the caller must render based on index.
+        const canvasId = `reportMiniTideChart_${idx}`;
+
+        html += `
+            <div class="overview-card">
+                <div class="overview-date">
+                    ${dateStr}
+                </div>
+                <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
+                    ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
+                </div>
+                
+                <div class="overview-weather">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
+                    <span class="overview-temp">${temp}</span>
+                </div>
+
+                <div class="overview-sun">
+                    <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                    <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                </div>
+
+                <div class="overview-chart">
+                    <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                </div>
+            </div>
+        `;
+    });
+    html += `</div></div><hr />`;
+
+    // --- Destination Guide ---
+    if (guide) {
+        html += `
+            <div class="report-section-wrapper report-guide-bg">
+                <h2 class="report-day-header brand-green">Destination Guide</h2>
+                ${generateGuideHTML(guide)}
+            </div>
+            <hr />
+        `;
+    }
+
+    // --- Daily Itinerary ---
+    sortedStops.forEach((stop, idx) => {
+        const b = briefings.find(br => br.stop_id === stop.id);
+        const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
+        
+        html += `
+            <div class="report-daily-wrapper">
+                <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
+                <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
+        `;
+        
+        if (b) {
+             const isInvalid = (v) => {
+                if (!v) return true;
+                const sv = String(v).toLowerCase().trim();
+                return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
+             };
+
+             // Weather
+            if (b.weather_summary) {
+                const w = b.weather_summary;
+                html += `
+                    <div class="briefing-section">
+                        <h3 class="briefing-header-icon">
+                            <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
+                            Weather
+                        </h3>
+                        <div class="weather-box">
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
+                                    <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
+                                        ${isInvalid(w.condition) ? 'N/A' : w.condition}
+                                    </td>
+                                </tr>
+                                ${(w.temp_max_f || w.temp_min_f) ? `
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
+                                </tr>
+                                ` : ''}
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
+                                </tr>
+                                ${w.wave_height_ft > 0 ? `
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Sun Phase
+            if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
+                const sun = b.sun_phase;
+                const formatTime = (t) => {
+                    if (!t) return 'N/A';
+                    try {
+                        const d = new Date(t);
+                        if (isNaN(d.getTime())) return t;
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    } catch (e) {
+                        return t;
+                    }
+                };
+
+                html += `
+                <div class="briefing-section">
+                    <h3 class="briefing-header-icon">
+                        <span class="material-symbols-outlined">wb_twilight</span>
+                        Sun Phase
+                    </h3>
+                    <div class="weather-box">
+                        <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                `;
+            }
+            
+            // Tides
+            if (b.tides && b.tides.events) {
+                // Use consistent ID format
+                const canvasId = `reportTideChart_${idx}`;
+                const targetDateYMD = stop.target_date.split('T')[0];
+                const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
+                
+                const tideEventsHtml = displayEvents.map(e => {
+                    let timeStr = e.time;
+                    try {
+                        const d = new Date(e.time.replace(' ', 'T'));
+                        if (!isNaN(d.getTime())) {
+                            let hours = d.getHours();
+                            const minutes = String(d.getMinutes()).padStart(2, '0');
+                            const ampm = hours >= 12 ? 'pm' : 'am';
+                            hours = hours % 12;
+                            hours = hours ? hours : 12;
+                            timeStr = `${hours}:${minutes} ${ampm}`;
+                        }
+                    } catch (ignore) {}
+
+                    return `<tr style="border: 1px solid #ddd;">
+                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
+                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
+                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
+                    </tr>`;
+                }).join('');
+
+                const [y, m, d] = targetDateYMD.split('-');
+                const displayDateHeader = `${m}/${d}/${y}`;
+
+                html += `
+                    <div class="briefing-section">
+                        <h3 class="briefing-header-icon">
+                            <span class="material-symbols-outlined">waves</span>
+                            Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
+                        </h3>
+                        <div class="tide-box" style="margin-bottom:1rem;">
+                            <div style="height:200px; width:100%; position:relative;">
+                                <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                            </div>
+                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
+                                <thead>
+                                    <tr style="background-color: #f4f4f4;">
+                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
+                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
+                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Facilities
+            const stopName = displayLocationName(stop.location_name);
+            // Check if this is the last stop and it's a loop (same location as start)
+            // Need first stop location name.
+            const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
+            const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
+
+            if (b.facilities && b.facilities.length > 0) {
+                if (isLastStopLoop) {
+                    html += `
+                    <div class="briefing-section">
+                        <h3 class="briefing-header-icon">
+                            <span class="material-symbols-outlined">warehouse</span>
+                            Facilities
+                        </h3>
+                        <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
+                    </div>`;
+                } else {
+                    html += `
+                    <div class="briefing-section">
+                        <h3 class="briefing-header-icon">
+                            <span class="material-symbols-outlined">warehouse</span>
+                            Facilities
+                        </h3>
+                        <ul class="facility-list">
+                            ${b.facilities.map(f => {
+                     // Icon Mapping
+                     let icon = 'place';
+                     const typeLower = (f.type || '').toLowerCase();
+                     if (typeLower.includes('anchorage')) icon = 'anchor';
+                     else if (typeLower.includes('marina')) icon = 'storefront';
+                     else if (typeLower.includes('mooring')) icon = 'crisis_alert';
+                     else if (typeLower.includes('bar')) icon = 'local_bar';
+                     else if (typeLower.includes('restaurant')) icon = 'restaurant';
+
+                     let detailsHtml = '';
+                     if (typeof f.details === 'string') {
+                         detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
+                     } else if (f.details && typeof f.details === 'object') {
+                        // Table format for details
+                        let rows = `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
+                            </tr>
+                        `;
+                        
+                        rows += Object.entries(f.details)
+                            .filter(([_, v]) => {
+                                if (!v) return false;
+                                const sv = String(v).toLowerCase().trim();
+                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
+                            })
+                            .map(([k, v]) => `
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
+                                </tr>
+                            `).join('');
+                        
+                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
+                    }
+
+                    let locHtml = '';
+                    if (f.latitude && f.longitude) {
+                        let query = f.latitude + "," + f.longitude;
+                        if (f.address) {
+                            query = f.name + ", " + f.address;
+                        }
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+                        locHtml = `
+                            <p class="map-link-p">
+                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
+                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
+                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let websiteHtml = '';
+                    if (f.website) {
+                        websiteHtml = `
+                            <p class="map-link-p" style="margin-top: 0;">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
+                            </p>
+                        `;
+                    }
+
+                    return `
+                        <li class="facility-item">
+                            <h4 class="briefing-header-icon">
+                                <span class="material-symbols-outlined icon-lg">${icon}</span>
+                                ${f.name}
+                            </h4>
+                            ${locHtml}
+                            ${websiteHtml}
+                            ${detailsHtml}
+                            ${renderReferences(f.references)}
+                        </li>
+                    `;
+                }).join('')}
+                </ul></div>`;
+                }
+            }
+        } else {
+             html += `<p class="text-gray italic">No briefing data available.</p>`;
+        }
+        html += `</div>`;
+    });
+
+    html += `
+        <footer class="mt-xl text-center text-gray font-sm p-lg">
+            <p>Generated by NavalPlan</p>
+        </footer>
+    `;
+
+    return html;
+}
+
+function renderSharedReport(data, container) {
+    const guide = data.guide || {};
+    const voyage = data.voyage || {};
+    const stops = data.stops || [];
+    const briefings = data.briefings || [];
+    const mapUrl = data.map_url;
+
+    const html = generateReportHTML(voyage, stops, briefings, guide);
+    
+    // Inject and Render - Wrapped in a container for styling (max-width etc)
+    container.innerHTML = DOMPurify.sanitize(`<div class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
+
+    // ... (Chart rendering logic preserved below) ...
+    setTimeout(() => {
+        const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+        
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings.find(br => br.stop_id === stop.id) || {};
+            // Main Chart
+            if (b.tides && b.tides.events) {
+                renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
+            }
+            // Mini Chart
+            if (b.tides && b.tides.events) {
+                renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+            }
+        });
+    }, 100);
 }
 
 let currentAdminPage = 1;
