@@ -56,7 +56,7 @@ func NewPlacesTool() (tool.Tool, error) {
 
 func FindPlaces(args PlacesArgs) (PlacesResponse, error) {
 	start := time.Now()
-	log.Infof("tool:find_places_nearby Query='%s' at %f, %f (r=%f)", args.Query, args.Latitude, args.Longitude, args.Radius)
+	log.Debugf("tool:find_places_nearby Query='%s' at %f, %f (r=%f)", args.Query, args.Latitude, args.Longitude, args.Radius)
 
 	ctx := context.Background()
 
