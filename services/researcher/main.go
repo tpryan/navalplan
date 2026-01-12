@@ -298,7 +298,7 @@ func onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[
 
 		}
 
-		log.Info(fmt.Sprintf("tool:%s  %s", t.Name(), str))
+		log.Debug(fmt.Sprintf("tool:%s  %s", t.Name(), str))
 	}
 	return result, nil
 }
