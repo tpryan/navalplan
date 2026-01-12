@@ -125,12 +125,12 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 
 	// Handle Weather Error
 	if weatherErr != nil {
-		fmt.Printf("OpenMeteo Weather Error: %v\n", weatherErr)
+		log.Errorf("OpenMeteo Weather Error: %v\n", weatherErr)
 		return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", weatherErr)}, nil
 	}
 
 	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
-		fmt.Printf("OpenMeteo: No weather data for %s\n", args.Date)
+		log.Warnf("OpenMeteo: No weather data for %s\n", args.Date)
 		return WeatherResult{Error: "No weather data returned."}, nil
 	}
 
@@ -150,7 +150,7 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 	} else if marineErr != nil {
 		// Don't log error for seasonal dates as it's expected to fail/be empty for marine
 		if !isSeasonal {
-			fmt.Printf("OpenMeteo Marine Error (ignoring): %v\n", marineErr)
+			log.Warnf("OpenMeteo Marine Error (ignoring): %v\n", marineErr)
 		}
 	}
 
