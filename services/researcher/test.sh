@@ -34,4 +34,4 @@ QUERY="{
 curl -X POST \
      -H "Content-Type: application/json" \
      -d "$QUERY" \
-     "$ENDPOINT"
+     "$ENDPOINT" | jq .
