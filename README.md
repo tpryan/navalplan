@@ -30,7 +30,8 @@ Before you begin, ensure you have the following installed:
 3.  **Configure Environment:**
     Open the newly created `.env` file and fill in the required values:
     *   `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: Create these in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-    *   `NAVALPLAN_MB_TOKEN`: Get a token from [Mapbox](https://www.mapbox.com/).
+    *   `NAVALPLAN_FRONTEND_MAPS_API_KEY` & `NAVALPLAN_BACKEND_MAPS_API_KEY`: Get API keys from [Google Maps Platform](https://developers.google.com/maps).
+    *   `NAVALPLAN_MAP_ID`: Create a Map ID in Google Maps Platform (for vector maps/styling).
     *   `NAVALPLAN_SYSTEM_KEY`: Generate a secure random string for system-level API access.
 
 4.  **Start the Database:**

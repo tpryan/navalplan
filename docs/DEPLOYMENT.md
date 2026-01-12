@@ -44,7 +44,9 @@ make setup-secrets
 ```
 
 The script will prompt you for the following values:
-*   `NAVALPLAN_MB_TOKEN`: Your Mapbox access token.
+*   `NAVALPLAN_FRONTEND_MAPS_API_KEY`: Google Maps API key for the frontend.
+*   `NAVALPLAN_BACKEND_MAPS_API_KEY`: Google Maps API key for the backend (optional, if separate).
+*   `NAVALPLAN_MAP_ID`: Map ID for custom styling.
 *   `NAVALPLAN_OA_CLIENT`: Google OAuth Client ID.
 *   `NAVALPLAN_OA_SECRET`: Google OAuth Client Secret.
 *   `NAVALPLAN_SYSTEM_KEY`: A secure random string for internal API calls.
