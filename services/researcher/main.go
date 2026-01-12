@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	clog "github.com/charmbracelet/log"
+	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
@@ -73,20 +72,15 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		}
 
-		clog.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
+		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 	})
 }
 
 func main() {
 	// Configure charmbracelet/log
-	clog.SetOutput(os.Stdout)
-	clog.SetLevel(clog.DebugLevel)
-	clog.SetPrefix("agent")
-
-	// Redirect standard log to charmbracelet/log
-	stdLog := clog.StandardLog()
-	log.SetOutput(stdLog.Writer())
-	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
+	log.SetPrefix("agent")
 
 	// Load .env
 	godotenv.Load("../../.env")
@@ -94,12 +88,12 @@ func main() {
 	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if mapsKey != "" {
 		if len(mapsKey) > 5 {
-			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
+			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
 		} else {
-			clog.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
+			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
 		}
 	} else {
-		clog.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
+		log.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
 	}
 
 	ctx := context.Background()
@@ -111,34 +105,34 @@ func main() {
 		modelName = "gemini-2.0-flash-001"
 	}
 
-	clog.Info("config", "modelName", modelName)
+	log.Info("config", "modelName", modelName)
 
 	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
 		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
 	if err != nil {
-		clog.Fatalf("Failed to create model: %v", err)
+		log.Fatalf("Failed to create model: %v", err)
 	}
 
 	researchAgent, err := CreateResearcherAgent(model)
 	if err != nil {
-		clog.Fatalf("Failed to create researcher agent: %v", err)
+		log.Fatalf("Failed to create researcher agent: %v", err)
 	}
 
 	guideAgent, err := CreateGuideAgent(model)
 	if err != nil {
-		clog.Fatalf("Failed to create guide agent: %v", err)
+		log.Fatalf("Failed to create guide agent: %v", err)
 	}
 
 	discoveryAgent, err := CreateDiscoveryAgent(model)
 	if err != nil {
-		clog.Fatalf("Failed to create discovery agent: %v", err)
+		log.Fatalf("Failed to create discovery agent: %v", err)
 	}
 
 	// 4. Launch the Server
 	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
 	if err != nil {
-		clog.Fatalf("Failed to create multi loader: %v", err)
+		log.Fatalf("Failed to create multi loader: %v", err)
 	}
 
 	config := &launcher.Config{
@@ -149,7 +143,7 @@ func main() {
 	// Recovery for main process
 	defer func() {
 		if r := recover(); r != nil {
-			clog.Printf("Recovered from panic in main: %v", r)
+			log.Printf("Recovered from panic in main: %v", r)
 		}
 	}()
 
@@ -171,9 +165,9 @@ func main() {
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 
-	clog.Info("Starting custom server", "port", port)
+	log.Info("Starting custom server", "port", port)
 	if err := http.ListenAndServe(":"+port, loggingMiddleware(mux)); err != nil {
-		clog.Fatalf("Server failed: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
 }
 
@@ -304,7 +298,7 @@ func onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[
 
 		}
 
-		clog.Info(fmt.Sprintf("tool:%s  %s", t.Name(), str))
+		log.Info(fmt.Sprintf("tool:%s  %s", t.Name(), str))
 	}
 	return result, nil
 }
