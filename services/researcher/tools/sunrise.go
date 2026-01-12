@@ -34,7 +34,7 @@ func NewSunriseTool() (tool.Tool, error) {
 }
 
 func GetSunriseSunset(args SunriseArgs) (SunriseResult, error) {
-	log.Infof("tool:get_sunrise Calculating sunrise/sunset for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
+	log.Debugf("tool:get_sunrise Calculating sunrise/sunset for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
 	// 1. Parse Inputs
 	targetDate, err := time.Parse("2006-01-02", args.Date)
 	if err != nil {
