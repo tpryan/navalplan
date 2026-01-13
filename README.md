@@ -73,7 +73,7 @@ Before you begin, ensure you have the following installed:
 
 ## Architecture
 
-![Architecture Diagram](images/architecture.jpg)
+![Architecture Diagram](images/architecture.png)
 
 *   **Backend**: Go (Standard Library + `chi`-style routing without the framework).
 *   **Frontend**: Vanilla JS / ES Modules (no framework) bundled with Vite.
