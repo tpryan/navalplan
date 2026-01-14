@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"sync"
 	"testing"
@@ -22,7 +23,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 		timings:   sync.Map{},
 	}
 
-	a, err := srv.createResearcherAgent()
+	a, err := srv.createResearcherAgent(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to create researcher agent: %v", err)
 	}
