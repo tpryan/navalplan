@@ -104,7 +104,7 @@ setup-infra:
 	@chmod +x scripts/setup_infra.sh
 	@./scripts/setup_infra.sh
 
-dev: build-js
+dev: db-start build-js
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
 	@(trap 'kill 0' SIGINT; make run-backend & make run-agent & (sleep 3 && make run-frontend) & wait)
@@ -119,17 +119,33 @@ dev-mine:
 
 db-start:
 	@echo "Starting Database container ($(DB_CONTAINER_NAME))..."
-	@podman run -d \
-		--name $(DB_CONTAINER_NAME) \
-		-p $(DB_PORT):5432 \
-		-e POSTGRES_USER=$(DB_USER) \
-		-e POSTGRES_PASSWORD=$(DB_PASS) \
-		-e POSTGRES_DB=$(DB_NAME) \
-		postgres:15-alpine || echo "Container likely already running"
+	@if ! podman info >/dev/null 2>&1; then \
+		echo "Error: Podman is not running. Please start it (e.g., 'podman machine start')."; \
+		exit 1; \
+	fi
+	@if podman inspect $(DB_CONTAINER_NAME) >/dev/null 2>&1; then \
+		echo "Container $(DB_CONTAINER_NAME) exists. Starting..."; \
+		podman start $(DB_CONTAINER_NAME); \
+	else \
+		echo "Creating and starting container $(DB_CONTAINER_NAME)..."; \
+		podman run -d \
+			--name $(DB_CONTAINER_NAME) \
+			-p $(DB_PORT):5432 \
+			-e POSTGRES_USER=$(DB_USER) \
+			-e POSTGRES_PASSWORD=$(DB_PASS) \
+			-e POSTGRES_DB=$(DB_NAME) \
+			postgres:15-alpine; \
+	fi
 	@echo "Waiting for DB to accept connections..."
-	@sleep 3
+	@timeout=30; \
+	until podman exec $(DB_CONTAINER_NAME) pg_isready -U $(DB_USER) >/dev/null 2>&1 || [ $$timeout -le 0 ]; do \
+		echo "Waiting for DB... ($$timeout)"; \
+		sleep 1; \
+		timeout=$$((timeout-1)); \
+	done; \
+	if [ $$timeout -le 0 ]; then echo "Timed out waiting for DB"; exit 1; fi
 	@make migrate-up
-	@make db-seed
+	@make db-seed || echo "Seeding skipped (likely already seeded)"
 
 db-stop:
 	@echo "Stopping Database..."
