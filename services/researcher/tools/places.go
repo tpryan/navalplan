@@ -62,7 +62,7 @@ func NewPlacesTool() (tool.Tool, error) {
 
 	c, err := places.NewClient(ctx, clientOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Places client: %w", err)
+		return nil, fmt.Errorf("creating Places client: %w", err)
 	}
 
 	p := &PlacesProvider{client: c}
@@ -126,7 +126,7 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 	resp, err := p.client.SearchText(callCtx, req)
 	if err != nil {
 		log.Errorf("SearchText failed: %v", err)
-		return PlacesResponse{Error: fmt.Sprintf("SearchText API failed: %v", err)}, nil
+		return PlacesResponse{Error: fmt.Sprintf("SearchText API: %v", err)}, nil
 	}
 
 	var results []PlaceResult

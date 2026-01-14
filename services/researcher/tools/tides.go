@@ -75,7 +75,7 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 		lastErr = err
 	}
 
-	return TideResult{Error: fmt.Sprintf("Failed to get tides from any nearby stations. Last error: %v", lastErr)}, nil
+	return TideResult{Error: fmt.Sprintf("getting tides from nearby stations. Last error: %v", lastErr)}, nil
 }
 
 func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
@@ -86,7 +86,7 @@ func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, 
 
 	stationsResp, err := tp.client.FindStations(stationOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search stations: %w", err)
+		return nil, fmt.Errorf("searching stations: %w", err)
 	}
 
 	if stationsResp.Count == 0 || len(stationsResp.Stations) == 0 {
