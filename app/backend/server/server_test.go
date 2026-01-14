@@ -95,6 +95,13 @@ func (m *MockStore) GetBriefing(ctx context.Context, stopID int64) (*models.Brie
 	}
 	return args.Get(0).(*models.Briefing), args.Error(1)
 }
+func (m *MockStore) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.Briefing, error) {
+	args := m.Called(lat, lng)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Briefing), args.Error(1)
+}
 func (m *MockStore) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
