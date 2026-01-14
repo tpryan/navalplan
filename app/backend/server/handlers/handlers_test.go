@@ -99,6 +99,14 @@ func (m *MockStore) GetBriefing(ctx context.Context, stopID int64) (*models.Brie
 	return args.Get(0).(*models.Briefing), args.Error(1)
 }
 
+func (m *MockStore) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.Briefing, error) {
+	args := m.Called(lat, lng)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Briefing), args.Error(1)
+}
+
 func (m *MockStore) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
@@ -552,6 +560,8 @@ func TestResearchBriefing(t *testing.T) {
 	// Trigger
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+	// performStopResearchLogic (async) calls GetNearbyBriefing. We allow it.
+	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
 	reqTrigger = addPerson(reqTrigger, personID)
@@ -614,6 +624,9 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 		{ID: 10, LocationName: "Stop 1"},
 		{ID: 11, LocationName: "Stop 2"},
 	}, nil)
+
+	// Async stops research
+	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 
 	req := httptest.NewRequest("POST", "/voyages/1/research", nil)
 	req = addPerson(req, personID)
