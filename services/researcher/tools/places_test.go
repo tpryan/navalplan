@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewPlacesTool(t *testing.T) {
-	tool, err := NewPlacesTool()
+	tool, err := NewPlacesTool("dummy-key")
 	if err != nil {
 		t.Fatalf("NewPlacesTool() error = %v", err)
 	}

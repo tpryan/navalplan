@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -51,11 +50,11 @@ type PlacesProvider struct {
 }
 
 // NewPlacesTool creates a new ADK tool for searching places nearby.
-func NewPlacesTool() (tool.Tool, error) {
+func NewPlacesTool(apiKey string) (tool.Tool, error) {
 	ctx := context.Background()
 	var clientOpts []option.ClientOption
-	if key := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY"); key != "" {
-		clientOpts = append(clientOpts, option.WithAPIKey(key))
+	if apiKey != "" {
+		clientOpts = append(clientOpts, option.WithAPIKey(apiKey))
 	}
 
 	c, err := places.NewClient(ctx, clientOpts...)

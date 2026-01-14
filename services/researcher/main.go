@@ -166,7 +166,8 @@ func (s *Server) createResearcherAgent() (agent.Agent, error) {
 		return nil, err
 	}
 
-	placesTool, err := tools.NewPlacesTool()
+	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
+	placesTool, err := tools.NewPlacesTool(mapsKey)
 	if err != nil {
 		return nil, err
 	}
