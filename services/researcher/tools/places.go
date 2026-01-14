@@ -9,7 +9,6 @@ import (
 
 	places "cloud.google.com/go/maps/places/apiv1"
 	"cloud.google.com/go/maps/places/apiv1/placespb"
-	"github.com/charmbracelet/log"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/api/option"
@@ -44,7 +43,6 @@ type PlaceResult struct {
 type PlacesResponse struct {
 	Places          []PlaceResult `json:"places"`
 	DebugDurationMS int64         `json:"debug_duration_ms"`
-	Error           string        `json:"error,omitempty"`
 }
 
 // PlacesProvider implements the find_places_nearby tool using the Google Maps Places API.
@@ -75,7 +73,6 @@ func NewPlacesTool() (tool.Tool, error) {
 
 func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesResponse, error) {
 	start := time.Now()
-	log.Debugf("tool:find_places_nearby Query='%s' at %f, %f (r=%f)", args.Query, args.Latitude, args.Longitude, args.Radius)
 
 	// Default radius if 0
 	radius := args.Radius
@@ -125,8 +122,7 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 
 	resp, err := p.client.SearchText(callCtx, req)
 	if err != nil {
-		log.Errorf("SearchText failed: %v", err)
-		return PlacesResponse{Error: fmt.Sprintf("SearchText API: %v", err)}, nil
+		return PlacesResponse{}, fmt.Errorf("SearchText API: %w", err)
 	}
 
 	placesList := resp.Places

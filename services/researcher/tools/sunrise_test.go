@@ -6,9 +6,10 @@ import (
 
 func TestGetSunriseSunset(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     SunriseArgs
-		expected SunriseResult
+		name        string
+		args        SunriseArgs
+		expected    SunriseResult
+		expectError bool
 	}{
 		{
 			name: "Jamestown, RI",
@@ -23,6 +24,7 @@ func TestGetSunriseSunset(t *testing.T) {
 				Sunrise: "2026-05-29T04:15:45",
 				Sunset:  "2026-05-29T19:10:19",
 			},
+			expectError: false,
 		},
 		{
 			name: "Invalid Date",
@@ -31,9 +33,7 @@ func TestGetSunriseSunset(t *testing.T) {
 				Longitude: 0,
 				Date:      "invalid",
 			},
-			expected: SunriseResult{
-				Error: "invalid date format",
-			},
+			expectError: true,
 		},
 	}
 
@@ -41,14 +41,16 @@ func TestGetSunriseSunset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sp := &SunriseProvider{}
 			got, err := sp.GetSunriseSunset(nil, tt.args)
-			if err != nil {
-				t.Errorf("GetSunriseSunset() error = %v", err)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("GetSunriseSunset() expected error, got nil")
+				}
 				return
 			}
-			if tt.expected.Error != "" {
-				if got.Error != tt.expected.Error {
-					t.Errorf("GetSunriseSunset() error = %v, want %v", got.Error, tt.expected.Error)
-				}
+
+			if err != nil {
+				t.Errorf("GetSunriseSunset() error = %v", err)
 				return
 			}
 			if got.Sunrise != tt.expected.Sunrise {
