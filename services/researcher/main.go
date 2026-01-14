@@ -46,8 +46,9 @@ var guideAgentPrompt string
 var discoveryAgentPrompt string
 
 type Server struct {
-	model   model.LLM
-	timings sync.Map
+	modelName string
+	apiKey    string
+	timings   sync.Map
 }
 
 func main() {
@@ -76,9 +77,7 @@ func run() error {
 		log.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
 	}
 
-	ctx := context.Background()
-
-	// 1. Initialize Gemini Model
+	// 1. Initialize Gemini Model Config
 	modelName := os.Getenv("NAVALPLAN_AGENT_MODEL")
 	if modelName == "" {
 		modelName = "gemini-2.0-flash-001"
@@ -86,16 +85,10 @@ func run() error {
 
 	log.Info("config", "modelName", modelName)
 
-	geminiModel, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
-		APIKey: os.Getenv("GEMINI_API_KEY"),
-	})
-	if err != nil {
-		return fmt.Errorf("creating model: %w", err)
-	}
-
 	srv := &Server{
-		model:   geminiModel,
-		timings: sync.Map{},
+		modelName: modelName,
+		apiKey:    os.Getenv("GEMINI_API_KEY"),
+		timings:   sync.Map{},
 	}
 
 	researchAgent, err := srv.createResearcherAgent()
@@ -146,6 +139,12 @@ func run() error {
 	return http.ListenAndServe(":"+port, loggingMiddleware(mux))
 }
 
+func (s *Server) createModel() (model.LLM, error) {
+	return gemini.NewModel(context.Background(), s.modelName, &genai.ClientConfig{
+		APIKey: s.apiKey,
+	})
+}
+
 func (s *Server) createResearcherAgent() (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: 65536,
@@ -172,10 +171,16 @@ func (s *Server) createResearcherAgent() (agent.Agent, error) {
 		return nil, err
 	}
 
+	// Create a dedicated model instance
+	m, err := s.createModel()
+	if err != nil {
+		return nil, err
+	}
+
 	// 2. Define Sub-Agent (Search Specialist)
 	searchAgent, err := llmagent.New(llmagent.Config{
 		Name:        "search_specialist",
-		Model:       s.model,
+		Model:       m,
 		Description: "Finds information on the web (facilities, reviews).",
 		Instruction: searchSpecialistPrompt,
 		Tools: []tool.Tool{
@@ -190,7 +195,7 @@ func (s *Server) createResearcherAgent() (agent.Agent, error) {
 	// 3. Define Parent Agent (Researcher / Orchestrator)
 	return llmagent.New(llmagent.Config{
 		Name:        "researcher_agent",
-		Model:       s.model,
+		Model:       m,
 		Description: "A Virtual Harbourmaster that researches sailing destinations.",
 		Instruction: researcherAgentPrompt,
 		Tools: []tool.Tool{
@@ -212,9 +217,14 @@ func (s *Server) createGuideAgent() (agent.Agent, error) {
 		Temperature:     genai.Ptr[float32](0.4),
 	}
 
+	m, err := s.createModel()
+	if err != nil {
+		return nil, err
+	}
+
 	return llmagent.New(llmagent.Config{
 		Name:        "guide_agent",
-		Model:       s.model,
+		Model:       m,
 		Description: "A Local Knowledge Expert and Sailing Guide.",
 		Instruction: guideAgentPrompt,
 		Tools: []tool.Tool{
@@ -232,9 +242,14 @@ func (s *Server) createDiscoveryAgent() (agent.Agent, error) {
 		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
 	}
 
+	m, err := s.createModel()
+	if err != nil {
+		return nil, err
+	}
+
 	return llmagent.New(llmagent.Config{
 		Name:        "discovery_agent",
-		Model:       s.model,
+		Model:       m,
 		Description: "The Commodore - Global Seasonal Discovery Expert.",
 		Instruction: discoveryAgentPrompt,
 		Tools: []tool.Tool{
@@ -285,7 +300,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		defer func() {
 			timesince := time.Since(start)
 			str := timesince.String()

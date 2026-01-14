@@ -255,18 +255,31 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	// Post-process facilities to fix missing or imprecise coordinates
 	var facilities []Facility
 	if err := json.Unmarshal(output.Facilities, &facilities); err == nil {
+		var wg sync.WaitGroup
+		var mu sync.Mutex
 		updated := false
-		for i, f := range facilities {
-			log.Infof("Geocoding facility: %s near %s", f.Name, stop.LocationName)
-			lat, lng, err := GeocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
-			if err == nil {
-				facilities[i].Latitude = lat
-				facilities[i].Longitude = lng
-				updated = true
-			} else {
-				log.Warnf("Failed to geocode facility %s: %v", f.Name, err)
-			}
+
+		for i := range facilities {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				f := facilities[i]
+				log.Infof("Geocoding facility: %s near %s", f.Name, stop.LocationName)
+				lat, lng, err := GeocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
+				if err == nil {
+					facilities[i].Latitude = lat
+					facilities[i].Longitude = lng
+
+					mu.Lock()
+					updated = true
+					mu.Unlock()
+				} else {
+					log.Warnf("Failed to geocode facility %s: %v", f.Name, err)
+				}
+			}(i)
 		}
+		wg.Wait()
+
 		if updated {
 			newBytes, _ := json.Marshal(facilities)
 			output.Facilities = json.RawMessage(newBytes)
