@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/log"
 	"github.com/tpryan/openmeteogo"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
@@ -36,7 +35,6 @@ type WeatherResult struct {
 	WaveDirection   float64 `json:"wave_direction"`
 	WavePeriod      float64 `json:"wave_period"`
 	DebugDurationMS int64   `json:"debug_duration_ms"`
-	Error           string  `json:"error,omitempty"`
 }
 
 // WeatherProvider implements the get_weather_forecast tool using the Open-Meteo API.
@@ -57,11 +55,10 @@ func NewWeatherTool() (tool.Tool, error) {
 
 func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {
 	start := time.Now()
-	log.Debugf("tool:get_weather Fetching weather for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
 
 	targetDate, err := time.Parse("2006-01-02", args.Date)
 	if err != nil {
-		return WeatherResult{Error: ErrInvalidDate.Error()}, nil
+		return WeatherResult{}, fmt.Errorf("%w: %v", ErrInvalidDate, err)
 	}
 
 	// Auto-adjust for Future Dates
@@ -94,13 +91,11 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 	wg.Wait()
 
 	if weatherErr != nil {
-		log.Errorf("OpenMeteo Weather Error: %v\n", weatherErr)
-		return WeatherResult{Error: fmt.Sprintf("Weather API: %v", weatherErr)}, nil
+		return WeatherResult{}, fmt.Errorf("weather API error: %w", weatherErr)
 	}
 
 	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
-		log.Warnf("OpenMeteo: No weather data for %s\n", args.Date)
-		return WeatherResult{Error: "No weather data returned."}, nil
+		return WeatherResult{}, fmt.Errorf("no weather data returned for %s", args.Date)
 	}
 
 	result := wp.processResults(weather, marine, marineErr, isSeasonal)
@@ -159,10 +154,6 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 		}
 		if len(marine.Daily.WavePeriodMax) > 0 {
 			wavePeriod = marine.Daily.WavePeriodMax[0]
-		}
-	} else if marineErr != nil {
-		if !isSeasonal {
-			log.Warnf("OpenMeteo Marine Error (ignoring): %v\n", marineErr)
 		}
 	}
 

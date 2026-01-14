@@ -15,12 +15,9 @@ func TestGetTides_InvalidDate(t *testing.T) {
 	}
 
 	tp := &TideProvider{client: noaago.NewClient()}
-	got, err := tp.GetTides(nil, args)
-	if err != nil {
-		t.Fatalf("GetTides() error = %v", err)
-	}
-	if got.Error == "" {
-		t.Errorf("Expected error for invalid date, got none")
+	_, err := tp.GetTides(nil, args)
+	if err == nil {
+		t.Error("Expected error for invalid date, got none")
 	}
 }
 

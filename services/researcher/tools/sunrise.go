@@ -1,10 +1,10 @@
 package tools
 
 import (
+	"fmt"
 	"math"
 	"time"
 
-	"github.com/charmbracelet/log"
 	"github.com/nathan-osman/go-sunrise"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
@@ -22,7 +22,6 @@ type SunriseResult struct {
 	Date    string `json:"date"`
 	Sunrise string `json:"sunrise"`
 	Sunset  string `json:"sunset"`
-	Error   string `json:"error,omitempty"`
 }
 
 // SunriseProvider implements the get_sunrise_sunset tool.
@@ -38,11 +37,9 @@ func NewSunriseTool() (tool.Tool, error) {
 }
 
 func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) (SunriseResult, error) {
-	log.Debugf("tool:get_sunrise Calculating sunrise/sunset for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
-
 	targetDate, err := time.Parse("2006-01-02", args.Date)
 	if err != nil {
-		return SunriseResult{Error: ErrInvalidDate.Error()}, nil
+		return SunriseResult{}, fmt.Errorf("%w: %v", ErrInvalidDate, err)
 	}
 
 	// Calculate Sunrise/Sunset (Returns UTC)

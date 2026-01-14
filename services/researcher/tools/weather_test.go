@@ -51,11 +51,8 @@ func TestGetWeatherForecast_InvalidDate(t *testing.T) {
 	}
 
 	wp := &WeatherProvider{client: openmeteogo.NewClient()}
-	got, err := wp.GetWeatherForecast(nil, args)
-	if err != nil {
-		t.Fatalf("GetWeatherForecast() error = %v", err)
-	}
-	if got.Error == "" {
-		t.Errorf("Expected error for invalid date, got none")
+	_, err := wp.GetWeatherForecast(nil, args)
+	if err == nil {
+		t.Error("Expected error for invalid date, got none")
 	}
 }
