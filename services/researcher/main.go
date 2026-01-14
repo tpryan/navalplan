@@ -269,6 +269,8 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 	return result, nil
 }
 
+var _ http.ResponseWriter = (*responseWriter)(nil)
+
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
