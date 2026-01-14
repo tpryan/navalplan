@@ -31,6 +31,27 @@ func (db *DB) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models
 	return briefings, nil
 }
 
+func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.Briefing, error) {
+	// 0.005 degrees is approximately 555 meters at the equator, sufficient for "nearby" check
+	const tolerance = 0.005
+
+	var b models.Briefing
+	query := `
+		SELECT b.*
+		FROM briefing b
+		JOIN stop s ON b.stop_id = s.id
+		WHERE s.latitude BETWEEN $1 - $3 AND $1 + $3
+		  AND s.longitude BETWEEN $2 - $3 AND $2 + $3
+		ORDER BY b.created_at DESC
+		LIMIT 1
+	`
+	err := db.GetContext(ctx, &b, query, lat, lng, tolerance)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
 func (db *DB) CreateBriefing(ctx context.Context, b *models.Briefing) error {
 	query := `
 		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities)

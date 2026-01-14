@@ -64,3 +64,31 @@ func TestListVoyageBriefings(t *testing.T) {
 	assert.Equal(t, int64(1), briefings[0].ID)
 	assert.Equal(t, int64(2), briefings[1].ID)
 }
+
+func TestGetNearbyBriefing(t *testing.T) {
+	db, mock := mockDB(t)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"id", "stop_id"}).AddRow(5, 50)
+
+	lat, lng := 10.0, 20.0
+	tolerance := 0.005
+
+	query := `
+		SELECT b.*
+		FROM briefing b
+		JOIN stop s ON b.stop_id = s.id
+		WHERE s.latitude BETWEEN $1 - $3 AND $1 + $3
+		  AND s.longitude BETWEEN $2 - $3 AND $2 + $3
+		ORDER BY b.created_at DESC
+		LIMIT 1
+	`
+
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WithArgs(lat, lng, tolerance).
+		WillReturnRows(rows)
+
+	b, err := db.GetNearbyBriefing(context.Background(), lat, lng)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), b.ID)
+}

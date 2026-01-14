@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -181,6 +182,10 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	ctx := context.Background()
 	client := h.AgentClient
 
+	// Check for nearby existing research to reuse facilities
+	nearbyBriefing, err := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
+	var reusableFacilities json.RawMessage
+
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
@@ -200,6 +205,12 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 
 	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
 		stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+
+	if err == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
+		log.Infof("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID)
+		reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
+		prompt += " Do not research facilities; I will provide those separately."
+	}
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
@@ -252,12 +263,15 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		return
 	}
 
+	if reusableFacilities != nil {
+		output.Facilities = reusableFacilities
+	}
+
 	// Post-process facilities to fix missing or imprecise coordinates
 	var facilities []Facility
 	if err := json.Unmarshal(output.Facilities, &facilities); err == nil {
 		var wg sync.WaitGroup
-		var mu sync.Mutex
-		updated := false
+		// var mu sync.Mutex // Removed as we always re-marshal now for sorting
 
 		for i := range facilities {
 			wg.Add(1)
@@ -269,10 +283,6 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 				if err == nil {
 					facilities[i].Latitude = lat
 					facilities[i].Longitude = lng
-
-					mu.Lock()
-					updated = true
-					mu.Unlock()
 				} else {
 					log.Warnf("Failed to geocode facility %s: %v", f.Name, err)
 				}
@@ -280,10 +290,16 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		}
 		wg.Wait()
 
-		if updated {
-			newBytes, _ := json.Marshal(facilities)
-			output.Facilities = json.RawMessage(newBytes)
-		}
+		// Sort facilities by Type, then Name
+		sort.Slice(facilities, func(i, j int) bool {
+			if facilities[i].Type != facilities[j].Type {
+				return facilities[i].Type < facilities[j].Type
+			}
+			return facilities[i].Name < facilities[j].Name
+		})
+
+		newBytes, _ := json.Marshal(facilities)
+		output.Facilities = json.RawMessage(newBytes)
 	}
 
 	briefing := &models.Briefing{
