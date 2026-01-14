@@ -95,7 +95,7 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 
 	if weatherErr != nil {
 		log.Errorf("OpenMeteo Weather Error: %v\n", weatherErr)
-		return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", weatherErr)}, nil
+		return WeatherResult{Error: fmt.Sprintf("Weather API: %v", weatherErr)}, nil
 	}
 
 	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {

@@ -90,7 +90,7 @@ func run() error {
 		APIKey: os.Getenv("GEMINI_API_KEY"),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create model: %w", err)
+		return fmt.Errorf("creating model: %w", err)
 	}
 
 	srv := &Server{
@@ -100,23 +100,23 @@ func run() error {
 
 	researchAgent, err := srv.createResearcherAgent()
 	if err != nil {
-		return fmt.Errorf("failed to create researcher agent: %w", err)
+		return fmt.Errorf("creating researcher agent: %w", err)
 	}
 
 	guideAgent, err := srv.createGuideAgent()
 	if err != nil {
-		return fmt.Errorf("failed to create guide agent: %w", err)
+		return fmt.Errorf("creating guide agent: %w", err)
 	}
 
 	discoveryAgent, err := srv.createDiscoveryAgent()
 	if err != nil {
-		return fmt.Errorf("failed to create discovery agent: %w", err)
+		return fmt.Errorf("creating discovery agent: %w", err)
 	}
 
 	// 4. Launch the Server
 	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
 	if err != nil {
-		return fmt.Errorf("failed to create multi loader: %w", err)
+		return fmt.Errorf("creating multi loader: %w", err)
 	}
 
 	config := &launcher.Config{
