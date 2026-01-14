@@ -129,8 +129,13 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 		return PlacesResponse{Error: fmt.Sprintf("SearchText API: %v", err)}, nil
 	}
 
+	placesList := resp.Places
+	if len(placesList) > 10 {
+		placesList = placesList[:10]
+	}
+
 	var results []PlaceResult
-	for _, pt := range resp.Places {
+	for _, pt := range placesList {
 		lat := 0.0
 		lng := 0.0
 		if pt.Location != nil {

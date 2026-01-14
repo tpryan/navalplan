@@ -49,7 +49,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 			Invited: false,
 		})
 	}
-	
+
 	// Invites are small enough to just list, but separate them in response structure
 	var inviteView []AdminUserView
 	for _, i := range invites {

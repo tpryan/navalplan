@@ -1,17 +1,12 @@
 package main
 
 import (
-	"context"
 	"os"
 	"sync"
 	"testing"
-
-	"google.golang.org/adk/model/gemini"
-	"google.golang.org/genai"
 )
 
 func TestCreateResearcherAgent(t *testing.T) {
-	ctx := context.Background()
 	// Use a mock model if possible, or just check configuration
 	// For now, let's see if it instantiates without error (requires API key if real)
 
@@ -21,16 +16,10 @@ func TestCreateResearcherAgent(t *testing.T) {
 		t.Skip("Skipping agent creation test because GEMINI_API_KEY is not set")
 	}
 
-	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
-		APIKey: apiKey,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create model: %v", err)
-	}
-
 	srv := &Server{
-		model:   model,
-		timings: sync.Map{},
+		modelName: modelName,
+		apiKey:    apiKey,
+		timings:   sync.Map{},
 	}
 
 	a, err := srv.createResearcherAgent()
