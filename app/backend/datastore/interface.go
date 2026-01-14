@@ -26,6 +26,7 @@ type Store interface {
 
 	// Briefings
 	GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error)
+	GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.Briefing, error)
 	ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error)
 	CreateBriefing(ctx context.Context, b *models.Briefing) error
 
