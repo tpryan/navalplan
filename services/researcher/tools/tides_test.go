@@ -3,6 +3,8 @@ package tools
 import (
 	"testing"
 	"time"
+
+	"github.com/tpryan/noaago"
 )
 
 func TestGetTides_InvalidDate(t *testing.T) {
@@ -11,9 +13,9 @@ func TestGetTides_InvalidDate(t *testing.T) {
 		Longitude: -71.362,
 		Date:      "invalid",
 	}
-	// We can't easily test the success path without mocking the NOAA API client,
-	// but we can test the input validation.
-	got, err := GetTides(args)
+
+	tp := &TideProvider{client: noaago.NewClient()}
+	got, err := tp.GetTides(nil, args)
 	if err != nil {
 		t.Fatalf("GetTides() error = %v", err)
 	}

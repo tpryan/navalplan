@@ -32,14 +32,15 @@ func TestGetSunriseSunset(t *testing.T) {
 				Date:      "invalid",
 			},
 			expected: SunriseResult{
-				Error: "invalid date format: parsing time \"invalid\" as \"2006-01-02\": cannot parse \"invalid\" as \"2006\"",
+				Error: "invalid date format",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetSunriseSunset(tt.args)
+			sp := &SunriseProvider{}
+			got, err := sp.GetSunriseSunset(nil, tt.args)
 			if err != nil {
 				t.Errorf("GetSunriseSunset() error = %v", err)
 				return

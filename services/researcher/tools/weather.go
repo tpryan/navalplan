@@ -11,12 +11,16 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 )
 
+const metersToFeet = 3.28084
+
+// WeatherArgs defines the arguments for the get_weather_forecast tool.
 type WeatherArgs struct {
 	Latitude  float64 `json:"latitude" description:"Decimal latitude"`
 	Longitude float64 `json:"longitude" description:"Decimal longitude"`
 	Date      string  `json:"date" description:"Date in YYYY-MM-DD format"`
 }
 
+// WeatherResult defines the response structure for the get_weather_forecast tool.
 type WeatherResult struct {
 	Date            string  `json:"date"`
 	Condition       string  `json:"condition"`
@@ -35,44 +39,84 @@ type WeatherResult struct {
 	Error           string  `json:"error,omitempty"`
 }
 
+// WeatherProvider implements the get_weather_forecast tool using the Open-Meteo API.
+type WeatherProvider struct {
+	client *openmeteogo.Client
+}
+
+// NewWeatherTool creates a new ADK tool for retrieving weather forecasts.
 func NewWeatherTool() (tool.Tool, error) {
+	wp := &WeatherProvider{
+		client: openmeteogo.NewClient(),
+	}
 	return functiontool.New(functiontool.Config{
 		Name:        "get_weather_forecast",
 		Description: "Retrieves precise weather forecasts (Wind, Gusts, Temp, Waves) for a specific location and date.",
-	}, func(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {
-		return GetWeatherForecast(args)
-	})
+	}, wp.GetWeatherForecast)
 }
 
-func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
+func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {
 	start := time.Now()
 	log.Debugf("tool:get_weather Fetching weather for %s at %f, %f", args.Date, args.Latitude, args.Longitude)
-	// 1. Parse Inputs
+
 	targetDate, err := time.Parse("2006-01-02", args.Date)
 	if err != nil {
-		return WeatherResult{Error: fmt.Sprintf("invalid date format: %v", err)}, nil
+		return WeatherResult{Error: ErrInvalidDate.Error()}, nil
 	}
 
-	// 2. Auto-adjust for Future Dates
-	// OpenMeteo forecast is valid for ~14 days.
-	// If request is further out, use Seasonal forecast.
+	// Auto-adjust for Future Dates
 	isSeasonal := false
 	daysUntil := time.Until(targetDate).Hours() / 24
-
 	if daysUntil > 14 {
 		isSeasonal = true
 	}
-	// 3. Initialize Client
-	c := openmeteogo.NewClient()
 
-	// 4. Build Options for Weather
-	weatherOptsBuilder := openmeteogo.NewOptionsBuilder().
-		Latitude(args.Latitude).
-		Longitude(args.Longitude).
+	// Build Options
+	weatherOpts := wp.buildWeatherOptions(args.Latitude, args.Longitude, targetDate, isSeasonal)
+	marineOpts := wp.buildMarineOptions(args.Latitude, args.Longitude, targetDate)
+
+	// Fetch Data (Parallel)
+	var weather, marine *openmeteogo.WeatherData
+	var weatherErr, marineErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		weather, weatherErr = wp.client.Get(weatherOpts)
+	}()
+
+	go func() {
+		defer wg.Done()
+		marine, marineErr = wp.client.Get(marineOpts)
+	}()
+
+	wg.Wait()
+
+	if weatherErr != nil {
+		log.Errorf("OpenMeteo Weather Error: %v\n", weatherErr)
+		return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", weatherErr)}, nil
+	}
+
+	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
+		log.Warnf("OpenMeteo: No weather data for %s\n", args.Date)
+		return WeatherResult{Error: "No weather data returned."}, nil
+	}
+
+	result := wp.processResults(weather, marine, marineErr, isSeasonal)
+	result.DebugDurationMS = time.Since(start).Milliseconds()
+
+	return result, nil
+}
+
+func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time, isSeasonal bool) *openmeteogo.Options {
+	builder := openmeteogo.NewOptionsBuilder().
+		Latitude(lat).
+		Longitude(lng).
 		TemperatureUnit(openmeteogo.Fahrenheit).
 		WindspeedUnit(openmeteogo.KN).
-		Start(targetDate).
-		End(targetDate).
+		Start(date).
+		End(date).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WeatherCode,
 			openmeteogo.Temperature2mMax,
@@ -84,62 +128,31 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 		})
 
 	if isSeasonal {
-		weatherOptsBuilder.Seasonal(true)
+		builder.Seasonal(true)
 	}
+	return builder.Build()
+}
 
-	weatherOpts := weatherOptsBuilder.Build()
-
-	// 5. Build Options for Marine
-	// Marine forecasts generally don't extend to seasonal range in the standard API.
-	// We will try anyway; if empty, we just handle it.
-	marineOpts := openmeteogo.NewOptionsBuilder().
-		Latitude(args.Latitude).
-		Longitude(args.Longitude).
+func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) *openmeteogo.Options {
+	return openmeteogo.NewOptionsBuilder().
+		Latitude(lat).
+		Longitude(lng).
 		Marine(true).
-		Start(targetDate).
-		End(targetDate).
+		Start(date).
+		End(date).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WaveHeightMax,
 			openmeteogo.WaveDirectionDominant,
 			openmeteogo.WavePeriodMax,
 		}).
 		Build()
+}
 
-	// 6. Fetch Data (Parallel Weather and Marine)
-	var weather, marine *openmeteogo.WeatherData
-	var weatherErr, marineErr error
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		weather, weatherErr = c.Get(weatherOpts)
-	}()
-
-	go func() {
-		defer wg.Done()
-		marine, marineErr = c.Get(marineOpts)
-	}()
-
-	wg.Wait()
-
-	// Handle Weather Error
-	if weatherErr != nil {
-		log.Errorf("OpenMeteo Weather Error: %v\n", weatherErr)
-		return WeatherResult{Error: fmt.Sprintf("API Error (Weather): %v", weatherErr)}, nil
-	}
-
-	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
-		log.Warnf("OpenMeteo: No weather data for %s\n", args.Date)
-		return WeatherResult{Error: "No weather data returned."}, nil
-	}
-
-	// 7. Process Marine Data
-	// We treat marine errors as non-fatal (e.g. location might be on land, or date out of range)
+func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherData, marineErr error, isSeasonal bool) WeatherResult {
 	var waveHeight, waveDir, wavePeriod float64
 	if marineErr == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
 		if len(marine.Daily.WaveHeightMax) > 0 {
-			waveHeight = marine.Daily.WaveHeightMax[0] * 3.28084 // Convert meters to feet
+			waveHeight = marine.Daily.WaveHeightMax[0] * metersToFeet
 		}
 		if len(marine.Daily.WaveDirectionDominant) > 0 {
 			waveDir = marine.Daily.WaveDirectionDominant[0]
@@ -148,13 +161,11 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 			wavePeriod = marine.Daily.WavePeriodMax[0]
 		}
 	} else if marineErr != nil {
-		// Don't log error for seasonal dates as it's expected to fail/be empty for marine
 		if !isSeasonal {
 			log.Warnf("OpenMeteo Marine Error (ignoring): %v\n", marineErr)
 		}
 	}
 
-	// Handle missing weather code
 	condition := "Unknown weather"
 	if len(weather.Daily.WeatherCode) > 0 {
 		condition = openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
@@ -165,7 +176,6 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 		forecastType = "Seasonal"
 	}
 
-	// Handle potentially missing metrics in Seasonal response
 	var maxTemp, minTemp, maxWind, maxGusts, precip float64
 	var windDir int
 
@@ -189,23 +199,23 @@ func GetWeatherForecast(args WeatherArgs) (WeatherResult, error) {
 	}
 
 	return WeatherResult{
-		Date:            weather.Daily.Time[0],
-		Condition:       condition,
-		ForecastType:    forecastType,
-		MaxTemp:         maxTemp,
-		MinTemp:         minTemp,
-		MaxWindKts:      maxWind,
-		MaxGustsKts:     maxGusts,
-		WindDirDeg:      windDir,
-		WindDirection:   DegreesToDirection(float64(windDir)),
-		PrecipTotal:     precip,
-		WaveHeight:      waveHeight,
-		WaveDirection:   waveDir,
-		WavePeriod:      wavePeriod,
-		DebugDurationMS: time.Since(start).Milliseconds(),
-	}, nil
+		Date:          weather.Daily.Time[0],
+		Condition:     condition,
+		ForecastType:  forecastType,
+		MaxTemp:       maxTemp,
+		MinTemp:       minTemp,
+		MaxWindKts:    maxWind,
+		MaxGustsKts:   maxGusts,
+		WindDirDeg:    windDir,
+		WindDirection: DegreesToDirection(float64(windDir)),
+		PrecipTotal:   precip,
+		WaveHeight:    waveHeight,
+		WaveDirection: waveDir,
+		WavePeriod:    wavePeriod,
+	}
 }
 
+// DegreesToDirection converts a compass bearing in degrees to a cardinal direction string (e.g. "N", "NNE").
 func DegreesToDirection(deg float64) string {
 	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
 	index := int((deg + 11.25) / 22.5)

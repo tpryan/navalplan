@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 
 	"google.golang.org/adk/model/gemini"
@@ -27,7 +28,12 @@ func TestCreateResearcherAgent(t *testing.T) {
 		t.Fatalf("Failed to create model: %v", err)
 	}
 
-	a, err := CreateResearcherAgent(model)
+	srv := &Server{
+		model:   model,
+		timings: &sync.Map{},
+	}
+
+	a, err := srv.createResearcherAgent()
 	if err != nil {
 		t.Fatalf("Failed to create researcher agent: %v", err)
 	}

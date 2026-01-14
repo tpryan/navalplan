@@ -10,12 +10,14 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 )
 
+// TideArgs defines the arguments for the get_tides tool.
 type TideArgs struct {
 	Latitude  float64 `json:"latitude" description:"Decimal latitude"`
 	Longitude float64 `json:"longitude" description:"Decimal longitude"`
 	Date      string  `json:"date" description:"Date in YYYY-MM-DD format"`
 }
 
+// TideEvent represents a single high or low tide event.
 type TideEvent struct {
 	Time   string  `json:"time"`
 	Type   string  `json:"type"`
@@ -23,6 +25,7 @@ type TideEvent struct {
 	Unit   string  `json:"unit"`
 }
 
+// TideResult defines the response structure for the get_tides tool.
 type TideResult struct {
 	StationName   string      `json:"station_name"`
 	StationID     string      `json:"station_id"`
@@ -31,99 +34,112 @@ type TideResult struct {
 	Error         string      `json:"error,omitempty"`
 }
 
+// TideProvider implements the get_tides tool using the NOAA CO-OPS API.
+type TideProvider struct {
+	client *noaago.Client
+}
+
+// NewTideTool creates a new ADK tool for retrieving tide predictions.
 func NewTideTool() (tool.Tool, error) {
+	client := noaago.NewClient()
+	tp := &TideProvider{client: client}
+
 	return functiontool.New(functiontool.Config{
 		Name:        "get_tides",
 		Description: "Retrieves high and low tide predictions for a specific date from the nearest NOAA station.",
-	}, func(ctx tool.Context, args TideArgs) (TideResult, error) {
-		return GetTides(args)
-	})
+	}, tp.GetTides)
 }
 
-func GetTides(args TideArgs) (TideResult, error) {
-	client := noaago.NewClient()
-
+func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, error) {
 	log.Debugf("tool:get_tides Searching for tides at %f, %f", args.Latitude, args.Longitude)
 
-	// 1. Find nearest station
-	// Search within 50 miles. We explicitly filter for "tidepredictions" to find
-	// both harmonic and subordinate stations that provide tide data.
+	stations, err := tp.findNearbyStations(args.Latitude, args.Longitude)
+	if err != nil {
+		return TideResult{Error: err.Error()}, nil
+	}
+
+	if len(stations) == 0 {
+		return TideResult{Error: ErrNotFound.Error()}, nil
+	}
+
+	var lastErr error
+	for _, s := range stations {
+		tides, err := tp.fetchPredictions(s, args.Date)
+		if err == nil {
+			return TideResult{
+				StationName: s.Name,
+				StationID:   s.ID,
+				Tides:       tides,
+			}, nil
+		}
+		lastErr = err
+	}
+
+	return TideResult{Error: fmt.Sprintf("Failed to get tides from any nearby stations. Last error: %v", lastErr)}, nil
+}
+
+func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
 	stationOpts := noaago.NewStationOptionsBuilder().
-		Nearby(args.Latitude, args.Longitude, 50).
+		Nearby(lat, lng, 50).
 		Type(noaago.StationType("tidepredictions")).
 		Build()
 
-	stationsResp, err := client.FindStations(stationOpts)
+	stationsResp, err := tp.client.FindStations(stationOpts)
 	if err != nil {
-		return TideResult{Error: fmt.Sprintf("Failed to search stations: %v", err)}, nil
+		return nil, fmt.Errorf("failed to search stations: %w", err)
 	}
 
 	if stationsResp.Count == 0 || len(stationsResp.Stations) == 0 {
-		return TideResult{Error: "No tide stations found within 50 miles."}, nil
+		return nil, nil
 	}
 
-	log.Debugf("tool:get_tides Found %d stations", len(stationsResp.Stations))
-
-	// 2. Iterate through closest stations to find one that supports predictions
-	// The API might return Current stations or others that don't support tide predictions.
+	// Limit to checking 5 closest stations
 	limit := 5
 	if len(stationsResp.Stations) < limit {
 		limit = len(stationsResp.Stations)
 	}
 
-	var lastErr error
+	return stationsResp.Stations[:limit], nil
+}
 
-	for i := 0; i < limit; i++ {
-		station := stationsResp.Stations[i]
-		log.Debugf("tool:get_tides Trying station %d: %s (%s)", i, station.Name, station.ID)
+func (tp *TideProvider) fetchPredictions(station noaago.Station, dateStr string) ([]TideEvent, error) {
+	log.Debugf("tool:get_tides Trying station: %s (%s)", station.Name, station.ID)
 
-		parsedDate, err := time.Parse("2006-01-02", args.Date)
-		if err != nil {
-			return TideResult{Error: fmt.Sprintf("Invalid date format: %v", err)}, nil
-		}
-
-		// Get for the date with a 48-hour buffer before and after.
-		beginDate := parsedDate.Add(-48 * time.Hour)
-		endDate := parsedDate.Add(48 * time.Hour)
-
-		tideOpts := noaago.NewTideOptionsBuilder().
-			StationID(station.ID).
-			Product(noaago.ProductPredictions).
-			Datum(noaago.DatumMLLW).
-			Units(noaago.UnitsEnglish).
-			Interval(noaago.IntervalHighLow).
-			TimeZone(noaago.TimeZoneLSTLDT).
-			DateRange(beginDate, endDate).
-			Build()
-
-		tideResp, err := client.GetTides(tideOpts)
-		if err != nil {
-			// This station likely doesn't support predictions (e.g. it's a Current station).
-			// Try the next one.
-			log.Debugf("tool:get_tides Failed to get tides for %s: %v", station.Name, err)
-			lastErr = err
-			continue
-		}
-		log.Debugf("tool:get_tides Success with station %s", station.Name)
-
-		// Success! Convert and return.
-		var events []TideEvent
-		for _, pt := range tideResp.GetData() {
-			val, _ := pt.ValueFloat()
-			events = append(events, TideEvent{
-				Time:   pt.Time,
-				Type:   pt.Type,
-				Height: val,
-				Unit:   "ft",
-			})
-		}
-
-		return TideResult{
-			StationName: station.Name,
-			StationID:   station.ID,
-			Tides:       events,
-		}, nil
+	parsedDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return nil, ErrInvalidDate
 	}
 
-	return TideResult{Error: fmt.Sprintf("Failed to get tides from any nearby stations. Last error: %v", lastErr)}, nil
+	// Get for the date with a 48-hour buffer before and after.
+	beginDate := parsedDate.Add(-48 * time.Hour)
+	endDate := parsedDate.Add(48 * time.Hour)
+
+	tideOpts := noaago.NewTideOptionsBuilder().
+		StationID(station.ID).
+		Product(noaago.ProductPredictions).
+		Datum(noaago.DatumMLLW).
+		Units(noaago.UnitsEnglish).
+		Interval(noaago.IntervalHighLow).
+		TimeZone(noaago.TimeZoneLSTLDT).
+		DateRange(beginDate, endDate).
+		Build()
+
+	tideResp, err := tp.client.GetTides(tideOpts)
+	if err != nil {
+		log.Debugf("tool:get_tides Failed to get tides for %s: %v", station.Name, err)
+		return nil, err
+	}
+	log.Debugf("tool:get_tides Success with station %s", station.Name)
+
+	var events []TideEvent
+	for _, pt := range tideResp.GetData() {
+		val, _ := pt.ValueFloat()
+		events = append(events, TideEvent{
+			Time:   pt.Time,
+			Type:   pt.Type,
+			Height: val,
+			Unit:   "ft",
+		})
+	}
+	return events, nil
 }

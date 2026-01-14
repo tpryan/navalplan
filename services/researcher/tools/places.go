@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	places "cloud.google.com/go/maps/places/apiv1"
 	"cloud.google.com/go/maps/places/apiv1/placespb"
 	"github.com/charmbracelet/log"
 	"google.golang.org/adk/tool"
@@ -14,10 +15,9 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/genproto/googleapis/type/latlng"
 	"google.golang.org/grpc/metadata"
-
-	places "cloud.google.com/go/maps/places/apiv1"
 )
 
+// PlacesArgs defines the arguments for the find_places_nearby tool.
 type PlacesArgs struct {
 	Query     string  `json:"query" description:"Text query (e.g. 'restaurants', 'marinas')."`
 	Latitude  float64 `json:"latitude" description:"Latitude for location bias."`
@@ -27,6 +27,7 @@ type PlacesArgs struct {
 	MinRating float64 `json:"min_rating" description:"Minimum rating (1.0 - 5.0)."`
 }
 
+// PlaceResult represents a single place found by the search.
 type PlaceResult struct {
 	Name            string   `json:"name"`
 	Address         string   `json:"address"`
@@ -39,27 +40,21 @@ type PlaceResult struct {
 	WebsiteURI      string   `json:"website_uri,omitempty"`
 }
 
+// PlacesResponse defines the response structure for the find_places_nearby tool.
 type PlacesResponse struct {
 	Places          []PlaceResult `json:"places"`
 	DebugDurationMS int64         `json:"debug_duration_ms"`
 	Error           string        `json:"error,omitempty"`
 }
 
-func NewPlacesTool() (tool.Tool, error) {
-	return functiontool.New(functiontool.Config{
-		Name:        "find_places_nearby",
-		Description: "Finds places (e.g. marinas, restaurants) near a location using Google Maps Text Search. Returns specific locations with Lat/Lng.",
-	}, func(ctx tool.Context, args PlacesArgs) (PlacesResponse, error) {
-		return FindPlaces(args)
-	})
+// PlacesProvider implements the find_places_nearby tool using the Google Maps Places API.
+type PlacesProvider struct {
+	client *places.Client
 }
 
-func FindPlaces(args PlacesArgs) (PlacesResponse, error) {
-	start := time.Now()
-	log.Debugf("tool:find_places_nearby Query='%s' at %f, %f (r=%f)", args.Query, args.Latitude, args.Longitude, args.Radius)
-
+// NewPlacesTool creates a new ADK tool for searching places nearby.
+func NewPlacesTool() (tool.Tool, error) {
 	ctx := context.Background()
-
 	var clientOpts []option.ClientOption
 	if key := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY"); key != "" {
 		clientOpts = append(clientOpts, option.WithAPIKey(key))
@@ -67,9 +62,20 @@ func FindPlaces(args PlacesArgs) (PlacesResponse, error) {
 
 	c, err := places.NewClient(ctx, clientOpts...)
 	if err != nil {
-		return PlacesResponse{Error: fmt.Sprintf("Failed to create Places client: %v", err)}, nil
+		return nil, fmt.Errorf("failed to create Places client: %w", err)
 	}
-	defer c.Close()
+
+	p := &PlacesProvider{client: c}
+
+	return functiontool.New(functiontool.Config{
+		Name:        "find_places_nearby",
+		Description: "Finds places (e.g. marinas, restaurants) near a location using Google Maps Text Search. Returns specific locations with Lat/Lng.",
+	}, p.FindPlaces)
+}
+
+func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesResponse, error) {
+	start := time.Now()
+	log.Debugf("tool:find_places_nearby Query='%s' at %f, %f (r=%f)", args.Query, args.Latitude, args.Longitude, args.Radius)
 
 	// Default radius if 0
 	radius := args.Radius
@@ -115,61 +121,38 @@ func FindPlaces(args PlacesArgs) (PlacesResponse, error) {
 	}
 
 	// Append FieldMask to context
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-goog-fieldmask", fieldMaskHeader)
-	// Add API Key explicitly if needed, but usually ADC or env var handles it.
-	// The client library should pick up GOOGLE_APPLICATION_CREDENTIALS or use API Key from options if provided.
-	// For ADK/Gemini projects, often GEMINI_API_KEY is for Gemini, but Maps might need GOOGLE_MAPS_API_KEY.
-	// The `maps.NewClient` uses `option.WithAPIKey` if we pass it.
-	// Let's check if we need to pass the API Key explicitly.
-	// The user mentioned "Updated environment variables to use GOOGLE_MAPS_API_KEY".
-	// The standard `places.NewClient` uses default credential chain.
-	// If `GOOGLE_MAPS_API_KEY` is set, we should probably use it.
+	callCtx := metadata.AppendToOutgoingContext(ctx, "x-goog-fieldmask", fieldMaskHeader)
 
-	// However, `places.NewClient` from `cloud.google.com/go/maps/places/apiv1` is a gRPC client.
-	// It usually expects `GOOGLE_APPLICATION_CREDENTIALS` (Service Account) OR an API Key.
-	// Let's assume the environment is set up correctly or we might need to modify `NewClient`.
-	// Since I cannot change the `NewClient` call inside `FindPlaces` easily without passing options,
-	// I will check if I can pass options.
-
-	// Re-creating client with options if key exists.
-	// But `places.NewClient` takes `...option.ClientOption`.
-	// I need to import "google.golang.org/api/option".
-
-	// Wait, I can't easily add imports to a file I'm writing in one go unless I include them.
-	// I'll assume standard auth for now. If it fails, I'll fix it.
-	// Actually, for Maps Platform, API Key is common.
-	// Let's rely on standard auth first.
-
-	resp, err := c.SearchText(ctx, req)
+	resp, err := p.client.SearchText(callCtx, req)
 	if err != nil {
 		log.Errorf("SearchText failed: %v", err)
 		return PlacesResponse{Error: fmt.Sprintf("SearchText API failed: %v", err)}, nil
 	}
 
 	var results []PlaceResult
-	for _, p := range resp.Places {
+	for _, pt := range resp.Places {
 		lat := 0.0
 		lng := 0.0
-		if p.Location != nil {
-			lat = p.Location.Latitude
-			lng = p.Location.Longitude
+		if pt.Location != nil {
+			lat = pt.Location.Latitude
+			lng = pt.Location.Longitude
 		}
 
 		name := ""
-		if p.DisplayName != nil {
-			name = p.DisplayName.Text
+		if pt.DisplayName != nil {
+			name = pt.DisplayName.Text
 		}
 
 		results = append(results, PlaceResult{
 			Name:            name,
-			Address:         p.FormattedAddress,
+			Address:         pt.FormattedAddress,
 			Latitude:        lat,
 			Longitude:       lng,
-			Rating:          float64(p.Rating),
-			UserRatingCount: p.GetUserRatingCount(),
-			BusinessStatus:  p.BusinessStatus.String(),
-			Types:           p.Types,
-			WebsiteURI:      p.WebsiteUri,
+			Rating:          float64(pt.Rating),
+			UserRatingCount: pt.GetUserRatingCount(),
+			BusinessStatus:  pt.BusinessStatus.String(),
+			Types:           pt.Types,
+			WebsiteURI:      pt.WebsiteUri,
 		})
 	}
 

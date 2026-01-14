@@ -2,6 +2,8 @@ package tools
 
 import (
 	"testing"
+
+	"github.com/tpryan/openmeteogo"
 )
 
 func TestDegreesToDirection(t *testing.T) {
@@ -48,7 +50,8 @@ func TestGetWeatherForecast_InvalidDate(t *testing.T) {
 		Date:      "invalid",
 	}
 
-	got, err := GetWeatherForecast(args)
+	wp := &WeatherProvider{client: openmeteogo.NewClient()}
+	got, err := wp.GetWeatherForecast(nil, args)
 	if err != nil {
 		t.Fatalf("GetWeatherForecast() error = %v", err)
 	}

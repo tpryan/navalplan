@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,11 +26,12 @@ import (
 	"google.golang.org/genai"
 )
 
-var timeWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
-var timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
-
-var thresholdWarn = time.Second * 5
-var thresholdUrgentWarn = time.Second * 30
+var (
+	timeWarn            = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
+	timeUrgentWarn      = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	thresholdWarn       = time.Second * 5
+	thresholdUrgentWarn = time.Second * 30
+)
 
 //go:embed prompts/search_specialist.md
 var searchSpecialistPrompt string
@@ -44,6 +44,230 @@ var guideAgentPrompt string
 
 //go:embed prompts/discovery_agent.md
 var discoveryAgentPrompt string
+
+type Server struct {
+	model   model.LLM
+	timings *sync.Map
+}
+
+func main() {
+	// Configure charmbracelet/log
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
+	log.SetPrefix("agent")
+
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
+	// Load .env
+	godotenv.Load("../../.env")
+
+	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
+	if mapsKey != "" {
+		if len(mapsKey) > 5 {
+			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
+		} else {
+			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
+		}
+	} else {
+		log.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
+	}
+
+	ctx := context.Background()
+
+	// 1. Initialize Gemini Model
+	modelName := os.Getenv("NAVALPLAN_AGENT_MODEL")
+	if modelName == "" {
+		modelName = "gemini-2.0-flash-001"
+	}
+
+	log.Info("config", "modelName", modelName)
+
+	geminiModel, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
+		APIKey: os.Getenv("GEMINI_API_KEY"),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create model: %w", err)
+	}
+
+	srv := &Server{
+		model:   geminiModel,
+		timings: &sync.Map{},
+	}
+
+	researchAgent, err := srv.createResearcherAgent()
+	if err != nil {
+		return fmt.Errorf("failed to create researcher agent: %w", err)
+	}
+
+	guideAgent, err := srv.createGuideAgent()
+	if err != nil {
+		return fmt.Errorf("failed to create guide agent: %w", err)
+	}
+
+	discoveryAgent, err := srv.createDiscoveryAgent()
+	if err != nil {
+		return fmt.Errorf("failed to create discovery agent: %w", err)
+	}
+
+	// 4. Launch the Server
+	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
+	if err != nil {
+		return fmt.Errorf("failed to create multi loader: %w", err)
+	}
+
+	config := &launcher.Config{
+		AgentLoader:    loader,
+		SessionService: session.InMemoryService(),
+	}
+
+	// Port handling
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("NAVALPLAN_AGENT_PORT")
+	}
+	if port == "" {
+		port = "8081" // Default fallback
+	}
+
+	// Create the ADK HTTP Handler
+	adkHandler := adkrest.NewHandler(config, 120*time.Second)
+
+	// Start Custom Server
+	mux := http.NewServeMux()
+
+	// Mount ADK under /api/
+	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
+
+	log.Info("Starting custom server", "port", port)
+	return http.ListenAndServe(":"+port, loggingMiddleware(mux))
+}
+
+func (s *Server) createResearcherAgent() (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
+	weatherTool, err := tools.NewWeatherTool()
+	if err != nil {
+		return nil, err
+	}
+
+	tideTool, err := tools.NewTideTool()
+	if err != nil {
+		return nil, err
+	}
+
+	sunriseTool, err := tools.NewSunriseTool()
+	if err != nil {
+		return nil, err
+	}
+
+	placesTool, err := tools.NewPlacesTool()
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Define Sub-Agent (Search Specialist)
+	searchAgent, err := llmagent.New(llmagent.Config{
+		Name:        "search_specialist",
+		Model:       s.model,
+		Description: "Finds information on the web (facilities, reviews).",
+		Instruction: searchSpecialistPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		GenerateContentConfig: genConfig,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Define Parent Agent (Researcher / Orchestrator)
+	return llmagent.New(llmagent.Config{
+		Name:        "researcher_agent",
+		Model:       s.model,
+		Description: "A Virtual Harbourmaster that researches sailing destinations.",
+		Instruction: researcherAgentPrompt,
+		Tools: []tool.Tool{
+			weatherTool,
+			tideTool,
+			sunriseTool,
+			placesTool,
+			agenttool.New(searchAgent, nil),
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
+}
+
+func (s *Server) createGuideAgent() (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
+	return llmagent.New(llmagent.Config{
+		Name:        "guide_agent",
+		Model:       s.model,
+		Description: "A Local Knowledge Expert and Sailing Guide.",
+		Instruction: guideAgentPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
+}
+
+func (s *Server) createDiscoveryAgent() (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: 65536,
+		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
+	}
+
+	return llmagent.New(llmagent.Config{
+		Name:        "discovery_agent",
+		Model:       s.model,
+		Description: "The Commodore - Global Seasonal Discovery Expert.",
+		Instruction: discoveryAgentPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
+		GenerateContentConfig: genConfig,
+	})
+}
+
+func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
+	s.timings.Store(ctx.FunctionCallID(), time.Now())
+	return nil, nil
+}
+
+func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
+	if startTime, ok := s.timings.LoadAndDelete(ctx.FunctionCallID()); ok {
+		timesince := time.Since(startTime.(time.Time))
+		str := timesince.String()
+
+		switch {
+		case timesince > thresholdUrgentWarn:
+			str = timeUrgentWarn.Render(str)
+		case timesince > thresholdWarn:
+			str = timeWarn.Render(str)
+
+		}
+
+		log.Debug(fmt.Sprintf("tool:%s  %s", t.Name(), str))
+	}
+	return result, nil
+}
 
 type responseWriter struct {
 	http.ResponseWriter
@@ -74,231 +298,4 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 	})
-}
-
-func main() {
-	// Configure charmbracelet/log
-	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel)
-	log.SetPrefix("agent")
-
-	// Load .env
-	godotenv.Load("../../.env")
-
-	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
-	if mapsKey != "" {
-		if len(mapsKey) > 5 {
-			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
-		} else {
-			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
-		}
-	} else {
-		log.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
-	}
-
-	ctx := context.Background()
-
-	// 1. Initialize Gemini Model
-	// We use gemini-2.0-flash-001 as it is the current stable flash model, unless overridden by env var
-	modelName := os.Getenv("NAVALPLAN_AGENT_MODEL")
-	if modelName == "" {
-		modelName = "gemini-2.0-flash-001"
-	}
-
-	log.Info("config", "modelName", modelName)
-
-	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{
-		APIKey: os.Getenv("GEMINI_API_KEY"),
-	})
-	if err != nil {
-		log.Fatalf("Failed to create model: %v", err)
-	}
-
-	researchAgent, err := CreateResearcherAgent(model)
-	if err != nil {
-		log.Fatalf("Failed to create researcher agent: %v", err)
-	}
-
-	guideAgent, err := CreateGuideAgent(model)
-	if err != nil {
-		log.Fatalf("Failed to create guide agent: %v", err)
-	}
-
-	discoveryAgent, err := CreateDiscoveryAgent(model)
-	if err != nil {
-		log.Fatalf("Failed to create discovery agent: %v", err)
-	}
-
-	// 4. Launch the Server
-	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
-	if err != nil {
-		log.Fatalf("Failed to create multi loader: %v", err)
-	}
-
-	config := &launcher.Config{
-		AgentLoader:    loader,
-		SessionService: session.InMemoryService(),
-	}
-
-	// Recovery for main process
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in main: %v", r)
-		}
-	}()
-
-	// Port handling for Cloud Run compatibility
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = os.Getenv("NAVALPLAN_AGENT_PORT")
-	}
-	if port == "" {
-		port = "8081" // Default fallback
-	}
-
-	// Create the ADK HTTP Handler
-	adkHandler := adkrest.NewHandler(config, 120*time.Second)
-
-	// Start Custom Server
-	mux := http.NewServeMux()
-
-	// Mount ADK under /api/
-	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
-
-	log.Info("Starting custom server", "port", port)
-	if err := http.ListenAndServe(":"+port, loggingMiddleware(mux)); err != nil {
-		log.Fatalf("Server failed: %v", err)
-	}
-}
-
-func CreateResearcherAgent(model model.LLM) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
-		Temperature:     genai.Ptr[float32](0.4),
-	}
-
-	weatherTool, err := tools.NewWeatherTool()
-	if err != nil {
-		return nil, err
-	}
-
-	tideTool, err := tools.NewTideTool()
-	if err != nil {
-		return nil, err
-	}
-
-	sunriseTool, err := tools.NewSunriseTool()
-	if err != nil {
-		return nil, err
-	}
-
-	placesTool, err := tools.NewPlacesTool()
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Define Sub-Agent (Search Specialist)
-	searchAgent, err := llmagent.New(llmagent.Config{
-		Name:        "search_specialist",
-		Model:       model,
-		Description: "Finds information on the web (facilities, reviews).",
-		Instruction: searchSpecialistPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		GenerateContentConfig: genConfig,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// 3. Define Parent Agent (Researcher / Orchestrator)
-	return llmagent.New(llmagent.Config{
-		Name:        "researcher_agent",
-		Model:       model,
-		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: researcherAgentPrompt,
-		Tools: []tool.Tool{
-			weatherTool,
-			tideTool,
-			sunriseTool,
-			placesTool,
-			agenttool.New(searchAgent, nil),
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-}
-
-func CreateGuideAgent(model model.LLM) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
-		Temperature:     genai.Ptr[float32](0.4),
-	}
-
-	return llmagent.New(llmagent.Config{
-		Name:        "guide_agent",
-		Model:       model,
-		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: guideAgentPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-}
-
-func CreateDiscoveryAgent(model model.LLM) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
-		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
-	}
-
-	return llmagent.New(llmagent.Config{
-		Name:        "discovery_agent",
-		Model:       model,
-		Description: "The Commodore - Global Seasonal Discovery Expert.",
-		Instruction: discoveryAgentPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-}
-
-func ObscureString(input, toObscure string) string {
-	// The number of runes (characters) in the input determines the length of the output.
-	str := strings.Repeat("*", len(toObscure))
-	return strings.ReplaceAll(input, toObscure, str)
-
-}
-
-var toolTimings sync.Map
-
-func onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
-	toolTimings.Store(ctx.FunctionCallID(), time.Now())
-	return nil, nil
-}
-
-func onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
-	if startTime, ok := toolTimings.LoadAndDelete(ctx.FunctionCallID()); ok {
-		timesince := time.Since(startTime.(time.Time))
-		str := timesince.String()
-
-		switch {
-		case timesince > thresholdUrgentWarn:
-			str = timeUrgentWarn.Render(str)
-		case timesince > thresholdWarn:
-			str = timeWarn.Render(str)
-
-		}
-
-		log.Debug(fmt.Sprintf("tool:%s  %s", t.Name(), str))
-	}
-	return result, nil
 }
