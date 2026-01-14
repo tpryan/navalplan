@@ -57,12 +57,13 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.SetPrefix("agent")
 
-	if err := run(); err != nil {
+	ctx := context.Background()
+	if err := run(ctx); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	// Load .env
 	godotenv.Load("../../.env")
 
@@ -91,17 +92,17 @@ func run() error {
 		timings:   sync.Map{},
 	}
 
-	researchAgent, err := srv.createResearcherAgent()
+	researchAgent, err := srv.createResearcherAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating researcher agent: %w", err)
 	}
 
-	guideAgent, err := srv.createGuideAgent()
+	guideAgent, err := srv.createGuideAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating guide agent: %w", err)
 	}
 
-	discoveryAgent, err := srv.createDiscoveryAgent()
+	discoveryAgent, err := srv.createDiscoveryAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating discovery agent: %w", err)
 	}
@@ -139,13 +140,13 @@ func run() error {
 	return http.ListenAndServe(":"+port, loggingMiddleware(mux))
 }
 
-func (s *Server) createModel() (model.LLM, error) {
-	return gemini.NewModel(context.Background(), s.modelName, &genai.ClientConfig{
+func (s *Server) createModel(ctx context.Context) (model.LLM, error) {
+	return gemini.NewModel(ctx, s.modelName, &genai.ClientConfig{
 		APIKey: s.apiKey,
 	})
 }
 
-func (s *Server) createResearcherAgent() (agent.Agent, error) {
+func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: 65536,
 		Temperature:     genai.Ptr[float32](0.4),
@@ -173,7 +174,7 @@ func (s *Server) createResearcherAgent() (agent.Agent, error) {
 	}
 
 	// Create a dedicated model instance
-	m, err := s.createModel()
+	m, err := s.createModel(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -212,13 +213,13 @@ func (s *Server) createResearcherAgent() (agent.Agent, error) {
 	})
 }
 
-func (s *Server) createGuideAgent() (agent.Agent, error) {
+func (s *Server) createGuideAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: 65536,
 		Temperature:     genai.Ptr[float32](0.4),
 	}
 
-	m, err := s.createModel()
+	m, err := s.createModel(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -237,13 +238,13 @@ func (s *Server) createGuideAgent() (agent.Agent, error) {
 	})
 }
 
-func (s *Server) createDiscoveryAgent() (agent.Agent, error) {
+func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: 65536,
 		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
 	}
 
-	m, err := s.createModel()
+	m, err := s.createModel(ctx)
 	if err != nil {
 		return nil, err
 	}
