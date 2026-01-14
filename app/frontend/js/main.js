@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import { API } from './api.js';
 import { checkSession, currentUser } from './auth.js';
+import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 
 const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
@@ -31,6 +32,7 @@ loadChart();
 // Configuration
 
 // State
+let researchTicker = null;
 let voyages = [];
 let currentVoyage = null;
 let currentStops = [];
@@ -129,6 +131,8 @@ function initApp() {
 }
 
 function initUI() {
+  researchTicker = new Ticker('research-ticker');
+
   const btnNewVoyage = document.getElementById('btn-new-voyage');
   const modalOverlay = document.getElementById('modal-overlay');
   const modalNewVoyage = document.getElementById('modal-new-voyage');
@@ -391,6 +395,7 @@ function initUI() {
 
                   await API.triggerFullResearch(currentVoyage.id);
                   showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
+                  if (researchTicker) researchTicker.start();
                   
                   // 2. Poll for completion
                   const startTime = Date.now();
@@ -403,6 +408,7 @@ function initUI() {
                       // Check timeout
                       if (Date.now() - startTime > TIMEOUT_MS) {
                           clearInterval(poll);
+                          if (researchTicker) researchTicker.stop();
                           btnResearchAll.innerHTML = originalContent;
                           btnResearchAll.disabled = false;
                           // Revert stuck spinners
@@ -433,6 +439,8 @@ function initUI() {
                                   if (b && isNewData(b, 'stop', stop.id)) {
                                       // 1. Mark as done in our list
                                       pendingStops.splice(i, 1);
+                                      
+                                      if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
 
                                       // 2. Update the specific button UI immediately
                                       const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
@@ -451,6 +459,7 @@ function initUI() {
                           // If all done
                           if (guideComplete && pendingStops.length === 0) {
                               clearInterval(poll);
+                              if (researchTicker) researchTicker.stop();
                               btnResearchAll.innerHTML = originalContent;
                               btnResearchAll.disabled = false;
                               
@@ -466,6 +475,7 @@ function initUI() {
 
               } catch (err) {
                   console.error(err);
+                  if (researchTicker) researchTicker.stop();
                   btnResearchAll.innerHTML = originalContent;
                   btnResearchAll.disabled = false;
                   // Revert spinners
@@ -1166,6 +1176,7 @@ async function handleResearchClick(stop, button) {
         button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
         // Trigger
+        if (researchTicker) researchTicker.start();
         await API.triggerResearch(stop.id);
         
         // Poll
@@ -1174,6 +1185,7 @@ async function handleResearchClick(stop, button) {
                 const b = await API.getBriefing(stop.id);
                 if (b) {
                     clearInterval(poll);
+                    if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showBriefing(b); // Updates the already-open modal with data
                     renderMapStops();
@@ -1183,6 +1195,7 @@ async function handleResearchClick(stop, button) {
         
     } catch (err) {
         console.error(err);
+        if (researchTicker) researchTicker.stop();
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
         setTimeout(() => button.innerHTML = originalContent, 2000);
     }
