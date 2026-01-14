@@ -47,7 +47,7 @@ var discoveryAgentPrompt string
 
 type Server struct {
 	model   model.LLM
-	timings *sync.Map
+	timings sync.Map
 }
 
 func main() {
@@ -95,7 +95,7 @@ func run() error {
 
 	srv := &Server{
 		model:   geminiModel,
-		timings: &sync.Map{},
+		timings: sync.Map{},
 	}
 
 	researchAgent, err := srv.createResearcherAgent()
@@ -283,19 +283,22 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		
+		defer func() {
+			timesince := time.Since(start)
+			str := timesince.String()
+
+			switch {
+			case timesince > time.Second*2:
+				str = timeUrgentWarn.Render(str)
+			case timesince > time.Millisecond*100:
+				str = timeWarn.Render(str)
+
+			}
+
+			log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
+		}()
+
 		next.ServeHTTP(ww, r)
-
-		timesince := time.Since(start)
-		str := timesince.String()
-
-		switch {
-		case timesince > time.Second*2:
-			str = timeUrgentWarn.Render(str)
-		case timesince > time.Millisecond*100:
-			str = timeWarn.Render(str)
-
-		}
-
-		log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 	})
 }
