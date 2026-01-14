@@ -30,7 +30,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 
 	srv := &Server{
 		model:   model,
-		timings: &sync.Map{},
+		timings: sync.Map{},
 	}
 
 	a, err := srv.createResearcherAgent()
