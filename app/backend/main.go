@@ -19,13 +19,10 @@ import (
 )
 
 func main() {
-	log.SetPrefix("main")
+	log.SetPrefix("backend")
 	// Load .env file (try current dir, then project root)
-	err1 := godotenv.Load(".env")
-	err2 := godotenv.Load("../../.env")
-	if err1 != nil && err2 != nil {
-		log.Info("No .env file found, relying on environment variables")
-	}
+	godotenv.Load(".env")
+	godotenv.Load("../../.env")
 
 	cfg, err := config.New(os.Getenv)
 	if err != nil {

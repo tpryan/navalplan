@@ -9,7 +9,8 @@ import (
 )
 
 type Config struct {
-	Env string
+	Env     string
+	Project string
 
 	// Server
 	Port       string
@@ -143,6 +144,7 @@ func New(getEnv func(string) string) (*Config, error) {
 
 	result := &Config{
 		Env:                getEnv("ENV"),
+		Project:            getEnv("GOOGLE_CLOUD_PROJECT"),
 		Port:               port,
 		ContentDir:         contentDir,
 		DatabaseDSN:        dsn,
