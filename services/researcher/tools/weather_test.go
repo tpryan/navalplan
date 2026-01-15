@@ -33,7 +33,7 @@ func TestDegreesToDirection(t *testing.T) {
 }
 
 func TestNewWeatherTool(t *testing.T) {
-	tool, err := NewWeatherTool()
+	tool, _, err := NewWeatherTool()
 	if err != nil {
 		t.Fatalf("NewWeatherTool() error = %v", err)
 	}

@@ -37,20 +37,31 @@ type WeatherResult struct {
 	DebugDurationMS int64   `json:"debug_duration_ms"`
 }
 
+// WeatherClient defines the interface for the Open-Meteo API client.
+type WeatherClient interface {
+	Get(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error)
+}
+
 // WeatherProvider implements the get_weather_forecast tool using the Open-Meteo API.
 type WeatherProvider struct {
-	client *openmeteogo.Client
+	client WeatherClient
+}
+
+// Close closes the underlying client connection.
+func (wp *WeatherProvider) Close() error {
+	return nil
 }
 
 // NewWeatherTool creates a new ADK tool for retrieving weather forecasts.
-func NewWeatherTool() (tool.Tool, error) {
+func NewWeatherTool() (tool.Tool, *WeatherProvider, error) {
 	wp := &WeatherProvider{
 		client: openmeteogo.NewClient(),
 	}
-	return functiontool.New(functiontool.Config{
+	t, err := functiontool.New(functiontool.Config{
 		Name:        "get_weather_forecast",
 		Description: "Retrieves precise weather forecasts (Wind, Gusts, Temp, Waves) for a specific location and date.",
 	}, wp.GetWeatherForecast)
+	return t, wp, err
 }
 
 func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {

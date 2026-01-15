@@ -56,6 +56,23 @@ type Config struct {
 type Server struct {
 	config  *Config
 	timings sync.Map
+
+	// Providers
+	placesProvider  *tools.PlacesProvider
+	weatherProvider *tools.WeatherProvider
+	tideProvider    *tools.TideProvider
+}
+
+func (s *Server) Close() {
+	if s.placesProvider != nil {
+		s.placesProvider.Close()
+	}
+	if s.weatherProvider != nil {
+		s.weatherProvider.Close()
+	}
+	if s.tideProvider != nil {
+		s.tideProvider.Close()
+	}
 }
 
 func main() {
@@ -127,6 +144,7 @@ func run(ctx context.Context, cfg *Config) error {
 		config:  cfg,
 		timings: sync.Map{},
 	}
+	defer srv.Close()
 
 	researchAgent, err := srv.createResearcherAgent(ctx)
 	if err != nil {
@@ -179,25 +197,28 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 		Temperature:     genai.Ptr[float32](0.4),
 	}
 
-	weatherTool, err := tools.NewWeatherTool()
+	weatherTool, wp, err := tools.NewWeatherTool()
 	if err != nil {
 		return nil, err
 	}
+	s.weatherProvider = wp
 
-	tideTool, err := tools.NewTideTool()
+	tideTool, tp, err := tools.NewTideTool()
 	if err != nil {
 		return nil, err
 	}
+	s.tideProvider = tp
 
 	sunriseTool, err := tools.NewSunriseTool()
 	if err != nil {
 		return nil, err
 	}
 
-	placesTool, err := tools.NewPlacesTool(s.config.MapsAPIKey)
+	placesTool, pp, err := tools.NewPlacesTool(s.config.MapsAPIKey)
 	if err != nil {
 		return nil, err
 	}
+	s.placesProvider = pp
 
 	// Create a dedicated model instance
 	m, err := s.createModel(ctx)
