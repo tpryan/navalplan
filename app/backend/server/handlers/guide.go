@@ -6,12 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/charmbracelet/log"
 
 	appcontext "app/context"
 	"app/models"
@@ -83,13 +82,13 @@ func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		log.Errorf("Failed to read image data: %v", err)
+		slog.ErrorContext(r.Context(), "Failed to read image data", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	if err := h.DB.SaveVoyageMap(r.Context(), voyageID, data); err != nil {
-		log.Errorf("Failed to save map image to DB: %v", err)
+		slog.ErrorContext(r.Context(), "Failed to save map image to DB", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +184,8 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 }
 
 func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
-	log.Infof("[guide-agent] Starting research for voyage %d", voyage.ID)
+	ctx := context.Background()
+	slog.InfoContext(ctx, fmt.Sprintf("[guide-agent] Starting research for voyage %d", voyage.ID))
 
 	agentURL := h.AgentURL
 	if agentURL == "" {
@@ -196,14 +196,13 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	userID := "system"
 	sessionID := fmt.Sprintf("voyage_%d", voyage.ID)
 
-	ctx := context.Background()
 	client := h.AgentClient
 
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		log.Errorf("Failed to create agent session: %v", err)
+		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
@@ -233,20 +232,20 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Errorf("Failed to call agent: %v", err)
+		slog.ErrorContext(ctx, "Failed to call agent", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Errorf("Agent returned error: %s", body)
+		slog.ErrorContext(ctx, "Agent returned error", "body", string(body))
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Errorf("Failed to decode agent response: %v", err)
+		slog.ErrorContext(ctx, "Failed to decode agent response", "error", err)
 		return
 	}
 
@@ -259,19 +258,19 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	}
 
 	if responseText == "" {
-		log.Error("No response from agent")
+		slog.ErrorContext(ctx, "No response from agent")
 		return
 	}
 
 	cleanedResponse := cleanJSON(responseText)
 	if cleanedResponse == "" {
-		log.Errorf("Agent returned non-JSON response: %s", responseText)
+		slog.ErrorContext(ctx, "Agent returned non-JSON response", "response", responseText)
 		return
 	}
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(cleanedResponse), &output); err != nil {
-		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, cleanedResponse)
+		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", cleanedResponse)
 		return
 	}
 
@@ -290,9 +289,9 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	}
 
 	if err := h.DB.CreateVoyageGuide(ctx, guide); err != nil {
-		log.Errorf("Failed to save voyage guide: %v", err)
+		slog.ErrorContext(ctx, "Failed to save voyage guide", "error", err)
 	}
-	log.Infof("Voyage guide saved for voyage %d", voyage.ID)
+	slog.InfoContext(ctx, fmt.Sprintf("Voyage guide saved for voyage %d", voyage.ID))
 }
 
 type VoyageGuideResponse struct {
@@ -340,7 +339,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	if err != nil && mapURL == "" {
 		// Log the error if it's something other than "not found" (depending on DB impl)
 		// For now assuming err implies not found or db error
-		log.Warnf("Voyage guide not found for voyage %d: %v", voyageID, err)
+		slog.WarnContext(r.Context(), "Voyage guide not found for voyage", "voyage_id", voyageID, "error", err)
 		http.Error(w, "Voyage guide not found", http.StatusNotFound)
 		return
 	}
@@ -390,7 +389,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	// Fetch Stops
 	stops, err := h.DB.ListStops(r.Context(), voyage.ID, 0, 0)
 	if err != nil {
-		log.Errorf("Failed to list stops for public voyage %d: %v", voyage.ID, err)
+		slog.ErrorContext(r.Context(), "Failed to list stops for public voyage", "voyage_id", voyage.ID, "error", err)
 		// Continue? Or fail? Let's continue with empty stops
 		stops = []models.Stop{}
 	}
@@ -398,7 +397,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	// Fetch Briefings
 	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyage.ID)
 	if err != nil {
-		log.Errorf("Failed to list briefings for public voyage %d: %v", voyage.ID, err)
+		slog.ErrorContext(r.Context(), "Failed to list briefings for public voyage", "voyage_id", voyage.ID, "error", err)
 		briefings = []models.Briefing{}
 	}
 
@@ -453,7 +452,7 @@ func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
 
 	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
 	if err != nil {
-		log.Errorf("Failed to list briefings for voyage %d: %v", voyageID, err)
+		slog.ErrorContext(r.Context(), "Failed to list briefings for voyage", "voyage_id", voyageID, "error", err)
 		http.Error(w, "Failed to list briefings", http.StatusInternalServerError)
 		return
 	}

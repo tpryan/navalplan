@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"app/datastore"
 
-	"github.com/charmbracelet/log"
 	"google.golang.org/api/idtoken"
 )
 
@@ -30,7 +30,7 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		// Create an authenticated client for Cloud Run
 		client, err = idtoken.NewClient(context.Background(), agentURL)
 		if err != nil {
-			log.Errorf("Failed to create authenticated agent client: %v", err)
+			slog.Error("Failed to create authenticated agent client", "error", err)
 			client = &http.Client{Timeout: 300 * time.Second}
 		}
 	} else {

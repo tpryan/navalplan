@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,7 +14,6 @@ import (
 	appcontext "app/context"
 	"app/models"
 
-	"github.com/charmbracelet/log"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 )
@@ -73,7 +73,7 @@ func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *htt
 	}
 
 	if err := h.DB.DeleteSeasonality(r.Context(), regionID, month); err != nil {
-		log.Errorf("Failed to delete seasonality: %v", err)
+		slog.ErrorContext(r.Context(), "Failed to delete seasonality", "error", err)
 		http.Error(w, "Failed to delete seasonality", http.StatusInternalServerError)
 		return
 	}
@@ -83,18 +83,18 @@ func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *htt
 
 func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	monthStr := r.URL.Query().Get("month")
-	log.Infof("DiscoveryMining request received for month %s", monthStr)
+	slog.InfoContext(r.Context(), fmt.Sprintf("DiscoveryMining request received for month %s", monthStr))
 
 	if monthStr == "all" {
 		w.WriteHeader(http.StatusAccepted)
 		fmt.Fprintf(w, "Discovery mining started for all months")
 
 		go func() {
-			log.Info("[discovery-mining] Starting full year mining cycle...")
+			slog.Info("[discovery-mining] Starting full year mining cycle...")
 			for m := 1; m <= 12; m++ {
 				h.performDiscoveryMining(m)
 			}
-			log.Info("[discovery-mining] Full year mining cycle complete.")
+			slog.Info("[discovery-mining] Full year mining cycle complete.")
 		}()
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	month, err := strconv.Atoi(monthStr)
 	if err != nil || month < 1 || month > 12 {
 		month = int(time.Now().Month())
-		log.Infof("Defaulting to current month: %d", month)
+		slog.InfoContext(r.Context(), fmt.Sprintf("Defaulting to current month: %d", month))
 	}
 
 	w.WriteHeader(http.StatusAccepted)
@@ -162,12 +162,13 @@ func getTierPriority(tier string, isHiddenGem bool) int {
 }
 
 func (h *Handler) performDiscoveryMining(month int) {
+	ctx := context.Background()
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("[discovery-mining] Panic: %v", r)
+			slog.ErrorContext(ctx, "[discovery-mining] Panic", "recover", r)
 		}
 	}()
-	log.Infof("[discovery-mining] Starting mining for month %d", month)
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Starting mining for month %d", month))
 
 	agentURL := h.AgentURL
 	if agentURL == "" {
@@ -182,7 +183,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	// 1. Create Session with initial state
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	log.Infof("[discovery-mining] Creating agent session: %s", createSessionURL)
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Creating agent session: %s", createSessionURL))
 
 	monthName := time.Month(month).String()
 	state := map[string]any{
@@ -192,7 +193,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	respSession, err := client.Post(createSessionURL, "application/json", bytes.NewBuffer(stateJSON))
 	if err != nil {
-		log.Errorf("[discovery-mining] Failed to create agent session: %v", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "error", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
@@ -211,23 +212,23 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}{{Text: prompt}}
 
 	jsonData, _ := json.Marshal(reqBody)
-	log.Infof("[discovery-mining] Calling agent /api/run...")
+	slog.InfoContext(ctx, "[discovery-mining] Calling agent /api/run...")
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Errorf("[discovery-mining] Failed to call discovery agent: %v", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to call discovery agent", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Errorf("[discovery-mining] Failed to read agent response body: %v", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to read agent response body", "error", err)
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.Unmarshal(bodyBytes, &events); err != nil {
-		log.Errorf("[discovery-mining] Failed to decode agent response: %v. Raw body: %s", err, string(bodyBytes))
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to decode agent response. Raw body: %s", string(bodyBytes)), "error", err)
 		return
 	}
 
@@ -240,26 +241,24 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 
 	if responseText == "" {
-		log.Errorf("[discovery-mining] No response text found in events. Full event log: %+v", events)
+		slog.ErrorContext(ctx, "[discovery-mining] No response text found in events", "events", events)
 		return
 	}
 
-	log.Infof("[discovery-mining] Raw agent response: %s", responseText)
+	slog.InfoContext(ctx, "[discovery-mining] Raw agent response", "response", responseText)
 
 	cleanedResponseText := cleanJSON(responseText)
 
 	var output []DiscoveryRegionOutput
 	if err := json.Unmarshal([]byte(cleanedResponseText), &output); err != nil {
-		log.Errorf("[discovery-mining] Failed to unmarshal discovery agent JSON: %v. Cleaned: %s. Raw: %s", err, cleanedResponseText, responseText)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to unmarshal discovery agent JSON", "error", err, "cleaned", cleanedResponseText, "raw", responseText)
 		return
 	}
-
-	ctx := context.Background()
 
 	// Load existing regions ACTIVE IN THIS MONTH for intelligent replacement
 	activeRegions, err := h.DB.ListRegionsByMonth(ctx, month)
 	if err != nil {
-		log.Errorf("[discovery-mining] Failed to load active regions for month %d: %v", month, err)
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to load active regions for month %d", month), "error", err)
 	}
 
 	type activeReg struct {
@@ -287,7 +286,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 		// Check for spatial duplicates
 		newGeom, err := geojson.UnmarshalGeometry(reg.Geometry)
 		if err != nil {
-			log.Errorf("[discovery-mining] Failed to parse geometry for new region %s: %v", reg.Name, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to parse geometry for new region %s", reg.Name), "error", err)
 			continue
 		}
 
@@ -324,19 +323,19 @@ func (h *Handler) performDiscoveryMining(month int) {
 				// If New is LOWER priority, we keep Old.
 
 				if newPriority > oldPriority {
-					log.Infof("[discovery-mining] Replacing existing '%s' (Tier: %s) with new superior '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
-						ex.Name, ex.Tier, reg.Name, reg.Tier, iou, containment)
+					slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Replacing existing '%s' (Tier: %s) with new superior '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
+						ex.Name, ex.Tier, reg.Name, reg.Tier, iou, containment))
 
 					// Delete the old seasonality
 					if err := h.DB.DeleteSeasonality(ctx, int(ex.ID), month); err != nil {
-						log.Errorf("[discovery-mining] Failed to remove inferior region %s: %v", ex.Name, err)
+						slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to remove inferior region %s", ex.Name), "error", err)
 					}
 
 					// Remove from parsedActive so we don't match against it again
 					parsedActive[i].Name = ""
 				} else {
-					log.Infof("[discovery-mining] Skipping new region '%s' (Tier: %s) in favor of existing '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
-						reg.Name, reg.Tier, ex.Name, ex.Tier, iou, containment)
+					slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Skipping new region '%s' (Tier: %s) in favor of existing '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
+						reg.Name, reg.Tier, ex.Name, ex.Tier, iou, containment))
 					shouldSkip = true
 					break
 				}
@@ -354,7 +353,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 		}
 
 		if err := h.DB.UpsertRegion(ctx, region); err != nil {
-			log.Errorf("[discovery-mining] Failed to upsert region %s: %v", reg.Name, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to upsert region %s", reg.Name), "error", err)
 			continue
 		}
 
@@ -383,9 +382,9 @@ func (h *Handler) performDiscoveryMining(month int) {
 		}
 
 		if err := h.DB.UpsertSeasonality(ctx, seasonality); err != nil {
-			log.Errorf("[discovery-mining] Failed to upsert seasonality for %s: %v", reg.Name, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to upsert seasonality for %s", reg.Name), "error", err)
 		}
 	}
 
-	log.Infof("[discovery-mining] Discovery mining complete for month %d. Processed %d regions.", month, len(output))
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Discovery mining complete for month %d. Processed %d regions.", month, len(output)))
 }

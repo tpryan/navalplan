@@ -3,6 +3,7 @@ package server
 import (
 	"compress/gzip"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -10,14 +11,6 @@ import (
 	"time"
 
 	appcontext "app/context"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/log"
-)
-
-var (
-	timeWarn       = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
-	timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 )
 
 type rateLimitEntry struct {
@@ -63,7 +56,7 @@ func (s *Server) rateLimit(limit int, window time.Duration) func(http.Handler) h
 			}
 
 			if entry.count > limit {
-				log.Warn("Rate limit exceeded", "key", key, "limit", limit)
+				slog.WarnContext(r.Context(), "Rate limit exceeded", "key", key, "limit", limit)
 				http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
 				return
 			}
@@ -255,43 +248,22 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 		if !strings.Contains(r.URL.Path, "/.well-known") {
 
 			timesince := time.Since(start)
-			str := timesince.String()
 
-			level := log.DebugLevel
-			severity := "INFO"
+			level := slog.LevelInfo
 
 			switch {
-			case ww.statusCode > 400:
-				level = log.WarnLevel
-			case ww.statusCode > 500:
-				level = log.ErrorLevel
-			default:
-				level = log.InfoLevel
+			case ww.statusCode >= 500:
+				level = slog.LevelError
+			case ww.statusCode >= 400:
+				level = slog.LevelWarn
 			}
 
-			switch s.Env {
-			case "production":
-				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-				traceParts := strings.Split(traceHeader, "/")
-				traceID := traceParts[0]
-				trace := fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID)
-
-				log.Log(level, "Request handled",
-					"severity", severity,
-					"logging.googleapis.com/trace", trace,
-					"method", r.Method,
-					"path", r.URL.Path,
-					"duration", timesince.String(),
-				)
-			default:
-				switch {
-				case timesince > time.Second*2:
-					str = timeUrgentWarn.Render(str)
-				case timesince > time.Millisecond*100:
-					str = timeWarn.Render(str)
-				}
-				log.Log(level, fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
-			}
+			slog.Log(r.Context(), level, "Request handled",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.statusCode,
+				"duration", timesince.String(),
+			)
 		}
 	})
 }
@@ -325,7 +297,7 @@ func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Error("Panic recovered", "error", err)
+				slog.ErrorContext(r.Context(), "Panic recovered", "error", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 		}()
