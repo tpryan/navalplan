@@ -100,6 +100,9 @@ func loadConfig(getEnv func(string) string) (*Config, error) {
 	}
 
 	geminiKey := getEnv("GEMINI_API_KEY")
+	if geminiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY is not set")
+	}
 
 	port := getEnv("PORT")
 	if port == "" {
