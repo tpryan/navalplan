@@ -1,23 +1,16 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
-	"time"
 
 	"app/config"
 	"app/datastore"
 	"app/server/handlers"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
-
-var timeWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
-var timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 
 // Server holds the application dependencies and router.
 type Server struct {
@@ -70,82 +63,9 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 
 // Middleware wraps the handler with standard middleware (Logging, CORS, Recovery).
 func (s *Server) Middleware(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		// 1. Recovery
-		defer func() {
-			if err := recover(); err != nil {
-				log.Error("Panic recovered", "error", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
-		}()
-
-		// 2. CORS
-		origin := r.Header.Get("Origin")
-		allowedOrigins := map[string]bool{
-			s.BaseURL:               true,
-			"http://localhost:5173": true, // Vite default
-		}
-
-		if allowedOrigins[origin] {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		}
-
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		// 3. Request Logging wrapper
-		// We need to wrap ResponseWriter to capture status code
-		ww := &responseWriter{w, http.StatusOK}
-
-		h.ServeHTTP(ww, r)
-
-		if !strings.Contains(r.URL.Path, "/.well-known") {
-
-			timesince := time.Since(start)
-			str := timesince.String()
-
-			switch s.Env {
-			case "production":
-				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-				// Typically formatted as "TRACE_ID/SPAN_ID;o=TRACE_TRUE"
-				traceID := strings.Split(traceHeader, "/")[0]
-				// Include the trace field in the log entry
-				log.Info("Request handled",
-					"severity", "INFO",
-					"logging.googleapis.com/trace", fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID),
-					"method", r.Method,
-					"path", r.URL.Path,
-					"duration", timesince.String(),
-				)
-			default:
-				switch {
-				case timesince > time.Second*2:
-					str = timeUrgentWarn.Render(str)
-				case timesince > time.Millisecond*100:
-					str = timeWarn.Render(str)
-				}
-				log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
-			}
-
-		}
-	})
-}
-
-// responseWriter is a wrapper to capture status code
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+	// Apply in reverse order (wrapping)
+	h = s.requestLoggingMiddleware(h)
+	h = s.corsMiddleware(h)
+	h = s.recoveryMiddleware(h)
+	return h
 }
