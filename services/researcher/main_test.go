@@ -18,9 +18,11 @@ func TestCreateResearcherAgent(t *testing.T) {
 	}
 
 	srv := &Server{
-		modelName: modelName,
-		apiKey:    apiKey,
-		timings:   sync.Map{},
+		config: &Config{
+			ModelName:    modelName,
+			GeminiAPIKey: apiKey,
+		},
+		timings: sync.Map{},
 	}
 
 	a, err := srv.createResearcherAgent(context.Background())
