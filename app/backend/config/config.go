@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/charmbracelet/log"
 )
 
 type Config struct {
@@ -157,17 +155,6 @@ func New(getEnv func(string) string) (*Config, error) {
 	}
 
 	result.ObscuredDSN = ObscureString(dsn, dbPass)
-
-	log.Info("config", "Env", result.Env)
-	log.Info("config", "Port", result.Port)
-	log.Info("config", "ContentDir", result.ContentDir)
-	log.Info("config", "DatabaseDSN", result.ObscuredDSN)
-	log.Info("config", "GoogleClientID", result.GoogleClientID)
-	log.Info("config", "GoogleClientSecret", ObscureString(result.GoogleClientSecret))
-	log.Info("config", "BaseURL", result.BaseURL)
-	log.Info("config", "NavalPlanAgentURL", result.NavalPlanAgentURL)
-	log.Info("config", "SystemAPIKey", ObscureString(result.SystemAPIKey))
-	log.Info("config", "GoogleMapsAPIKey", ObscureString(result.GoogleMapsAPIKey))
 
 	return result, nil
 }
