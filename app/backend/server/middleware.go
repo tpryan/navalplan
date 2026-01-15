@@ -271,8 +271,11 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 
 			switch s.Env {
 			case "production":
-				// Include the trace field in the log entry
-				trace := appcontext.GetTraceFromContext(r.Context())
+				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+				traceParts := strings.Split(traceHeader, "/")
+				traceID := traceParts[0]
+				trace := fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID)
+
 				log.Log(level, "Request handled",
 					"severity", severity,
 					"logging.googleapis.com/trace", trace,
