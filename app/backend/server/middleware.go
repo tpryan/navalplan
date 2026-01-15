@@ -227,6 +227,21 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+func (s *Server) traceMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+		traceParts := strings.Split(traceHeader, "/")
+		if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+			traceID := traceParts[0]
+			trace := fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID)
+			ctx := appcontext.AddTraceToContext(r.Context(), trace)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -243,6 +258,7 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 			str := timesince.String()
 
 			level := log.DebugLevel
+			severity := "INFO"
 
 			switch {
 			case ww.statusCode > 400:
@@ -255,12 +271,11 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 
 			switch s.Env {
 			case "production":
-				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-				// Typically formatted as "TRACE_ID/SPAN_ID;o=TRACE_TRUE"
-				traceID := strings.Split(traceHeader, "/")[0]
 				// Include the trace field in the log entry
+				trace := appcontext.GetTraceFromContext(r.Context())
 				log.Log(level, "Request handled",
-					"logging.googleapis.com/trace", fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID),
+					"severity", severity,
+					"logging.googleapis.com/trace", trace,
 					"method", r.Method,
 					"path", r.URL.Path,
 					"duration", timesince.String(),
@@ -274,7 +289,6 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 				}
 				log.Log(level, fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 			}
-
 		}
 	})
 }
