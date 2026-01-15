@@ -25,6 +25,7 @@ type Server struct {
 	DB           datastore.Store
 	GoogleConfig *oauth2.Config
 	Env          string
+	Project      string
 	BaseURL      string
 	Handler      *handlers.Handler
 	SystemAPIKey string
@@ -32,7 +33,6 @@ type Server struct {
 
 // New initializes a new Server with the provided database and configuration.
 func New(db datastore.Store, cfg *config.Config) (*Server, error) {
-	log.SetPrefix("backend")
 
 	if len(cfg.GoogleClientID) > 0 {
 		prefix := ""
@@ -52,6 +52,7 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		Mux:          http.NewServeMux(),
 		DB:           db,
 		Env:          cfg.Env,
+		Project:      cfg.Project,
 		BaseURL:      cfg.BaseURL,
 		Handler:      h,
 		SystemAPIKey: cfg.SystemAPIKey,
@@ -111,15 +112,29 @@ func (s *Server) Middleware(h http.Handler) http.Handler {
 			timesince := time.Since(start)
 			str := timesince.String()
 
-			switch {
-			case timesince > time.Second*2:
-				str = timeUrgentWarn.Render(str)
-			case timesince > time.Millisecond*100:
-				str = timeWarn.Render(str)
-
+			switch s.Env {
+			case "production":
+				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+				// Typically formatted as "TRACE_ID/SPAN_ID;o=TRACE_TRUE"
+				traceID := strings.Split(traceHeader, "/")[0]
+				// Include the trace field in the log entry
+				log.Info("Request handled",
+					"severity", "INFO",
+					"logging.googleapis.com/trace", fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID),
+					"method", r.Method,
+					"path", r.URL.Path,
+					"duration", timesince.String(),
+				)
+			default:
+				switch {
+				case timesince > time.Second*2:
+					str = timeUrgentWarn.Render(str)
+				case timesince > time.Millisecond*100:
+					str = timeWarn.Render(str)
+				}
+				log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 			}
 
-			log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
 		}
 	})
 }
