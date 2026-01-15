@@ -34,9 +34,14 @@ func main() {
 	if cfg.Env == "production" {
 		// Production: JSON with Severity mapping
 		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			AddSource: true,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				if a.Key == slog.LevelKey {
-					return slog.Attr{Key: "severity", Value: a.Value}
+				if a.Key == slog.MessageKey {
+					a.Key = "message"
+				} else if a.Key == slog.SourceKey {
+					a.Key = "logging.googleapis.com/sourceLocation"
+				} else if a.Key == slog.LevelKey {
+					a.Key = "severity"
 				}
 				return a
 			},

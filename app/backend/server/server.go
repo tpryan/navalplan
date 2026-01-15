@@ -65,8 +65,8 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 // Middleware wraps the handler with standard middleware (Logging, CORS, Recovery).
 func (s *Server) Middleware(h http.Handler) http.Handler {
 	// Apply in reverse order (wrapping)
-	h = s.traceMiddleware(h)
 	h = s.requestLoggingMiddleware(h)
+	h = s.traceMiddleware(h)
 	h = s.corsMiddleware(h)
 	h = s.recoveryMiddleware(h)
 	return h
