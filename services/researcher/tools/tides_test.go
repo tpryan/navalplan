@@ -41,7 +41,7 @@ func TestTideBufferRange(t *testing.T) {
 }
 
 func TestNewTideTool(t *testing.T) {
-	tool, err := NewTideTool()
+	tool, _, err := NewTideTool()
 	if err != nil {
 		t.Fatalf("NewTideTool() error = %v", err)
 	}

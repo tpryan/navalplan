@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/googleapis/gax-go/v2"
 	places "cloud.google.com/go/maps/places/apiv1"
 	"cloud.google.com/go/maps/places/apiv1/placespb"
 	"google.golang.org/adk/tool"
@@ -44,13 +45,24 @@ type PlacesResponse struct {
 	DebugDurationMS int64         `json:"debug_duration_ms"`
 }
 
+// PlacesClient defines the interface for the Google Places API client.
+type PlacesClient interface {
+	SearchText(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error)
+	Close() error
+}
+
 // PlacesProvider implements the find_places_nearby tool using the Google Maps Places API.
 type PlacesProvider struct {
-	client *places.Client
+	client PlacesClient
+}
+
+// Close closes the underlying client connection.
+func (p *PlacesProvider) Close() error {
+	return p.client.Close()
 }
 
 // NewPlacesTool creates a new ADK tool for searching places nearby.
-func NewPlacesTool(apiKey string) (tool.Tool, error) {
+func NewPlacesTool(apiKey string) (tool.Tool, *PlacesProvider, error) {
 	ctx := context.Background()
 	var clientOpts []option.ClientOption
 	if apiKey != "" {
@@ -59,15 +71,17 @@ func NewPlacesTool(apiKey string) (tool.Tool, error) {
 
 	c, err := places.NewClient(ctx, clientOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("creating Places client: %w", err)
+		return nil, nil, fmt.Errorf("creating Places client: %w", err)
 	}
 
 	p := &PlacesProvider{client: c}
 
-	return functiontool.New(functiontool.Config{
+	t, err := functiontool.New(functiontool.Config{
 		Name:        "find_places_nearby",
 		Description: "Finds places (e.g. marinas, restaurants) near a location using Google Maps Text Search. Returns specific locations with Lat/Lng.",
 	}, p.FindPlaces)
+
+	return t, p, err
 }
 
 func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesResponse, error) {

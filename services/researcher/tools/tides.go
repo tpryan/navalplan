@@ -32,20 +32,32 @@ type TideResult struct {
 	Tides         []TideEvent `json:"tides"`
 }
 
+// TideClient defines the interface for the NOAA API client.
+type TideClient interface {
+	FindStations(opts *noaago.StationOptions) (*noaago.StationResponse, error)
+	GetTides(opts *noaago.TideOptions) (*noaago.TideResponse, error)
+}
+
 // TideProvider implements the get_tides tool using the NOAA CO-OPS API.
 type TideProvider struct {
-	client *noaago.Client
+	client TideClient
+}
+
+// Close closes the underlying client connection.
+func (tp *TideProvider) Close() error {
+	return nil
 }
 
 // NewTideTool creates a new ADK tool for retrieving tide predictions.
-func NewTideTool() (tool.Tool, error) {
+func NewTideTool() (tool.Tool, *TideProvider, error) {
 	client := noaago.NewClient()
 	tp := &TideProvider{client: client}
 
-	return functiontool.New(functiontool.Config{
+	t, err := functiontool.New(functiontool.Config{
 		Name:        "get_tides",
 		Description: "Retrieves high and low tide predictions for a specific date from the nearest NOAA station.",
 	}, tp.GetTides)
+	return t, tp, err
 }
 
 func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, error) {
