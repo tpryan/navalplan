@@ -120,8 +120,8 @@ dev-mine:
 db-start:
 	@echo "Starting Database container ($(DB_CONTAINER_NAME))..."
 	@if ! podman info >/dev/null 2>&1; then \
-		echo "Error: Podman is not running. Please start it (e.g., 'podman machine start')."; \
-		exit 1; \
+		echo "Podman is not running. Attempting to start Podman machine..."; \
+		podman machine start || (echo "Error: Failed to start Podman machine. Please start it manually." && exit 1); \
 	fi
 	@if podman inspect $(DB_CONTAINER_NAME) >/dev/null 2>&1; then \
 		echo "Container $(DB_CONTAINER_NAME) exists. Starting..."; \

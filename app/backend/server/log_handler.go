@@ -2,13 +2,16 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 
 	appcontext "app/context"
 )
 
 type CloudLoggingHandler struct {
-	Handler slog.Handler
+	Handler       slog.Handler
+	FormatMessage bool
 }
 
 func (h *CloudLoggingHandler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -16,6 +19,20 @@ func (h *CloudLoggingHandler) Enabled(ctx context.Context, level slog.Level) boo
 }
 
 func (h *CloudLoggingHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Format Message if enabled (before adding technical attributes like trace)
+	if h.FormatMessage {
+		var sb strings.Builder
+		sb.WriteString(r.Message)
+		r.Attrs(func(a slog.Attr) bool {
+			sb.WriteString(" ")
+			sb.WriteString(a.Key)
+			sb.WriteString("=")
+			sb.WriteString(fmt.Sprintf("%v", a.Value.Any()))
+			return true
+		})
+		r.Message = sb.String()
+	}
+
 	if trace := appcontext.GetTraceFromContext(ctx); trace != "" {
 		r.Add("logging.googleapis.com/trace", slog.StringValue(trace))
 	}
@@ -23,9 +40,9 @@ func (h *CloudLoggingHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 func (h *CloudLoggingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &CloudLoggingHandler{Handler: h.Handler.WithAttrs(attrs)}
+	return &CloudLoggingHandler{Handler: h.Handler.WithAttrs(attrs), FormatMessage: h.FormatMessage}
 }
 
 func (h *CloudLoggingHandler) WithGroup(name string) slog.Handler {
-	return &CloudLoggingHandler{Handler: h.Handler.WithGroup(name)}
+	return &CloudLoggingHandler{Handler: h.Handler.WithGroup(name), FormatMessage: h.FormatMessage}
 }
