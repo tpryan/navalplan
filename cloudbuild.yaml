@@ -50,6 +50,7 @@ steps:
   - '--set-env-vars=NAVALPLAN_BASE_URL=${_NAVALPLAN_BASE_URL}'
   - '--set-env-vars=NAVALPLAN_PORT=${_NAVALPLAN_PORT}'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
+  - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${_GOOGLE_CLOUD_PROJECT}'
   - '--set-env-vars=ENV=${_ENV}'
   - '--set-env-vars=NAVALPLAN_CONTENT_DIR=${_NAVALPLAN_CONTENT_DIR}'
   dir: 'app/backend'
@@ -65,4 +66,5 @@ substitutions:
   _NAVALPLAN_AGENT_MODEL: "gemini-2.5-flash"
   _ENV: "production"
   _NAVALPLAN_CONTENT_DIR: "./static.min"
+  _GOOGLE_CLOUD_PROJECT: ${PROJECT_ID}
 logsBucket: gs://navalplan-logging-bucket
