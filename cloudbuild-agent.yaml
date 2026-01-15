@@ -11,6 +11,7 @@ steps:
   - '--project'
   - '${PROJECT_ID}'                   # Your Google Cloud Project ID
   - '--no-allow-unauthenticated'    # Security: Only backend can call this
+  - '--set-secrets=NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
   dir: 'services/researcher'        # Build context
