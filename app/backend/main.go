@@ -46,7 +46,7 @@ func main() {
 				return a
 			},
 		})
-		handler = &server.CloudLoggingHandler{Handler: jsonHandler}
+		handler = &server.CloudLoggingHandler{Handler: jsonHandler, FormatMessage: true}
 	} else {
 		// Development: Charmbracelet colorful slog
 		chOptions := charm.Options{Prefix: "backend", ReportTimestamp: true}
