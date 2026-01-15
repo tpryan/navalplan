@@ -11,7 +11,13 @@ import (
 
 	appcontext "app/context"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+)
+
+var (
+	timeWarn       = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
+	timeUrgentWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 )
 
 type rateLimitEntry struct {
@@ -206,6 +212,106 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// responseWriter is a wrapper to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Request Logging wrapper
+		// We need to wrap ResponseWriter to capture status code
+		ww := &responseWriter{w, http.StatusOK}
+
+		next.ServeHTTP(ww, r)
+
+		if !strings.Contains(r.URL.Path, "/.well-known") {
+
+			timesince := time.Since(start)
+			str := timesince.String()
+
+			level := log.DebugLevel
+
+			switch {
+			case ww.statusCode > 400:
+				level = log.WarnLevel
+			case ww.statusCode > 500:
+				level = log.ErrorLevel
+			default:
+				level = log.InfoLevel
+			}
+
+			switch s.Env {
+			case "production":
+				traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+				// Typically formatted as "TRACE_ID/SPAN_ID;o=TRACE_TRUE"
+				traceID := strings.Split(traceHeader, "/")[0]
+				// Include the trace field in the log entry
+				log.Log(level, "Request handled",
+					"logging.googleapis.com/trace", fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID),
+					"method", r.Method,
+					"path", r.URL.Path,
+					"duration", timesince.String(),
+				)
+			default:
+				switch {
+				case timesince > time.Second*2:
+					str = timeUrgentWarn.Render(str)
+				case timesince > time.Millisecond*100:
+					str = timeWarn.Render(str)
+				}
+				log.Log(level, fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
+			}
+
+		}
+	})
+}
+
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		allowedOrigins := map[string]bool{
+			s.BaseURL:               true,
+			"http://localhost:5173": true, // Vite default
+		}
+
+		if allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error("Panic recovered", "error", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		}()
 		next.ServeHTTP(w, r)
 	})
 }
