@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -32,6 +33,8 @@ func main() {
 	}
 
 	if cfg.Env == "production" {
+		wrapper := &SeverityWrapper{Outer: os.Stderr}
+		log.SetOutput(wrapper)
 		log.SetFormatter(log.JSONFormatter)
 	}
 
@@ -97,4 +100,37 @@ func run(ctx context.Context, cfg *config.Config) error {
 
 	log.Info("Server exiting")
 	return nil
+}
+
+// SeverityWrapper intercepts the log output to rename the "level" field.
+type SeverityWrapper struct {
+	Outer *os.File
+}
+
+func (w *SeverityWrapper) Write(p []byte) (n int, err error) {
+	// 1. Unmarshal the original JSON produced by the logger
+	var data map[string]interface{}
+	if err := json.Unmarshal(p, &data); err != nil {
+		// If it's not valid JSON, just write the original bytes
+		return w.Outer.Write(p)
+	}
+
+	// 2. Rename the "level" field to "severity"
+	if level, ok := data["level"]; ok {
+		data["severity"] = level
+		delete(data, "level")
+	}
+
+	// 3. Re-marshal the modified map
+	modifiedJSON, err := json.Marshal(data)
+	if err != nil {
+		return 0, err
+	}
+
+	// 4. Write the modified JSON with a newline
+	modifiedJSON = append(modifiedJSON, '\n')
+	_, err = w.Outer.Write(modifiedJSON)
+
+	// Return the original length to satisfy io.Writer
+	return len(p), err
 }
