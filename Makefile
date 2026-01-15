@@ -39,7 +39,7 @@ GO_FILES=$(shell find . -name '*.go')
 run: build-js
 	@echo "Starting NavalPlan backend (Production Mode)..."
 	# Variables are automatically loaded from .env
-	cd app/backend && go run -mod=vendor main.go --content=./static.min
+	cd app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
 # 2. BUILD: The master build command
 build: build-js
 
@@ -47,7 +47,7 @@ build: build-js
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
 	mkdir -p app/backend/static.min
-	cd app/backend && go run -mod=vendor main.go --content=./static.min
+	cd app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
