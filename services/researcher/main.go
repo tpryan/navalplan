@@ -45,10 +45,17 @@ var guideAgentPrompt string
 //go:embed prompts/discovery_agent.md
 var discoveryAgentPrompt string
 
+type Config struct {
+	Env          string
+	ModelName    string
+	GeminiAPIKey string
+	MapsAPIKey   string
+	Port         string
+}
+
 type Server struct {
-	modelName string
-	apiKey    string
-	timings   sync.Map
+	config  *Config
+	timings sync.Map
 }
 
 func main() {
@@ -57,39 +64,68 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.SetPrefix("agent")
 
+	// Load .env
+	godotenv.Load("../../.env")
+
+	cfg, err := loadConfig(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if cfg.Env == "production" {
+		log.SetFormatter(log.JSONFormatter)
+	}
+
+	log.Info("config", "modelName", cfg.ModelName)
+	log.Info("config", "port", cfg.Port)
+	if len(cfg.MapsAPIKey) > 5 {
+		log.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
+	}
+
 	ctx := context.Background()
-	if err := run(ctx); err != nil {
+	if err := run(ctx, cfg); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(ctx context.Context) error {
-	// Load .env
-	godotenv.Load("../../.env")
-
-	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
-	if mapsKey != "" {
-		if len(mapsKey) > 5 {
-			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", mapsKey[:5]+"...")
-		} else {
-			log.Info("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "SET (short)")
-		}
-	} else {
-		log.Warn("config", "NAVALPLAN_BACKEND_MAPS_API_KEY", "NOT SET")
+func loadConfig(getEnv func(string) string) (*Config, error) {
+	mapsKey := getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY")
+	if mapsKey == "" {
+		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY is not set")
 	}
 
-	// 1. Initialize Gemini Model Config
-	modelName := os.Getenv("NAVALPLAN_AGENT_MODEL")
+	modelName := getEnv("NAVALPLAN_AGENT_MODEL")
 	if modelName == "" {
 		modelName = "gemini-2.0-flash-001"
 	}
 
-	log.Info("config", "modelName", modelName)
+	geminiKey := getEnv("GEMINI_API_KEY")
+	if geminiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY is not set")
+	}
 
+	port := getEnv("PORT")
+	if port == "" {
+		port = getEnv("NAVALPLAN_AGENT_PORT")
+	}
+	if port == "" {
+		port = "8081"
+	}
+
+	cfg := &Config{
+		ModelName:    modelName,
+		GeminiAPIKey: geminiKey,
+		MapsAPIKey:   mapsKey,
+		Port:         port,
+	}
+
+	return cfg, nil
+}
+
+func run(ctx context.Context, cfg *Config) error {
 	srv := &Server{
-		modelName: modelName,
-		apiKey:    os.Getenv("GEMINI_API_KEY"),
-		timings:   sync.Map{},
+		config:  cfg,
+		timings: sync.Map{},
 	}
 
 	researchAgent, err := srv.createResearcherAgent(ctx)
@@ -118,15 +154,6 @@ func run(ctx context.Context) error {
 		SessionService: session.InMemoryService(),
 	}
 
-	// Port handling
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = os.Getenv("NAVALPLAN_AGENT_PORT")
-	}
-	if port == "" {
-		port = "8081" // Default fallback
-	}
-
 	// Create the ADK HTTP Handler
 	adkHandler := adkrest.NewHandler(config, 120*time.Second)
 
@@ -136,13 +163,13 @@ func run(ctx context.Context) error {
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 
-	log.Info("Starting custom server", "port", port)
-	return http.ListenAndServe(":"+port, loggingMiddleware(mux))
+	log.Info("Starting custom server", "port", cfg.Port)
+	return http.ListenAndServe(":"+cfg.Port, loggingMiddleware(mux))
 }
 
 func (s *Server) createModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, s.modelName, &genai.ClientConfig{
-		APIKey: s.apiKey,
+	return gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
+		APIKey: s.config.GeminiAPIKey,
 	})
 }
 
@@ -167,8 +194,7 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 		return nil, err
 	}
 
-	mapsKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
-	placesTool, err := tools.NewPlacesTool(mapsKey)
+	placesTool, err := tools.NewPlacesTool(s.config.MapsAPIKey)
 	if err != nil {
 		return nil, err
 	}
