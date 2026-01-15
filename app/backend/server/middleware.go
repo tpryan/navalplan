@@ -248,7 +248,7 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 		if !strings.Contains(r.URL.Path, "/.well-known") {
 
 			timesince := time.Since(start)
-
+			str := timesince.String()
 			level := slog.LevelInfo
 
 			switch {
@@ -262,7 +262,7 @@ func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", ww.statusCode,
-				"duration", timesince.String(),
+				"duration", str,
 			)
 		}
 	})
