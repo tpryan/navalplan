@@ -50,6 +50,8 @@ steps:
   - '--set-env-vars=NAVALPLAN_BASE_URL=${_NAVALPLAN_BASE_URL}'
   - '--set-env-vars=NAVALPLAN_PORT=${_NAVALPLAN_PORT}'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
+  - '--set-env-vars=ENV=${_ENV}'
+  - '--set-env-vars=NAVALPLAN_CONTENT_DIR=${_NAVALPLAN_CONTENT_DIR}'
   dir: 'app/backend'
 availableSecrets:
   secretManager:
@@ -61,4 +63,6 @@ substitutions:
   _NAVALPLAN_BASE_URL: 'https://plan.wakelog.app'
   _NAVALPLAN_PORT: "8080"
   _NAVALPLAN_AGENT_MODEL: "gemini-2.5-flash"
+  _ENV: "production"
+  _NAVALPLAN_CONTENT_DIR: "./static.min"
 logsBucket: gs://navalplan-logging-bucket
