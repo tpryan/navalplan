@@ -44,7 +44,8 @@ func main() {
 		handler = &server.CloudLoggingHandler{Handler: jsonHandler}
 	} else {
 		// Development: Charmbracelet colorful slog
-		cbLogger := charm.NewWithOptions(os.Stderr, charm.Options{Prefix: "backend"})
+		chOptions := charm.Options{Prefix: "backend", ReportTimestamp: true}
+		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
 		handler = &server.CloudLoggingHandler{Handler: cbLogger}
 	}
 
