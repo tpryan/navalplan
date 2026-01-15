@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"testing"
@@ -59,10 +59,11 @@ func TestObscureString(t *testing.T) {
 
 func TestLoadConfig_ContentDir(t *testing.T) {
 	// Satisfy required checks using t.Setenv (modifies real env for test duration)
-	t.Setenv("NAVALPLAN_OA_CLIENT", "fake-client")
-	t.Setenv("NAVALPLAN_OA_SECRET", "fake-secret")
-	t.Setenv("NAVALPLAN_SYSTEM_KEY", "fake-key")
-	t.Setenv("NAVALPLAN_BACKEND_MAPS_API_KEY", "fake-maps-key")
+	// We use t.Setenv to satisfy the checks inside New() that call os.Getenv/getEnv
+	// Since New calls getEnv, we need to make sure getEnv returns values.
+	// But New() calls getEnv, so we can mock it!
+	// HOWEVER, I changed New() in my previous plan to use getEnv() everywhere.
+	// Let's verify load.go content.
 
 	tests := []struct {
 		name           string
@@ -83,15 +84,28 @@ func TestLoadConfig_ContentDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock getEnv for logic inside loadConfig
+			// Mock getEnv for logic inside New
 			mockGetEnv := func(key string) string {
 				if key == "NAVALPLAN_CONTENT_DIR" {
 					return tt.envValue
 				}
+				// Satisfy required keys
+				if key == "NAVALPLAN_OA_CLIENT" {
+					return "fake-client"
+				}
+				if key == "NAVALPLAN_OA_SECRET" {
+					return "fake-secret"
+				}
+				if key == "NAVALPLAN_SYSTEM_KEY" {
+					return "fake-key"
+				}
+				if key == "NAVALPLAN_BACKEND_MAPS_API_KEY" {
+					return "fake-maps-key"
+				}
 				return ""
 			}
 
-			cfg, err := loadConfig(mockGetEnv)
+			cfg, err := New(mockGetEnv)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedResult, cfg.ContentDir)
 		})
