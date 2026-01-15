@@ -38,6 +38,17 @@ func main() {
 		log.SetFormatter(log.JSONFormatter)
 	}
 
+	log.Info("config", "Env", cfg.Env)
+	log.Info("config", "Port", cfg.Port)
+	log.Info("config", "ContentDir", cfg.ContentDir)
+	log.Info("config", "DatabaseDSN", cfg.ObscuredDSN)
+	log.Info("config", "GoogleClientID", cfg.GoogleClientID)
+	log.Info("config", "GoogleClientSecret", config.ObscureString(cfg.GoogleClientSecret))
+	log.Info("config", "BaseURL", cfg.BaseURL)
+	log.Info("config", "NavalPlanAgentURL", cfg.NavalPlanAgentURL)
+	log.Info("config", "SystemAPIKey", config.ObscureString(cfg.SystemAPIKey))
+	log.Info("config", "GoogleMapsAPIKey", config.ObscureString(cfg.GoogleMapsAPIKey))
+
 	if err := run(context.Background(), cfg); err != nil {
 		log.Error(err)
 		os.Exit(1)

@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -33,7 +32,6 @@ type Server struct {
 
 // New initializes a new Server with the provided database and configuration.
 func New(db datastore.Store, cfg *config.Config) (*Server, error) {
-	log.SetOutput(os.Stderr)
 	log.SetPrefix("backend")
 
 	if len(cfg.GoogleClientID) > 0 {
