@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,40 +14,55 @@ import (
 	"app/datastore"
 	"app/server"
 
-	"github.com/charmbracelet/log"
+	charm "github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	log.SetPrefix("backend")
 	// Load .env file (try current dir, then project root)
 	godotenv.Load(".env")
 	godotenv.Load("../../.env")
 
 	cfg, err := config.New(os.Getenv)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to load config", "error", err)
+		os.Exit(1)
 	}
+
+	var handler slog.Handler
 
 	if cfg.Env == "production" {
-		wrapper := &SeverityWrapper{Outer: os.Stderr}
-		log.SetOutput(wrapper)
-		log.SetFormatter(log.JSONFormatter)
+		// Production: JSON with Severity mapping
+		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.LevelKey {
+					return slog.Attr{Key: "severity", Value: a.Value}
+				}
+				return a
+			},
+		})
+		handler = &server.CloudLoggingHandler{Handler: jsonHandler}
+	} else {
+		// Development: Charmbracelet colorful slog
+		cbLogger := charm.NewWithOptions(os.Stderr, charm.Options{Prefix: "backend"})
+		handler = &server.CloudLoggingHandler{Handler: cbLogger}
 	}
 
-	log.Info("config", "Env", cfg.Env)
-	log.Info("config", "Port", cfg.Port)
-	log.Info("config", "ContentDir", cfg.ContentDir)
-	log.Info("config", "DatabaseDSN", cfg.ObscuredDSN)
-	log.Info("config", "GoogleClientID", cfg.GoogleClientID)
-	log.Info("config", "GoogleClientSecret", config.ObscureString(cfg.GoogleClientSecret))
-	log.Info("config", "BaseURL", cfg.BaseURL)
-	log.Info("config", "NavalPlanAgentURL", cfg.NavalPlanAgentURL)
-	log.Info("config", "SystemAPIKey", config.ObscureString(cfg.SystemAPIKey))
-	log.Info("config", "GoogleMapsAPIKey", config.ObscureString(cfg.GoogleMapsAPIKey))
+	slog.SetDefault(slog.New(handler))
+
+	slog.Info("config", "Env", cfg.Env)
+	slog.Info("config", "Port", cfg.Port)
+	slog.Info("config", "ContentDir", cfg.ContentDir)
+	slog.Info("config", "DatabaseDSN", cfg.ObscuredDSN)
+	slog.Info("config", "GoogleClientID", cfg.GoogleClientID)
+	slog.Info("config", "GoogleClientSecret", config.ObscureString(cfg.GoogleClientSecret))
+	slog.Info("config", "BaseURL", cfg.BaseURL)
+	slog.Info("config", "NavalPlanAgentURL", cfg.NavalPlanAgentURL)
+	slog.Info("config", "SystemAPIKey", config.ObscureString(cfg.SystemAPIKey))
+	slog.Info("config", "GoogleMapsAPIKey", config.ObscureString(cfg.GoogleMapsAPIKey))
 
 	if err := run(context.Background(), cfg); err != nil {
-		log.Error(err)
+		slog.Error("Application error", "error", err)
 		os.Exit(1)
 	}
 }
@@ -78,8 +93,8 @@ func run(ctx context.Context, cfg *config.Config) error {
 
 	errChan := make(chan error, 1)
 	go func() {
-		log.Infof("NavalPlan starting on port %s...", cfg.Port)
-		log.Infof("Serving static content from: %s", cfg.ContentDir)
+		slog.Info(fmt.Sprintf("NavalPlan starting on port %s...", cfg.Port))
+		slog.Info(fmt.Sprintf("Serving static content from: %s", cfg.ContentDir))
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
@@ -92,9 +107,9 @@ func run(ctx context.Context, cfg *config.Config) error {
 
 	select {
 	case <-quit:
-		log.Info("Shutting down server...")
+		slog.Info("Shutting down server...")
 	case <-ctx.Done():
-		log.Info("Context cancelled, shutting down...")
+		slog.Info("Context cancelled, shutting down...")
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
 	}
@@ -106,39 +121,6 @@ func run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
-	log.Info("Server exiting")
+	slog.Info("Server exiting")
 	return nil
-}
-
-// SeverityWrapper intercepts the log output to rename the "level" field.
-type SeverityWrapper struct {
-	Outer *os.File
-}
-
-func (w *SeverityWrapper) Write(p []byte) (n int, err error) {
-	// 1. Unmarshal the original JSON produced by the logger
-	var data map[string]interface{}
-	if err := json.Unmarshal(p, &data); err != nil {
-		// If it's not valid JSON, just write the original bytes
-		return w.Outer.Write(p)
-	}
-
-	// 2. Rename the "level" field to "severity"
-	if level, ok := data["level"]; ok {
-		data["severity"] = level
-		delete(data, "level")
-	}
-
-	// 3. Re-marshal the modified map
-	modifiedJSON, err := json.Marshal(data)
-	if err != nil {
-		return 0, err
-	}
-
-	// 4. Write the modified JSON with a newline
-	modifiedJSON = append(modifiedJSON, '\n')
-	_, err = w.Outer.Write(modifiedJSON)
-
-	// Return the original length to satisfy io.Writer
-	return len(p), err
 }

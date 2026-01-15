@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,8 +16,6 @@ import (
 
 	appcontext "app/context"
 	"app/models"
-
-	"github.com/charmbracelet/log"
 )
 
 type AgentRunRequest struct {
@@ -168,7 +167,8 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 }
 
 func (h *Handler) performStopResearchLogic(stop *models.Stop) {
-	log.Infof("[researcher-agent] Starting research for stop %d", stop.ID)
+	ctx := context.Background()
+	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
 
 	agentURL := h.AgentURL
 	if agentURL == "" {
@@ -179,7 +179,6 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	userID := "system"
 	sessionID := fmt.Sprintf("stop_%d", stop.ID)
 
-	ctx := context.Background()
 	client := h.AgentClient
 
 	// Check for nearby existing research to reuse facilities
@@ -190,7 +189,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
-		log.Errorf("Failed to create agent session: %v", err)
+		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 	} else if respSession != nil {
 		respSession.Body.Close()
 	}
@@ -207,7 +206,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
 	if err == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
-		log.Infof("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID)
+		slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
 		reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 		prompt += " Do not research facilities; I will provide those separately."
 	}
@@ -225,20 +224,20 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Errorf("Failed to call agent: %v", err)
+		slog.ErrorContext(ctx, "Failed to call agent", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Errorf("Agent returned error: %s", body)
+		slog.ErrorContext(ctx, "Agent returned error", "body", string(body))
 		return
 	}
 
 	var events []AgentEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		log.Errorf("Failed to decode agent response: %v", err)
+		slog.ErrorContext(ctx, "Failed to decode agent response", "error", err)
 		return
 	}
 
@@ -251,7 +250,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	}
 
 	if responseText == "" {
-		log.Errorf("No response from agent")
+		slog.ErrorContext(ctx, "No response from agent")
 		return
 	}
 
@@ -259,7 +258,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 
 	var output AgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		log.Errorf("Failed to unmarshal agent JSON output: %v. Raw: %s", err, responseText)
+		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
 		return
 	}
 
@@ -278,13 +277,13 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 			go func(i int) {
 				defer wg.Done()
 				f := facilities[i]
-				log.Infof("Geocoding facility: %s near %s", f.Name, stop.LocationName)
+				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility: %s near %s", f.Name, stop.LocationName))
 				lat, lng, err := GeocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
 				if err == nil {
 					facilities[i].Latitude = lat
 					facilities[i].Longitude = lng
 				} else {
-					log.Warnf("Failed to geocode facility %s: %v", f.Name, err)
+					slog.WarnContext(ctx, fmt.Sprintf("Failed to geocode facility %s", f.Name), "error", err)
 				}
 			}(i)
 		}
@@ -311,9 +310,9 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	}
 
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
-		log.Errorf("Failed to save briefing: %v", err)
+		slog.ErrorContext(ctx, "Failed to save briefing", "error", err)
 	}
-	log.Infof("Briefing saved for stop %d", stop.ID)
+	slog.InfoContext(ctx, fmt.Sprintf("Briefing saved for stop %d", stop.ID))
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +393,8 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	})
 
 	go func() {
-		log.Infof("[research-coordinator] Starting full research for voyage %d", voyageID)
+		ctx := context.Background()
+		slog.InfoContext(ctx, fmt.Sprintf("[research-coordinator] Starting full research for voyage %d", voyageID))
 
 		var wg sync.WaitGroup
 
@@ -402,7 +402,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			log.Infof("Starting guide research for voyage %d", voyageID)
+			slog.InfoContext(ctx, fmt.Sprintf("Starting guide research for voyage %d", voyageID))
 			h.performGuideResearch(voyage)
 		}()
 
@@ -413,12 +413,12 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			go func(s models.Stop) {
 				defer wg.Done()
 				defer func() { <-h.ResearchSem }() // Release slot
-				log.Infof("Starting stop research for stop %d", s.ID)
+				slog.InfoContext(ctx, fmt.Sprintf("Starting stop research for stop %d", s.ID))
 				h.performStopResearchLogic(&s)
 			}(stop)
 		}
 
 		wg.Wait()
-		log.Infof("Full research complete for voyage %d", voyageID)
+		slog.InfoContext(ctx, fmt.Sprintf("Full research complete for voyage %d", voyageID))
 	}()
 }

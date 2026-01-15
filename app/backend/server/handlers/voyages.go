@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	appcontext "app/context"
 	"app/models"
-
-	"github.com/charmbracelet/log"
 )
 
 // EnableSharing generates a public share token for a voyage.
@@ -39,7 +38,7 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.DB.UpdateVoyageSharing(r.Context(), id, true)
 	if err != nil {
-		log.Error("Failed to enable sharing", "voyage_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to enable sharing", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -77,7 +76,7 @@ func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.DB.UpdateVoyageSharing(r.Context(), id, false); err != nil {
-		log.Error("Failed to disable sharing", "voyage_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to disable sharing", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -112,7 +111,7 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 
 	stops, err := h.DB.ListStops(r.Context(), v.ID, 0, 0)
 	if err != nil {
-		log.Error("Failed to list public stops", "voyage_id", v.ID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to list public stops", "voyage_id", v.ID, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -141,7 +140,7 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 
 	voyages, err := h.DB.ListVoyages(r.Context(), person.ID, limit, offset)
 	if err != nil {
-		log.Error("Failed to list voyages", "person_id", person.ID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to list voyages", "person_id", person.ID, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -184,7 +183,7 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.CreateVoyage(r.Context(), &v); err != nil {
-		log.Error("Failed to create voyage", "err", err)
+		slog.ErrorContext(r.Context(), "Failed to create voyage", "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -259,7 +258,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	v.PersonID = person.ID // Ensure PersonID isn't changed/spoofed in body
 
 	if err := h.DB.UpdateVoyage(r.Context(), &v); err != nil {
-		log.Error("Failed to update voyage", "voyage_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to update voyage", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -295,7 +294,7 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.DeleteVoyage(r.Context(), id); err != nil {
-		log.Error("Failed to delete voyage", "voyage_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to delete voyage", "voyage_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}

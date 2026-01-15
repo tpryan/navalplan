@@ -1,13 +1,14 @@
 package server
 
 import (
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"app/config"
 	"app/datastore"
 	"app/server/handlers"
 
-	"github.com/charmbracelet/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -34,9 +35,9 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		} else {
 			prefix = cfg.GoogleClientID
 		}
-		log.Infof("Initializing server with Google Client ID prefix: %s... (total length: %d)", prefix, len(cfg.GoogleClientID))
+		slog.Info(fmt.Sprintf("Initializing server with Google Client ID prefix: %s... (total length: %d)", prefix, len(cfg.GoogleClientID)))
 	} else {
-		log.Warn("Initializing server with EMPTY Google Client ID!")
+		slog.Warn("Initializing server with EMPTY Google Client ID!")
 	}
 
 	h := handlers.New(db, cfg.ContentDir, cfg.NavalPlanAgentURL)

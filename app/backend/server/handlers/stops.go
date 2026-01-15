@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	appcontext "app/context"
 	"app/models"
-
-	"github.com/charmbracelet/log"
 )
 
 func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +47,7 @@ func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
 
 	stops, err := h.DB.ListStops(r.Context(), voyageID, limit, offset)
 	if err != nil {
-		log.Error("Failed to list stops", "voyage_id", voyageID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to list stops", "voyage_id", voyageID, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -115,7 +114,7 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.CreateStop(r.Context(), &s); err != nil {
-		log.Error("Failed to create stop", "err", err)
+		slog.ErrorContext(r.Context(), "Failed to create stop", "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -167,7 +166,7 @@ func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
 	s.VoyageID = existingStop.VoyageID
 
 	if err := h.DB.UpdateStop(r.Context(), &s); err != nil {
-		log.Error("Failed to update stop", "stop_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to update stop", "stop_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -209,7 +208,7 @@ func (h *Handler) DeleteStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.DeleteStop(r.Context(), id); err != nil {
-		log.Error("Failed to delete stop", "stop_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to delete stop", "stop_id", id, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
