@@ -127,6 +127,7 @@ function initApp() {
   initMap();
   initUI();
   initAdminUI();
+  initOnboarding();
   loadVoyages();
 }
 
@@ -3546,3 +3547,25 @@ window.revokeInvite = async (email) => {
         alert('Failed to revoke invitation');
     }
 };
+
+function initOnboarding() {
+  const hasSeenFirstTrip = localStorage.getItem('seenFirstTrip');
+  const modalFirstTrip = document.getElementById('modal-first-trip');
+  const btnCloseFirstTrip = document.getElementById('btn-close-first-trip');
+  const modalOverlay = document.getElementById('modal-overlay');
+
+  if (!hasSeenFirstTrip && modalFirstTrip) {
+      setTimeout(() => {
+          modalFirstTrip.classList.remove('hidden');
+          modalOverlay.classList.remove('hidden');
+      }, 1000);
+      
+      if (btnCloseFirstTrip) {
+          btnCloseFirstTrip.addEventListener('click', () => {
+              modalFirstTrip.classList.add('hidden');
+              modalOverlay.classList.add('hidden');
+              localStorage.setItem('seenFirstTrip', 'true');
+          });
+      }
+  }
+}
