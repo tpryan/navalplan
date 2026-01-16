@@ -1697,7 +1697,23 @@ async function initMap() {
       try {
           const response = await geocoder.geocode({ location: e.latLng });
           if (response.results[0]) {
-              locationName = response.results[0].formatted_address;
+              const r = response.results[0];
+              locationName = r.formatted_address;
+              
+              // Use Town/Region logic similar to Map Center
+              const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
+              const locality = getComp('locality') || getComp('sublocality'); 
+              const region = getComp('administrative_area_level_1');
+              const country = getComp('country');
+              
+              if (locality && country) {
+                  locationName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
+              } else if (region && country) {
+                  locationName = `${region}, ${country}`;
+              } else if (country) {
+                  locationName = country;
+              }
+
               if (response.results[0].plus_code) {
                   const pc = response.results[0].plus_code;
                   preciseLocation = pc.compound_code || pc.global_code || "";
