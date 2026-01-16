@@ -2,10 +2,10 @@ package tools
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/tpryan/openmeteogo"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 )
@@ -83,26 +83,34 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 	weatherOpts := wp.buildWeatherOptions(args.Latitude, args.Longitude, targetDate, isSeasonal)
 	marineOpts := wp.buildMarineOptions(args.Latitude, args.Longitude, targetDate)
 
-	// Fetch Data (Parallel)
+	// Fetch Data (Parallel using errgroup)
 	var weather, marine *openmeteogo.WeatherData
-	var weatherErr, marineErr error
-	var wg sync.WaitGroup
-	wg.Add(2)
+	var marineErr error // We want to tolerate marine errors, so we don't return them from the group
 
-	go func() {
-		defer wg.Done()
-		weather, weatherErr = wp.client.Get(weatherOpts)
-	}()
+	g, _ := errgroup.WithContext(ctx)
 
-	go func() {
-		defer wg.Done()
-		marine, marineErr = wp.client.Get(marineOpts)
-	}()
+	// Fetch Weather (Critical)
+	g.Go(func() error {
+		var err error
+		weather, err = wp.client.Get(weatherOpts)
+		if err != nil {
+			return fmt.Errorf("weather API error: %w", err)
+		}
+		return nil
+	})
 
-	wg.Wait()
+	// Fetch Marine (Optional)
+	g.Go(func() error {
+		var err error
+		marine, err = wp.client.Get(marineOpts)
+		if err != nil {
+			marineErr = err // Capture error but don't fail the group
+		}
+		return nil
+	})
 
-	if weatherErr != nil {
-		return WeatherResult{}, fmt.Errorf("weather API error: %w", weatherErr)
+	if err := g.Wait(); err != nil {
+		return WeatherResult{}, err
 	}
 
 	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
