@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/nathan-osman/go-sunrise"
@@ -37,19 +38,20 @@ type SunriseProvider struct {
 }
 
 // NewSunriseTool creates a new ADK tool for calculating sunrise and sunset times.
-func NewSunriseTool(apiKey string) (tool.Tool, error) {
+func NewSunriseTool(apiKey string) (tool.Tool, *SunriseProvider, error) {
 	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
 	if err != nil {
-		return nil, fmt.Errorf("creating maps client: %w", err)
+		return nil, nil, fmt.Errorf("creating maps client: %w", err)
 	}
 
 	sp := &SunriseProvider{
 		client: c,
 	}
-	return functiontool.New(functiontool.Config{
+	t, err := functiontool.New(functiontool.Config{
 		Name:        "get_sunrise_sunset",
 		Description: "Retrieves sunrise and sunset times for a specific location and date. Returns times in the location's local timezone.",
 	}, sp.GetSunriseSunset)
+	return t, sp, err
 }
 
 func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) (SunriseResult, error) {
@@ -67,7 +69,10 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 		targetDate.Day(),
 	)
 
-	// 2. Fetch Actual Timezone
+	// 2. Fetch Actual Timezone with Fallback
+	var loc *time.Location
+	var timeZoneID string
+
 	tzReq := &maps.TimezoneRequest{
 		Location:  &maps.LatLng{Lat: args.Latitude, Lng: args.Longitude},
 		Timestamp: targetDate, // Use target date for correct DST
@@ -75,18 +80,17 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 
 	tzResult, err := sp.client.Timezone(context.Background(), tzReq)
 	if err != nil {
-		return SunriseResult{}, fmt.Errorf("timezone API error: %w", err)
+		// Fallback to LMT (Local Mean Time) approximation
+		// Offset = Round(Longitude / 15)
+		offsetHours := int(math.Round(args.Longitude / 15.0))
+		loc = time.FixedZone("LMT", offsetHours*3600)
+		timeZoneID = "LMT (Approximate)"
+	} else {
+		// Use API result
+		totalOffsetSeconds := tzResult.DstOffset + tzResult.RawOffset
+		loc = time.FixedZone(tzResult.TimeZoneName, totalOffsetSeconds)
+		timeZoneID = tzResult.TimeZoneID
 	}
-
-	// 3. Construct Time Location
-	// The API returns DstOffset and RawOffset in seconds.
-	// We can construct a fixed zone, or load the location if ID is standard.
-	// Loading location by ID is safer for edge cases but requires local tzdata.
-	// For simplicity and robustness without relying on local system tzdata for all world zones,
-	// we will construct a FixedZone based on the total offset at that timestamp.
-
-	totalOffsetSeconds := tzResult.DstOffset + tzResult.RawOffset
-	loc := time.FixedZone(tzResult.TimeZoneName, totalOffsetSeconds)
 
 	localRise := rise.In(loc)
 	localSet := set.In(loc)
@@ -97,6 +101,6 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 		Date:     args.Date,
 		Sunrise:  localRise.Format(timeFmt),
 		Sunset:   localSet.Format(timeFmt),
-		TimeZone: tzResult.TimeZoneID,
+		TimeZone: timeZoneID,
 	}, nil
 }
