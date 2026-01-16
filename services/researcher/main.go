@@ -4,14 +4,16 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/log"
+	charm "github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
+	"github.com/tpryan/navalplan/services/researcher/logging"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -27,8 +29,6 @@ import (
 )
 
 var (
-	timeWarn            = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00"))
-	timeUrgentWarn      = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 	thresholdWarn       = time.Second * 5
 	thresholdUrgentWarn = time.Second * 30
 )
@@ -47,6 +47,7 @@ var discoveryAgentPrompt string
 
 type Config struct {
 	Env          string
+	Project      string
 	ModelName    string
 	GeminiAPIKey string
 	MapsAPIKey   string
@@ -76,32 +77,53 @@ func (s *Server) Close() {
 }
 
 func main() {
-	// Configure charmbracelet/log
-	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel)
-	log.SetPrefix("agent")
-
-	// Load .env
+	// Load .env file (try current dir, then project root)
+	godotenv.Load(".env")
 	godotenv.Load("../../.env")
 
 	cfg, err := loadConfig(os.Getenv)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to load config", "error", err)
+		os.Exit(1)
 	}
+
+	var handler slog.Handler
 
 	if cfg.Env == "production" {
-		log.SetFormatter(log.JSONFormatter)
+		// Production: JSON with Severity mapping
+		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			AddSource: true,
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.MessageKey {
+					a.Key = "message"
+				} else if a.Key == slog.SourceKey {
+					a.Key = "logging.googleapis.com/sourceLocation"
+				} else if a.Key == slog.LevelKey {
+					a.Key = "severity"
+				}
+				return a
+			},
+		})
+		handler = &logging.CloudLoggingHandler{Handler: jsonHandler, FormatMessage: true}
+	} else {
+		// Development: Charmbracelet colorful slog
+		chOptions := charm.Options{Prefix: "agent", ReportTimestamp: true, Level: charm.DebugLevel}
+		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
+		handler = &logging.CloudLoggingHandler{Handler: cbLogger}
 	}
 
-	log.Info("config", "modelName", cfg.ModelName)
-	log.Info("config", "port", cfg.Port)
+	slog.SetDefault(slog.New(handler))
+
+	slog.Info("config", "modelName", cfg.ModelName)
+	slog.Info("config", "port", cfg.Port)
 	if len(cfg.MapsAPIKey) > 5 {
-		log.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
+		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
 	}
 
 	ctx := context.Background()
 	if err := run(ctx, cfg); err != nil {
-		log.Fatal(err)
+		slog.Error("Application error", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -129,7 +151,16 @@ func loadConfig(getEnv func(string) string) (*Config, error) {
 		port = "8081"
 	}
 
+	env := getEnv("ENV")
+	if env == "" {
+		env = "development"
+	}
+
+	project := getEnv("GOOGLE_CLOUD_PROJECT")
+
 	cfg := &Config{
+		Env:          env,
+		Project:      project,
 		ModelName:    modelName,
 		GeminiAPIKey: geminiKey,
 		MapsAPIKey:   mapsKey,
@@ -181,8 +212,9 @@ func run(ctx context.Context, cfg *Config) error {
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 
-	log.Info("Starting custom server", "port", cfg.Port)
-	return http.ListenAndServe(":"+cfg.Port, loggingMiddleware(mux))
+	slog.Info("Starting custom server", "port", cfg.Port)
+	// Apply Trace Middleware then Logging Middleware
+	return http.ListenAndServe(":"+cfg.Port, traceMiddleware(cfg.Project, loggingMiddleware(mux)))
 }
 
 func (s *Server) createModel(ctx context.Context) (model.LLM, error) {
@@ -319,16 +351,7 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 	if startTime, ok := s.timings.LoadAndDelete(ctx.FunctionCallID()); ok {
 		timesince := time.Since(startTime.(time.Time))
 		str := timesince.String()
-
-		switch {
-		case timesince > thresholdUrgentWarn:
-			str = timeUrgentWarn.Render(str)
-		case timesince > thresholdWarn:
-			str = timeWarn.Render(str)
-
-		}
-
-		log.Debug(fmt.Sprintf("tool:%s  %s", t.Name(), str))
+		slog.Debug("tool execution", "tool", t.Name(), "duration", str)
 	}
 	return result, nil
 }
@@ -345,6 +368,12 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -354,17 +383,43 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			timesince := time.Since(start)
 			str := timesince.String()
 
-			switch {
-			case timesince > time.Second*2:
-				str = timeUrgentWarn.Render(str)
-			case timesince > time.Millisecond*100:
-				str = timeWarn.Render(str)
-
+			level := slog.LevelInfo
+			if ww.statusCode >= 400 {
+				level = slog.LevelWarn
+			}
+			if ww.statusCode >= 500 {
+				level = slog.LevelError
 			}
 
-			log.Info(fmt.Sprintf("%s %s %s %d %s", r.Method, r.URL.Path, r.RemoteAddr, ww.statusCode, str))
+			slog.Log(r.Context(), level, "Request handled",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.statusCode,
+				"duration", str,
+				"remote_addr", r.RemoteAddr,
+			)
 		}()
 
 		next.ServeHTTP(ww, r)
+	})
+}
+
+func traceMiddleware(projectID string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+		traceParts := strings.Split(traceHeader, "/")
+		if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+			traceID := traceParts[0]
+			var trace string
+			if projectID != "" {
+				trace = fmt.Sprintf("projects/%s/traces/%s", projectID, traceID)
+			} else {
+				trace = traceID
+			}
+			ctx := logging.AddTraceToContext(r.Context(), trace)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
