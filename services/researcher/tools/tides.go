@@ -92,27 +92,28 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 }
 
 func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
-	stationOpts := noaago.NewStationOptionsBuilder().
-		Nearby(lat, lng, DefaultSearchRadius).
-		Type(noaago.StationType("tidepredictions")).
-		Build()
+	for radius := DefaultSearchRadius; radius <= 10*DefaultSearchRadius; radius += DefaultSearchRadius {
+		stationOpts := noaago.NewStationOptionsBuilder().
+			Nearby(lat, lng, float64(radius)).
+			Type(noaago.StationType("tidepredictions")).
+			Build()
 
-	stationsResp, err := tp.client.FindStations(stationOpts)
-	if err != nil {
-		return nil, fmt.Errorf("searching stations: %w", err)
+		stationsResp, err := tp.client.FindStations(stationOpts)
+		if err != nil {
+			return nil, fmt.Errorf("searching stations: %w", err)
+		}
+
+		if stationsResp.Count > 0 && len(stationsResp.Stations) > 0 {
+			// Limit to checking 5 closest stations
+			limit := MaxStationsToCheck
+			if len(stationsResp.Stations) < limit {
+				limit = len(stationsResp.Stations)
+			}
+			return stationsResp.Stations[:limit], nil
+		}
 	}
 
-	if stationsResp.Count == 0 || len(stationsResp.Stations) == 0 {
-		return nil, nil
-	}
-
-	// Limit to checking 5 closest stations
-	limit := MaxStationsToCheck
-	if len(stationsResp.Stations) < limit {
-		limit = len(stationsResp.Stations)
-	}
-
-	return stationsResp.Stations[:limit], nil
+	return nil, nil
 }
 
 func (tp *TideProvider) fetchPredictions(station noaago.Station, dateStr string) ([]TideEvent, error) {
