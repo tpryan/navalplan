@@ -54,25 +54,22 @@ type Config struct {
 	Port         string
 }
 
+type Provider interface {
+	Close() error
+}
+
 type Server struct {
 	config  *Config
 	timings sync.Map
 
-	// Providers
-	placesProvider  *tools.PlacesProvider
-	weatherProvider *tools.WeatherProvider
-	tideProvider    *tools.TideProvider
+	providers []Provider
 }
 
 func (s *Server) Close() {
-	if s.placesProvider != nil {
-		s.placesProvider.Close()
-	}
-	if s.weatherProvider != nil {
-		s.weatherProvider.Close()
-	}
-	if s.tideProvider != nil {
-		s.tideProvider.Close()
+	for _, p := range s.providers {
+		if err := p.Close(); err != nil {
+			slog.Error("Failed to close provider", "error", err)
+		}
 	}
 }
 
@@ -233,13 +230,13 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 	if err != nil {
 		return nil, err
 	}
-	s.weatherProvider = wp
+	s.providers = append(s.providers, wp)
 
 	tideTool, tp, err := tools.NewTideTool()
 	if err != nil {
 		return nil, err
 	}
-	s.tideProvider = tp
+	s.providers = append(s.providers, tp)
 
 	sunriseTool, err := tools.NewSunriseTool(s.config.MapsAPIKey)
 	if err != nil {
@@ -250,7 +247,7 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 	if err != nil {
 		return nil, err
 	}
-	s.placesProvider = pp
+	s.providers = append(s.providers, pp)
 
 	// Create a dedicated model instance
 	m, err := s.createModel(ctx)
