@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/googleapis/gax-go/v2"
 	places "cloud.google.com/go/maps/places/apiv1"
 	"cloud.google.com/go/maps/places/apiv1/placespb"
+	"github.com/googleapis/gax-go/v2"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/api/option"
@@ -124,10 +124,11 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 	fieldMaskHeader := strings.Join(fieldsToRequest, ",")
 
 	req := &placespb.SearchTextRequest{
-		TextQuery:    args.Query,
-		LocationBias: locationBias,
-		OpenNow:      args.OpenNow,
-		MinRating:    args.MinRating,
+		TextQuery:      args.Query,
+		LocationBias:   locationBias,
+		OpenNow:        args.OpenNow,
+		MinRating:      args.MinRating,
+		MaxResultCount: 5,
 	}
 
 	// Append FieldMask to context
@@ -139,9 +140,6 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 	}
 
 	placesList := resp.Places
-	if len(placesList) > 10 {
-		placesList = placesList[:10]
-	}
 
 	var results []PlaceResult
 	for _, pt := range placesList {
