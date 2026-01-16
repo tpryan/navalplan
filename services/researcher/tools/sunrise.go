@@ -1,13 +1,14 @@
 package tools
 
 import (
+	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/nathan-osman/go-sunrise"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"googlemaps.github.io/maps"
 )
 
 // SunriseArgs defines the arguments for the get_sunrise_sunset tool.
@@ -19,20 +20,35 @@ type SunriseArgs struct {
 
 // SunriseResult defines the response structure for the get_sunrise_sunset tool.
 type SunriseResult struct {
-	Date    string `json:"date"`
-	Sunrise string `json:"sunrise"`
-	Sunset  string `json:"sunset"`
+	Date     string `json:"date"`
+	Sunrise  string `json:"sunrise"`
+	Sunset   string `json:"sunset"`
+	TimeZone string `json:"time_zone"`
+}
+
+// TimezoneClient defines the interface for the Google Maps Timezone API client.
+type TimezoneClient interface {
+	Timezone(ctx context.Context, r *maps.TimezoneRequest) (*maps.TimezoneResult, error)
 }
 
 // SunriseProvider implements the get_sunrise_sunset tool.
-type SunriseProvider struct{}
+type SunriseProvider struct {
+	client TimezoneClient
+}
 
 // NewSunriseTool creates a new ADK tool for calculating sunrise and sunset times.
-func NewSunriseTool() (tool.Tool, error) {
-	sp := &SunriseProvider{}
+func NewSunriseTool(apiKey string) (tool.Tool, error) {
+	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("creating maps client: %w", err)
+	}
+
+	sp := &SunriseProvider{
+		client: c,
+	}
 	return functiontool.New(functiontool.Config{
 		Name:        "get_sunrise_sunset",
-		Description: "Retrieves sunrise and sunset times for a specific location and date.",
+		Description: "Retrieves sunrise and sunset times for a specific location and date. Returns times in the location's local timezone.",
 	}, sp.GetSunriseSunset)
 }
 
@@ -42,7 +58,7 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 		return SunriseResult{}, fmt.Errorf("%w: %v", ErrInvalidDate, err)
 	}
 
-	// Calculate Sunrise/Sunset (Returns UTC)
+	// 1. Calculate Sunrise/Sunset (Returns UTC)
 	rise, set := sunrise.SunriseSunset(
 		args.Latitude,
 		args.Longitude,
@@ -51,19 +67,36 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 		targetDate.Day(),
 	)
 
-	// Approximate Local Timezone (Nautical Time / Local Mean Time)
-	// Offset = Round(Longitude / 15)
-	offsetHours := int(math.Round(args.Longitude / 15.0))
-	zone := time.FixedZone("LMT", offsetHours*3600)
+	// 2. Fetch Actual Timezone
+	tzReq := &maps.TimezoneRequest{
+		Location:  &maps.LatLng{Lat: args.Latitude, Lng: args.Longitude},
+		Timestamp: targetDate, // Use target date for correct DST
+	}
 
-	localRise := rise.In(zone)
-	localSet := set.In(zone)
+	tzResult, err := sp.client.Timezone(context.Background(), tzReq)
+	if err != nil {
+		return SunriseResult{}, fmt.Errorf("timezone API error: %w", err)
+	}
+
+	// 3. Construct Time Location
+	// The API returns DstOffset and RawOffset in seconds.
+	// We can construct a fixed zone, or load the location if ID is standard.
+	// Loading location by ID is safer for edge cases but requires local tzdata.
+	// For simplicity and robustness without relying on local system tzdata for all world zones,
+	// we will construct a FixedZone based on the total offset at that timestamp.
+
+	totalOffsetSeconds := tzResult.DstOffset + tzResult.RawOffset
+	loc := time.FixedZone(tzResult.TimeZoneName, totalOffsetSeconds)
+
+	localRise := rise.In(loc)
+	localSet := set.In(loc)
 
 	timeFmt := "2006-01-02T15:04:05"
 
 	return SunriseResult{
-		Date:    args.Date,
-		Sunrise: localRise.Format(timeFmt),
-		Sunset:  localSet.Format(timeFmt),
+		Date:     args.Date,
+		Sunrise:  localRise.Format(timeFmt),
+		Sunset:   localSet.Format(timeFmt),
+		TimeZone: tzResult.TimeZoneID,
 	}, nil
 }
