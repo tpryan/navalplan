@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/tpryan/navalplan/services/researcher/config"
 )
 
 func TestCreateResearcherAgent(t *testing.T) {
@@ -23,7 +25,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 	}
 
 	srv := &Server{
-		config: &Config{
+		config: &config.Config{
 			ModelName:    modelName,
 			GeminiAPIKey: apiKey,
 			MapsAPIKey:   mapsKey,
@@ -31,7 +33,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 		timings: sync.Map{},
 	}
 
-	a, err := srv.createResearcherAgent(context.Background())
+	a, err := srv.createStopAgent(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to create researcher agent: %v", err)
 	}

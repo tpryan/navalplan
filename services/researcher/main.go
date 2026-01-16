@@ -11,14 +11,13 @@ import (
 	"sync"
 	"time"
 
-	charm "github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
+	"github.com/tpryan/navalplan/services/researcher/config"
 	"github.com/tpryan/navalplan/services/researcher/logging"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
-	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/session"
@@ -31,32 +30,23 @@ import (
 //go:embed prompts/search_specialist.md
 var searchSpecialistPrompt string
 
-//go:embed prompts/researcher_agent.md
-var researcherAgentPrompt string
+//go:embed prompts/stop_agent.md
+var stopAgentPrompt string
 
-//go:embed prompts/guide_agent.md
-var guideAgentPrompt string
+//go:embed prompts/voyage_agent.md
+var voyageAgentPrompt string
 
 //go:embed prompts/discovery_agent.md
 var discoveryAgentPrompt string
 
 const maxOutputTokens = 65536
 
-type Config struct {
-	Env          string
-	Project      string
-	ModelName    string
-	GeminiAPIKey string
-	MapsAPIKey   string
-	Port         string
-}
-
 type Provider interface {
 	Close() error
 }
 
 type Server struct {
-	config  *Config
+	config  *config.Config
 	timings sync.Map
 
 	providers []Provider
@@ -75,39 +65,13 @@ func main() {
 	godotenv.Load(".env")
 	godotenv.Load("../../.env")
 
-	cfg, err := loadConfig(os.Getenv)
+	cfg, err := config.New(os.Getenv)
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
 		os.Exit(1)
 	}
 
-	var handler slog.Handler
-
-	if cfg.Env == "production" {
-		// Production: JSON with Severity mapping
-		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			AddSource: true,
-			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				switch a.Key {
-				case slog.MessageKey:
-					a.Key = "message"
-				case slog.SourceKey:
-					a.Key = "logging.googleapis.com/sourceLocation"
-				case slog.LevelKey:
-					a.Key = "severity"
-				}
-				return a
-			},
-		})
-		handler = &logging.CloudLoggingHandler{Handler: jsonHandler, FormatMessage: true}
-	} else {
-		// Development: Charmbracelet colorful slog
-		chOptions := charm.Options{Prefix: "agent", ReportTimestamp: true, Level: charm.DebugLevel}
-		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
-		handler = &logging.CloudLoggingHandler{Handler: cbLogger}
-	}
-
-	slog.SetDefault(slog.New(handler))
+	logging.InitLogging(cfg.Env)
 
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
@@ -122,64 +86,21 @@ func main() {
 	}
 }
 
-func loadConfig(getEnv func(string) string) (*Config, error) {
-	mapsKey := getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY")
-	if mapsKey == "" {
-		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY is not set")
-	}
-
-	modelName := getEnv("NAVALPLAN_AGENT_MODEL")
-	if modelName == "" {
-		modelName = "gemini-2.0-flash-001"
-	}
-
-	geminiKey := getEnv("GEMINI_API_KEY")
-	if geminiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY is not set")
-	}
-
-	port := getEnv("PORT")
-	if port == "" {
-		port = getEnv("NAVALPLAN_AGENT_PORT")
-	}
-	if port == "" {
-		port = "8081"
-	}
-
-	env := getEnv("ENV")
-	if env == "" {
-		env = "development"
-	}
-
-	project := getEnv("GOOGLE_CLOUD_PROJECT")
-
-	cfg := &Config{
-		Env:          env,
-		Project:      project,
-		ModelName:    modelName,
-		GeminiAPIKey: geminiKey,
-		MapsAPIKey:   mapsKey,
-		Port:         port,
-	}
-
-	return cfg, nil
-}
-
-func run(ctx context.Context, cfg *Config) error {
+func run(ctx context.Context, cfg *config.Config) error {
 	srv := &Server{
 		config:  cfg,
 		timings: sync.Map{},
 	}
 	defer srv.Close()
 
-	researchAgent, err := srv.createResearcherAgent(ctx)
-	if err != nil {
-		return fmt.Errorf("creating researcher agent: %w", err)
-	}
-
-	guideAgent, err := srv.createGuideAgent(ctx)
+	voyageAgent, err := srv.createVoyageAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating guide agent: %w", err)
+	}
+
+	stopAgent, err := srv.createStopAgent(ctx)
+	if err != nil {
+		return fmt.Errorf("creating researcher agent: %w", err)
 	}
 
 	discoveryAgent, err := srv.createDiscoveryAgent(ctx)
@@ -187,8 +108,7 @@ func run(ctx context.Context, cfg *Config) error {
 		return fmt.Errorf("creating discovery agent: %w", err)
 	}
 
-	// 4. Launch the Server
-	loader, err := agent.NewMultiLoader(researchAgent, guideAgent, discoveryAgent)
+	loader, err := agent.NewMultiLoader(stopAgent, voyageAgent, discoveryAgent)
 	if err != nil {
 		return fmt.Errorf("creating multi loader: %w", err)
 	}
@@ -212,13 +132,34 @@ func run(ctx context.Context, cfg *Config) error {
 	return http.ListenAndServe(":"+cfg.Port, traceMiddleware(cfg.Project, loggingMiddleware(mux)))
 }
 
-func (s *Server) createModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
+func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
+	genConfig := &genai.GenerateContentConfig{
+		MaxOutputTokens: maxOutputTokens,
+		Temperature:     genai.Ptr[float32](0.4),
+	}
+
+	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
 		APIKey: s.config.GeminiAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return llmagent.New(llmagent.Config{
+		Name:        "guide_agent",
+		Model:       m,
+		Description: "A Local Knowledge Expert and Sailing Guide.",
+		Instruction: voyageAgentPrompt,
+		Tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
+		GenerateContentConfig: genConfig,
 	})
 }
 
-func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error) {
+func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](0.4),
@@ -248,7 +189,9 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 	s.providers = append(s.providers, pp)
 
 	// Create a dedicated model instance
-	m, err := s.createModel(ctx)
+	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
+		APIKey: s.config.GeminiAPIKey,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +216,7 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 		Name:        "researcher_agent",
 		Model:       m,
 		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: researcherAgentPrompt,
+		Instruction: stopAgentPrompt,
 		Tools: []tool.Tool{
 			weatherTool,
 			tideTool,
@@ -287,38 +230,15 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 	})
 }
 
-func (s *Server) createGuideAgent(ctx context.Context) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: maxOutputTokens,
-		Temperature:     genai.Ptr[float32](0.4),
-	}
-
-	m, err := s.createModel(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return llmagent.New(llmagent.Config{
-		Name:        "guide_agent",
-		Model:       m,
-		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: guideAgentPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-}
-
 func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
 	}
 
-	m, err := s.createModel(ctx)
+	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
+		APIKey: s.config.GeminiAPIKey,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -399,6 +319,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// traceMiddleware exists to make sure when running on Cloud Run, trace
+// ids are propegated so that you can get debugging and analysis.
 func traceMiddleware(projectID string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
