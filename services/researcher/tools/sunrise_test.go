@@ -64,7 +64,7 @@ func TestGetSunriseSunset(t *testing.T) {
 }
 
 func TestNewSunriseTool(t *testing.T) {
-	tool, err := NewSunriseTool()
+	tool, _, err := NewSunriseTool("dummy-key")
 	if err != nil {
 		t.Fatalf("NewSunriseTool() error = %v", err)
 	}
