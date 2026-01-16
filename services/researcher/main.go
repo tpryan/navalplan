@@ -238,7 +238,7 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 	}
 	s.providers = append(s.providers, tp)
 
-	sunriseTool, err := tools.NewSunriseTool(s.config.MapsAPIKey)
+	sunriseTool, _, err := tools.NewSunriseTool(s.config.MapsAPIKey)
 	if err != nil {
 		return nil, err
 	}
