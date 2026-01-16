@@ -9,6 +9,11 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 )
 
+const (
+	DefaultSearchRadius = 50
+	MaxStationsToCheck  = 5
+)
+
 // TideArgs defines the arguments for the get_tides tool.
 type TideArgs struct {
 	Latitude  float64 `json:"latitude" description:"Decimal latitude"`
@@ -88,7 +93,7 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 
 func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
 	stationOpts := noaago.NewStationOptionsBuilder().
-		Nearby(lat, lng, 50).
+		Nearby(lat, lng, DefaultSearchRadius).
 		Type(noaago.StationType("tidepredictions")).
 		Build()
 
@@ -102,7 +107,7 @@ func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, 
 	}
 
 	// Limit to checking 5 closest stations
-	limit := 5
+	limit := MaxStationsToCheck
 	if len(stationsResp.Stations) < limit {
 		limit = len(stationsResp.Stations)
 	}
