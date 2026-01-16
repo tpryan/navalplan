@@ -17,10 +17,16 @@ func TestCreateResearcherAgent(t *testing.T) {
 		t.Skip("Skipping agent creation test because GEMINI_API_KEY is not set")
 	}
 
+	mapsKey := os.Getenv("MAPS_API_KEY")
+	if mapsKey == "" {
+		mapsKey = "dummy-key"
+	}
+
 	srv := &Server{
 		config: &Config{
 			ModelName:    modelName,
 			GeminiAPIKey: apiKey,
+			MapsAPIKey:   mapsKey,
 		},
 		timings: sync.Map{},
 	}
