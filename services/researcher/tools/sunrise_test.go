@@ -1,8 +1,20 @@
 package tools
 
 import (
+	"context"
 	"testing"
+
+	"googlemaps.github.io/maps"
 )
+
+type mockTimezoneClient struct {
+	res *maps.TimezoneResult
+	err error
+}
+
+func (m *mockTimezoneClient) Timezone(ctx context.Context, r *maps.TimezoneRequest) (*maps.TimezoneResult, error) {
+	return m.res, m.err
+}
 
 func TestGetSunriseSunset(t *testing.T) {
 	tests := []struct {
@@ -21,8 +33,8 @@ func TestGetSunriseSunset(t *testing.T) {
 			// These values are deterministic for the given library and rounding logic
 			expected: SunriseResult{
 				Date:    "2026-05-29",
-				Sunrise: "2026-05-29T04:15:45",
-				Sunset:  "2026-05-29T19:10:19",
+				Sunrise: "2026-05-29T05:15:45", // Adjusted for DST (-4)
+				Sunset:  "2026-05-29T20:10:19", // Adjusted for DST (-4)
 			},
 			expectError: false,
 		},
@@ -39,7 +51,17 @@ func TestGetSunriseSunset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sp := &SunriseProvider{}
+			// Mock client returning America/New_York DST
+			mockClient := &mockTimezoneClient{
+				res: &maps.TimezoneResult{
+					DstOffset:    3600,
+					RawOffset:    -18000,
+					TimeZoneID:   "America/New_York",
+					TimeZoneName: "Eastern Daylight Time",
+				},
+			}
+
+			sp := &SunriseProvider{client: mockClient}
 			got, err := sp.GetSunriseSunset(nil, tt.args)
 
 			if tt.expectError {
