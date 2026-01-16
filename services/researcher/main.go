@@ -28,11 +28,6 @@ import (
 	"google.golang.org/genai"
 )
 
-var (
-	thresholdWarn       = time.Second * 5
-	thresholdUrgentWarn = time.Second * 30
-)
-
 //go:embed prompts/search_specialist.md
 var searchSpecialistPrompt string
 
@@ -44,6 +39,8 @@ var guideAgentPrompt string
 
 //go:embed prompts/discovery_agent.md
 var discoveryAgentPrompt string
+
+const maxOutputTokens = 65536
 
 type Config struct {
 	Env          string
@@ -91,11 +88,12 @@ func main() {
 		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 			AddSource: true,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				if a.Key == slog.MessageKey {
+				switch a.Key {
+				case slog.MessageKey:
 					a.Key = "message"
-				} else if a.Key == slog.SourceKey {
+				case slog.SourceKey:
 					a.Key = "logging.googleapis.com/sourceLocation"
-				} else if a.Key == slog.LevelKey {
+				case slog.LevelKey:
 					a.Key = "severity"
 				}
 				return a
@@ -222,7 +220,7 @@ func (s *Server) createModel(ctx context.Context) (model.LLM, error) {
 
 func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
+		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](0.4),
 	}
 
@@ -291,7 +289,7 @@ func (s *Server) createResearcherAgent(ctx context.Context) (agent.Agent, error)
 
 func (s *Server) createGuideAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
+		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](0.4),
 	}
 
@@ -316,7 +314,7 @@ func (s *Server) createGuideAgent(ctx context.Context) (agent.Agent, error) {
 
 func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: 65536,
+		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
 	}
 
