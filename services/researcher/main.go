@@ -75,9 +75,7 @@ func main() {
 
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
-	if len(cfg.MapsAPIKey) > 5 {
-		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
-	}
+	slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
 
 	ctx := context.Background()
 	if err := run(ctx, cfg); err != nil {
