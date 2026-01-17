@@ -175,10 +175,11 @@ func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
 	}
 	s.providers = append(s.providers, tp)
 
-	sunriseTool, _, err := tools.NewSunriseTool(s.config.MapsAPIKey)
+	sunriseTool, sp, err := tools.NewSunriseTool(s.config.MapsAPIKey)
 	if err != nil {
 		return nil, err
 	}
+	s.providers = append(s.providers, sp)
 
 	placesTool, pp, err := tools.NewPlacesTool(s.config.MapsAPIKey)
 	if err != nil {
