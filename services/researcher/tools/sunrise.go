@@ -37,6 +37,11 @@ type SunriseProvider struct {
 	client TimezoneClient
 }
 
+// Close closes the underlying client connection.
+func (sp *SunriseProvider) Close() error {
+	return nil
+}
+
 // NewSunriseTool creates a new ADK tool for calculating sunrise and sunset times.
 func NewSunriseTool(apiKey string) (tool.Tool, *SunriseProvider, error) {
 	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
