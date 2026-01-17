@@ -1,3 +1,5 @@
+// Package main is the entry point for the researcher service, orchestrating multiple AI agents
+// (Researcher, Guide, Discovery) to assist with sailing voyage planning.
 package main
 
 import (
@@ -28,16 +30,16 @@ import (
 )
 
 //go:embed prompts/search_specialist.md
-var searchSpecialistPrompt string
+var _searchSpecialistPrompt string
 
 //go:embed prompts/stop_agent.md
-var stopAgentPrompt string
+var _stopAgentPrompt string
 
 //go:embed prompts/voyage_agent.md
-var voyageAgentPrompt string
+var _voyageAgentPrompt string
 
 //go:embed prompts/discovery_agent.md
-var discoveryAgentPrompt string
+var _discoveryAgentPrompt string
 
 const maxOutputTokens = 65536
 
@@ -46,8 +48,10 @@ type Provider interface {
 }
 
 type Server struct {
-	config  *config.Config
-	timings sync.Map
+	config *config.Config
+	mu     sync.Mutex
+	// timings stores the start time of tool executions, keyed by function call ID.
+	timings map[string]time.Time
 
 	providers []Provider
 }
@@ -75,7 +79,9 @@ func main() {
 
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
-	slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
+	if len(cfg.MapsAPIKey) > 5 {
+		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
+	}
 
 	ctx := context.Background()
 	if err := run(ctx, cfg); err != nil {
@@ -87,7 +93,7 @@ func main() {
 func run(ctx context.Context, cfg *config.Config) error {
 	srv := &Server{
 		config:  cfg,
-		timings: sync.Map{},
+		timings: make(map[string]time.Time),
 	}
 	defer srv.Close()
 
@@ -147,7 +153,7 @@ func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
 		Name:        "guide_agent",
 		Model:       m,
 		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: voyageAgentPrompt,
+		Instruction: _voyageAgentPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
@@ -200,7 +206,7 @@ func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
 		Name:        "search_specialist",
 		Model:       m,
 		Description: "Finds information on the web (facilities, reviews).",
-		Instruction: searchSpecialistPrompt,
+		Instruction: _searchSpecialistPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
@@ -215,7 +221,7 @@ func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
 		Name:        "researcher_agent",
 		Model:       m,
 		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: stopAgentPrompt,
+		Instruction: _stopAgentPrompt,
 		Tools: []tool.Tool{
 			weatherTool,
 			tideTool,
@@ -246,7 +252,7 @@ func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) 
 		Name:        "discovery_agent",
 		Model:       m,
 		Description: "The Commodore - Global Seasonal Discovery Expert.",
-		Instruction: discoveryAgentPrompt,
+		Instruction: _discoveryAgentPrompt,
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
@@ -257,13 +263,22 @@ func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) 
 }
 
 func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
-	s.timings.Store(ctx.FunctionCallID(), time.Now())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.timings[ctx.FunctionCallID()] = time.Now()
 	return nil, nil
 }
 
 func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
-	if startTime, ok := s.timings.LoadAndDelete(ctx.FunctionCallID()); ok {
-		timesince := time.Since(startTime.(time.Time))
+	s.mu.Lock()
+	startTime, ok := s.timings[ctx.FunctionCallID()]
+	if ok {
+		delete(s.timings, ctx.FunctionCallID())
+	}
+	s.mu.Unlock()
+
+	if ok {
+		timesince := time.Since(startTime)
 		str := timesince.String()
 		slog.Debug("tool execution", "tool", t.Name(), "duration", str)
 	}

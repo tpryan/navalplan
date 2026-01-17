@@ -12,6 +12,8 @@ type CloudLoggingHandler struct {
 	FormatMessage bool
 }
 
+var _ slog.Handler = (*CloudLoggingHandler)(nil)
+
 func (h *CloudLoggingHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.Handler.Enabled(ctx, level)
 }

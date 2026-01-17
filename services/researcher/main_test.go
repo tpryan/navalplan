@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"os"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/tpryan/navalplan/services/researcher/config"
 )
@@ -30,7 +30,7 @@ func TestCreateResearcherAgent(t *testing.T) {
 			GeminiAPIKey: apiKey,
 			MapsAPIKey:   mapsKey,
 		},
-		timings: sync.Map{},
+		timings: make(map[string]time.Time),
 	}
 
 	a, err := srv.createStopAgent(context.Background())
