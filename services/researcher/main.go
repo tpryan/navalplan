@@ -84,30 +84,35 @@ func main() {
 	}
 
 	ctx := context.Background()
-	if err := run(ctx, cfg); err != nil {
-		slog.Error("Application error", "error", err)
-		os.Exit(1)
-	}
-}
-
-func run(ctx context.Context, cfg *config.Config) error {
 	srv := &Server{
 		config:  cfg,
 		timings: make(map[string]time.Time),
 	}
 	defer srv.Close()
 
-	voyageAgent, err := srv.createVoyageAgent(ctx)
+	if err := srv.run(ctx); err != nil {
+		slog.Error("Application error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func (s *Server) run(ctx context.Context) error {
+	researcherTools, err := s.setupTools()
+	if err != nil {
+		return fmt.Errorf("setting up tools: %w", err)
+	}
+
+	voyageAgent, err := s.createVoyageAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating guide agent: %w", err)
 	}
 
-	stopAgent, err := srv.createStopAgent(ctx)
+	stopAgent, err := s.createStopAgent(ctx, researcherTools)
 	if err != nil {
 		return fmt.Errorf("creating researcher agent: %w", err)
 	}
 
-	discoveryAgent, err := srv.createDiscoveryAgent(ctx)
+	discoveryAgent, err := s.createDiscoveryAgent(ctx)
 	if err != nil {
 		return fmt.Errorf("creating discovery agent: %w", err)
 	}
@@ -131,15 +136,23 @@ func run(ctx context.Context, cfg *config.Config) error {
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 
-	slog.Info("Starting custom server", "port", cfg.Port)
+	slog.Info("Starting custom server", "port", s.config.Port)
 	// Apply Trace Middleware then Logging Middleware
-	return http.ListenAndServe(":"+cfg.Port, traceMiddleware(cfg.Project, loggingMiddleware(mux)))
+	return http.ListenAndServe(":"+s.config.Port, traceMiddleware(s.config.Project, loggingMiddleware(mux)))
 }
 
-func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
+type agentConfig struct {
+	name        string
+	description string
+	instruction string
+	tools       []tool.Tool
+	temperature float32
+}
+
+func (s *Server) createAgent(ctx context.Context, acfg *agentConfig) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: maxOutputTokens,
-		Temperature:     genai.Ptr[float32](0.4),
+		Temperature:     genai.Ptr[float32](acfg.temperature),
 	}
 
 	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
@@ -150,25 +163,18 @@ func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
 	}
 
 	return llmagent.New(llmagent.Config{
-		Name:        "guide_agent",
-		Model:       m,
-		Description: "A Local Knowledge Expert and Sailing Guide.",
-		Instruction: _voyageAgentPrompt,
-		Tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
+		Name:                  acfg.name,
+		Model:                 m,
+		Description:           acfg.description,
+		Instruction:           acfg.instruction,
+		Tools:                 acfg.tools,
 		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
 		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
 		GenerateContentConfig: genConfig,
 	})
 }
 
-func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: maxOutputTokens,
-		Temperature:     genai.Ptr[float32](0.4),
-	}
-
+func (s *Server) setupTools() ([]tool.Tool, error) {
 	weatherTool, wp, err := tools.NewWeatherTool()
 	if err != nil {
 		return nil, err
@@ -193,72 +199,55 @@ func (s *Server) createStopAgent(ctx context.Context) (agent.Agent, error) {
 	}
 	s.providers = append(s.providers, pp)
 
-	// Create a dedicated model instance
-	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
-		APIKey: s.config.GeminiAPIKey,
-	})
-	if err != nil {
-		return nil, err
-	}
+	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, nil
+}
 
-	// 2. Define Sub-Agent (Search Specialist)
-	searchAgent, err := llmagent.New(llmagent.Config{
-		Name:        "search_specialist",
-		Model:       m,
-		Description: "Finds information on the web (facilities, reviews).",
-		Instruction: _searchSpecialistPrompt,
-		Tools: []tool.Tool{
+func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
+	return s.createAgent(ctx, &agentConfig{
+		name:        "guide_agent",
+		description: "A Local Knowledge Expert and Sailing Guide.",
+		instruction: _voyageAgentPrompt,
+		tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
-		GenerateContentConfig: genConfig,
+		temperature: 0.4,
+	})
+}
+
+func (s *Server) createStopAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
+	searchAgent, err := s.createAgent(ctx, &agentConfig{
+		name:        "search_specialist",
+		description: "Finds information on the web (facilities, reviews).",
+		instruction: _searchSpecialistPrompt,
+		tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		temperature: 0.4,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating search agent: %w", err)
 	}
 
-	// 3. Define Parent Agent (Researcher / Orchestrator)
-	return llmagent.New(llmagent.Config{
-		Name:        "researcher_agent",
-		Model:       m,
-		Description: "A Virtual Harbourmaster that researches sailing destinations.",
-		Instruction: _stopAgentPrompt,
-		Tools: []tool.Tool{
-			weatherTool,
-			tideTool,
-			sunriseTool,
-			placesTool,
-			agenttool.New(searchAgent, nil),
-		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
-		GenerateContentConfig: genConfig,
+	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
+
+	return s.createAgent(ctx, &agentConfig{
+		name:        "researcher_agent",
+		description: "A Virtual Harbourmaster that researches sailing destinations.",
+		instruction: _stopAgentPrompt,
+		tools:       allTools,
+		temperature: 0.4,
 	})
 }
 
 func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: maxOutputTokens,
-		Temperature:     genai.Ptr[float32](0.2), // Lower temperature for more consistent JSON
-	}
-
-	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
-		APIKey: s.config.GeminiAPIKey,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return llmagent.New(llmagent.Config{
-		Name:        "discovery_agent",
-		Model:       m,
-		Description: "The Commodore - Global Seasonal Discovery Expert.",
-		Instruction: _discoveryAgentPrompt,
-		Tools: []tool.Tool{
+	return s.createAgent(ctx, &agentConfig{
+		name:        "discovery_agent",
+		description: "The Commodore - Global Seasonal Discovery Expert.",
+		instruction: _discoveryAgentPrompt,
+		tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
-		GenerateContentConfig: genConfig,
+		temperature: 0.2,
 	})
 }
 
