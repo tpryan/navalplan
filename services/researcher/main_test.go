@@ -33,7 +33,12 @@ func TestCreateResearcherAgent(t *testing.T) {
 		timings: make(map[string]time.Time),
 	}
 
-	a, err := srv.createStopAgent(context.Background())
+	researcherTools, err := srv.setupTools()
+	if err != nil {
+		t.Fatalf("Failed to setup tools: %v", err)
+	}
+
+	a, err := srv.createStopAgent(context.Background(), researcherTools)
 	if err != nil {
 		t.Fatalf("Failed to create researcher agent: %v", err)
 	}
