@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -44,6 +45,31 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		AgentClient: client,
 		ResearchSem: make(chan struct{}, 10), // Limit to 10 concurrent research tasks globally
 	}
+}
+
+// CheckAgentHealth pings the agent's /healthz endpoint.
+func (h *Handler) CheckAgentHealth(ctx context.Context) error {
+	if h.AgentURL == "" {
+		return nil // Agent not configured, skip check
+	}
+
+	url := h.AgentURL + "/healthz"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := h.AgentClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("agent returned non-200 status: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func cleanJSON(s string) string {

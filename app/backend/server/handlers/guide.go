@@ -259,18 +259,21 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 
 	if responseText == "" {
 		slog.ErrorContext(ctx, "No response from agent")
+		h.saveEmptyGuide(ctx, voyage)
 		return
 	}
 
 	cleanedResponse := cleanJSON(responseText)
 	if cleanedResponse == "" {
 		slog.ErrorContext(ctx, "Agent returned non-JSON response", "response", responseText)
+		h.saveEmptyGuide(ctx, voyage)
 		return
 	}
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(cleanedResponse), &output); err != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", cleanedResponse)
+		h.saveEmptyGuide(ctx, voyage)
 		return
 	}
 
@@ -292,6 +295,23 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		slog.ErrorContext(ctx, "Failed to save voyage guide", "error", err)
 	}
 	slog.InfoContext(ctx, fmt.Sprintf("Voyage guide saved for voyage %d", voyage.ID))
+}
+
+func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *models.Voyage) {
+	guide := &models.VoyageGuide{
+		VoyageID:         voyage.ID,
+		Summary:          "Error: Research agent failed to provide a guide for this location.",
+		SailingSeason:    models.RawJSON([]byte(`{}`)),
+		Hazards:          models.RawJSON([]byte(`{}`)),
+		Hubs:             models.RawJSON([]byte(`[]`)),
+		CharterInfo:      models.RawJSON([]byte(`{}`)),
+		Airports:         models.RawJSON([]byte(`[]`)),
+		CountryInfo:      models.RawJSON([]byte(`{}`)),
+		Currencies:       models.RawJSON([]byte(`[]`)),
+		PointsOfInterest: models.RawJSON([]byte(`[]`)),
+		CreatedAt:        time.Now(),
+	}
+	h.DB.CreateVoyageGuide(ctx, guide)
 }
 
 type VoyageGuideResponse struct {

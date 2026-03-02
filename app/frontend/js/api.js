@@ -220,6 +220,18 @@ export const API = {
         });
         if (!res.ok) throw new Error('Failed to revoke invitation');
         return true;
+    },
+
+    async checkHealth() {
+        try {
+            const res = await fetch('/healthz');
+            if (res.ok) return { ok: true };
+            
+            const text = await res.text();
+            return { ok: false, status: res.status, message: text };
+        } catch (e) {
+            return { ok: false, status: 0, message: 'Backend Connection Lost' };
+        }
     }
   };
 

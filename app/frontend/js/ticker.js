@@ -33,6 +33,21 @@ export class Ticker {
         if (this.interval) clearInterval(this.interval);
         this.container.classList.add('hidden');
         this.isRunning = false;
+        // Reset color
+        if (this.textElement) this.textElement.style.color = '';
+    }
+
+    error(msg) {
+        if (!this.container || !this.textElement) return;
+        this.container.classList.remove('hidden');
+        this.isRunning = true;
+        if (this.interval) clearInterval(this.interval);
+        
+        this.textElement.style.color = 'var(--brand-red, #d9534f)';
+        this.show(msg);
+        
+        // Stop after 5 seconds
+        setTimeout(() => this.stop(), 5000);
     }
 
     push(msg) {

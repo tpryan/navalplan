@@ -40,7 +40,13 @@ func (s *Server) Routes(staticPath string) {
 	// 1. Define the Route Table
 	routes := []route{
 		// --- System / Auth (Public) ---
-		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("OK")) }), 0},
+		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := s.Handler.CheckAgentHealth(r.Context()); err != nil {
+				http.Error(w, "Agent Health Check Failed: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Write([]byte("OK"))
+		}), 0},
 		{http.MethodGet, "/auth/google/login", http.HandlerFunc(s.oauthGoogleLogin), 0},
 		{http.MethodGet, "/auth/google/callback", http.HandlerFunc(s.oauthGoogleCallback), 0},
 		{http.MethodPost, "/auth/logout", http.HandlerFunc(s.oauthLogout), 1},
