@@ -251,6 +251,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 
 	if responseText == "" {
 		slog.ErrorContext(ctx, "No response from agent")
+		h.saveEmptyBriefing(ctx, stop)
 		return
 	}
 
@@ -259,6 +260,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	var output AgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
+		h.saveEmptyBriefing(ctx, stop)
 		return
 	}
 
@@ -421,4 +423,15 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		wg.Wait()
 		slog.InfoContext(ctx, fmt.Sprintf("Full research complete for voyage %d", voyageID))
 	}()
+}
+
+func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *models.Stop) {
+	briefing := &models.Briefing{
+		StopID:         stop.ID,
+		WeatherSummary: models.RawJSON([]byte(`{"summary":"Error: Agent failed to respond"}`)),
+		SunPhase:       models.RawJSON([]byte(`{}`)),
+		Tides:          models.RawJSON([]byte(`{}`)),
+		Facilities:     models.RawJSON([]byte(`[]`)),
+	}
+	h.DB.CreateBriefing(ctx, briefing)
 }

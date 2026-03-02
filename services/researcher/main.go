@@ -133,6 +133,12 @@ func (s *Server) run(ctx context.Context) error {
 	// Start Custom Server
 	mux := http.NewServeMux()
 
+	// Health Check
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("OK"))
+	})
+
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 

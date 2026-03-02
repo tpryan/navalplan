@@ -129,6 +129,33 @@ function initApp() {
   initAdminUI();
   initOnboarding();
   loadVoyages();
+  startHealthCheck();
+}
+
+function startHealthCheck() {
+    const warning = document.getElementById('health-warning');
+    if (!warning) return;
+
+    const check = async () => {
+        const result = await API.checkHealth();
+        if (result.ok) {
+            warning.classList.add('hidden');
+        } else {
+            // Differentiate text
+            let text = 'Backend Connection Lost';
+            if (result.status === 503 && result.message.includes('Agent')) {
+                text = 'Agent Service Unavailable';
+            }
+            
+            warning.innerHTML = `<span class="material-symbols-outlined">warning</span> ${text}`;
+            warning.classList.remove('hidden');
+        }
+    };
+
+    // Check every 10 seconds
+    setInterval(check, 10000);
+    // Initial check
+    check();
 }
 
 function initUI() {
@@ -376,10 +403,7 @@ function initUI() {
                       const existingGuide = await API.getVoyageGuide(currentVoyage.id);
                       if (existingGuide) initialTimestamps['guide'] = new Date(existingGuide.created_at).getTime();
                       
-                      // Fetch existing briefings just for the list we have
-                      const existingBriefings = await Promise.all(
-                          currentStops.map(s => API.getBriefing(s.id).catch(()=>null))
-                      );
+                      const existingBriefings = await API.getVoyageBriefings(currentVoyage.id);
                       existingBriefings.forEach(b => {
                           if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
                       });
@@ -400,18 +424,20 @@ function initUI() {
                   
                   // 2. Poll for completion
                   const startTime = Date.now();
-                  const TIMEOUT_MS = 300000; // 5 minutes timeout (research all is heavy)
+                  const TIMEOUT_MS = 240000; // 4 minutes timeout
                   
-                  const pendingStops = [...currentStops]; 
+                  let pendingStops = [...currentStops]; 
                   let guideComplete = false;
+                  let consecutiveErrors = 0;
                   
                   const poll = setInterval(async () => {
                       // Check timeout
                       if (Date.now() - startTime > TIMEOUT_MS) {
                           clearInterval(poll);
-                          if (researchTicker) researchTicker.stop();
+                          if (researchTicker) researchTicker.error('Research Timeout');
                           btnResearchAll.innerHTML = originalContent;
                           btnResearchAll.disabled = false;
+                          
                           // Revert stuck spinners
                           const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
                           stuckBtns.forEach(btn => {
@@ -426,7 +452,10 @@ function initUI() {
                           // Check Guide
                           if (!guideComplete) {
                               const g = await API.getVoyageGuide(currentVoyage.id);
-                              if (g && isNewData(g, 'guide')) guideComplete = true;
+                              if (g && isNewData(g, 'guide')) {
+                                  guideComplete = true;
+                                  if (researchTicker) researchTicker.push('Voyage guide complete');
+                              }
                           }
 
                           // Check Stops
@@ -438,12 +467,12 @@ function initUI() {
                                   const b = briefings.find(br => br.stop_id === stop.id);
                                   
                                   if (b && isNewData(b, 'stop', stop.id)) {
-                                      // 1. Mark as done in our list
+                                      // Mark as done in our list
                                       pendingStops.splice(i, 1);
                                       
                                       if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
 
-                                      // 2. Update the specific button UI immediately
+                                      // Update the specific button UI immediately
                                       const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
                                       if (btn) {
                                           btn.innerHTML = '<span class="material-symbols-outlined" style="color: var(--brand-green);">check_circle</span>';
@@ -454,7 +483,8 @@ function initUI() {
                                   }
                               }
                           } catch (e) {
-                              // Ignore error
+                              console.warn("Poll: Briefings fetch failed", e);
+                              consecutiveErrors++;
                           }
 
                           // If all done
@@ -465,14 +495,23 @@ function initUI() {
                               btnResearchAll.disabled = false;
                               
                               renderMapStops(); // Refresh map with new data markers
-                              
                               showNotification('Research Complete', 'All research tasks have been completed successfully.');
+                          } else if (consecutiveErrors > 15) {
+                              // Too many errors, give up
+                              clearInterval(poll);
+                              if (researchTicker) researchTicker.error('Research Failed');
+                              btnResearchAll.innerHTML = originalContent;
+                              btnResearchAll.disabled = false;
+                              showNotification('Research Failed', 'Connection to server lost. Please try again.');
+                          } else {
+                              consecutiveErrors = 0; // Reset on success
                           }
 
                       } catch (err) {
                           console.error("Polling cycle error", err);
+                          consecutiveErrors++;
                       }
-                  }, 5000); // Poll every 5 seconds (slightly slower to be nice)
+                  }, 5000); // Poll every 5 seconds
 
               } catch (err) {
                   console.error(err);
