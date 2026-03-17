@@ -69,6 +69,24 @@
 .sidebar-actions {
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sidebar-actions .btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  height: 44px; /* Fixed height for all buttons in this row */
+  box-sizing: border-box;
+}
+
+.sidebar-actions .btn .material-symbols-outlined {
+    margin: 0;
+    line-height: 1;
 }
 
 #voyage-list {
