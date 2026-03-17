@@ -11,3 +11,4 @@ app/backend/navalplan-backend
 .gemini/settings.json
 services/researcher/navalplan-agent
 .DS_Store
+temp/**
