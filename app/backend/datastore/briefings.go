@@ -40,8 +40,8 @@ func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.
 		SELECT b.*
 		FROM briefing b
 		JOIN stop s ON b.stop_id = s.id
-		WHERE s.latitude BETWEEN $1 - $3 AND $1 + $3
-		  AND s.longitude BETWEEN $2 - $3 AND $2 + $3
+		WHERE s.latitude BETWEEN $1::float - $3::float AND $1::float + $3::float
+		  AND s.longitude BETWEEN $2::float - $3::float AND $2::float + $3::float
 		ORDER BY b.created_at DESC
 		LIMIT 1
 	`

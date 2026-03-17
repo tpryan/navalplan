@@ -47,6 +47,31 @@ type Provider interface {
 	Close() error
 }
 
+type autoCreateSessionService struct {
+	session.Service
+}
+
+func (s *autoCreateSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	resp, err := s.Service.Get(ctx, req)
+	if err != nil {
+		slog.Debug("Session not found, auto-creating", "appName", req.AppName, "userID", req.UserID, "sessionID", req.SessionID)
+		createResp, createErr := s.Service.Create(ctx, &session.CreateRequest{
+			AppName:   req.AppName,
+			UserID:    req.UserID,
+			SessionID: req.SessionID,
+		})
+		if createErr != nil {
+			// If creation failed, maybe it was created by another request in the meantime?
+			if resp2, err2 := s.Service.Get(ctx, req); err2 == nil {
+				return resp2, nil
+			}
+			return nil, createErr
+		}
+		return &session.GetResponse{Session: createResp.Session}, nil
+	}
+	return resp, nil
+}
+
 type Server struct {
 	config *config.Config
 	mu     sync.Mutex
@@ -124,7 +149,7 @@ func (s *Server) run(ctx context.Context) error {
 
 	config := &launcher.Config{
 		AgentLoader:    loader,
-		SessionService: session.InMemoryService(),
+		SessionService: &autoCreateSessionService{session.InMemoryService()},
 	}
 
 	// Create the ADK HTTP Handler
