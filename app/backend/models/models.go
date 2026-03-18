@@ -136,6 +136,20 @@ type RegionWithSeasonality struct {
 	AvgTempC          int    `json:"avg_temp_c" db:"avg_temp_c"`
 }
 
+// VoyageRecommendation represents an AI-generated suggestion for a place to stay.
+type VoyageRecommendation struct {
+	ID          string    `json:"id" db:"id"`
+	VoyageID    int64     `json:"voyage_id" db:"voyage_id"`
+	Name        string    `json:"name" db:"name"`
+	Type        string    `json:"type" db:"type"` // "Anchorage", "Mooring", "Marina"
+	Latitude    float64   `json:"latitude" db:"latitude"`
+	Longitude   float64   `json:"longitude" db:"longitude"`
+	Geometry    RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon for "blob" visualization
+	Description string    `json:"description" db:"description"`
+	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+}
+
 // RawJSON is a helper for JSONB columns
 type RawJSON []byte
 

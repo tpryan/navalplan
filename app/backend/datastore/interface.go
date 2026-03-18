@@ -36,6 +36,11 @@ type Store interface {
 	SaveVoyageMap(ctx context.Context, voyageID int64, data []byte) error
 	GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, error)
 
+	// Recommendations
+	ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]models.VoyageRecommendation, error)
+	CreateVoyageRecommendation(ctx context.Context, r *models.VoyageRecommendation) error
+	DeleteVoyageRecommendations(ctx context.Context, voyageID int64) error
+
 	// Person
 	FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error)
 	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
