@@ -1259,12 +1259,24 @@ async function renderRecommendations() {
 
         map.data.setStyle((feature) => {
             if (feature.getProperty('type') === 'recommendation') {
+                const recId = feature.getProperty('recId');
+                const rec = recommendations.find(r => r.id === recId);
+                let zIndex = 10; // Default for Hubs
+                
+                if (rec && rec.type) {
+                    const t = rec.type.toLowerCase();
+                    if (t.includes('anchor') || t.includes('moor')) {
+                        zIndex = 20; // Higher for smaller items
+                    }
+                }
+
                 return {
                     fillColor: feature.getProperty('color'),
                     strokeColor: feature.getProperty('color'),
                     strokeWeight: 4, 
                     fillOpacity: 0.35,
-                    clickable: true
+                    clickable: true,
+                    zIndex: zIndex
                 };
             }
             return {
