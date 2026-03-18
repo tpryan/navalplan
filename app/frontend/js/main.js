@@ -196,6 +196,31 @@ function initUI() {
       });
   }
 
+  // Empty Voyage Prompt
+  const btnEmptyPilot = document.getElementById('btn-empty-pilot');
+  const btnEmptyManual = document.getElementById('btn-empty-manual');
+  const modalEmptyVoyage = document.getElementById('modal-empty-voyage');
+
+  if (btnEmptyPilot) {
+      btnEmptyPilot.addEventListener('click', () => {
+          modalEmptyVoyage.classList.add('hidden');
+          modalOverlay.classList.add('hidden');
+          handlePilotSuggestionsClick();
+      });
+  }
+
+  if (btnEmptyManual) {
+      btnEmptyManual.addEventListener('click', () => {
+          modalEmptyVoyage.classList.add('hidden');
+          modalOverlay.classList.add('hidden');
+          // Start selecting first date automatically
+          if (currentVoyage) {
+              const start = new Date(currentVoyage.start_date).toISOString().split('T')[0];
+              selectDate(start);
+          }
+      });
+  }
+
   // Month Slider
   if (monthSlider) {
       monthSlider.addEventListener('input', (e) => {
@@ -1038,6 +1063,7 @@ function showVoyageList() {
     
     currentVoyage = null;
     selectedDate = null;
+    clearRecommendations();
     clearMap();
 }
 
@@ -1071,6 +1097,12 @@ async function loadStops() {
         currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
         renderItinerary();
         renderMapStops();
+
+        // Check if itinerary is empty - Show Prompt
+        if (currentStops.length === 0 && currentStopPage === 1) {
+            document.getElementById('modal-empty-voyage').classList.remove('hidden');
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
 
         // Check if itinerary is full
         const isFull = isItineraryFull();
@@ -1150,6 +1182,8 @@ async function handlePilotSuggestionsClick() {
                     icon.classList.remove('spin');
                     btn.disabled = false;
                     
+                    showNotification("Pilot Research Complete", `The Local Pilot has identified ${recommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
+
                     // Zoom out to show recommendations
                     if (map && recommendations.length > 0) {
                         const { LatLngBounds } = await importLibrary("core");
@@ -2751,6 +2785,7 @@ async function toggleDiscoveryMode(active) {
         ];
         document.getElementById('month-display').textContent = months[currentMonth - 1];
         
+        clearRecommendations();
         clearMap(); // Clear existing markers/routes
         loadDiscoveryRegions(currentMonth);
         

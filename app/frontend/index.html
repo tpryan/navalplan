@@ -147,6 +147,27 @@
       </form>
     </div>
 
+    <!-- Empty Voyage Prompt Modal -->
+    <div id="modal-empty-voyage" class="modal hidden">
+      <div class="flex flex-col align-center text-center p-md">
+        <span class="material-symbols-outlined text-brand-medium" style="font-size: 64px; margin-bottom: 1rem;">explore</span>
+        <h2>Your Voyage is Empty</h2>
+        <p class="text-gray mb-lg">How would you like to start planning?</p>
+        
+        <div class="flex flex-col gap-md w-full">
+          <button id="btn-empty-pilot" class="btn primary w-full">
+            <span class="material-symbols-outlined icon-align">auto_awesome</span>
+            Hire Local Pilot
+          </button>
+          <p class="font-xs text-gray uppercase m-0">or</p>
+          <button id="btn-empty-manual" class="btn secondary w-full">
+            <span class="material-symbols-outlined icon-align">add_location</span>
+            Select Stops Manually
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="modal-briefing" class="modal hidden modal-scrollable">
       <div class="modal-header-row flex justify-between align-center">
         <h2 class="m-0">Destination Briefing</h2>
