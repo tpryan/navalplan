@@ -23,7 +23,9 @@ Output: Produce a JSON array of recommendation objects strictly following this s
     "geometry": {
       "type": "Polygon",
       "coordinates": [[[lng, lat], [lng, lat], ...]]
-    }, // ONLY for "Hub" type. Represent the 1-3 sq mile area. For other types, leave null.
+    }, // MANDATORY for ALL types. 
+       // For "Hub": Represent a 1-3 sq mile area. 
+       // For "Anchorage"/"Mooring": Represent a smaller 0.25-0.5 sq mile "blob" area.
     "description": "Summary of resources or description of the spot.",
     "reasoning": "Why this area or spot is a primary target for the skipper."
   },
@@ -33,6 +35,6 @@ Output: Produce a JSON array of recommendation objects strictly following this s
 
 Important:
 - Provide as many relevant items as possible.
-- "Hub" types MUST have a `geometry` polygon.
-- "Anchorage" and "Mooring" types should focus on specific coordinates.
+- EVERY item MUST have a `geometry` polygon.
+- The `geometry` should be larger for Hubs and smaller for Anchorages/Moorings, but always a "blob" rather than a single point.
 - Do NOT return any text outside the JSON block.

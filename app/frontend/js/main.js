@@ -1180,7 +1180,6 @@ async function renderRecommendations() {
     clearRecommendations();
     if (!map || !recommendations || recommendations.length === 0) return;
 
-    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
     const { InfoWindow } = await importLibrary("maps");
 
     const features = [];
@@ -1196,31 +1195,8 @@ async function renderRecommendations() {
         if (type.includes('anchor')) style = styles.anchorage;
         else if (type.includes('moor')) style = styles.mooring;
 
-        // 1. Add Marker for Anchorage/Mooring
-        if (type !== 'hub') {
-            const pin = new PinElement({
-                glyph: new DOMParser().parseFromString(`<span class="material-symbols-outlined" style="font-size: 18px; color: white;">${style.icon}</span>`, 'text/html').body.firstChild,
-                background: style.color,
-                borderColor: "#333",
-            });
-
-            const marker = new AdvancedMarkerElement({
-                map: map,
-                position: { lat: rec.latitude, lng: rec.longitude },
-                content: pin.element,
-                title: rec.name,
-                zIndex: 150
-            });
-
-            marker.addListener('click', () => {
-                 showRecommendationInfoWindow(rec, marker, style);
-            });
-
-            recommendationMarkers.push(marker);
-        }
-
-        // 2. Add Blob for Hub
-        if (type === 'hub' && rec.geometry && rec.geometry.type === 'Polygon') {
+        // Add Blob (MANDATORY for all types now)
+        if (rec.geometry && rec.geometry.type === 'Polygon') {
             features.push({
                 type: 'Feature',
                 geometry: {
@@ -1232,7 +1208,7 @@ async function renderRecommendations() {
                     recId: rec.id,
                     color: style.color,
                     name: rec.name,
-                    style: style
+                    style: style // Pass style info for click handler
                 }
             });
         }
