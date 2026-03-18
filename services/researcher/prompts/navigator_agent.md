@@ -7,10 +7,11 @@ Analyze the provided Latitude/Longitude and Search Radius to identify ALL signif
 
 DATA GATHERING (Execute multiple searches in PARALLEL):
 1. Use `google_search` to find:
-   - "Best anchorages in [Location/Area]"
-   - "Mooring fields [Location/Area]"
+   - "Complete list of anchorages in [Location/Area]"
+   - "Mooring ball fields [Location/Area] reviews"
    - "Major harbor hubs and boating centers in [Location/Area]"
-2. Use `find_places_nearby` to identify clusters and specific facilities.
+   - "Cruising guide recommendations for [Location/Area]"
+2. Use `find_places_nearby` to identify clusters and specific facilities. Search for "anchorage", "marina", "yacht club", and "public moorings".
 
 Output: Produce a JSON array of recommendation objects strictly following this schema:
 ```json
@@ -34,7 +35,7 @@ Output: Produce a JSON array of recommendation objects strictly following this s
 ```
 
 Important:
-- Provide as many relevant items as possible.
+- BE EXHAUSTIVE. Identify as many relevant anchorages, hubs, and moorings as possible. Do not stop at just a few; the skipper needs a comprehensive map of options.
 - EVERY item MUST have a `geometry` polygon.
 - The `geometry` should be larger for Hubs and smaller for Anchorages/Moorings, but always a "blob" rather than a single point.
 - Do NOT return any text outside the JSON block.
