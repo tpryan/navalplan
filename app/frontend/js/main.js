@@ -43,6 +43,7 @@ let routePolyline = null;
 let facilityMarkers = [];
 let recommendationMarkers = [];
 let recommendations = [];
+let activeInfoWindow = null;
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -1098,24 +1099,25 @@ async function loadStops() {
         renderItinerary();
         renderMapStops();
 
-        // Check if itinerary is empty - Show Prompt
-        if (currentStops.length === 0 && currentStopPage === 1) {
+        // Auto-load recommendations if they exist
+        try {
+            recommendations = await API.getRecommendations(currentVoyage.id);
+            renderRecommendations();
+        } catch (e) {
+            console.warn("No recommendations found or failed to load", e);
+        }
+
+        // Check if itinerary is empty AND research hasn't been done - Show Prompt
+        if (currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
             document.getElementById('modal-empty-voyage').classList.remove('hidden');
             document.getElementById('modal-overlay').classList.remove('hidden');
         }
 
         // Check if itinerary is full
-        const isFull = isItineraryFull();
+        const isFull = await isItineraryFull();
 
-        // Auto-load recommendations if they exist and itinerary NOT full
-        if (!isFull) {
-            try {
-                recommendations = await API.getRecommendations(currentVoyage.id);
-                renderRecommendations();
-            } catch (e) {
-                console.warn("No recommendations found or failed to load", e);
-            }
-        } else {
+        // Clear recommendations if itinerary is full
+        if (isFull) {
             clearRecommendations();
         }
 
@@ -1140,13 +1142,23 @@ async function loadStops() {
     }
 }
 
-function isItineraryFull() {
+async function isItineraryFull() {
     if (!currentVoyage) return false;
+    
+    // Calculate expected days
     const start = new Date(currentVoyage.start_date);
     const end = new Date(currentVoyage.end_date);
     const diffTime = Math.abs(end - start);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return currentStops.length >= diffDays;
+
+    try {
+        // Fetch ALL stops for this voyage to be sure (bypass pagination)
+        const allStops = await API.getStops(currentVoyage.id, 1, 1000);
+        return allStops.length >= diffDays;
+    } catch (e) {
+        console.error("Failed to check if itinerary is full", e);
+        return false;
+    }
 }
 
 async function handlePilotSuggestionsClick() {
@@ -1163,12 +1175,12 @@ async function handlePilotSuggestionsClick() {
         
         // Start a ticker to show progress
         if (researchTicker) {
-            researchTicker.start("The Local Pilot is researching anchorages, moorings, and marinas...");
+            researchTicker.start("The AI is researching resource hubs, anchorages, and moorings...");
         }
 
         // Poll for results
         let attempts = 0;
-        const maxAttempts = 30; // 5 minutes (10s interval)
+        const maxAttempts = 18; // 3 minutes (10s interval)
         
         const poll = setInterval(async () => {
             attempts++;
@@ -1182,7 +1194,7 @@ async function handlePilotSuggestionsClick() {
                     icon.classList.remove('spin');
                     btn.disabled = false;
                     
-                    showNotification("Pilot Research Complete", `The Local Pilot has identified ${recommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
+                    showNotification("Research Complete", `We've identified ${recommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
 
                     // Zoom out to show recommendations
                     if (map && recommendations.length > 0) {
@@ -1193,7 +1205,7 @@ async function handlePilotSuggestionsClick() {
                     }
                 }
             } catch (e) {
-                // Ignore errors during polling
+                console.error("Polling error:", e);
             }
 
             if (attempts >= maxAttempts) {
@@ -1201,7 +1213,7 @@ async function handlePilotSuggestionsClick() {
                 if (researchTicker) researchTicker.stop();
                 icon.classList.remove('spin');
                 btn.disabled = false;
-                alert("Pilot research is taking longer than expected. Please check back in a moment.");
+                alert("The AI research is taking longer than expected. The agent may have encountered an error. Please try again in a few minutes.");
             }
         }, 10000);
 
@@ -1301,6 +1313,8 @@ async function renderRecommendations() {
 }
 
 function showRecommendationInfoWindow(rec, anchor, style) {
+    if (activeInfoWindow) activeInfoWindow.close();
+
     const { InfoWindow } = googleMapsLib;
     const content = `
         <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
@@ -1319,11 +1333,11 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             </button>
         </div>`;
     
-    const infoWindow = new InfoWindow({
+    activeInfoWindow = new InfoWindow({
         content: content,
         position: anchor.position
     });
-    infoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
+    activeInfoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
 }
 
 function clearRecommendations() {
@@ -1377,6 +1391,12 @@ window.addRecommendationToItinerary = async function(recId) {
         try {
             const created = await API.createStop(currentVoyage.id, stopData);
             currentStops.push(created);
+            
+            if (activeInfoWindow) {
+                activeInfoWindow.close();
+                activeInfoWindow = null;
+            }
+
             renderItinerary();
             renderMapStops();
             alert(`Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
@@ -2147,10 +2167,11 @@ async function initMap() {
         });
         
         marker.addListener('click', () => {
-             const infoWindow = new InfoWindow({
+             if (activeInfoWindow) activeInfoWindow.close();
+             activeInfoWindow = new InfoWindow({
                 content: `<div style="color: black;"><b>${displayLocationName(stop.location_name)}</b><br>Day ${index + 1}</div>`
              });
-             infoWindow.open(map, marker);
+             activeInfoWindow.open(map, marker);
         });
 
         markers.push(marker);
@@ -2192,11 +2213,12 @@ async function initMap() {
                              });
 
                              fMarker.addListener('click', () => {
+                                 if (activeInfoWindow) activeInfoWindow.close();
                                  let query = f.latitude + "," + f.longitude;
                                  if (f.address) {
                                      query = f.name + ", " + f.address;
                                  }
-                                 const infoWindow = new InfoWindow({
+                                 activeInfoWindow = new InfoWindow({
                                      content: `
                                          <div style="color: black;">
                                              <strong>${f.name}</strong><br>
@@ -2205,9 +2227,8 @@ async function initMap() {
                                          </div>
                                      `
                                  });
-                                 infoWindow.open(map, fMarker);
+                                 activeInfoWindow.open(map, fMarker);
                              });
-
                              facilityMarkers.push(fMarker);
                          }
                     });
@@ -2236,6 +2257,7 @@ async function initMap() {
 }
   
   function clearMap() {
+      if (activeInfoWindow) activeInfoWindow.close();
       markers.forEach(m => m.map = null);
       markers = [];
 

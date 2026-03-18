@@ -13,7 +13,7 @@ DATA GATHERING (Execute multiple searches in PARALLEL):
    - "Cruising guide recommendations for [Location/Area]"
 2. Use `find_places_nearby` to identify clusters and specific facilities. Search for "anchorage", "marina", "yacht club", and "public moorings".
 
-Output: Produce a JSON array of recommendation objects strictly following this schema:
+Output: Produce a JSON array of recommendation objects strictly following this schema. **YOU MUST CALCULATE ALL COORDINATES YOURSELF. DO NOT OUTPUT MATH EXPRESSIONS.**
 ```json
 [
   {
@@ -37,5 +37,6 @@ Output: Produce a JSON array of recommendation objects strictly following this s
 Important:
 - BE EXHAUSTIVE. Identify as many relevant anchorages, hubs, and moorings as possible. Do not stop at just a few; the skipper needs a comprehensive map of options.
 - EVERY item MUST have a `geometry` polygon.
+- All coordinates in `latitude`, `longitude`, and `geometry` MUST be final, calculated numbers. Do NOT include math expressions like `latitude - 0.01` in the JSON.
 - The `geometry` should be larger for Hubs and smaller for Anchorages/Moorings, but always a "blob" rather than a single point.
 - Do NOT return any text outside the JSON block.
