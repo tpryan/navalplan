@@ -1098,7 +1098,7 @@ async function loadStops() {
                 map.fitBounds(bounds, 100);
             } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                 map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
-                map.setZoom(8);
+                map.setZoom(12);
             }
         }
     } catch (err) {
