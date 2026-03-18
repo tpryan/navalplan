@@ -44,6 +44,7 @@ let facilityMarkers = [];
 let recommendationMarkers = [];
 let recommendations = [];
 let activeInfoWindow = null;
+let lastKnownItineraryFull = false;
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -78,6 +79,7 @@ function smoothPolygon(coordinates, iterations = 2) {
 }
 
 function chaikin(coords) {
+    if (!coords || coords.length < 2) return coords;
     const newCoords = [];
     // Handle the closed loop: if last point == first point, we smooth across it
     const isClosed = coords[0][0] === coords[coords.length-1][0] && coords[0][1] === coords[coords.length-1][1];
@@ -100,7 +102,8 @@ function chaikin(coords) {
     }
     
     if (isClosed) {
-        newCoords.push(newCoords[0]); // Re-close
+        // Explicitly close the loop with the exact first point
+        newCoords.push([newCoords[0][0], newCoords[0][1]]);
     } else {
         // If not closed, keep endpoints (less ideal for smoothing)
         newCoords.unshift(coords[0]);
@@ -427,156 +430,7 @@ function initUI() {
   // Research All Button
   const btnResearchAll = document.getElementById('btn-research-all');
   if (btnResearchAll) {
-      btnResearchAll.addEventListener('click', async () => {
-          if (!currentVoyage) return;
-          if (confirm('This will trigger research for the entire voyage and all stops. Continue?')) {
-              const originalContent = btnResearchAll.innerHTML;
-              btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
-              btnResearchAll.disabled = true;
-              
-              // 1. Visual Indicators: Spin all microscope icons
-              const researchBtns = document.querySelectorAll('.day-actions .research');
-              researchBtns.forEach(btn => {
-                  // Only spin if not already done/spinning
-                  if (!btn.querySelector('.spin') && !btn.querySelector('.material-symbols-outlined').textContent.includes('check_circle')) {
-                     btn.dataset.originalContent = btn.innerHTML;
-                     btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
-                     btn.disabled = true;
-                  }
-              });
-
-              try {
-                  // 1b. Snapshot timestamps to distinguish new data from old
-                  const initialTimestamps = {};
-                  try {
-                      const existingGuide = await API.getVoyageGuide(currentVoyage.id);
-                      if (existingGuide) initialTimestamps['guide'] = new Date(existingGuide.created_at).getTime();
-                      
-                      const existingBriefings = await API.getVoyageBriefings(currentVoyage.id);
-                      existingBriefings.forEach(b => {
-                          if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
-                      });
-                  } catch (e) { console.warn("Failed to snapshot timestamps", e); }
-
-                  // Helper to check freshness
-                  const isNewData = (item, type, id) => {
-                      const key = type + (id ? '_' + id : '');
-                      const prevTime = initialTimestamps[key];
-                      if (!prevTime) return true; // No previous data, so this must be new
-                      const newTime = new Date(item.created_at).getTime();
-                      return newTime > prevTime;
-                  };
-
-                  await API.triggerFullResearch(currentVoyage.id);
-                  showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
-                  if (researchTicker) researchTicker.start();
-                  
-                  // 2. Poll for completion
-                  const startTime = Date.now();
-                  const TIMEOUT_MS = 240000; // 4 minutes timeout
-                  
-                  let pendingStops = [...currentStops]; 
-                  let guideComplete = false;
-                  let consecutiveErrors = 0;
-                  
-                  const poll = setInterval(async () => {
-                      // Check timeout
-                      if (Date.now() - startTime > TIMEOUT_MS) {
-                          clearInterval(poll);
-                          if (researchTicker) researchTicker.error('Research Timeout');
-                          btnResearchAll.innerHTML = originalContent;
-                          btnResearchAll.disabled = false;
-                          
-                          // Revert stuck spinners
-                          const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
-                          stuckBtns.forEach(btn => {
-                                 btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
-                                 btn.disabled = false;
-                          });
-                          showNotification('Research Timeout', 'Research is taking longer than expected. Some stops may still be processing.');
-                          return;
-                      }
-
-                      try {
-                          // Check Guide
-                          if (!guideComplete) {
-                              const g = await API.getVoyageGuide(currentVoyage.id);
-                              if (g && isNewData(g, 'guide')) {
-                                  guideComplete = true;
-                                  if (researchTicker) researchTicker.push('Voyage guide complete');
-                              }
-                          }
-
-                          // Check Stops
-                          try {
-                              const briefings = await API.getVoyageBriefings(currentVoyage.id);
-                              
-                              for (let i = pendingStops.length - 1; i >= 0; i--) {
-                                  const stop = pendingStops[i];
-                                  const b = briefings.find(br => br.stop_id === stop.id);
-                                  
-                                  if (b && isNewData(b, 'stop', stop.id)) {
-                                      // Mark as done in our list
-                                      pendingStops.splice(i, 1);
-                                      
-                                      if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
-
-                                      // Update the specific button UI immediately
-                                      const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
-                                      if (btn) {
-                                          btn.innerHTML = '<span class="material-symbols-outlined" style="color: var(--brand-green);">check_circle</span>';
-                                          btn.disabled = false;
-                                          btn.title = "View Briefing";
-                                          btn.classList.remove('spin'); 
-                                      }
-                                  }
-                              }
-                          } catch (e) {
-                              console.warn("Poll: Briefings fetch failed", e);
-                              consecutiveErrors++;
-                          }
-
-                          // If all done
-                          if (guideComplete && pendingStops.length === 0) {
-                              clearInterval(poll);
-                              if (researchTicker) researchTicker.stop();
-                              btnResearchAll.innerHTML = originalContent;
-                              btnResearchAll.disabled = false;
-                              
-                              renderMapStops(); // Refresh map with new data markers
-                              showNotification('Research Complete', 'All research tasks have been completed successfully.');
-                          } else if (consecutiveErrors > 15) {
-                              // Too many errors, give up
-                              clearInterval(poll);
-                              if (researchTicker) researchTicker.error('Research Failed');
-                              btnResearchAll.innerHTML = originalContent;
-                              btnResearchAll.disabled = false;
-                              showNotification('Research Failed', 'Connection to server lost. Please try again.');
-                          } else {
-                              consecutiveErrors = 0; // Reset on success
-                          }
-
-                      } catch (err) {
-                          console.error("Polling cycle error", err);
-                          consecutiveErrors++;
-                      }
-                  }, 5000); // Poll every 5 seconds
-
-              } catch (err) {
-                  console.error(err);
-                  if (researchTicker) researchTicker.stop();
-                  btnResearchAll.innerHTML = originalContent;
-                  btnResearchAll.disabled = false;
-                  // Revert spinners
-                  const researchBtns = document.querySelectorAll('.day-actions .research');
-                  researchBtns.forEach(btn => {
-                     btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
-                     btn.disabled = false;
-                  });
-                  alert('Failed to trigger research.');
-              }
-          }
-      });
+      btnResearchAll.addEventListener('click', () => handleResearchAll(true));
   }
 
   // Edit Voyage Button (Itinerary View)
@@ -1080,6 +934,7 @@ function showVoyageList() {
     
     currentVoyage = null;
     selectedDate = null;
+    lastKnownItineraryFull = false;
     clearRecommendations();
     clearMap();
 }
@@ -1098,6 +953,7 @@ async function selectVoyage(voyage) {
     // For mobile
     document.getElementById('app').classList.remove('menu-open');
 
+    lastKnownItineraryFull = false;
     clearRecommendations();
     updateItineraryHeader(voyage);
 
@@ -1115,6 +971,16 @@ async function loadStops() {
         renderItinerary();
         renderMapStops();
 
+        // Toggle visibility of Research All button
+        const btnResearchAll = document.getElementById('btn-research-all');
+        if (btnResearchAll) {
+            if (currentStops.length > 0) {
+                btnResearchAll.classList.remove('hidden');
+            } else {
+                btnResearchAll.classList.add('hidden');
+            }
+        }
+
         // Auto-load recommendations if they exist
         try {
             const recs = await API.getRecommendations(currentVoyage.id);
@@ -1131,13 +997,7 @@ async function loadStops() {
             document.getElementById('modal-overlay').classList.remove('hidden');
         }
 
-        // Check if itinerary is full
-        const isFull = await isItineraryFull();
-
-        // Clear recommendations if itinerary is full
-        if (isFull) {
-            clearRecommendations();
-        }
+        await checkItineraryFullness();
 
         if (map) {
             if (currentStops.length > 0) {
@@ -1157,6 +1017,207 @@ async function loadStops() {
         console.error(err);
         alert('Failed to load stops');
         list.innerHTML = '<div class="error-state"><p>Failed to load stops.</p></div>';
+    }
+}
+
+async function handleResearchAll(confirmFirst = true) {
+    if (!currentVoyage) return;
+    
+    if (confirmFirst) {
+        if (!confirm('This will trigger research for the entire voyage and all stops. Continue?')) {
+            return;
+        }
+    }
+
+    const btnResearchAll = document.getElementById('btn-research-all');
+    const originalContent = btnResearchAll.innerHTML;
+    btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+    btnResearchAll.disabled = true;
+    
+    // 1. Visual Indicators: Spin all icons
+    const researchBtns = document.querySelectorAll('.day-actions .research');
+    researchBtns.forEach(btn => {
+        // Only spin if not already done/spinning
+        if (!btn.querySelector('.spin') && !btn.querySelector('.material-symbols-outlined').textContent.includes('check_circle')) {
+           btn.dataset.originalContent = btn.innerHTML;
+           btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
+           btn.disabled = true;
+        }
+    });
+
+    try {
+        // 1b. Snapshot timestamps to distinguish new data from old
+        const initialTimestamps = {};
+        try {
+            const existingGuide = await API.getVoyageGuide(currentVoyage.id);
+            if (existingGuide) initialTimestamps['guide'] = new Date(existingGuide.created_at).getTime();
+            
+            const existingBriefings = await API.getVoyageBriefings(currentVoyage.id);
+            existingBriefings.forEach(b => {
+                if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
+            });
+        } catch (e) { console.warn("Failed to snapshot timestamps", e); }
+
+        // Helper to check freshness
+        const isNewData = (item, type, id) => {
+            const key = type + (id ? '_' + id : '');
+            const prevTime = initialTimestamps[key];
+            if (!prevTime) return true; // No previous data, so this must be new
+            const newTime = new Date(item.created_at).getTime();
+            return newTime > prevTime;
+        };
+
+        await API.triggerFullResearch(currentVoyage.id);
+        showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
+        if (researchTicker) researchTicker.start();
+        
+        // 2. Poll for completion
+        const startTime = Date.now();
+        const TIMEOUT_MS = 240000; // 4 minutes timeout
+        
+        let pendingStops = [...currentStops]; 
+        let guideComplete = false;
+        let consecutiveErrors = 0;
+        
+        const poll = setInterval(async () => {
+            // Check timeout
+            if (Date.now() - startTime > TIMEOUT_MS) {
+                clearInterval(poll);
+                if (researchTicker) researchTicker.error('Research Timeout');
+                btnResearchAll.innerHTML = originalContent;
+                btnResearchAll.disabled = false;
+                
+                // Revert stuck spinners
+                const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
+                stuckBtns.forEach(btn => {
+                       btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
+                       btn.disabled = false;
+                });
+                showNotification('Research Timeout', 'Research is taking longer than expected. Some stops may still be processing.');
+                return;
+            }
+
+            try {
+                // Check Guide
+                if (!guideComplete) {
+                    const g = await API.getVoyageGuide(currentVoyage.id);
+                    if (g && isNewData(g, 'guide')) {
+                        guideComplete = true;
+                        if (researchTicker) researchTicker.push('Voyage guide complete');
+                    }
+                }
+
+                // Check Stops
+                try {
+                    const briefings = await API.getVoyageBriefings(currentVoyage.id);
+                    
+                    for (let i = pendingStops.length - 1; i >= 0; i--) {
+                        const stop = pendingStops[i];
+                        const b = briefings.find(br => br.stop_id === stop.id);
+                        
+                        if (b && isNewData(b, 'stop', stop.id)) {
+                            // Mark as done in our list
+                            pendingStops.splice(i, 1);
+                            
+                            if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
+
+                            // Update the specific button UI immediately
+                            const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
+                            if (btn) {
+                                btn.innerHTML = '<span class="material-symbols-outlined" style="color: var(--brand-green);">check_circle</span>';
+                                btn.disabled = false;
+                                btn.title = "View Briefing";
+                                btn.classList.remove('spin'); 
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Poll: Briefings fetch failed", e);
+                    consecutiveErrors++;
+                }
+
+                // If all done
+                if (guideComplete && pendingStops.length === 0) {
+                    clearInterval(poll);
+                    if (researchTicker) researchTicker.stop();
+                    btnResearchAll.innerHTML = originalContent;
+                    btnResearchAll.disabled = false;
+                    
+                    renderMapStops(); // Refresh map with new data markers
+                    showNotification('Research Complete', 'All research tasks have been completed successfully.');
+                } else if (consecutiveErrors > 15) {
+                    // Too many errors, give up
+                    clearInterval(poll);
+                    if (researchTicker) researchTicker.error('Research Failed');
+                    btnResearchAll.innerHTML = originalContent;
+                    btnResearchAll.disabled = false;
+                    showNotification('Research Failed', 'Connection to server lost. Please try again.');
+                } else {
+                    consecutiveErrors = 0; // Reset on success
+                }
+
+            } catch (err) {
+                console.error("Polling cycle error", err);
+                consecutiveErrors++;
+            }
+        }, 5000); // Poll every 5 seconds
+
+    } catch (err) {
+        console.error(err);
+        if (researchTicker) researchTicker.stop();
+        btnResearchAll.innerHTML = originalContent;
+        btnResearchAll.disabled = false;
+        // Revert spinners
+        const researchBtns = document.querySelectorAll('.day-actions .research');
+        researchBtns.forEach(btn => {
+           btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
+           btn.disabled = false;
+        });
+        alert('Failed to trigger research.');
+    }
+}
+
+async function checkItineraryFullness() {
+    const isFull = await isItineraryFull();
+
+    // Toggle visibility of Research All button
+    const btnResearchAll = document.getElementById('btn-research-all');
+    if (btnResearchAll) {
+        if (currentStops.length > 0) {
+            btnResearchAll.classList.remove('hidden');
+        } else {
+            btnResearchAll.classList.add('hidden');
+        }
+    }
+
+    // Toggle visibility of Pilot Suggestions button
+    const btnPilot = document.getElementById('btn-pilot-suggestions');
+    if (btnPilot) {
+        if (isFull) {
+            btnPilot.classList.add('hidden');
+        } else {
+            btnPilot.classList.remove('hidden');
+        }
+    }
+
+    // If it just BECAME full, notify user
+    if (isFull && !lastKnownItineraryFull) {
+        showNotification(
+            "Itinerary Ready", 
+            "Every day of your voyage now has a destination! All research hubs and spots have been cleared. \n\nNext Step: Click the 'Research All' (Globe) icon to gather weather, tides, and local charts for your trip.",
+            {
+                label: "Start Full Research Now",
+                callback: () => handleResearchAll(false)
+            }
+        );
+        clearRecommendations();
+    }
+    
+    lastKnownItineraryFull = isFull;
+
+    // Ensure recommendations are hidden if full
+    if (isFull) {
+        clearRecommendations();
     }
 }
 
@@ -1268,7 +1329,18 @@ async function renderRecommendations() {
                 type: 'Feature',
                 geometry: {
                     type: 'Polygon',
-                    coordinates: rec.geometry.coordinates.map(ring => smoothPolygon(ring, 3)) 
+                    coordinates: rec.geometry.coordinates.map(ring => {
+                        // Defensively ensure ring is closed before smoothing
+                        let coords = [...ring];
+                        if (coords.length > 0) {
+                            const first = coords[0];
+                            const last = coords[coords.length - 1];
+                            if (first[0] !== last[0] || first[1] !== last[1]) {
+                                coords.push([first[0], first[1]]);
+                            }
+                        }
+                        return smoothPolygon(coords, 3);
+                    })
                 },
                 properties: {
                     type: 'recommendation',
@@ -1417,6 +1489,7 @@ window.addRecommendationToItinerary = async function(recId) {
 
             renderItinerary();
             renderMapStops();
+            await checkItineraryFullness();
             alert(`Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
         } catch (err) {
             console.error(err);
@@ -2129,8 +2202,10 @@ async function initMap() {
           }
           renderItinerary();
           renderMapStops();
+          await checkItineraryFullness();
 
           // Auto-advance to next empty date
+
           if (currentVoyage && selectedDate) {
               const current = new Date(selectedDate);
               const next = new Date(current);
@@ -2179,12 +2254,12 @@ async function initMap() {
         const marker = new AdvancedMarkerElement({
             map: map,
             position: { lat: stop.latitude, lng: stop.longitude },
-            content: pin.element,
+            content: pin,
             title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`,
             zIndex: 100
         });
         
-        marker.addListener('click', () => {
+        marker.addListener('gmp-click', () => {
              if (activeInfoWindow) activeInfoWindow.close();
              activeInfoWindow = new InfoWindow({
                 content: `<div style="color: black;"><b>${displayLocationName(stop.location_name)}</b><br>Day ${index + 1}</div>`
@@ -2230,7 +2305,7 @@ async function initMap() {
                                  zIndex: 1
                              });
 
-                             fMarker.addListener('click', () => {
+                             fMarker.addListener('gmp-click', () => {
                                  if (activeInfoWindow) activeInfoWindow.close();
                                  let query = f.latitude + "," + f.longitude;
                                  if (f.address) {
@@ -2805,15 +2880,36 @@ async function redoGuide(oldGuide, btn) {
     }
 }
 
-function showNotification(title, message) {
+function showNotification(title, message, action = null) {
     const modal = document.getElementById('modal-notification');
     const modalOverlay = document.getElementById('modal-overlay');
     const titleEl = document.getElementById('notification-title');
     const msgEl = document.getElementById('notification-message');
+    const actionsContainer = document.getElementById('notification-actions');
+    const closeBtn = document.getElementById('btn-close-notification');
 
     if (modal && titleEl && msgEl) {
         titleEl.textContent = title;
         msgEl.textContent = message;
+        
+        // Clear previous custom actions (keep close btn)
+        if (actionsContainer) {
+            const customBtns = actionsContainer.querySelectorAll('.custom-action');
+            customBtns.forEach(b => b.remove());
+
+            if (action) {
+                const actionBtn = document.createElement('button');
+                actionBtn.className = 'btn primary w-full custom-action';
+                actionBtn.textContent = action.label;
+                actionBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    modalOverlay.classList.add('hidden');
+                    action.callback();
+                };
+                actionsContainer.insertBefore(actionBtn, closeBtn);
+            }
+        }
+
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
     } else {
