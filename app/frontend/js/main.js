@@ -349,13 +349,13 @@ function initUI() {
       } else {
         savedVoyage = await API.createVoyage(voyageData);
       }
+      
       closeModal();
-      loadVoyages(); // Refresh list
+      await loadVoyages(); // Refresh list
 
-      // If we are currently viewing this voyage, refresh the view
-      if (currentVoyage && currentVoyage.id === savedVoyage.id) {
-        selectVoyage(savedVoyage);
-      }
+      // Find the most fresh version of the voyage from the loaded list if possible
+      const freshVoyage = voyages.find(v => v.id === savedVoyage.id);
+      await selectVoyage(freshVoyage || savedVoyage);
     } catch (err) {
       console.error(err);
       alert('Failed to save voyage. Check console.');
@@ -1051,6 +1051,9 @@ async function selectVoyage(voyage) {
     document.getElementById('voyage-list').classList.add('hidden');
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
+    
+    // For mobile
+    document.getElementById('app').classList.remove('menu-open');
 
     clearRecommendations();
     updateItineraryHeader(voyage);
