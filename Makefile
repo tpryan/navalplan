@@ -283,9 +283,9 @@ migrate-prod-gcs:
 	fi; \
 	FILENAME=$$(basename $$FILE); \
 	echo "Applying $$FILENAME to PRODUCTION via GCS..."; \
-	gsutil cp $$FILE gs://$(STORAGE_BUCKET)/$$FILENAME; \
+	gcloud storage cp $$FILE gs://$(STORAGE_BUCKET)/$$FILENAME; \
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$$FILENAME --database=$(PROD_DB_NAME) --user=$(PROD_DB_USER) -q; \
-	gsutil rm gs://$(STORAGE_BUCKET)/$$FILENAME
+	gcloud storage rm gs://$(STORAGE_BUCKET)/$$FILENAME
 
 deploy-sql:
 	@echo "Deploying SQL to PRODUCTION ($(PROD_INSTANCE)) via GCS Import..."
@@ -295,15 +295,15 @@ deploy-sql:
 		echo "Aborting."; \
 		exit 1; \
 	fi
-	gsutil cp app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
-	gsutil cp app/db/schema.sql gs://$(STORAGE_BUCKET)/
-	gsutil cp app/db/seed.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp app/db/schema.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp app/db/seed.sql gs://$(STORAGE_BUCKET)/
 	
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/pg-shortkey.sql --database=$(PROD_DB_NAME) -q
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/schema.sql --database=$(PROD_DB_NAME) -q
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/seed.sql --database=$(PROD_DB_NAME) -q
 	
-	gsutil rm gs://$(STORAGE_BUCKET)/pg-shortkey.sql
-	gsutil rm gs://$(STORAGE_BUCKET)/schema.sql
-	gsutil rm gs://$(STORAGE_BUCKET)/seed.sql
+	gcloud storage rm gs://$(STORAGE_BUCKET)/pg-shortkey.sql
+	gcloud storage rm gs://$(STORAGE_BUCKET)/schema.sql
+	gcloud storage rm gs://$(STORAGE_BUCKET)/seed.sql
 db-publish-prod: deploy-sql
