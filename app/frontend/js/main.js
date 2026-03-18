@@ -311,9 +311,25 @@ function initUI() {
       const center = map.getCenter();
       const lat = center.lat();
       const lng = center.lng();
+      const zoom = map.getZoom();
+      
       inputLat.value = lat;
       inputLng.value = lng;
       displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+      // Calculate approximate search radius based on zoom
+      // At zoom 10, ~20nm is a good coverage. 
+      // Higher zoom (zoomed in) = smaller radius.
+      // Formula: radius = baseline * 2^(baseline_zoom - current_zoom)
+      let radius = Math.round(20 * Math.pow(2, 10 - zoom));
+      
+      // Constrain to reasonable limits (5nm to 200nm)
+      radius = Math.max(5, Math.min(200, radius));
+      
+      const inputRadius = document.getElementById('voyage-radius');
+      if (inputRadius) {
+          inputRadius.value = radius;
+      }
 
       // Reverse Geocode
       try {
@@ -1101,9 +1117,11 @@ async function loadStops() {
 
         // Auto-load recommendations if they exist
         try {
-            recommendations = await API.getRecommendations(currentVoyage.id);
+            const recs = await API.getRecommendations(currentVoyage.id);
+            recommendations = recs || [];
             renderRecommendations();
         } catch (e) {
+            recommendations = [];
             console.warn("No recommendations found or failed to load", e);
         }
 
