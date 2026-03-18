@@ -127,6 +127,18 @@ export const API = {
     return res.json();
   },
 
+  async getRecommendations(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/recommendations`);
+    if (!res.ok) throw new Error('Failed to load recommendations');
+    return res.json();
+  },
+
+  async generateRecommendations(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/recommendations/generate`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to generate recommendations');
+    return res.json();
+  },
+
   async getVoyageGuide(id) {
     const res = await apiFetch(`${API_BASE}/voyages/${id}/guide`);
     if (res.status === 404) return null;

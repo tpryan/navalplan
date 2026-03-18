@@ -41,6 +41,9 @@ var _voyageAgentPrompt string
 //go:embed prompts/discovery_agent.md
 var _discoveryAgentPrompt string
 
+//go:embed prompts/navigator_agent.md
+var _navigatorAgentPrompt string
+
 const maxOutputTokens = 65536
 
 type Provider interface {
@@ -142,7 +145,12 @@ func (s *Server) run(ctx context.Context) error {
 		return fmt.Errorf("creating discovery agent: %w", err)
 	}
 
-	loader, err := agent.NewMultiLoader(stopAgent, voyageAgent, discoveryAgent)
+	navigatorAgent, err := s.createNavigatorAgent(ctx, researcherTools)
+	if err != nil {
+		return fmt.Errorf("creating navigator agent: %w", err)
+	}
+
+	loader, err := agent.NewMultiLoader(stopAgent, voyageAgent, discoveryAgent, navigatorAgent)
 	if err != nil {
 		return fmt.Errorf("creating multi loader: %w", err)
 	}
@@ -279,6 +287,31 @@ func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) 
 			geminitool.GoogleSearch{},
 		},
 		temperature: 0.2,
+	})
+}
+
+func (s *Server) createNavigatorAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
+	searchAgent, err := s.createAgent(ctx, &agentConfig{
+		name:        "navigator_search_specialist",
+		description: "Finds navigation info on the web.",
+		instruction: _searchSpecialistPrompt,
+		tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		temperature: 0.4,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating search agent: %w", err)
+	}
+
+	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
+
+	return s.createAgent(ctx, &agentConfig{
+		name:        "navigator_agent",
+		description: "A Local Pilot and Navigation Specialist.",
+		instruction: _navigatorAgentPrompt,
+		tools:       allTools,
+		temperature: 0.4,
 	})
 }
 

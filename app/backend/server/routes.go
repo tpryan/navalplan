@@ -73,6 +73,8 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/research", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerFullVoyageResearch)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/guide", http.HandlerFunc(s.Handler.GetVoyageGuide), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/briefings", http.HandlerFunc(s.Handler.ListVoyageBriefings), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/recommendations/generate", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.GenerateRecommendations)), 1},
+		{http.MethodGet, "/api/v1/voyages/{id}/recommendations", http.HandlerFunc(s.Handler.ListRecommendations), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/guide/snapshot", http.HandlerFunc(s.Handler.UploadVoyageSnapshot), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/map_image", http.HandlerFunc(s.Handler.GetVoyageMapImage), 0}, // Public (Mixed Auth)
 
@@ -100,7 +102,7 @@ func (s *Server) Routes(staticPath string) {
 			// Strip prefix manually if needed, but ServeFile works with full path if constructed right
 			// However, http.ServeFile doesn't strip the prefix from the URL when looking up the file.
 			// So if we request /assets/foo.css, and staticPath is /static, we want /static/assets/foo.css
-			
+
 			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
 			http.ServeFile(w, r, fpath)
 		}), 0},

@@ -146,6 +146,24 @@ func (m *MockStore) GetVoyageMap(ctx context.Context, voyageID int64) ([]byte, e
 	return args.Get(0).([]byte), args.Error(1)
 }
 
+func (m *MockStore) ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]models.VoyageRecommendation, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.VoyageRecommendation), args.Error(1)
+}
+
+func (m *MockStore) CreateVoyageRecommendation(ctx context.Context, r *models.VoyageRecommendation) error {
+	args := m.Called(r)
+	return args.Error(0)
+}
+
+func (m *MockStore) DeleteVoyageRecommendations(ctx context.Context, voyageID int64) error {
+	args := m.Called(voyageID)
+	return args.Error(0)
+}
+
 func (m *MockStore) FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error) {
 	args := m.Called(googleID)
 	if args.Get(0) == nil {

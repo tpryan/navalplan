@@ -1,0 +1,46 @@
+package datastore
+
+import (
+	"context"
+
+	"app/models"
+)
+
+// ListVoyageRecommendations retrieves all recommendations for a given voyage.
+func (db *DB) ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]models.VoyageRecommendation, error) {
+	var recommendations []models.VoyageRecommendation
+	query := `
+		SELECT id, voyage_id, name, type, latitude, longitude, geometry, description, reasoning, created_at
+		FROM voyage_recommendation 
+		WHERE voyage_id = $1 
+		ORDER BY created_at DESC`
+
+	err := db.SelectContext(ctx, &recommendations, query, voyageID)
+	return recommendations, err
+}
+
+// CreateVoyageRecommendation inserts a new recommendation into the database.
+func (db *DB) CreateVoyageRecommendation(ctx context.Context, r *models.VoyageRecommendation) error {
+	query := `
+		INSERT INTO voyage_recommendation (voyage_id, name, type, latitude, longitude, geometry, description, reasoning)
+		VALUES (:voyage_id, :name, :type, :latitude, :longitude, :geometry, :description, :reasoning)
+		RETURNING id, created_at`
+
+	rows, err := db.NamedQueryContext(ctx, query, r)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return rows.Scan(&r.ID, &r.CreatedAt)
+	}
+	return nil
+}
+
+// DeleteVoyageRecommendations removes all recommendations for a given voyage.
+func (db *DB) DeleteVoyageRecommendations(ctx context.Context, voyageID int64) error {
+	query := `DELETE FROM voyage_recommendation WHERE voyage_id = $1`
+	_, err := db.ExecContext(ctx, query, voyageID)
+	return err
+}

@@ -41,6 +41,8 @@ let map = null;
 let markers = [];
 let routePolyline = null;
 let facilityMarkers = [];
+let recommendationMarkers = [];
+let recommendations = [];
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -168,10 +170,15 @@ function initUI() {
   const formNewVoyage = document.getElementById('form-new-voyage');
   const btnBack = document.getElementById('btn-back-voyages');
   const btnExport = document.getElementById('btn-export-voyage');
+  const btnPilotSuggestions = document.getElementById('btn-pilot-suggestions');
   const btnEditVoyage = document.getElementById('btn-edit-voyage');
   const btnDiscover = document.getElementById('btn-discover');
   const btnCloseDiscovery = document.getElementById('btn-close-discovery');
   const monthSlider = document.getElementById('month-slider');
+
+  if (btnPilotSuggestions) {
+    btnPilotSuggestions.addEventListener('click', () => handlePilotSuggestionsClick());
+  }
 
   // Discovery Toggle
   if (btnDiscover) {
@@ -1045,6 +1052,7 @@ async function selectVoyage(voyage) {
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
 
+    clearRecommendations();
     updateItineraryHeader(voyage);
 
     // Reset pagination
@@ -1060,6 +1068,21 @@ async function loadStops() {
         currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
         renderItinerary();
         renderMapStops();
+
+        // Check if itinerary is full
+        const isFull = isItineraryFull();
+
+        // Auto-load recommendations if they exist and itinerary NOT full
+        if (!isFull) {
+            try {
+                recommendations = await API.getRecommendations(currentVoyage.id);
+                renderRecommendations();
+            } catch (e) {
+                console.warn("No recommendations found or failed to load", e);
+            }
+        } else {
+            clearRecommendations();
+        }
 
         if (map) {
             if (currentStops.length > 0) {
@@ -1081,6 +1104,263 @@ async function loadStops() {
         list.innerHTML = '<div class="error-state"><p>Failed to load stops.</p></div>';
     }
 }
+
+function isItineraryFull() {
+    if (!currentVoyage) return false;
+    const start = new Date(currentVoyage.start_date);
+    const end = new Date(currentVoyage.end_date);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return currentStops.length >= diffDays;
+}
+
+async function handlePilotSuggestionsClick() {
+    if (!currentVoyage) return;
+    
+    const btn = document.getElementById('btn-pilot-suggestions');
+    const icon = btn.querySelector('.material-symbols-outlined');
+    
+    try {
+        icon.classList.add('spin');
+        btn.disabled = true;
+        
+        await API.generateRecommendations(currentVoyage.id);
+        
+        // Start a ticker to show progress
+        if (researchTicker) {
+            researchTicker.start("The Local Pilot is researching anchorages, moorings, and marinas...");
+        }
+
+        // Poll for results
+        let attempts = 0;
+        const maxAttempts = 30; // 5 minutes (10s interval)
+        
+        const poll = setInterval(async () => {
+            attempts++;
+            try {
+                const recs = await API.getRecommendations(currentVoyage.id);
+                if (recs && recs.length > 0) {
+                    clearInterval(poll);
+                    recommendations = recs;
+                    renderRecommendations();
+                    if (researchTicker) researchTicker.stop();
+                    icon.classList.remove('spin');
+                    btn.disabled = false;
+                    
+                    // Zoom out to show recommendations
+                    if (map && recommendations.length > 0) {
+                        const { LatLngBounds } = await importLibrary("core");
+                        const bounds = new LatLngBounds();
+                        recommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
+                        map.fitBounds(bounds, 100);
+                    }
+                }
+            } catch (e) {
+                // Ignore errors during polling
+            }
+
+            if (attempts >= maxAttempts) {
+                clearInterval(poll);
+                if (researchTicker) researchTicker.stop();
+                icon.classList.remove('spin');
+                btn.disabled = false;
+                alert("Pilot research is taking longer than expected. Please check back in a moment.");
+            }
+        }, 10000);
+
+    } catch (err) {
+        console.error(err);
+        alert('Failed to start pilot suggestions');
+        icon.classList.remove('spin');
+        btn.disabled = false;
+    }
+}
+
+async function renderRecommendations() {
+    clearRecommendations();
+    if (!map || !recommendations || recommendations.length === 0) return;
+
+    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
+    const { InfoWindow } = await importLibrary("maps");
+
+    const features = [];
+    const styles = {
+        hub: { color: '#FF5722', icon: 'hub', label: 'Resource Hub' }, // Safety Orange
+        anchorage: { color: '#00BFA5', icon: 'anchor', label: 'Anchorage' }, // Vibrant Teal
+        mooring: { color: '#9B59B6', icon: 'crisis_alert', label: 'Mooring' } // Purple
+    };
+
+    recommendations.forEach((rec) => {
+        const type = (rec.type || '').toLowerCase();
+        let style = styles.hub;
+        if (type.includes('anchor')) style = styles.anchorage;
+        else if (type.includes('moor')) style = styles.mooring;
+
+        // 1. Add Marker for Anchorage/Mooring
+        if (type !== 'hub') {
+            const pin = new PinElement({
+                glyph: new DOMParser().parseFromString(`<span class="material-symbols-outlined" style="font-size: 18px; color: white;">${style.icon}</span>`, 'text/html').body.firstChild,
+                background: style.color,
+                borderColor: "#333",
+            });
+
+            const marker = new AdvancedMarkerElement({
+                map: map,
+                position: { lat: rec.latitude, lng: rec.longitude },
+                content: pin.element,
+                title: rec.name,
+                zIndex: 150
+            });
+
+            marker.addListener('click', () => {
+                 showRecommendationInfoWindow(rec, marker, style);
+            });
+
+            recommendationMarkers.push(marker);
+        }
+
+        // 2. Add Blob for Hub
+        if (type === 'hub' && rec.geometry && rec.geometry.type === 'Polygon') {
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: rec.geometry.coordinates.map(ring => smoothPolygon(ring, 3)) 
+                },
+                properties: {
+                    type: 'recommendation',
+                    recId: rec.id,
+                    color: style.color,
+                    name: rec.name,
+                    style: style
+                }
+            });
+        }
+    });
+
+    if (features.length > 0) {
+        map.data.addGeoJson({
+            type: 'FeatureCollection',
+            features: features
+        });
+
+        map.data.setStyle((feature) => {
+            if (feature.getProperty('type') === 'recommendation') {
+                return {
+                    fillColor: feature.getProperty('color'),
+                    strokeColor: feature.getProperty('color'),
+                    strokeWeight: 4, 
+                    fillOpacity: 0.35,
+                    clickable: true
+                };
+            }
+            return {
+                fillColor: '#4285F4',
+                strokeWeight: 1,
+                fillOpacity: 0.2
+            };
+        });
+        
+        // Handle clicks on blobs
+        map.data.addListener('click', (event) => {
+            if (event.feature.getProperty('type') === 'recommendation') {
+                const recId = event.feature.getProperty('recId');
+                const rec = recommendations.find(r => r.id === recId);
+                const style = event.feature.getProperty('style');
+                if (rec) {
+                    showRecommendationInfoWindow(rec, { position: event.latLng }, style);
+                }
+            }
+        });
+    }
+}
+
+function showRecommendationInfoWindow(rec, anchor, style) {
+    const { InfoWindow } = googleMapsLib;
+    const content = `
+        <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span class="material-symbols-outlined" style="color: ${style.color};">${style.icon}</span>
+                <b style="font-size: 1.2rem; color: #1a73e8;">${rec.name}</b>
+            </div>
+            <span style="font-size: 0.85rem; color: ${style.color}; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">${style.label}</span><br>
+            <p style="margin: 10px 0; font-size: 0.9rem; line-height: 1.5; color: #333;">${rec.description || ''}</p>
+            <div style="background: ${style.color}1A; padding: 10px; border-radius: 6px; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
+                <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
+            </div>
+            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
+                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
+                Add to Itinerary
+            </button>
+        </div>`;
+    
+    const infoWindow = new InfoWindow({
+        content: content,
+        position: anchor.position
+    });
+    infoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
+}
+
+function clearRecommendations() {
+    recommendationMarkers.forEach(m => m.map = null);
+    recommendationMarkers = [];
+    
+    // Clear blobs from map.data
+    if (map && map.data) {
+        map.data.forEach((feature) => {
+            if (feature.getProperty('type') === 'recommendation') {
+                map.data.remove(feature);
+            }
+        });
+    }
+}
+
+window.addRecommendationToItinerary = async function(recId) {
+    const rec = recommendations.find(r => r.id === recId);
+    if (!rec) return;
+
+    if (currentVoyage) {
+        // Find first empty date
+        const start = new Date(currentVoyage.start_date);
+        const end = new Date(currentVoyage.end_date);
+        let targetDate = null;
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            if (!currentStops.some(s => s.target_date.startsWith(dateStr))) {
+                targetDate = dateStr;
+                break;
+            }
+        }
+
+        if (!targetDate) {
+            alert("No empty dates left in your voyage!");
+            return;
+        }
+
+        const stopData = {
+            target_date: targetDate + 'T00:00:00Z',
+            location_name: rec.name,
+            precise_location: `${rec.name}, ${rec.type}`,
+            latitude: rec.latitude,
+            longitude: rec.longitude,
+            search_radius: 5,
+            search_radius_unit: 'nm',
+            notes: rec.description
+        };
+
+        try {
+            const created = await API.createStop(currentVoyage.id, stopData);
+            currentStops.push(created);
+            renderItinerary();
+            renderMapStops();
+            alert(`Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to add recommendation to itinerary');
+        }
+    }
+};
 
 function renderItinerary() {
     const list = document.getElementById('itinerary-list');
@@ -1933,21 +2213,26 @@ async function initMap() {
   function clearMap() {
       markers.forEach(m => m.map = null);
       markers = [];
-      
+
       if (routePolyline) {
           routePolyline.setMap(null);
           routePolyline = null;
       }
-  
+
       facilityMarkers.forEach(m => m.map = null);
       facilityMarkers = [];
-  
+
       if (map && map.data) {
           map.data.forEach((feature) => {
-              map.data.remove(feature);
+              // Sparce recommendation blobs and discovery regions
+              const type = feature.getProperty('type');
+              if (type !== 'recommendation' && type !== 'discovery') {
+                  map.data.remove(feature);
+              }
           });
       }
-  }  
+  }
+  
 async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -2552,6 +2837,7 @@ async function renderDiscoveryLayer() {
                 coordinates: r.geometry.coordinates.map(ring => smoothPolygon(ring, 3))
             },
             properties: {
+                type: 'discovery',
                 id: r.id,
                 name: r.name,
                 tier: r.tier,
