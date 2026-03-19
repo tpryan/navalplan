@@ -171,6 +171,11 @@ func (s *Server) run(ctx context.Context) error {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("OK"))
 	})
+	// Health Check
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("OK"))
+	})
 
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
