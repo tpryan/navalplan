@@ -53,7 +53,7 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return nil // Agent not configured, skip check
 	}
 
-	url := h.AgentURL + "/healthz"
+	url := h.AgentURL + "/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

@@ -236,7 +236,7 @@ export const API = {
 
     async checkHealth() {
         try {
-            const res = await fetch('/healthz');
+            const res = await fetch('/health');
             if (res.ok) return { ok: true };
             
             const text = await res.text();

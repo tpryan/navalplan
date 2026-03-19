@@ -277,7 +277,7 @@ components:
 
 paths:
   # --- System ---
-  /healthz:
+  /health:
     get:
       tags: [System]
       summary: Health check
