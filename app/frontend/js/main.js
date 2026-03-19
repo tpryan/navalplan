@@ -403,7 +403,7 @@ function initUI() {
       await selectVoyage(freshVoyage || savedVoyage);
     } catch (err) {
       console.error(err);
-      alert('Failed to save voyage. Check console.');
+      showNotification('Error', 'Failed to save voyage. Check console.');
     }
   });
 
@@ -716,7 +716,7 @@ function initUI() {
             setTimeout(() => btnCopyReport.textContent = originalText, 2000);
         } catch (err) {
             console.error('Failed to copy', err);
-            alert('Failed to copy report to clipboard');
+            showNotification('Error', 'Failed to copy report to clipboard');
             btnCopyReport.textContent = originalText;
         } finally {
             // 5. Restore Attributes, Icons, Canvases, and Lists
@@ -851,7 +851,7 @@ function renderVoyageList() {
           }
         } catch (err) {
           console.error(err);
-          alert('Failed to delete voyage');
+          showNotification('Error', 'Failed to delete voyage');
         }
       }
     });
@@ -1015,7 +1015,7 @@ async function loadStops() {
         }
     } catch (err) {
         console.error(err);
-        alert('Failed to load stops');
+        showNotification('Error', 'Failed to load stops');
         list.innerHTML = '<div class="error-state"><p>Failed to load stops.</p></div>';
     }
 }
@@ -1173,7 +1173,7 @@ async function handleResearchAll(confirmFirst = true) {
            btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
            btn.disabled = false;
         });
-        alert('Failed to trigger research.');
+        showNotification('Error', 'Failed to trigger research.');
     }
 }
 
@@ -1292,13 +1292,13 @@ async function handlePilotSuggestionsClick() {
                 if (researchTicker) researchTicker.stop();
                 icon.classList.remove('spin');
                 btn.disabled = false;
-                alert("The AI research is taking longer than expected. The agent may have encountered an error. Please try again in a few minutes.");
+                showNotification('Error', "The AI research is taking longer than expected. The agent may have encountered an error. Please try again in a few minutes.");
             }
         }, 10000);
 
     } catch (err) {
         console.error(err);
-        alert('Failed to start pilot suggestions');
+        showNotification('Error', 'Failed to start pilot suggestions');
         icon.classList.remove('spin');
         btn.disabled = false;
     }
@@ -1463,7 +1463,7 @@ window.addRecommendationToItinerary = async function(recId) {
         }
 
         if (!targetDate) {
-            alert("No empty dates left in your voyage!");
+            showNotification('Notice', "No empty dates left in your voyage!");
             return;
         }
 
@@ -1490,10 +1490,10 @@ window.addRecommendationToItinerary = async function(recId) {
             renderItinerary();
             renderMapStops();
             await checkItineraryFullness();
-            alert(`Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
+            showNotification('Success', `Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
         } catch (err) {
             console.error(err);
-            alert('Failed to add recommendation to itinerary');
+            showNotification('Error', 'Failed to add recommendation to itinerary');
         }
     }
 };
@@ -1557,7 +1557,7 @@ function renderItinerary() {
                         renderMapStops();
                     } catch (err) {
                         console.error(err);
-                        alert('Failed to delete stop');
+                        showNotification('Error', 'Failed to delete stop');
                     }
                 }
             });
@@ -2224,7 +2224,7 @@ async function initMap() {
           }
       } catch (err) {
           console.error(err);
-          alert('Failed to save stop');
+          showNotification('Error', 'Failed to save stop');
       }
     });
   }
@@ -2690,7 +2690,7 @@ async function captureAndUploadMap(voyageId) {
 
     } catch (err) {
         console.error(err);
-        alert("Failed to generate report.");
+        showNotification('Error', "Failed to generate report.");
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalContent;
@@ -2807,7 +2807,7 @@ function showVoyageGuide(guide) {
                     img.src = `${src}?t=${Date.now()}`;
                 }
             } else {
-                alert('Failed to capture map. Ensure the map is visible.');
+                showNotification('Error', 'Failed to capture map. Ensure the map is visible.');
             }
     };
 
@@ -3167,7 +3167,7 @@ async function showRegionBriefing(props, month) {
                 loadDiscoveryRegions(month);
             } catch (err) {
                 console.error('Failed to delete region seasonality:', err);
-                alert('Failed to remove region. Please try again.');
+                showNotification('Error', 'Failed to remove region. Please try again.');
             }
         };
     }
@@ -3190,7 +3190,7 @@ async function initSharedMode(token) {
 
 async function handleShareClick(guide) {
     if (!currentVoyage || currentVoyage.id !== guide.voyage_id) {
-         alert('Error: Voyage context lost.');
+         showNotification('Error', 'Error: Voyage context lost.');
          return;
     }
 
@@ -3261,7 +3261,7 @@ async function handleShareClick(guide) {
             }
         } catch (err) {
             console.error(err);
-            alert('Failed to update sharing settings');
+            showNotification('Error', 'Failed to update sharing settings');
             chk.checked = !chk.checked;
         }
     };
@@ -3950,7 +3950,7 @@ function initAdminUI() {
                 showNotification('User Invited', `${email} has been added to the allowlist.`);
             } catch (err) {
                 console.error(err);
-                alert('Failed to invite user');
+                showNotification('Error', 'Failed to invite user');
             } finally {
                 btn.disabled = false;
                 btn.textContent = originalText;
@@ -4031,7 +4031,7 @@ window.revokeInvite = async (email) => {
         loadAdminUsers();
     } catch (err) {
         console.error(err);
-        alert('Failed to revoke invitation');
+        showNotification('Error', 'Failed to revoke invitation');
     }
 };
 
