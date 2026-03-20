@@ -948,7 +948,15 @@ function updateItineraryHeader(voyage) {
 }
 
 async function selectVoyage(voyage) {
-    currentVoyage = voyage;
+    try {
+        // Fetch full voyage details to ensure we have search_radius and other fields
+        const fullVoyage = await API.getVoyage(voyage.id);
+        currentVoyage = fullVoyage;
+    } catch (err) {
+        console.warn("Failed to fetch full voyage details, using list data", err);
+        currentVoyage = voyage;
+    }
+
     document.getElementById('voyage-list').classList.add('hidden');
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
@@ -958,7 +966,7 @@ async function selectVoyage(voyage) {
 
     lastKnownItineraryFull = false;
     clearRecommendations();
-    updateItineraryHeader(voyage);
+    updateItineraryHeader(currentVoyage);
 
     // Reset pagination
     currentStopPage = 1;
@@ -1605,12 +1613,14 @@ async function renderPilotCircle() {
                 currentVoyage.latitude = c.lat();
                 currentVoyage.longitude = c.lng();
                 currentVoyage.search_radius = rNm;
+                currentVoyage.search_radius_unit = currentVoyage.search_radius_unit || 'nm';
                 
                 await API.updateVoyage(currentVoyage.id, {
                     ...currentVoyage,
                     latitude: c.lat(),
                     longitude: c.lng(),
-                    search_radius: rNm
+                    search_radius: rNm,
+                    search_radius_unit: currentVoyage.search_radius_unit
                 });
                 console.log("NavalPlan: Voyage research area synced to DB:", rNm, "nm");
             } catch (err) {
