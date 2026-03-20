@@ -35,6 +35,12 @@ export const API = {
     return res.json();
   },
 
+  async getVoyage(id) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}`);
+    if (!res.ok) throw new Error('Failed to load voyage');
+    return res.json();
+  },
+
   async createVoyage(voyage) {
     const res = await apiFetch(`${API_BASE}/voyages`, {
       method: 'POST',

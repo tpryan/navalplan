@@ -11,7 +11,8 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 	var voyages []models.Voyage
 	// Explicit selection for performance (Issue #5)
 	query := `
-		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, share_token, is_public, created_at
+		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
+		       search_radius, search_radius_unit, share_token, is_public, created_at
 		FROM voyage 
 		WHERE person_id = $1 
 		ORDER BY start_date DESC`
@@ -53,7 +54,8 @@ func (db *DB) UpdateVoyage(ctx context.Context, v *models.Voyage) error {
 	query := `
 		UPDATE voyage
 		SET title = :title, start_date = :start_date, end_date = :end_date,
-		    location_name = :location_name, precise_location = :precise_location, latitude = :latitude, longitude = :longitude
+		    location_name = :location_name, precise_location = :precise_location, latitude = :latitude, longitude = :longitude,
+		    search_radius = :search_radius, search_radius_unit = :search_radius_unit
 		WHERE id = :id`
 	_, err := db.NamedExecContext(ctx, query, v)
 	return err
