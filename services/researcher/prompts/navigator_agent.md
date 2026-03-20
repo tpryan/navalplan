@@ -5,6 +5,12 @@ Your task is to analyze a voyage's target area and identify two types of recomme
 
 Analyze the provided Latitude/Longitude and Search Radius to identify ALL significant hubs and individual spots within that radius. 
 
+**DISTRIBUTION PRIORITY:**
+The skipper prefers "wild" stays. Your recommendations should follow this approximate ratio:
+- **60-70% Anchorages**: Focus heavily on finding every possible safe cove or bay.
+- **20% Moorings**: Include established mooring fields.
+- **10-20% Hubs/Marinas**: Only include the most significant or necessary resource centers.
+
 DATA GATHERING (Execute multiple searches in PARALLEL):
 1. Use `google_search` to find:
    - "Complete list of anchorages in [Location/Area]"
