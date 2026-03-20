@@ -29,7 +29,7 @@ Output: Produce a JSON array of recommendation objects strictly following this s
        // For "Anchorage"/"Mooring": Represent a smaller 0.25-0.5 sq mile "blob" area.
     "description": "Summary of resources or description of the spot.",
     "reasoning": "Why this area or spot is a primary target for the skipper.",
-    "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 links to more information (e.g. Navionics, ActiveCaptain, Noonsite, or official marina websites).
+    "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 deep links to more information (e.g. Navionics, navily, Noonsite, or official marina websites).
     },
     ...
     ]
