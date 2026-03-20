@@ -7,12 +7,45 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 
 	appcontext "app/context"
 	"app/models"
 )
+
+func haversine(lat1, lon1, lat2, lon2 float64, unit string) float64 {
+	const (
+		earthRadiusKm = 6371.0
+		earthRadiusMi = 3958.8
+		earthRadiusNm = 3440.1
+	)
+
+	var r float64
+	switch unit {
+	case "nm":
+		r = earthRadiusNm
+	case "mi":
+		r = earthRadiusMi
+	case "km":
+		r = earthRadiusKm
+	default:
+		r = earthRadiusNm
+	}
+
+	phi1 := lat1 * math.Pi / 180
+	phi2 := lat2 * math.Pi / 180
+	deltaPhi := (lat2 - lat1) * math.Pi / 180
+	deltaLambda := (lon2 - lon1) * math.Pi / 180
+
+	a := math.Sin(deltaPhi/2)*math.Sin(deltaPhi/2) +
+		math.Cos(phi1)*math.Cos(phi2)*
+			math.Sin(deltaLambda/2)*math.Sin(deltaLambda/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return r * c
+}
 
 // ListRecommendations returns generated recommendations for a voyage.
 func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +208,20 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 	if err := json.Unmarshal([]byte(responseText), &recommendations); err != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
 		return
+	}
+
+	// Filter by radius
+	if v.Latitude != nil && v.Longitude != nil {
+		var filtered []models.VoyageRecommendation
+		for _, rec := range recommendations {
+			dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
+			if dist <= float64(v.SearchRadius) {
+				filtered = append(filtered, rec)
+			} else {
+				slog.WarnContext(ctx, "Filtering recommendation out of range", "name", rec.Name, "dist", dist, "radius", v.SearchRadius, "unit", v.SearchRadiusUnit)
+			}
+		}
+		recommendations = filtered
 	}
 
 	// Clear old recommendations
