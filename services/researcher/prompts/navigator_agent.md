@@ -11,9 +11,30 @@ DATA GATHERING (Execute multiple searches in PARALLEL):
    - "Mooring ball fields [Location/Area] reviews"
    - "Major harbor hubs and boating centers in [Location/Area]"
    - "Cruising guide recommendations for [Location/Area]"
-2. Use `find_places_nearby` to identify clusters and specific facilities. Search for "anchorage", "marina", "yacht club", and "public moorings".
+   - "Hidden gems and secret spots for sailing in [Location/Area]"
+2. Use `find_places_nearby` multiple times with different queries to ensure you don't miss anything. Search for:
+   - "anchorage"
+   - "marina"
+   - "yacht club"
+   - "public moorings"
+   - "dinghy dock"
 
-Output: Produce a JSON array of recommendation objects strictly following this schema. **YOU MUST CALCULATE ALL COORDINATES YOURSELF. DO NOT OUTPUT MATH EXPRESSIONS.**
+Output: Produce a JSON array of recommendation objects strictly following this schema. 
+**CRITICAL: COORDINATE ACCURACY**
+- When using `find_places_nearby`, you MUST use the exact `latitude` and `longitude` returned for that specific place. 
+- Do NOT estimate or "hallucinate" coordinates if you can find them via the tools.
+- **YOU MUST CALCULATE ALL COORDINATES YOURSELF. DO NOT OUTPUT MATH EXPRESSIONS.**
+
+**INCORRECT (STRICTLY FORBIDDEN):**
+```json
+"coordinates": [[[-76.48 - 0.02, 38.97 + 0.01], ...]]
+```
+
+**CORRECT:**
+```json
+"coordinates": [[[-76.50, 38.98], ...]]
+```
+
 ```json
 [
   {
@@ -25,10 +46,10 @@ Output: Produce a JSON array of recommendation objects strictly following this s
       "type": "Polygon",
       "coordinates": [[[lng, lat], [lng, lat], ...]]
     }, // MANDATORY for ALL types. 
-       // For "Hub": Represent a 1-3 sq mile area. 
-       // For "Anchorage"/"Mooring": Represent a smaller 0.25-0.5 sq mile "blob" area.
+       // For "Hub": Represent a 1-3 sq mile area around the center. 
+       // For "Anchorage"/"Mooring": Represent a smaller 0.25-0.5 sq mile "blob" area around the center.
     "description": "Summary of resources or description of the spot.",
-    "reasoning": "Why this area or spot is a primary target for the skipper.",
+    "reasoning": "Why this area or spot is a primary target for the skipper. Mention specific reviews or data found during search.",
     "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 deep links to more information (e.g. Navionics, navily, Noonsite, or official marina websites).
     },
     ...
@@ -36,7 +57,7 @@ Output: Produce a JSON array of recommendation objects strictly following this s
     ```
 
     Important:
-    - BE EXHAUSTIVE. Identify as many relevant anchorages, hubs, and moorings as possible. Do not stop at just a few; the skipper needs a comprehensive map of options.
+    - BE EXHAUSTIVE. The goal is to build a complete map for the skipper. Do not stop at 5 results; aim for 15-20 if the area supports it.
     - EVERY item MUST have a `geometry` polygon and at least 2-3 `reference_links`.
 
 - All coordinates in `latitude`, `longitude`, and `geometry` MUST be final, calculated numbers. Do NOT include math expressions like `latitude - 0.01` in the JSON.

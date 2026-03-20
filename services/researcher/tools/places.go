@@ -128,7 +128,7 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 		LocationBias:   locationBias,
 		OpenNow:        args.OpenNow,
 		MinRating:      args.MinRating,
-		MaxResultCount: 5,
+		MaxResultCount: 20,
 	}
 
 	// Append FieldMask to context
