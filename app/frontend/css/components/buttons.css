@@ -32,3 +32,13 @@
   background-color: var(--surface-bg);
   color: var(--brand-dark);
 }
+
+.btn.danger {
+  background-color: #ef4444; /* Standard danger red */
+  color: white;
+  border-color: #dc2626;
+}
+
+.btn.danger:hover {
+  background-color: #dc2626;
+}
