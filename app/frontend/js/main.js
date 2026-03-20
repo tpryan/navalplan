@@ -43,6 +43,9 @@ let routePolyline = null;
 let facilityMarkers = [];
 let recommendationMarkers = [];
 let recommendations = [];
+let pilotCircle = null;
+let pilotCenterMarker = null;
+let pilotRadiusMarker = null;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
 let editingVoyageId = null;
@@ -1000,13 +1003,23 @@ async function loadStops() {
         await checkItineraryFullness();
 
         if (map) {
+            const { LatLngBounds } = await importLibrary("core");
+            const bounds = new LatLngBounds();
+
             if (currentStops.length > 0) {
-                const { LatLngBounds } = await importLibrary("core");
-                const bounds = new LatLngBounds();
                 currentStops.forEach(stop => bounds.extend({ lat: stop.latitude, lng: stop.longitude }));
-                if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                    bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
-                }
+            }
+            
+            if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
+                bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
+            }
+
+            // Include Pilot Circle in bounds if it exists
+            if (pilotCircle) {
+                bounds.union(pilotCircle.getBounds());
+            }
+
+            if (!bounds.isEmpty()) {
                 map.fitBounds(bounds, 100);
             } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                 map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
@@ -1250,6 +1263,7 @@ async function handlePilotSuggestionsClick() {
         icon.classList.add('spin');
         btn.disabled = true;
         
+        await renderPilotCircle();
         await API.generateRecommendations(currentVoyage.id);
         
         // Start a ticker to show progress
@@ -1275,11 +1289,16 @@ async function handlePilotSuggestionsClick() {
                     
                     showNotification("Research Complete", `We've identified ${recommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
 
-                    // Zoom out to show recommendations
+                    // Zoom out to show recommendations and research area
                     if (map && recommendations.length > 0) {
                         const { LatLngBounds } = await importLibrary("core");
                         const bounds = new LatLngBounds();
                         recommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
+                        
+                        if (pilotCircle) {
+                            bounds.union(pilotCircle.getBounds());
+                        }
+                        
                         map.fitBounds(bounds, 100);
                     }
                 }
@@ -1306,11 +1325,19 @@ async function handlePilotSuggestionsClick() {
 
 async function renderRecommendations() {
     clearRecommendations();
-    if (!map || !recommendations || recommendations.length === 0) return;
+    if (!map || !currentVoyage) return;
+
+    // Only render if itinerary is NOT full OR if we have recommendations
+    if (!lastKnownItineraryFull || (recommendations && recommendations.length > 0)) {
+        await renderPilotCircle();
+    }
+
+    if (!recommendations || recommendations.length === 0) return;
 
     const { InfoWindow } = await importLibrary("maps");
 
     const features = [];
+
     const styles = {
         hub: { color: '#FF5722', icon: 'hub', label: 'Resource Hub' }, // Safety Orange
         anchorage: { color: '#00BFA5', icon: 'anchor', label: 'Anchorage' }, // Vibrant Teal
@@ -1434,6 +1461,16 @@ function clearRecommendations() {
     recommendationMarkers.forEach(m => m.map = null);
     recommendationMarkers = [];
     
+    if (pilotCircle) {
+        pilotCircle.setMap(null);
+        pilotCircle = null;
+    }
+
+    if (pilotCenterMarker) {
+        pilotCenterMarker.map = null;
+        pilotCenterMarker = null;
+    }
+    
     // Clear blobs from map.data
     if (map && map.data) {
         map.data.forEach((feature) => {
@@ -1442,6 +1479,150 @@ function clearRecommendations() {
             }
         });
     }
+}
+
+async function renderPilotCircle() {
+    if (!map || !currentVoyage) return;
+    if (pilotCircle) pilotCircle.setMap(null);
+    if (pilotCenterMarker) pilotCenterMarker.map = null;
+    if (pilotRadiusMarker) pilotRadiusMarker.map = null;
+
+    const { Circle } = await importLibrary("maps");
+    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
+    const { spherical } = await importLibrary("geometry");
+    
+    // 60 nm default = 111120 meters
+    const radiusMeters = currentVoyage.search_radius ? currentVoyage.search_radius * 1852 : 111120;
+    const center = { lat: currentVoyage.latitude, lng: currentVoyage.longitude };
+
+    // Add Pilot Range Circle
+    pilotCircle = new Circle({
+        strokeColor: "#1a73e8",
+        strokeOpacity: 0.5,
+        strokeWeight: 2,
+        fillColor: "#1a73e8",
+        fillOpacity: 0.05,
+        map: map,
+        center: center,
+        radius: radiusMeters,
+        clickable: true,
+        draggable: false,
+        editable: false, // Use our own handle for real-time feedback
+        zIndex: 5
+    });
+
+    // Add Center Dot and Label
+    const centerContainer = document.createElement('div');
+    centerContainer.style.display = 'flex';
+    centerContainer.style.flexDirection = 'column';
+    centerContainer.style.alignItems = 'center';
+    centerContainer.style.pointerEvents = 'none';
+
+    const centerPin = new PinElement({
+        scale: 0.6,
+        background: "#1a73e8",
+        borderColor: "white",
+        glyph: ""
+    });
+    centerContainer.appendChild(centerPin);
+
+    const label = document.createElement('div');
+    label.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+    label.style.padding = '2px 8px';
+    label.style.borderRadius = '4px';
+    label.style.border = '1px solid #1a73e8';
+    label.style.marginTop = '4px';
+    label.style.whiteSpace = 'nowrap';
+    label.style.fontSize = '12px';
+    label.style.color = '#1a73e8';
+    label.style.fontWeight = 'bold';
+    label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    centerContainer.appendChild(label);
+
+    pilotCenterMarker = new AdvancedMarkerElement({
+        map: map,
+        position: center,
+        content: centerContainer,
+        title: "Research Center",
+        gmpDraggable: true,
+        zIndex: 10
+    });
+
+    // Add Radius Handle (on the East edge)
+    const radiusHandlePin = new PinElement({
+        scale: 0.4,
+        background: "white",
+        borderColor: "#1a73e8",
+        glyph: ""
+    });
+
+    const edgePos = spherical.computeOffset(center, radiusMeters, 90);
+    pilotRadiusMarker = new AdvancedMarkerElement({
+        map: map,
+        position: edgePos,
+        content: radiusHandlePin,
+        title: "Resize Research Area",
+        gmpDraggable: true,
+        zIndex: 11
+    });
+
+    const updateRadiusDisplay = () => {
+        if (!pilotCircle) return;
+        const rMeters = pilotCircle.getRadius();
+        const rNm = Math.round(rMeters / 1852);
+        label.textContent = `${rNm} nm`;
+    };
+
+    // Sync Center Marker -> Circle & Radius Marker
+    pilotCenterMarker.addListener('drag', (e) => {
+        const newCenter = e.latLng;
+        const currentRadius = pilotCircle.getRadius();
+        pilotCircle.setCenter(newCenter);
+        pilotRadiusMarker.position = spherical.computeOffset(newCenter, currentRadius, 90);
+        updateRadiusDisplay();
+    });
+
+    // Sync Radius Marker -> Circle Radius
+    pilotRadiusMarker.addListener('drag', (e) => {
+        const c = pilotCircle.getCenter();
+        const newRadius = spherical.computeDistanceBetween(c, e.latLng);
+        pilotCircle.setRadius(newRadius);
+        updateRadiusDisplay();
+    });
+
+    // Add a debounced sync to backend
+    let syncTimeout;
+    const syncToBackend = () => {
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            if (!pilotCircle) return;
+            const c = pilotCircle.getCenter();
+            const rMeters = pilotCircle.getRadius();
+            const rNm = Math.round(rMeters / 1852);
+            
+            try {
+                // Update local state
+                currentVoyage.latitude = c.lat();
+                currentVoyage.longitude = c.lng();
+                currentVoyage.search_radius = rNm;
+                
+                await API.updateVoyage(currentVoyage.id, {
+                    ...currentVoyage,
+                    latitude: c.lat(),
+                    longitude: c.lng(),
+                    search_radius: rNm
+                });
+                console.log("NavalPlan: Voyage research area synced to DB:", rNm, "nm");
+            } catch (err) {
+                console.error("NavalPlan: Failed to sync voyage research area:", err);
+            }
+        }, 1000);
+    };
+
+    pilotCenterMarker.addListener('dragend', syncToBackend);
+    pilotRadiusMarker.addListener('dragend', syncToBackend);
+
+    updateRadiusDisplay();
 }
 
 window.addRecommendationToItinerary = async function(recId) {
