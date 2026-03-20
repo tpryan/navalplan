@@ -845,18 +845,29 @@ function renderVoyageList() {
     const btnDelete = el.querySelector('.delete');
     btnDelete.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm(`Are you sure you want to delete "${voyage.title}"?`)) {
-        try {
-          await API.deleteVoyage(voyage.id);
-          loadVoyages();
-          if (currentVoyage && currentVoyage.id === voyage.id) {
-             showVoyageList(); // Reset view if we deleted the current voyage
+      showNotification('Delete Voyage', `Are you sure you want to delete "${voyage.title}"?`, [
+          {
+              label: 'Delete',
+              type: 'danger',
+              hideClose: true,
+              callback: async () => {
+                  try {
+                      await API.deleteVoyage(voyage.id);
+                      loadVoyages();
+                      if (currentVoyage && currentVoyage.id === voyage.id) {
+                          showVoyageList(); // Reset view if we deleted the current voyage
+                      }
+                  } catch (err) {
+                      console.error(err);
+                      showNotification('Error', 'Failed to delete voyage');
+                  }
+              }
+          },
+          {
+              label: 'Cancel',
+              type: 'secondary'
           }
-        } catch (err) {
-          console.error(err);
-          showNotification('Error', 'Failed to delete voyage');
-        }
-      }
+      ]);
     });
 
     listContainer.appendChild(el);
@@ -1041,15 +1052,7 @@ async function loadStops() {
     }
 }
 
-async function handleResearchAll(confirmFirst = true) {
-    if (!currentVoyage) return;
-    
-    if (confirmFirst) {
-        if (!confirm('This will trigger research for the entire voyage and all stops. Continue?')) {
-            return;
-        }
-    }
-
+async function executeResearchAll() {
     const btnResearchAll = document.getElementById('btn-research-all');
     const originalContent = btnResearchAll.innerHTML;
     btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
@@ -1195,6 +1198,25 @@ async function handleResearchAll(confirmFirst = true) {
            btn.disabled = false;
         });
         showNotification('Error', 'Failed to trigger research.');
+    }
+}
+
+async function handleResearchAll(confirmFirst = true) {
+    if (!currentVoyage) return;
+    
+    if (confirmFirst) {
+        showNotification('Full Research', 'This will trigger research for the entire voyage and all stops. Continue?', [
+            {
+                label: 'Continue',
+                callback: executeResearchAll
+            },
+            {
+                label: 'Cancel',
+                type: 'secondary'
+            }
+        ]);
+    } else {
+        executeResearchAll();
     }
 }
 
@@ -1764,18 +1786,29 @@ function renderItinerary() {
             const btnDelete = el.querySelector('.delete-stop');
             btnDelete.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (confirm(`Remove stop at ${displayLocationName(stop.location_name)}?`)) {
-                    try {
-                        await API.deleteStop(stop.id);
-                        currentStops = currentStops.filter(s => s.id !== stop.id);
-                        renderItinerary();
-                        renderMapStops();
-                        await checkItineraryFullness(true);
-                    } catch (err) {
-                        console.error(err);
-                        showNotification('Error', 'Failed to delete stop');
+                showNotification('Delete Stop', `Remove stop at ${displayLocationName(stop.location_name)}?`, [
+                    {
+                        label: 'Remove',
+                        type: 'danger',
+                        hideClose: true,
+                        callback: async () => {
+                            try {
+                                await API.deleteStop(stop.id);
+                                currentStops = currentStops.filter(s => s.id !== stop.id);
+                                renderItinerary();
+                                renderMapStops();
+                                await checkItineraryFullness(true);
+                            } catch (err) {
+                                console.error(err);
+                                showNotification('Error', 'Failed to delete stop');
+                            }
+                        }
+                    },
+                    {
+                        label: 'Cancel',
+                        type: 'secondary'
                     }
-                }
+                ]);
             });
         }
 
@@ -3095,7 +3128,7 @@ async function redoGuide(oldGuide, btn) {
     }
 }
 
-function showNotification(title, message, action = null) {
+function showNotification(title, message, actions = null) {
     const modal = document.getElementById('modal-notification');
     const modalOverlay = document.getElementById('modal-overlay');
     const titleEl = document.getElementById('notification-title');
@@ -3112,16 +3145,32 @@ function showNotification(title, message, action = null) {
             const customBtns = actionsContainer.querySelectorAll('.custom-action');
             customBtns.forEach(b => b.remove());
 
-            if (action) {
-                const actionBtn = document.createElement('button');
-                actionBtn.className = 'btn primary w-full custom-action';
-                actionBtn.textContent = action.label;
-                actionBtn.onclick = () => {
-                    modal.classList.add('hidden');
-                    modalOverlay.classList.add('hidden');
-                    action.callback();
-                };
-                actionsContainer.insertBefore(actionBtn, closeBtn);
+            if (actions) {
+                // If it's a single action object, wrap it in an array
+                const actionList = Array.isArray(actions) ? actions : [actions];
+                
+                // If any action specifies hideClose, honor it for the whole modal
+                const shouldHideClose = actionList.some(a => a.hideClose);
+                if (shouldHideClose) {
+                    closeBtn.classList.add('hidden');
+                } else {
+                    closeBtn.classList.remove('hidden');
+                }
+
+                actionList.forEach(action => {
+                    const actionBtn = document.createElement('button');
+                    actionBtn.className = `btn ${action.type || 'primary'} w-full custom-action`;
+                    actionBtn.textContent = action.label;
+                    actionBtn.onclick = () => {
+                        modal.classList.add('hidden');
+                        modalOverlay.classList.add('hidden');
+                        if (action.callback) action.callback();
+                    };
+                    
+                    actionsContainer.insertBefore(actionBtn, closeBtn);
+                });
+            } else {
+                closeBtn.classList.remove('hidden');
             }
         }
 
@@ -3371,19 +3420,28 @@ async function showRegionBriefing(props, month) {
     const btnDelete = document.getElementById('btn-delete-region-seasonality');
     if (btnDelete) {
         btnDelete.onclick = async () => {
-            if (!confirm(`Are you sure you want to remove ${props.name} from the discovery list for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`)) {
-                return;
-            }
-
-            try {
-                await API.deleteDiscoverySeasonality(props.id, month);
-                hide();
-                // Refresh discovery regions
-                loadDiscoveryRegions(month);
-            } catch (err) {
-                console.error('Failed to delete region seasonality:', err);
-                showNotification('Error', 'Failed to remove region. Please try again.');
-            }
+            showNotification('Remove Seasonality', `Are you sure you want to remove ${props.name} from the discovery list for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`, [
+                {
+                    label: 'Remove',
+                    type: 'danger',
+                    hideClose: true,
+                    callback: async () => {
+                        try {
+                            await API.deleteDiscoverySeasonality(props.id, month);
+                            hide();
+                            // Refresh discovery regions
+                            loadDiscoveryRegions(month);
+                        } catch (err) {
+                            console.error('Failed to delete region seasonality:', err);
+                            showNotification('Error', 'Failed to remove region. Please try again.');
+                        }
+                    }
+                },
+                {
+                    label: 'Cancel',
+                    type: 'secondary'
+                }
+            ]);
         };
     }
 }
@@ -4240,14 +4298,26 @@ async function loadAdminUsers() {
 
 // Make global for onclick handler
 window.revokeInvite = async (email) => {
-    if (!confirm(`Are you sure you want to revoke the invitation for ${email}?`)) return;
-    try {
-        await API.revokeInvitation(email);
-        loadAdminUsers();
-    } catch (err) {
-        console.error(err);
-        showNotification('Error', 'Failed to revoke invitation');
-    }
+    showNotification('Revoke Invitation', `Are you sure you want to revoke the invitation for ${email}?`, [
+        {
+            label: 'Revoke',
+            type: 'danger',
+            hideClose: true,
+            callback: async () => {
+                try {
+                    await API.revokeInvitation(email);
+                    loadAdminUsers();
+                } catch (err) {
+                    console.error(err);
+                    showNotification('Error', 'Failed to revoke invitation');
+                }
+            }
+        },
+        {
+            label: 'Cancel',
+            type: 'secondary'
+        }
+    ]);
 };
 
 function initOnboarding() {
