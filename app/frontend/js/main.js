@@ -1198,7 +1198,7 @@ async function handleResearchAll(confirmFirst = true) {
     }
 }
 
-async function checkItineraryFullness() {
+async function checkItineraryFullness(isManualAction = false) {
     if (!currentVoyage) return;
 
     // Calculate expected days
@@ -1247,8 +1247,9 @@ async function checkItineraryFullness() {
         }
     }
 
-    // If it just BECAME full, notify user (ONLY if research isn't already done)
-    if (isFull && !lastKnownItineraryFull && !allResearchDone) {
+    // If it just BECAME full OR if this was a manual action filling the last slot, notify user
+    // (ONLY if research isn't already done)
+    if (isFull && !allResearchDone && (isManualAction || !lastKnownItineraryFull)) {
         showNotification(
             "Itinerary Ready", 
             "Every day of your voyage now has a destination! All research hubs and spots have been cleared. \n\nNext Step: Click the 'Research All' (Globe) icon to gather weather, tides, and local charts for your trip.",
@@ -1687,8 +1688,9 @@ window.addRecommendationToItinerary = async function(recId) {
 
             renderItinerary();
             renderMapStops();
-            await checkItineraryFullness();
+            await checkItineraryFullness(true);
             showNotification('Success', `Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
+
         } catch (err) {
             console.error(err);
             showNotification('Error', 'Failed to add recommendation to itinerary');
@@ -1753,6 +1755,7 @@ function renderItinerary() {
                         currentStops = currentStops.filter(s => s.id !== stop.id);
                         renderItinerary();
                         renderMapStops();
+                        await checkItineraryFullness(true);
                     } catch (err) {
                         console.error(err);
                         showNotification('Error', 'Failed to delete stop');
@@ -2400,8 +2403,7 @@ async function initMap() {
           }
           renderItinerary();
           renderMapStops();
-          await checkItineraryFullness();
-
+          await checkItineraryFullness(true);
           // Auto-advance to next empty date
 
           if (currentVoyage && selectedDate) {
