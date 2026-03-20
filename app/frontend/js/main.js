@@ -1199,7 +1199,33 @@ async function handleResearchAll(confirmFirst = true) {
 }
 
 async function checkItineraryFullness() {
-    const isFull = await isItineraryFull();
+    if (!currentVoyage) return;
+
+    // Calculate expected days
+    const start = new Date(currentVoyage.start_date);
+    const end = new Date(currentVoyage.end_date);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    let isFull = false;
+    let allResearchDone = false;
+
+    try {
+        // Fetch ALL stops for this voyage to be sure (bypass pagination)
+        const allStops = await API.getStops(currentVoyage.id, 1, 1000);
+        isFull = allStops.length >= diffDays;
+
+        if (isFull) {
+            // Check if briefings exist for all stops AND guide exists
+            const briefings = await API.getVoyageBriefings(currentVoyage.id);
+            const guide = await API.getVoyageGuide(currentVoyage.id);
+            
+            // Criteria: Briefings for every stop + Global Voyage Guide
+            allResearchDone = briefings.length >= allStops.length && guide !== null;
+        }
+    } catch (e) {
+        console.error("Failed to check itinerary/research status", e);
+    }
 
     // Toggle visibility of Research All button
     const btnResearchAll = document.getElementById('btn-research-all');
@@ -1221,8 +1247,8 @@ async function checkItineraryFullness() {
         }
     }
 
-    // If it just BECAME full, notify user
-    if (isFull && !lastKnownItineraryFull) {
+    // If it just BECAME full, notify user (ONLY if research isn't already done)
+    if (isFull && !lastKnownItineraryFull && !allResearchDone) {
         showNotification(
             "Itinerary Ready", 
             "Every day of your voyage now has a destination! All research hubs and spots have been cleared. \n\nNext Step: Click the 'Research All' (Globe) icon to gather weather, tides, and local charts for your trip.",
@@ -1239,25 +1265,6 @@ async function checkItineraryFullness() {
     // Ensure recommendations are hidden if full
     if (isFull) {
         clearRecommendations();
-    }
-}
-
-async function isItineraryFull() {
-    if (!currentVoyage) return false;
-    
-    // Calculate expected days
-    const start = new Date(currentVoyage.start_date);
-    const end = new Date(currentVoyage.end_date);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    try {
-        // Fetch ALL stops for this voyage to be sure (bypass pagination)
-        const allStops = await API.getStops(currentVoyage.id, 1, 1000);
-        return allStops.length >= diffDays;
-    } catch (e) {
-        console.error("Failed to check if itinerary is full", e);
-        return false;
     }
 }
 
