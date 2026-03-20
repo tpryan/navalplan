@@ -147,6 +147,7 @@ type VoyageRecommendation struct {
 	Geometry    RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon for "blob" visualization
 	Description string    `json:"description" db:"description"`
 	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this
+	References  RawJSON   `json:"reference_links" db:"reference_links"` // Links to more information
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 

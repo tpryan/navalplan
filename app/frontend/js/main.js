@@ -1449,6 +1449,20 @@ function showRecommendationInfoWindow(rec, anchor, style) {
     if (activeInfoWindow) activeInfoWindow.close();
 
     const { InfoWindow } = googleMapsLib;
+    const references = rec.reference_links ? (typeof rec.reference_links === 'string' ? JSON.parse(rec.reference_links) : rec.reference_links) : [];
+    const refsHtml = references.length > 0 ? `
+        <div style="margin-bottom: 15px;">
+            <p style="margin: 0 0 5px 0; font-size: 0.8rem; font-weight: bold; color: #666; text-transform: uppercase;">Resources:</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${references.map((url, i) => `
+                    <a href="${url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                        <span class="material-symbols-outlined" style="font-size: 14px;">link</span>
+                        Link ${i+1}
+                    </a>
+                `).join('')}
+            </div>
+        </div>` : '';
+
     const content = `
         <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -1460,6 +1474,7 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             <div style="background: ${style.color}1A; padding: 10px; border-radius: 6px; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
                 <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
             </div>
+            ${refsHtml}
             <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
                 <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
                 Add to Itinerary

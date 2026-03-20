@@ -28,15 +28,17 @@ Output: Produce a JSON array of recommendation objects strictly following this s
        // For "Hub": Represent a 1-3 sq mile area. 
        // For "Anchorage"/"Mooring": Represent a smaller 0.25-0.5 sq mile "blob" area.
     "description": "Summary of resources or description of the spot.",
-    "reasoning": "Why this area or spot is a primary target for the skipper."
-  },
-  ...
-]
-```
+    "reasoning": "Why this area or spot is a primary target for the skipper.",
+    "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 links to more information (e.g. Navionics, ActiveCaptain, Noonsite, or official marina websites).
+    },
+    ...
+    ]
+    ```
 
-Important:
-- BE EXHAUSTIVE. Identify as many relevant anchorages, hubs, and moorings as possible. Do not stop at just a few; the skipper needs a comprehensive map of options.
-- EVERY item MUST have a `geometry` polygon.
+    Important:
+    - BE EXHAUSTIVE. Identify as many relevant anchorages, hubs, and moorings as possible. Do not stop at just a few; the skipper needs a comprehensive map of options.
+    - EVERY item MUST have a `geometry` polygon and at least 2-3 `reference_links`.
+
 - All coordinates in `latitude`, `longitude`, and `geometry` MUST be final, calculated numbers. Do NOT include math expressions like `latitude - 0.01` in the JSON.
 - The `geometry` should be larger for Hubs and smaller for Anchorages/Moorings, but always a "blob" rather than a single point.
 - Do NOT return any text outside the JSON block.
