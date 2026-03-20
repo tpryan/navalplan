@@ -11,35 +11,36 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"time"
 
 	appcontext "app/context"
 	"app/models"
 )
 
-// repairMathInJSON looks for common math expressions like "38.97 - 0.02" in JSON 
+// repairMathInJSON looks for common math expressions like "38.97 - 0.02" in JSON
 // and replaces them with the calculated result.
 func repairMathInJSON(s string) string {
 	// Pattern for "number space [+ or -] space number"
 	// This is a common failure mode for LLMs in coordinate calculations.
 	re := regexp.MustCompile(`(-?\d+\.?\d*)\s*([+-])\s*(\d+\.?\d*)`)
-	
+
 	return re.ReplaceAllStringFunc(s, func(match string) string {
 		parts := re.FindStringSubmatch(match)
 		if len(parts) != 4 {
 			return match
 		}
-		
+
 		v1, _ := strconv.ParseFloat(parts[1], 64)
 		op := parts[2]
 		v2, _ := strconv.ParseFloat(parts[3], 64)
-		
+
 		var res float64
 		if op == "+" {
 			res = v1 + v2
 		} else {
 			res = v1 - v2
 		}
-		
+
 		return fmt.Sprintf("%.7f", res)
 	})
 }
@@ -160,9 +161,14 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 
 	appName := "navigator_agent"
 	userID := "system"
-	sessionID := fmt.Sprintf("recommendation_%d", v.ID)
+	sessionID := fmt.Sprintf("recommendation_%d_%d", v.ID, time.Now().Unix())
 
 	client := h.AgentClient
+
+	// 0. Clear old recommendations immediately so poller doesn't get stale data
+	if err := h.DB.DeleteVoyageRecommendations(ctx, v.ID); err != nil {
+		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "err", err)
+	}
 
 	// 1. Create Session
 	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
@@ -252,11 +258,6 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 			}
 		}
 		recommendations = filtered
-	}
-
-	// Clear old recommendations
-	if err := h.DB.DeleteVoyageRecommendations(ctx, v.ID); err != nil {
-		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "err", err)
 	}
 
 	// Save new recommendations
