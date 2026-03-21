@@ -1606,6 +1606,13 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             </div>
         </div>` : '';
 
+    const hasDates = currentVoyage && currentVoyage.start_date && currentVoyage.end_date;
+    const addButton = hasDates ? `
+            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
+                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
+                Add to Itinerary
+            </button>` : '';
+
     const content = `
         <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -1618,10 +1625,7 @@ function showRecommendationInfoWindow(rec, anchor, style) {
                 <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
             </div>
             ${refsHtml}
-            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
-                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
-                Add to Itinerary
-            </button>
+            ${addButton}
         </div>`;
     
     activeInfoWindow = new InfoWindow({
@@ -1857,8 +1861,7 @@ window.addRecommendationToItinerary = async function(recId) {
             console.error(err);
             showNotification('Error', 'Failed to add recommendation to itinerary');
         }
-    }
-};
+}
 
 function renderItinerary() {
     const list = document.getElementById('itinerary-list');
