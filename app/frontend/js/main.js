@@ -4054,7 +4054,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // --- Recommendations ---
-    if (recommendations && recommendations.length > 0) {
+    // Only show if we don't have specific stop briefings (Discovery Mode vs Planning Mode)
+    if (!hasBriefings && recommendations && recommendations.length > 0) {
         html += `<div class="report-section-wrapper">
                     <h2 class="report-day-header brand-blue">Resource Hubs & Recommended Spots</h2>`;
 
@@ -4162,9 +4163,59 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (b.facilities && b.facilities.length > 0) {
                 html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
                 b.facilities.forEach(f => {
-                    html += `<li class="facility-item">
-                        <h4>${DOMPurify.sanitize(f.name)}</h4>
-                        <p>${DOMPurify.sanitize(f.description)}</p>
+                    const name = DOMPurify.sanitize(f.name);
+                    const desc = DOMPurify.sanitize(f.description || '');
+                    
+                    let website = '';
+                    if (f.website) {
+                        website = `
+                            <p class="m-0 font-sm">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank">Visit Website</a>
+                            </p>
+                        `;
+                    }
+
+                    let location = '';
+                    if (f.latitude && f.longitude) {
+                        const query = f.address ? `${f.name}, ${f.address}` : `${f.latitude},${f.longitude}`;
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+                        location = `
+                            <p class="m-0 font-sm text-gray">
+                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
+                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
+                                <a href="${mapsUrl}" target="_blank" class="ml-xs">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let detailsHtml = '';
+                    if (f.details && typeof f.details === 'object' && Object.keys(f.details).length > 0) {
+                        const rows = Object.entries(f.details)
+                            .filter(([_, v]) => {
+                                if (!v) return false;
+                                const sv = String(v).toLowerCase().trim();
+                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
+                            })
+                            .map(([k, v]) => `
+                                <tr>
+                                    <th class="briefing-th capitalize" style="text-align: left; background: #f9f9f9; width: 120px;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td">${DOMPurify.sanitize(String(v))}</td>
+                                </tr>
+                            `).join('');
+                        
+                        if (rows) {
+                            detailsHtml = `<table class="briefing-table mt-sm" style="width:100%; font-size: 0.85em;">${rows}</table>`;
+                        }
+                    }
+                    
+                    html += `<li class="facility-item mb-xl">
+                        <h4 class="mb-xs">${name}</h4>
+                        ${location}
+                        ${website}
+                        <p class="mt-sm mb-sm">${desc}</p>
+                        ${detailsHtml}
+                        ${renderReferences(f.references)}
                     </li>`;
                 });
                 html += `</ul></div>`;
