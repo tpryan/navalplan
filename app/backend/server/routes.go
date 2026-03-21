@@ -79,6 +79,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/research_guide", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerGuideResearch)), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/research", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerFullVoyageResearch)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/guide", http.HandlerFunc(s.Handler.GetVoyageGuide), 1},
+		{http.MethodGet, "/api/v1/voyages/{id}/pilot_report", http.HandlerFunc(s.Handler.GetPilotReport), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/briefings", http.HandlerFunc(s.Handler.ListVoyageBriefings), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/recommendations/generate", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.GenerateRecommendations)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/recommendations", http.HandlerFunc(s.Handler.ListRecommendations), 1},

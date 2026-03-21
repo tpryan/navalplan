@@ -2887,63 +2887,71 @@ async function captureAndUploadMap(voyageId) {
 }
 
     async function handleShowReport() {
-    if (!currentVoyage) return;
-    
-    const btn = document.getElementById("btn-export-voyage");
-    const originalContent = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
+        if (!currentVoyage) return;
 
-    try {
-        // 1. Check/Capture Map
-        let guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-        
-        if (!guide || !guide.map_url) {
-             const captured = await captureAndUploadMap(currentVoyage.id);
-             if (captured) {
-                 guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-             }
-        }
+        const btn = document.getElementById("btn-export-voyage");
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
 
-        // 2. Fetch all data
-        const sortedStops = [...currentStops].sort((a, b) => 
-            new Date(a.target_date) - new Date(b.target_date)
-        );
-        
-        const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
-        const [briefings] = await Promise.all([
-            Promise.all(briefingPromises)
-        ]);
+        try {
+            // 1. Fetch Pilot Report data (Voyage, Guide, Recommendations)
+            const pilotReport = await API.getPilotReport(currentVoyage.id);
+            let guide = pilotReport.guide;
+            const recommendations = pilotReport.recommendations;
 
-        // 3. Build HTML using shared generator
-        const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide);
-        
-        // 4. Show Modal
-        const modal = document.getElementById("modal-report");
-        const content = document.getElementById("report-content");
-        const modalOverlay = document.getElementById("modal-overlay");
-        
-        content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
-        modal.classList.remove("hidden");
-        modalOverlay.classList.remove("hidden");
-
-        // 5. Render charts (matching IDs in generateReportHTML)
-        for (const [idx, stop] of sortedStops.entries()) {
-            const b = briefings[idx];
-            if (b && b.tides && b.tides.events) {
-                await renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
-                await renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+            // 2. Check/Capture Map
+            if (!guide || !guide.map_url) {
+                 const captured = await captureAndUploadMap(currentVoyage.id);
+                 if (captured) {
+                     const updatedGuide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
+                     if (updatedGuide) guide = updatedGuide;
+                 }
             }
-        }
 
-    } catch (err) {
-        console.error(err);
-        showNotification('Error', "Failed to generate report.");
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
+            // 3. Fetch Stops and Briefings
+            const sortedStops = [...currentStops].sort((a, b) =>
+                new Date(a.target_date) - new Date(b.target_date)
+            );
+
+            const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
+            const briefings = await Promise.all(briefingPromises);
+
+            // 4. Determine if we should show stop briefings (only if some have been researched)
+            const hasBriefings = briefings.some(b => b !== null);
+
+            // 5. Build HTML using consolidated generator
+            const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide, recommendations, hasBriefings);
+
+            // 6. Show Modal
+            const modal = document.getElementById("modal-report");
+            const content = document.getElementById("report-content");
+            const modalOverlay = document.getElementById("modal-overlay");
+
+            content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
+            modal.classList.remove("hidden");
+            modalOverlay.classList.remove("hidden");
+
+            // 7. Render charts if stop briefings are included
+            if (hasBriefings) {
+                for (const [idx, stop] of sortedStops.entries()) {
+                    const b = briefings[idx];
+                    if (b && b.tides && b.tides.events) {
+                        await renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
+                        await renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+                    }
+                }
+            }
+
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', "Failed to generate report.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
     }
-}
+
 function getIconForWeather(description) {
     const d = (description || '').toLowerCase();
     if (d.includes('clear')) return 'clear_day';
@@ -3766,77 +3774,77 @@ function generateGuideHTML(guide) {
     return html;
 }
 
-function generateReportHTML(voyage, stops, briefings, guide) {
-    const sortedStops = [...stops].sort((a, b) => 
+function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings) {
+    const sortedStops = [...stops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
 
     let html = `
         <h1 class="report-title">${DOMPurify.sanitize(voyage.title)}</h1>
-        <p class="report-dates">
+        <p class="report-dates text-center mb-lg">
             ${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
         </p>
+        <p class="report-location text-center mb-lg"><strong>Area:</strong> ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
         <hr />
     `;
 
-    // --- Consolidated View ---
-    const gridCols = Math.min(sortedStops.length, 4);
-    html += `<div class="report-section-wrapper">
-        <h2 class="report-day-header brand-blue">Voyage Overview</h2>
-        <div class="overview-grid grid-cols-${gridCols}">
-    `;
-        
-    sortedStops.forEach((stop, idx) => {
-        const briefing = briefings.find(br => br.stop_id === stop.id) || {};
-        const date = new Date(stop.target_date);
-        const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-        
-        // Weather
-        const w = briefing.weather_summary || {};
-        const weatherIcon = getIconForWeather(w.condition);
-        const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-        // Sun
-        const sun = briefing.sun_phase || {};
-        const formatSunTime = (t) => {
-            if (!t) return '--:--';
-            const d = new Date(t);
-            return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        };
-        const sunrise = formatSunTime(sun.sunrise);
-        const sunset = formatSunTime(sun.sunset);
-
-        // Use a consistent ID format based on loop index, caller handles prefix mapping if needed
-        // Actually, we need unique IDs. Let's assume the caller will prefix chart rendering.
-        // We will use a placeholder here and the caller must render based on index.
-        const canvasId = `reportMiniTideChart_${idx}`;
-
-        html += `
-            <div class="overview-card">
-                <div class="overview-date">
-                    ${dateStr}
-                </div>
-                <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                    ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
-                </div>
-                
-                <div class="overview-weather">
-                    <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                    <span class="overview-temp">${temp}</span>
-                </div>
-
-                <div class="overview-sun">
-                    <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                    <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                </div>
-
-                <div class="overview-chart">
-                    <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                </div>
-            </div>
+    // --- Voyage Overview (Consolidated View) ---
+    if (hasBriefings) {
+        const gridCols = Math.min(sortedStops.length, 4);
+        html += `<div class="report-section-wrapper">
+            <h2 class="report-day-header brand-blue">Voyage Overview</h2>
+            <div class="overview-grid grid-cols-${gridCols}">
         `;
-    });
-    html += `</div></div><hr />`;
+
+        sortedStops.forEach((stop, idx) => {
+            const briefing = briefings.find(br => br.stop_id === stop.id) || {};
+            const date = new Date(stop.target_date);
+            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+            // Weather
+            const w = briefing.weather_summary || {};
+            const weatherIcon = getIconForWeather(w.condition);
+            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+
+            // Sun
+            const sun = briefing.sun_phase || {};
+            const formatSunTime = (t) => {
+                if (!t) return '--:--';
+                const d = new Date(t);
+                return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            };
+            const sunrise = formatSunTime(sun.sunrise);
+            const sunset = formatSunTime(sun.sunset);
+
+            const canvasId = `reportMiniTideChart_${idx}`;
+
+            html += `
+                <div class="overview-card">
+                    <div class="overview-date">
+                        ${dateStr}
+                    </div>
+                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
+                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
+                    </div>
+
+                    <div class="overview-weather">
+                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
+                        <span class="overview-temp">${temp}</span>
+                    </div>
+
+                    <div class="overview-sun">
+                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                    </div>
+
+                    <div class="overview-chart">
+                        <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div><hr />`;
+    }
 
     // --- Destination Guide ---
     if (guide) {
@@ -3849,272 +3857,126 @@ function generateReportHTML(voyage, stops, briefings, guide) {
         `;
     }
 
+    // --- Recommendations ---
+    if (recommendations && recommendations.length > 0) {
+        html += `<div class="report-section-wrapper">
+                    <h2 class="report-day-header brand-blue">Resource Hubs & Recommended Spots</h2>`;
+
+        // Group by normalized type
+        const groups = {
+            marina: { title: 'Resource Hubs & Marinas', items: [] },
+            anchorage: { title: 'Recommended Anchorages', items: [] },
+            mooring: { title: 'Mooring Fields', items: [] },
+            other: { title: 'Other Recommendations', items: [] }
+        };
+
+        recommendations.forEach(rec => {
+            const t = (rec.type || '').toLowerCase();
+            if (t.includes('marina') || t.includes('hub')) groups.marina.items.push(rec);
+            else if (t.includes('anchor')) groups.anchorage.items.push(rec);
+            else if (t.includes('mooring')) groups.mooring.items.push(rec);
+            else groups.other.items.push(rec);
+        });
+
+        // Render in specific order
+        ['marina', 'anchorage', 'mooring', 'other'].forEach(key => {
+            const group = groups[key];
+            if (group.items.length === 0) return;
+
+            html += `<div class="recommendation-group mb-xl">
+                        <h3 class="group-header border-b pb-xs mb-md text-brand-medium">${group.title}</h3>
+                        <div class="recommendations-list">`;
+
+            group.items.forEach(rec => {
+                const type = rec.type || 'Spot';
+                const typeClass = key === 'other' ? 'spot' : key;
+                
+                html += `
+                    <div class="recommendation-item mb-lg p-md border-radius border">
+                        <div class="flex justify-between align-center mb-sm">
+                            <h4 class="m-0">${DOMPurify.sanitize(rec.name)}</h4>
+                            <span class="badge badge-${typeClass}">${DOMPurify.sanitize(type)}</span>
+                        </div>
+                        <p class="mb-sm"><strong>Description:</strong> ${DOMPurify.sanitize(rec.description)}</p>
+                        <div class="pilot-reasoning p-sm bg-light border-radius italic">
+                            <strong>Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        });
+
+        html += `</div><hr />`;
+    }
+
     // --- Daily Itinerary ---
-    sortedStops.forEach((stop, idx) => {
-        const b = briefings.find(br => br.stop_id === stop.id);
-        const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
-        
-        html += `
-            <div class="report-daily-wrapper">
-                <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
-                <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
-        `;
-        
-        if (b) {
-             const isInvalid = (v) => {
+    if (hasBriefings) {
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings.find(br => br.stop_id === stop.id);
+            if (!b) return;
+
+            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
+
+            html += `
+                <div class="report-daily-wrapper">
+                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
+                    <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
+            `;
+
+            const isInvalid = (v) => {
                 if (!v) return true;
                 const sv = String(v).toLowerCase().trim();
                 return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
-             };
+            };
 
-             // Weather
-            if (b.weather_summary) {
-                const w = b.weather_summary;
+            // Weather
+            const w = b.weather_summary || {};
+            if (w && !isInvalid(w.condition)) {
+                const weatherIcon = getIconForWeather(w.condition);
                 html += `
                     <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
-                            Weather
-                        </h3>
-                        <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
-                                </tr>
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
-                                    <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
-                                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
-                                        ${isInvalid(w.condition) ? 'N/A' : w.condition}
-                                    </td>
-                                </tr>
-                                ${(w.temp_max_f || w.temp_min_f) ? `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
-                                </tr>
-                                ` : ''}
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
-                                </tr>
-                                ${w.wave_height_ft > 0 ? `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
-                                </tr>
-                                ` : ''}
-                            </table>
+                        <h3>Weather Outlook</h3>
+                        <div class="flex align-center gap-md">
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-dark);">${weatherIcon}</span>
+                            <div>
+                                <p class="m-0"><strong>Condition:</strong> ${w.condition}</p>
+                                <p class="m-0"><strong>Temperature:</strong> ${Math.round(w.temp_max_f)}°F / ${Math.round(w.temp_min_f)}°F</p>
+                                <p class="m-0"><strong>Precipitation:</strong> ${w.precip_prob}%</p>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
-            // Sun Phase
-            if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
-                const sun = b.sun_phase;
-                const formatTime = (t) => {
-                    if (!t) return 'N/A';
-                    try {
-                        const d = new Date(t);
-                        if (isNaN(d.getTime())) return t;
-                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    } catch (e) {
-                        return t;
-                    }
-                };
-
-                html += `
-                <div class="briefing-section">
-                    <h3 class="briefing-header-icon">
-                        <span class="material-symbols-outlined">wb_twilight</span>
-                        Sun Phase
-                    </h3>
-                    <div class="weather-box">
-                        <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-                `;
-            }
-            
             // Tides
             if (b.tides && b.tides.events) {
-                // Use consistent ID format
-                const canvasId = `reportTideChart_${idx}`;
-                const targetDateYMD = stop.target_date.split('T')[0];
-                const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
-                
-                const tideEventsHtml = displayEvents.map(e => {
-                    let timeStr = e.time;
-                    try {
-                        const d = new Date(e.time.replace(' ', 'T'));
-                        if (!isNaN(d.getTime())) {
-                            let hours = d.getHours();
-                            const minutes = String(d.getMinutes()).padStart(2, '0');
-                            const ampm = hours >= 12 ? 'pm' : 'am';
-                            hours = hours % 12;
-                            hours = hours ? hours : 12;
-                            timeStr = `${hours}:${minutes} ${ampm}`;
-                        }
-                    } catch (ignore) {}
-
-                    return `<tr style="border: 1px solid #ddd;">
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
-                    </tr>`;
-                }).join('');
-
-                const [y, m, d] = targetDateYMD.split('-');
-                const displayDateHeader = `${m}/${d}/${y}`;
-
                 html += `
                     <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">waves</span>
-                            Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
-                        </h3>
-                        <div class="tide-box" style="margin-bottom:1rem;">
-                            <div style="height:200px; width:100%; position:relative;">
-                                <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                            </div>
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
-                                <thead>
-                                    <tr style="background-color: #f4f4f4;">
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
-                                </tbody>
-                            </table>
+                        <h3>Tides & Currents</h3>
+                        <div style="height: 300px; margin-bottom: 1rem;">
+                            <canvas id="reportTideChart_${idx}"></canvas>
                         </div>
                     </div>
                 `;
             }
-            
+
             // Facilities
-            const stopName = displayLocationName(stop.location_name);
-            // Check if this is the last stop and it's a loop (same location as start)
-            // Need first stop location name.
-            const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
-            const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
-
             if (b.facilities && b.facilities.length > 0) {
-                if (isLastStopLoop) {
-                    html += `
-                    <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">warehouse</span>
-                            Facilities
-                        </h3>
-                        <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
-                    </div>`;
-                } else {
-                    html += `
-                    <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">warehouse</span>
-                            Facilities
-                        </h3>
-                        <ul class="facility-list">
-                            ${b.facilities.map(f => {
-                     // Icon Mapping
-                     let icon = 'place';
-                     const typeLower = (f.type || '').toLowerCase();
-                     if (typeLower.includes('anchorage')) icon = 'anchor';
-                     else if (typeLower.includes('marina')) icon = 'storefront';
-                     else if (typeLower.includes('mooring')) icon = 'crisis_alert';
-                     else if (typeLower.includes('bar')) icon = 'local_bar';
-                     else if (typeLower.includes('restaurant')) icon = 'restaurant';
-
-                     let detailsHtml = '';
-                     if (typeof f.details === 'string') {
-                         detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
-                     } else if (f.details && typeof f.details === 'object') {
-                        // Table format for details
-                        let rows = `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
-                            </tr>
-                        `;
-                        
-                        rows += Object.entries(f.details)
-                            .filter(([_, v]) => {
-                                if (!v) return false;
-                                const sv = String(v).toLowerCase().trim();
-                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                            })
-                            .map(([k, v]) => `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
-                                </tr>
-                            `).join('');
-                        
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
-                    }
-
-                    let locHtml = '';
-                    if (f.latitude && f.longitude) {
-                        let query = f.latitude + "," + f.longitude;
-                        if (f.address) {
-                            query = f.name + ", " + f.address;
-                        }
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                        locHtml = `
-                            <p class="map-link-p">
-                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
-                            </p>
-                        `;
-                    }
-
-                    let websiteHtml = '';
-                    if (f.website) {
-                        websiteHtml = `
-                            <p class="map-link-p" style="margin-top: 0;">
-                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
-                            </p>
-                        `;
-                    }
-
-                    return `
-                        <li class="facility-item">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined icon-lg">${icon}</span>
-                                ${f.name}
-                            </h4>
-                            ${locHtml}
-                            ${websiteHtml}
-                            ${detailsHtml}
-                            ${renderReferences(f.references)}
-                        </li>
-                    `;
-                }).join('')}
-                </ul></div>`;
-                }
+                html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
+                b.facilities.forEach(f => {
+                    html += `<li class="facility-item">
+                        <h4>${DOMPurify.sanitize(f.name)}</h4>
+                        <p>${DOMPurify.sanitize(f.description)}</p>
+                    </li>`;
+                });
+                html += `</ul></div>`;
             }
-        } else {
-             html += `<p class="text-gray italic">No briefing data available.</p>`;
-        }
-        html += `</div>`;
-    });
+
+            html += `</div><hr />`;
+        });
+    }
 
     html += `
         <footer class="mt-xl text-center text-gray font-sm p-lg">
@@ -4130,17 +3992,19 @@ function renderSharedReport(data, container) {
     const voyage = data.voyage || {};
     const stops = data.stops || [];
     const briefings = data.briefings || [];
-    const mapUrl = data.map_url;
+    const recommendations = data.recommendations || [];
 
-    const html = generateReportHTML(voyage, stops, briefings, guide);
-    
+    const hasBriefings = briefings.some(b => b !== null);
+
+    const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings);
+
     // Inject and Render - Wrapped in a container for styling (max-width etc)
     container.innerHTML = DOMPurify.sanitize(`<div class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
 
     // ... (Chart rendering logic preserved below) ...
     setTimeout(() => {
         const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
-        
+
         sortedStops.forEach((stop, idx) => {
             const b = briefings.find(br => br.stop_id === stop.id) || {};
             // Main Chart
@@ -4154,7 +4018,6 @@ function renderSharedReport(data, container) {
         });
     }, 100);
 }
-
 let currentAdminPage = 1;
 const ADMIN_PAGE_LIMIT = 20;
 
