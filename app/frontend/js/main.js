@@ -1412,7 +1412,12 @@ async function handlePilotSuggestionsClick() {
         btn.disabled = true;
         
         await renderPilotCircle();
-        await API.generateRecommendations(currentVoyage.id);
+        
+        // Trigger both Local Pilot (Recommendations) and Voyage Guide research
+        await Promise.all([
+            API.generateRecommendations(currentVoyage.id),
+            API.triggerVoyageGuideResearch(currentVoyage.id)
+        ]);
         
         // Start a ticker to show progress
         if (researchTicker) {
@@ -1801,7 +1806,10 @@ window.addRecommendationToItinerary = async function(recId) {
     const rec = recommendations.find(r => r.id === recId);
     if (!rec) return;
 
-    if (currentVoyage) {
+    if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
+        showNotification('Planning Mode Required', 'Please set voyage dates before adding specific spots to your daily itinerary.');
+        return;
+    }
         // Find first empty date
         const start = new Date(currentVoyage.start_date);
         const end = new Date(currentVoyage.end_date);
