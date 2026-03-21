@@ -46,6 +46,7 @@ let recommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
+let isPilotResearching = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
 let editingVoyageId = null;
@@ -179,9 +180,18 @@ function initUI() {
   const btnExport = document.getElementById('btn-export-voyage');
   const btnPilotSuggestions = document.getElementById('btn-pilot-suggestions');
   const btnEditVoyage = document.getElementById('btn-edit-voyage');
+  const btnSetDates = document.getElementById('btn-set-dates');
   const btnDiscover = document.getElementById('btn-discover');
   const btnCloseDiscovery = document.getElementById('btn-close-discovery');
   const monthSlider = document.getElementById('month-slider');
+
+  if (btnSetDates) {
+      btnSetDates.addEventListener('click', () => {
+          if (currentVoyage) {
+              openEditModal(currentVoyage);
+          }
+      });
+  }
 
   if (btnPilotSuggestions) {
     btnPilotSuggestions.addEventListener('click', () => handlePilotSuggestionsClick());
@@ -272,12 +282,15 @@ function initUI() {
     submitBtn.textContent = 'Create Voyage';
     modalOverlay.classList.remove('hidden');
     modalNewVoyage.classList.remove('hidden');
-    // Set default dates
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('voyage-start').value = today;
+    
+    // Hide date fields for initial creation (Discovery First)
+    document.getElementById('voyage-date-fields').classList.add('hidden');
+    
+    document.getElementById('voyage-start').value = '';
     document.getElementById('voyage-end').value = '';
     document.getElementById('voyage-title').value = '';
     document.getElementById('voyage-location-name').value = '';
+    document.getElementById('voyage-radius').value = 60;
     displayCoords.textContent = '';
     inputLat.value = '';
     inputLng.value = '';
@@ -380,14 +393,20 @@ function initUI() {
   formNewVoyage.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(formNewVoyage);
+    
+    const start = formData.get('start_date');
+    const end = formData.get('end_date');
+    
     const voyageData = {
       title: formData.get('title'),
-      start_date: formData.get('start_date') + 'T00:00:00Z',
-      end_date: formData.get('end_date') + 'T00:00:00Z',
+      start_date: start ? start + 'T00:00:00Z' : null,
+      end_date: end ? end + 'T00:00:00Z' : null,
       location_name: formData.get('location_name'),
       precise_location: formData.get('precise_location'),
       latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
-      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
+      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
+      search_radius: parseInt(formData.get('search_radius')) || 60,
+      search_radius_unit: 'nm'
     };
 
     try {
@@ -815,10 +834,14 @@ function renderVoyageList() {
     
     const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>` : '';
     
+    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : 'No dates set';
+    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : '';
+    const dateRange = endDate ? `${startDate} - ${endDate}` : startDate;
+    
     el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
         <h2>${voyage.title}</h2>
-        <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
+        <p>${dateRange}</p>
         ${locationHtml}
       </div>
       <div class="voyage-actions">
@@ -921,10 +944,14 @@ function openEditModal(voyage) {
     modalTitle.textContent = 'Edit Voyage';
     submitBtn.textContent = 'Update Voyage';
     
+    // Show date fields in edit mode
+    document.getElementById('voyage-date-fields').classList.remove('hidden');
+
     document.getElementById('voyage-title').value = voyage.title;
-    document.getElementById('voyage-start').value = voyage.start_date.split('T')[0];
-    document.getElementById('voyage-end').value = voyage.end_date.split('T')[0];
+    document.getElementById('voyage-start').value = voyage.start_date ? voyage.start_date.split('T')[0] : '';
+    document.getElementById('voyage-end').value = voyage.end_date ? voyage.end_date.split('T')[0] : '';
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
+    document.getElementById('voyage-radius').value = voyage.search_radius || 60;
     document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
@@ -955,7 +982,20 @@ function showVoyageList() {
 
 function updateItineraryHeader(voyage) {
     document.getElementById('itinerary-title').textContent = voyage.title;
-    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}`;
+    
+    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    
+    const datesEl = document.getElementById('itinerary-dates');
+    const btnSetDates = document.getElementById('btn-set-dates');
+
+    if (startDate && endDate) {
+        datesEl.textContent = `${startDate} - ${endDate}`;
+        if (btnSetDates) btnSetDates.classList.add('hidden');
+    } else {
+        datesEl.textContent = 'No dates set for this voyage';
+        if (btnSetDates) btnSetDates.classList.remove('hidden');
+    }
 }
 
 async function selectVoyage(voyage) {
@@ -979,6 +1019,13 @@ async function selectVoyage(voyage) {
     clearRecommendations();
     updateItineraryHeader(currentVoyage);
 
+    // Hide/Show Stop-based actions in Discovery Mode
+    const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+    const btnResearchAll = document.getElementById('btn-research-all');
+    if (btnResearchAll) {
+        if (!hasDates) btnResearchAll.classList.add('hidden');
+    }
+
     // Reset pagination
     currentStopPage = 1;
     loadStops();
@@ -989,14 +1036,20 @@ async function loadStops() {
     list.innerHTML = '<div class="loading-state"><p>Loading stops...</p></div>';
 
     try {
-        currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
+        if (currentVoyage.start_date && currentVoyage.end_date) {
+            currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
+        } else {
+            currentStops = [];
+        }
+        
         renderItinerary();
         renderMapStops();
 
         // Toggle visibility of Research All button
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) {
-            if (currentStops.length > 0) {
+            const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+            if (currentStops.length > 0 && hasDates) {
                 btnResearchAll.classList.remove('hidden');
             } else {
                 btnResearchAll.classList.add('hidden');
@@ -1014,7 +1067,8 @@ async function loadStops() {
         }
 
         // Check if itinerary is empty AND research hasn't been done - Show Prompt
-        if (currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
+        const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+        if (hasDates && currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
             document.getElementById('modal-empty-voyage').classList.remove('hidden');
             document.getElementById('modal-overlay').classList.remove('hidden');
         }
@@ -1031,6 +1085,17 @@ async function loadStops() {
             
             if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                 bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
+                
+                // If we have no stops yet, zoom to the search radius
+                if (currentStops.length === 0) {
+                    const { Circle } = await importLibrary("maps");
+                    const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
+                    const tempCircle = new Circle({
+                        center: { lat: currentVoyage.latitude, lng: currentVoyage.longitude },
+                        radius: radiusMeters
+                    });
+                    bounds.union(tempCircle.getBounds());
+                }
             }
 
             // Include Pilot Circle in bounds if it exists
@@ -1039,10 +1104,7 @@ async function loadStops() {
             }
 
             if (!bounds.isEmpty()) {
-                map.fitBounds(bounds, 100);
-            } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
-                map.setZoom(12);
+                map.fitBounds(bounds, 50);
             }
         }
     } catch (err) {
@@ -1222,6 +1284,20 @@ async function handleResearchAll(confirmFirst = true) {
 
 async function checkItineraryFullness(isManualAction = false) {
     if (!currentVoyage) return;
+    
+    // If no dates, it can't be full in the itinerary sense
+    if (!currentVoyage.start_date || !currentVoyage.end_date) {
+        lastKnownItineraryFull = false;
+        
+        // Ensure recommendations are visible if research hasn't been done
+        const btnPilot = document.getElementById('btn-pilot-suggestions');
+        if (btnPilot) btnPilot.classList.remove('hidden');
+        
+        const btnResearchAll = document.getElementById('btn-research-all');
+        if (btnResearchAll) btnResearchAll.classList.add('hidden');
+        
+        return;
+    }
 
     // Calculate expected days
     const start = new Date(currentVoyage.start_date);
@@ -1294,6 +1370,9 @@ async function checkItineraryFullness(isManualAction = false) {
 async function handlePilotSuggestionsClick() {
     if (!currentVoyage) return;
     
+    isPilotResearching = true;
+    renderItinerary();
+    
     const btn = document.getElementById('btn-pilot-suggestions');
     const icon = btn.querySelector('.material-symbols-outlined');
     
@@ -1320,7 +1399,9 @@ async function handlePilotSuggestionsClick() {
                 if (recs && recs.length > 0) {
                     clearInterval(poll);
                     recommendations = recs;
+                    isPilotResearching = false;
                     renderRecommendations();
+                    renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     icon.classList.remove('spin');
                     btn.disabled = false;
@@ -1346,6 +1427,8 @@ async function handlePilotSuggestionsClick() {
 
             if (attempts >= maxAttempts) {
                 clearInterval(poll);
+                isPilotResearching = false;
+                renderItinerary();
                 if (researchTicker) researchTicker.stop();
                 icon.classList.remove('spin');
                 btn.disabled = false;
@@ -1355,6 +1438,8 @@ async function handlePilotSuggestionsClick() {
 
     } catch (err) {
         console.error(err);
+        isPilotResearching = false;
+        renderItinerary();
         showNotification('Error', 'Failed to start pilot suggestions');
         icon.classList.remove('spin');
         btn.disabled = false;
@@ -1739,6 +1824,35 @@ function renderItinerary() {
     const list = document.getElementById('itinerary-list');
     list.innerHTML = '';
     
+    if (!currentVoyage.start_date || !currentVoyage.end_date) {
+        if (isPilotResearching) {
+            list.innerHTML = '<div class="p-md text-center"><p class="text-gray">Researching area...</p></div>';
+            return;
+        }
+
+        if (recommendations && recommendations.length > 0) {
+            list.innerHTML = `
+                <div class="p-md text-center">
+                    <p class="text-gray mb-md"><b>Discovery Mode:</b> Area research complete. Explore the map for suggested anchorages and hubs.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'p-md text-center';
+        container.innerHTML = '<p class="text-gray mb-md">Use <b>Local Pilot Research</b> to explore the area. Set dates when you\'re ready to plan your daily itinerary.</p>';
+        
+        const btn = document.createElement('button');
+        btn.className = 'btn secondary w-full';
+        btn.innerHTML = '<span class="material-symbols-outlined icon-align">auto_awesome</span> Run Local Pilot Research';
+        btn.onclick = () => handlePilotSuggestionsClick();
+        
+        container.appendChild(btn);
+        list.appendChild(container);
+        return;
+    }
+
     let currentDate = new Date(currentVoyage.start_date);
     const endDate = new Date(currentVoyage.end_date);
 

@@ -35,12 +35,12 @@ type Session struct {
 
 // Voyage represents a planned trip.
 type Voyage struct {
-	ID               int64     `json:"id" db:"id"`
-	PersonID         int64     `json:"person_id" db:"person_id"`
-	Title            string    `json:"title" db:"title"`
-	StartDate        time.Time `json:"start_date" db:"start_date"`
-	EndDate          time.Time `json:"end_date" db:"end_date"`
-	LocationName     *string   `json:"location_name" db:"location_name"`
+	ID               int64      `json:"id" db:"id"`
+	PersonID         int64      `json:"person_id" db:"person_id"`
+	Title            string     `json:"title" db:"title"`
+	StartDate        *time.Time `json:"start_date" db:"start_date"`
+	EndDate          *time.Time `json:"end_date" db:"end_date"`
+	LocationName     *string    `json:"location_name" db:"location_name"`
 	PreciseLocation  *string   `json:"precise_location" db:"precise_location"`
 	Latitude         *float64  `json:"latitude" db:"latitude"`
 	Longitude        *float64  `json:"longitude" db:"longitude"`
