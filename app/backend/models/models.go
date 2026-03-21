@@ -151,6 +151,13 @@ type VoyageRecommendation struct {
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 
+// PilotReport aggregates voyage info, the voyage guide, and all area recommendations.
+type PilotReport struct {
+	Voyage          *Voyage                `json:"voyage"`
+	Guide           *VoyageGuide           `json:"guide,omitempty"`
+	Recommendations []VoyageRecommendation `json:"recommendations"`
+}
+
 // RawJSON is a helper for JSONB columns
 type RawJSON []byte
 

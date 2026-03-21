@@ -380,11 +380,12 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 }
 
 type PublicVoyageReport struct {
-	Voyage    *models.Voyage      `json:"voyage"`
-	Guide     *models.VoyageGuide `json:"guide"`
-	Stops     []models.Stop       `json:"stops"`
-	Briefings []models.Briefing   `json:"briefings"`
-	MapURL    string              `json:"map_url,omitempty"`
+	Voyage          *models.Voyage                `json:"voyage"`
+	Guide           *models.VoyageGuide           `json:"guide"`
+	Stops           []models.Stop                 `json:"stops"`
+	Briefings       []models.Briefing             `json:"briefings"`
+	Recommendations []models.VoyageRecommendation `json:"recommendations"`
+	MapURL          string                        `json:"map_url,omitempty"`
 }
 
 func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
@@ -421,6 +422,13 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		briefings = []models.Briefing{}
 	}
 
+	// Fetch Recommendations
+	recs, err := h.DB.ListVoyageRecommendations(r.Context(), voyage.ID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list recommendations for public voyage", "voyage_id", voyage.ID, "error", err)
+		recs = []models.VoyageRecommendation{}
+	}
+
 	// Check for map image in DB
 	var mapURL string
 	if mapData, _ := h.DB.GetVoyageMap(r.Context(), voyage.ID); len(mapData) > 0 {
@@ -434,11 +442,12 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := PublicVoyageReport{
-		Voyage:    voyage,
-		Guide:     guide,
-		Stops:     stops,
-		Briefings: briefings,
-		MapURL:    mapURL,
+		Voyage:          voyage,
+		Guide:           guide,
+		Stops:           stops,
+		Briefings:       briefings,
+		Recommendations: recs,
+		MapURL:          mapURL,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
