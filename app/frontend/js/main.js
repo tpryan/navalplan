@@ -1061,6 +1061,9 @@ async function loadStops() {
             const recs = await API.getRecommendations(currentVoyage.id);
             recommendations = recs || [];
             renderRecommendations();
+            
+            // Re-render itinerary now that we have recommendations (to hide the prompt in Discovery Mode)
+            renderItinerary();
         } catch (e) {
             recommendations = [];
             console.warn("No recommendations found or failed to load", e);
@@ -1071,6 +1074,13 @@ async function loadStops() {
         if (hasDates && currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
             document.getElementById('modal-empty-voyage').classList.remove('hidden');
             document.getElementById('modal-overlay').classList.remove('hidden');
+        } else if (recommendations.length > 0) {
+            // Ensure empty voyage modal is hidden if we have recommendations (Discovery Mode or Planner)
+            document.getElementById('modal-empty-voyage').classList.add('hidden');
+            const modalNewVoyage = document.getElementById('modal-new-voyage');
+            if (modalNewVoyage.classList.contains('hidden')) {
+                document.getElementById('modal-overlay').classList.add('hidden');
+            }
         }
 
         await checkItineraryFullness();
@@ -1643,9 +1653,9 @@ async function renderPilotCircle() {
         map: map,
         center: center,
         radius: radiusMeters,
-        clickable: true,
+        clickable: false,
         draggable: false,
-        editable: false, // Use our own handle for real-time feedback
+        editable: false, 
         zIndex: 5
     });
 
@@ -1675,6 +1685,7 @@ async function renderPilotCircle() {
     label.style.color = '#1a73e8';
     label.style.fontWeight = 'bold';
     label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    label.style.pointerEvents = 'none'; // Allow clicks to pass through label
     centerContainer.appendChild(label);
 
     pilotCenterMarker = new AdvancedMarkerElement({
@@ -1831,11 +1842,29 @@ function renderItinerary() {
         }
 
         if (recommendations && recommendations.length > 0) {
-            list.innerHTML = `
-                <div class="p-md text-center">
-                    <p class="text-gray mb-md"><b>Discovery Mode:</b> Area research complete. Explore the map for suggested anchorages and hubs.</p>
-                </div>
-            `;
+            // Show Discovery Results in Sidebar
+            const header = document.createElement('div');
+            header.className = 'p-sm border-b text-gray font-xs uppercase tracking-wider';
+            header.textContent = 'Recommended Hubs & Spots';
+            list.appendChild(header);
+
+            recommendations.forEach(rec => {
+                const el = document.createElement('div');
+                el.className = 'day-item';
+                el.innerHTML = `
+                    <div class="day-info flex-1">
+                        <span class="day-location set">${DOMPurify.sanitize(displayLocationName(rec.name))}</span>
+                        <p class="font-xs text-gray">${rec.type}</p>
+                    </div>
+                `;
+                el.onclick = () => {
+                    if (map) {
+                        map.panTo({lat: rec.latitude, lng: rec.longitude});
+                        map.setZoom(15);
+                    }
+                };
+                list.appendChild(el);
+            });
             return;
         }
 
@@ -2451,6 +2480,11 @@ async function redoBriefing(oldBriefing, btn) {
 
 
 function selectDate(dateStr) {
+    if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
+        showNotification('Planning Mode Required', 'Please set voyage dates to begin building your daily itinerary.');
+        return;
+    }
+
     if (selectedDate === dateStr) {
         selectedDate = null; // Toggle off
     } else {
@@ -2502,7 +2536,17 @@ async function initMap() {
   console.log('NavalPlan: Map Loaded Successfully');
   
   map.addListener('click', async (e) => {
-      if (!currentVoyage || !selectedDate) return;
+      if (!currentVoyage) return;
+
+      if (!currentVoyage.start_date || !currentVoyage.end_date) {
+          showNotification('Planning Mode Required', 'To add specific stops to your itinerary, please set your voyage dates first.');
+          return;
+      }
+
+      if (!selectedDate) {
+          showNotification('Select a Date', 'Please select a date from the itinerary sidebar before placing a stop on the map.');
+          return;
+      }
   
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
