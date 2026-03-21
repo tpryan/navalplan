@@ -47,8 +47,10 @@ let pilotCircle = null;
 let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
 let isPilotResearching = false;
+let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
+let lastKnownResearchDone = false;
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -1125,6 +1127,11 @@ async function loadStops() {
 }
 
 async function executeResearchAll() {
+    if (!currentVoyage) return;
+    
+    isResearchAllRunning = true;
+    renderItinerary();
+    
     const btnResearchAll = document.getElementById('btn-research-all');
     const originalContent = btnResearchAll.innerHTML;
     btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
@@ -1235,6 +1242,8 @@ async function executeResearchAll() {
                 // If all done
                 if (guideComplete && pendingStops.length === 0) {
                     clearInterval(poll);
+                    isResearchAllRunning = false;
+                    renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
@@ -1244,6 +1253,8 @@ async function executeResearchAll() {
                 } else if (consecutiveErrors > 15) {
                     // Too many errors, give up
                     clearInterval(poll);
+                    isResearchAllRunning = false;
+                    renderItinerary();
                     if (researchTicker) researchTicker.error('Research Failed');
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
@@ -1333,6 +1344,16 @@ async function checkItineraryFullness(isManualAction = false) {
         }
     } catch (e) {
         console.error("Failed to check itinerary/research status", e);
+    }
+
+    const oldFull = lastKnownItineraryFull;
+    const oldResearch = lastKnownResearchDone;
+
+    lastKnownItineraryFull = isFull;
+    lastKnownResearchDone = allResearchDone;
+
+    if (oldFull !== lastKnownItineraryFull || oldResearch !== lastKnownResearchDone) {
+        renderItinerary();
     }
 
     // Toggle visibility of Research All button
@@ -1994,7 +2015,24 @@ function renderItinerary() {
 
     if (currentStops.length > 0 || currentStopPage > 1) {
         list.appendChild(paginationControls);
-    }
+
+        // Show Full Research Prompt if Full but research missing
+        if (lastKnownItineraryFull && !lastKnownResearchDone && !isResearchAllRunning) {
+
+            const container = document.createElement('div');
+            container.className = 'p-md text-center border-t mt-md';
+            container.innerHTML = '<p class="text-gray mb-md"><b>Itinerary Complete!</b> Run full voyage research to get weather, tides, and pilot info for every stop.</p>';
+
+            const btn = document.createElement('button');
+            btn.className = 'btn primary w-full';
+            btn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Run Full Voyage Research';
+            btn.onclick = () => handleResearchAll(false); // trigger without extra confirm
+
+            container.appendChild(btn);
+            list.appendChild(container);
+        }
+        }
+
 }
 
 async function handleResearchClick(stop, button) {
