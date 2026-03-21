@@ -31,7 +31,7 @@ STORAGE_BUCKET=navallog-system
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs
+.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy
 
 # --- Development ---
 
@@ -243,6 +243,14 @@ deps-backend:
 	cd app/backend && go mod tidy && go mod vendor
 
 deps-researcher:
+	cd services/researcher && go mod tidy && go mod vendor
+
+tidy: tidy-backend tidy-researcher
+
+tidy-backend:
+	cd app/backend && go mod tidy && go mod vendor
+
+tidy-researcher:
 	cd services/researcher && go mod tidy && go mod vendor
 
 # --- Deployment ---
