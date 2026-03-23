@@ -64,8 +64,8 @@
             <button id="btn-pilot-suggestions" class="btn secondary" title="Research Hubs & Spots">
                <span class="material-symbols-outlined icon-lg icon-align">auto_awesome</span>
             </button>
-            <button id="btn-export-voyage" class="btn secondary" title="View Full Report">
-              <span class="material-symbols-outlined icon-lg icon-align">description</span>
+            <button id="btn-export-voyage" class="btn secondary" title="View Voyage Report">
+               <span class="material-symbols-outlined icon-lg icon-align">description</span>
             </button>
           </div>
           <div class="voyage-header">
@@ -76,6 +76,7 @@
               </button>
             </div>
             <p id="itinerary-dates">Dates</p>
+            <button id="btn-set-dates" class="btn primary w-full mt-sm hidden">Set Voyage Dates</button>
           </div>
           <div id="itinerary-list">
             <!-- Daily stops will go here -->
@@ -128,15 +129,20 @@
           <input type="hidden" id="voyage-precise-location" name="precise_location" />
           <p id="voyage-coords-display" class="font-sm text-gray mt-xs"></p>
         </div>
+
+        <div class="form-group">
+          <label for="voyage-radius">Search Radius (nm)</label>
+          <input type="number" id="voyage-radius" name="search_radius" value="60" min="1" max="500" />
+        </div>
         
-        <div class="form-row">
+        <div id="voyage-date-fields" class="form-row">
           <div class="form-group">
-            <label for="voyage-start">Start Date</label>
-            <input type="date" id="voyage-start" name="start_date" required />
+            <label for="voyage-start">Start Date (Optional)</label>
+            <input type="date" id="voyage-start" name="start_date" />
           </div>
           <div class="form-group">
-            <label for="voyage-end">End Date</label>
-            <input type="date" id="voyage-end" name="end_date" required />
+            <label for="voyage-end">End Date (Optional)</label>
+            <input type="date" id="voyage-end" name="end_date" />
           </div>
         </div>
 

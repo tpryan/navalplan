@@ -152,6 +152,13 @@ export const API = {
     return res.json();
   },
 
+  async getPilotReport(id) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/pilot_report`);
+    if (res.status === 404) throw new Error('Voyage not found');
+    if (!res.ok) throw new Error('Failed to get pilot report');
+    return res.json();
+  },
+
   async getPublicVoyageGuide(token) {
     const res = await apiFetch(`${API_BASE}/public/voyages/${token}/guide`);
     if (!res.ok) throw new Error('Failed to load public guide');
