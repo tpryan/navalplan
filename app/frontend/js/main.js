@@ -46,8 +46,11 @@ let recommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
+let isPilotResearching = false;
+let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
+let lastKnownResearchDone = false;
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -179,9 +182,18 @@ function initUI() {
   const btnExport = document.getElementById('btn-export-voyage');
   const btnPilotSuggestions = document.getElementById('btn-pilot-suggestions');
   const btnEditVoyage = document.getElementById('btn-edit-voyage');
+  const btnSetDates = document.getElementById('btn-set-dates');
   const btnDiscover = document.getElementById('btn-discover');
   const btnCloseDiscovery = document.getElementById('btn-close-discovery');
   const monthSlider = document.getElementById('month-slider');
+
+  if (btnSetDates) {
+      btnSetDates.addEventListener('click', () => {
+          if (currentVoyage) {
+              openEditModal(currentVoyage);
+          }
+      });
+  }
 
   if (btnPilotSuggestions) {
     btnPilotSuggestions.addEventListener('click', () => handlePilotSuggestionsClick());
@@ -272,12 +284,15 @@ function initUI() {
     submitBtn.textContent = 'Create Voyage';
     modalOverlay.classList.remove('hidden');
     modalNewVoyage.classList.remove('hidden');
-    // Set default dates
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('voyage-start').value = today;
+    
+    // Hide date fields for initial creation (Discovery First)
+    document.getElementById('voyage-date-fields').classList.add('hidden');
+    
+    document.getElementById('voyage-start').value = '';
     document.getElementById('voyage-end').value = '';
     document.getElementById('voyage-title').value = '';
     document.getElementById('voyage-location-name').value = '';
+    document.getElementById('voyage-radius').value = 60;
     displayCoords.textContent = '';
     inputLat.value = '';
     inputLng.value = '';
@@ -380,14 +395,20 @@ function initUI() {
   formNewVoyage.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(formNewVoyage);
+    
+    const start = formData.get('start_date');
+    const end = formData.get('end_date');
+    
     const voyageData = {
       title: formData.get('title'),
-      start_date: formData.get('start_date') + 'T00:00:00Z',
-      end_date: formData.get('end_date') + 'T00:00:00Z',
+      start_date: start ? start + 'T00:00:00Z' : null,
+      end_date: end ? end + 'T00:00:00Z' : null,
       location_name: formData.get('location_name'),
       precise_location: formData.get('precise_location'),
       latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
-      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
+      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
+      search_radius: parseInt(formData.get('search_radius')) || 60,
+      search_radius_unit: 'nm'
     };
 
     try {
@@ -815,10 +836,14 @@ function renderVoyageList() {
     
     const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>` : '';
     
+    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : 'No dates set';
+    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : '';
+    const dateRange = endDate ? `${startDate} - ${endDate}` : startDate;
+    
     el.innerHTML = DOMPurify.sanitize(`
       <div class="voyage-info">
         <h2>${voyage.title}</h2>
-        <p>${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}</p>
+        <p>${dateRange}</p>
         ${locationHtml}
       </div>
       <div class="voyage-actions">
@@ -921,10 +946,14 @@ function openEditModal(voyage) {
     modalTitle.textContent = 'Edit Voyage';
     submitBtn.textContent = 'Update Voyage';
     
+    // Show date fields in edit mode
+    document.getElementById('voyage-date-fields').classList.remove('hidden');
+
     document.getElementById('voyage-title').value = voyage.title;
-    document.getElementById('voyage-start').value = voyage.start_date.split('T')[0];
-    document.getElementById('voyage-end').value = voyage.end_date.split('T')[0];
+    document.getElementById('voyage-start').value = voyage.start_date ? voyage.start_date.split('T')[0] : '';
+    document.getElementById('voyage-end').value = voyage.end_date ? voyage.end_date.split('T')[0] : '';
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
+    document.getElementById('voyage-radius').value = voyage.search_radius || 60;
     document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
@@ -955,7 +984,20 @@ function showVoyageList() {
 
 function updateItineraryHeader(voyage) {
     document.getElementById('itinerary-title').textContent = voyage.title;
-    document.getElementById('itinerary-dates').textContent = `${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}`;
+    
+    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    
+    const datesEl = document.getElementById('itinerary-dates');
+    const btnSetDates = document.getElementById('btn-set-dates');
+
+    if (startDate && endDate) {
+        datesEl.textContent = `${startDate} - ${endDate}`;
+        if (btnSetDates) btnSetDates.classList.add('hidden');
+    } else {
+        datesEl.textContent = 'No dates set for this voyage';
+        if (btnSetDates) btnSetDates.classList.remove('hidden');
+    }
 }
 
 async function selectVoyage(voyage) {
@@ -979,6 +1021,13 @@ async function selectVoyage(voyage) {
     clearRecommendations();
     updateItineraryHeader(currentVoyage);
 
+    // Hide/Show Stop-based actions in Discovery Mode
+    const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+    const btnResearchAll = document.getElementById('btn-research-all');
+    if (btnResearchAll) {
+        if (!hasDates) btnResearchAll.classList.add('hidden');
+    }
+
     // Reset pagination
     currentStopPage = 1;
     loadStops();
@@ -989,14 +1038,20 @@ async function loadStops() {
     list.innerHTML = '<div class="loading-state"><p>Loading stops...</p></div>';
 
     try {
-        currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
+        if (currentVoyage.start_date && currentVoyage.end_date) {
+            currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
+        } else {
+            currentStops = [];
+        }
+        
         renderItinerary();
         renderMapStops();
 
         // Toggle visibility of Research All button
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) {
-            if (currentStops.length > 0) {
+            const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+            if (currentStops.length > 0 && hasDates) {
                 btnResearchAll.classList.remove('hidden');
             } else {
                 btnResearchAll.classList.add('hidden');
@@ -1008,15 +1063,26 @@ async function loadStops() {
             const recs = await API.getRecommendations(currentVoyage.id);
             recommendations = recs || [];
             renderRecommendations();
+            
+            // Re-render itinerary now that we have recommendations (to hide the prompt in Discovery Mode)
+            renderItinerary();
         } catch (e) {
             recommendations = [];
             console.warn("No recommendations found or failed to load", e);
         }
 
         // Check if itinerary is empty AND research hasn't been done - Show Prompt
-        if (currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
+        const hasDates = currentVoyage.start_date && currentVoyage.end_date;
+        if (hasDates && currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
             document.getElementById('modal-empty-voyage').classList.remove('hidden');
             document.getElementById('modal-overlay').classList.remove('hidden');
+        } else if (recommendations.length > 0) {
+            // Ensure empty voyage modal is hidden if we have recommendations (Discovery Mode or Planner)
+            document.getElementById('modal-empty-voyage').classList.add('hidden');
+            const modalNewVoyage = document.getElementById('modal-new-voyage');
+            if (modalNewVoyage.classList.contains('hidden')) {
+                document.getElementById('modal-overlay').classList.add('hidden');
+            }
         }
 
         await checkItineraryFullness();
@@ -1031,6 +1097,17 @@ async function loadStops() {
             
             if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
                 bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
+                
+                // If we have no stops yet, zoom to the search radius
+                if (currentStops.length === 0) {
+                    const { Circle } = await importLibrary("maps");
+                    const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
+                    const tempCircle = new Circle({
+                        center: { lat: currentVoyage.latitude, lng: currentVoyage.longitude },
+                        radius: radiusMeters
+                    });
+                    bounds.union(tempCircle.getBounds());
+                }
             }
 
             // Include Pilot Circle in bounds if it exists
@@ -1039,10 +1116,7 @@ async function loadStops() {
             }
 
             if (!bounds.isEmpty()) {
-                map.fitBounds(bounds, 100);
-            } else if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
-                map.panTo({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
-                map.setZoom(12);
+                map.fitBounds(bounds, 50);
             }
         }
     } catch (err) {
@@ -1053,6 +1127,11 @@ async function loadStops() {
 }
 
 async function executeResearchAll() {
+    if (!currentVoyage) return;
+    
+    isResearchAllRunning = true;
+    renderItinerary();
+    
     const btnResearchAll = document.getElementById('btn-research-all');
     const originalContent = btnResearchAll.innerHTML;
     btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
@@ -1163,6 +1242,8 @@ async function executeResearchAll() {
                 // If all done
                 if (guideComplete && pendingStops.length === 0) {
                     clearInterval(poll);
+                    isResearchAllRunning = false;
+                    renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
@@ -1172,6 +1253,8 @@ async function executeResearchAll() {
                 } else if (consecutiveErrors > 15) {
                     // Too many errors, give up
                     clearInterval(poll);
+                    isResearchAllRunning = false;
+                    renderItinerary();
                     if (researchTicker) researchTicker.error('Research Failed');
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
@@ -1222,6 +1305,20 @@ async function handleResearchAll(confirmFirst = true) {
 
 async function checkItineraryFullness(isManualAction = false) {
     if (!currentVoyage) return;
+    
+    // If no dates, it can't be full in the itinerary sense
+    if (!currentVoyage.start_date || !currentVoyage.end_date) {
+        lastKnownItineraryFull = false;
+        
+        // Ensure recommendations are visible if research hasn't been done
+        const btnPilot = document.getElementById('btn-pilot-suggestions');
+        if (btnPilot) btnPilot.classList.remove('hidden');
+        
+        const btnResearchAll = document.getElementById('btn-research-all');
+        if (btnResearchAll) btnResearchAll.classList.add('hidden');
+        
+        return;
+    }
 
     // Calculate expected days
     const start = new Date(currentVoyage.start_date);
@@ -1247,6 +1344,16 @@ async function checkItineraryFullness(isManualAction = false) {
         }
     } catch (e) {
         console.error("Failed to check itinerary/research status", e);
+    }
+
+    const oldFull = lastKnownItineraryFull;
+    const oldResearch = lastKnownResearchDone;
+
+    lastKnownItineraryFull = isFull;
+    lastKnownResearchDone = allResearchDone;
+
+    if (oldFull !== lastKnownItineraryFull || oldResearch !== lastKnownResearchDone) {
+        renderItinerary();
     }
 
     // Toggle visibility of Research All button
@@ -1294,6 +1401,9 @@ async function checkItineraryFullness(isManualAction = false) {
 async function handlePilotSuggestionsClick() {
     if (!currentVoyage) return;
     
+    isPilotResearching = true;
+    renderItinerary();
+    
     const btn = document.getElementById('btn-pilot-suggestions');
     const icon = btn.querySelector('.material-symbols-outlined');
     
@@ -1302,7 +1412,12 @@ async function handlePilotSuggestionsClick() {
         btn.disabled = true;
         
         await renderPilotCircle();
-        await API.generateRecommendations(currentVoyage.id);
+        
+        // Trigger both Local Pilot (Recommendations) and Voyage Guide research
+        await Promise.all([
+            API.generateRecommendations(currentVoyage.id),
+            API.triggerVoyageGuideResearch(currentVoyage.id)
+        ]);
         
         // Start a ticker to show progress
         if (researchTicker) {
@@ -1320,7 +1435,9 @@ async function handlePilotSuggestionsClick() {
                 if (recs && recs.length > 0) {
                     clearInterval(poll);
                     recommendations = recs;
+                    isPilotResearching = false;
                     renderRecommendations();
+                    renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     icon.classList.remove('spin');
                     btn.disabled = false;
@@ -1346,6 +1463,8 @@ async function handlePilotSuggestionsClick() {
 
             if (attempts >= maxAttempts) {
                 clearInterval(poll);
+                isPilotResearching = false;
+                renderItinerary();
                 if (researchTicker) researchTicker.stop();
                 icon.classList.remove('spin');
                 btn.disabled = false;
@@ -1355,6 +1474,8 @@ async function handlePilotSuggestionsClick() {
 
     } catch (err) {
         console.error(err);
+        isPilotResearching = false;
+        renderItinerary();
         showNotification('Error', 'Failed to start pilot suggestions');
         icon.classList.remove('spin');
         btn.disabled = false;
@@ -1485,6 +1606,13 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             </div>
         </div>` : '';
 
+    const hasDates = currentVoyage && currentVoyage.start_date && currentVoyage.end_date;
+    const addButton = hasDates ? `
+            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
+                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
+                Add to Itinerary
+            </button>` : '';
+
     const content = `
         <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -1497,10 +1625,7 @@ function showRecommendationInfoWindow(rec, anchor, style) {
                 <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
             </div>
             ${refsHtml}
-            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
-                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
-                Add to Itinerary
-            </button>
+            ${addButton}
         </div>`;
     
     activeInfoWindow = new InfoWindow({
@@ -1558,9 +1683,9 @@ async function renderPilotCircle() {
         map: map,
         center: center,
         radius: radiusMeters,
-        clickable: true,
+        clickable: false,
         draggable: false,
-        editable: false, // Use our own handle for real-time feedback
+        editable: false, 
         zIndex: 5
     });
 
@@ -1590,6 +1715,7 @@ async function renderPilotCircle() {
     label.style.color = '#1a73e8';
     label.style.fontWeight = 'bold';
     label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    label.style.pointerEvents = 'none'; // Allow clicks to pass through label
     centerContainer.appendChild(label);
 
     pilotCenterMarker = new AdvancedMarkerElement({
@@ -1684,7 +1810,10 @@ window.addRecommendationToItinerary = async function(recId) {
     const rec = recommendations.find(r => r.id === recId);
     if (!rec) return;
 
-    if (currentVoyage) {
+    if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
+        showNotification('Planning Mode Required', 'Please set voyage dates before adding specific spots to your daily itinerary.');
+        return;
+    }
         // Find first empty date
         const start = new Date(currentVoyage.start_date);
         const end = new Date(currentVoyage.end_date);
@@ -1732,13 +1861,59 @@ window.addRecommendationToItinerary = async function(recId) {
             console.error(err);
             showNotification('Error', 'Failed to add recommendation to itinerary');
         }
-    }
-};
+}
 
 function renderItinerary() {
     const list = document.getElementById('itinerary-list');
     list.innerHTML = '';
     
+    if (!currentVoyage.start_date || !currentVoyage.end_date) {
+        if (isPilotResearching) {
+            list.innerHTML = '<div class="p-md text-center"><p class="text-gray">Researching area...</p></div>';
+            return;
+        }
+
+        if (recommendations && recommendations.length > 0) {
+            // Show Discovery Results in Sidebar
+            const header = document.createElement('div');
+            header.className = 'p-sm border-b text-gray font-xs uppercase tracking-wider';
+            header.textContent = 'Recommended Hubs & Spots';
+            list.appendChild(header);
+
+            recommendations.forEach(rec => {
+                const el = document.createElement('div');
+                el.className = 'day-item';
+                el.innerHTML = `
+                    <div class="day-info flex-1">
+                        <span class="day-location set">${DOMPurify.sanitize(displayLocationName(rec.name))}</span>
+                        <p class="font-xs text-gray">${rec.type}</p>
+                    </div>
+                `;
+                el.onclick = () => {
+                    if (map) {
+                        map.panTo({lat: rec.latitude, lng: rec.longitude});
+                        map.setZoom(15);
+                    }
+                };
+                list.appendChild(el);
+            });
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'p-md text-center';
+        container.innerHTML = '<p class="text-gray mb-md">Use <b>Local Pilot Research</b> to explore the area. Set dates when you\'re ready to plan your daily itinerary.</p>';
+        
+        const btn = document.createElement('button');
+        btn.className = 'btn secondary w-full';
+        btn.innerHTML = '<span class="material-symbols-outlined icon-align">auto_awesome</span> Run Local Pilot Research';
+        btn.onclick = () => handlePilotSuggestionsClick();
+        
+        container.appendChild(btn);
+        list.appendChild(container);
+        return;
+    }
+
     let currentDate = new Date(currentVoyage.start_date);
     const endDate = new Date(currentVoyage.end_date);
 
@@ -1851,7 +2026,24 @@ function renderItinerary() {
 
     if (currentStops.length > 0 || currentStopPage > 1) {
         list.appendChild(paginationControls);
-    }
+
+        // Show Full Research Prompt if Full but research missing
+        if (lastKnownItineraryFull && !lastKnownResearchDone && !isResearchAllRunning) {
+
+            const container = document.createElement('div');
+            container.className = 'p-md text-center border-t mt-md';
+            container.innerHTML = '<p class="text-gray mb-md"><b>Itinerary Complete!</b> Run full voyage research to get weather, tides, and pilot info for every stop.</p>';
+
+            const btn = document.createElement('button');
+            btn.className = 'btn primary w-full';
+            btn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Run Full Voyage Research';
+            btn.onclick = () => handleResearchAll(false); // trigger without extra confirm
+
+            container.appendChild(btn);
+            list.appendChild(container);
+        }
+        }
+
 }
 
 async function handleResearchClick(stop, button) {
@@ -2337,6 +2529,11 @@ async function redoBriefing(oldBriefing, btn) {
 
 
 function selectDate(dateStr) {
+    if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
+        showNotification('Planning Mode Required', 'Please set voyage dates to begin building your daily itinerary.');
+        return;
+    }
+
     if (selectedDate === dateStr) {
         selectedDate = null; // Toggle off
     } else {
@@ -2388,7 +2585,17 @@ async function initMap() {
   console.log('NavalPlan: Map Loaded Successfully');
   
   map.addListener('click', async (e) => {
-      if (!currentVoyage || !selectedDate) return;
+      if (!currentVoyage) return;
+
+      if (!currentVoyage.start_date || !currentVoyage.end_date) {
+          showNotification('Planning Mode Required', 'To add specific stops to your itinerary, please set your voyage dates first.');
+          return;
+      }
+
+      if (!selectedDate) {
+          showNotification('Select a Date', 'Please select a date from the itinerary sidebar before placing a stop on the map.');
+          return;
+      }
   
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
@@ -2887,63 +3094,71 @@ async function captureAndUploadMap(voyageId) {
 }
 
     async function handleShowReport() {
-    if (!currentVoyage) return;
-    
-    const btn = document.getElementById("btn-export-voyage");
-    const originalContent = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
+        if (!currentVoyage) return;
 
-    try {
-        // 1. Check/Capture Map
-        let guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-        
-        if (!guide || !guide.map_url) {
-             const captured = await captureAndUploadMap(currentVoyage.id);
-             if (captured) {
-                 guide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-             }
-        }
+        const btn = document.getElementById("btn-export-voyage");
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
 
-        // 2. Fetch all data
-        const sortedStops = [...currentStops].sort((a, b) => 
-            new Date(a.target_date) - new Date(b.target_date)
-        );
-        
-        const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
-        const [briefings] = await Promise.all([
-            Promise.all(briefingPromises)
-        ]);
+        try {
+            // 1. Fetch Pilot Report data (Voyage, Guide, Recommendations)
+            const pilotReport = await API.getPilotReport(currentVoyage.id);
+            let guide = pilotReport.guide;
+            const recommendations = pilotReport.recommendations;
 
-        // 3. Build HTML using shared generator
-        const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide);
-        
-        // 4. Show Modal
-        const modal = document.getElementById("modal-report");
-        const content = document.getElementById("report-content");
-        const modalOverlay = document.getElementById("modal-overlay");
-        
-        content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
-        modal.classList.remove("hidden");
-        modalOverlay.classList.remove("hidden");
-
-        // 5. Render charts (matching IDs in generateReportHTML)
-        for (const [idx, stop] of sortedStops.entries()) {
-            const b = briefings[idx];
-            if (b && b.tides && b.tides.events) {
-                await renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
-                await renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+            // 2. Check/Capture Map
+            if (!guide || !guide.map_url) {
+                 const captured = await captureAndUploadMap(currentVoyage.id);
+                 if (captured) {
+                     const updatedGuide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
+                     if (updatedGuide) guide = updatedGuide;
+                 }
             }
-        }
 
-    } catch (err) {
-        console.error(err);
-        showNotification('Error', "Failed to generate report.");
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
+            // 3. Fetch Stops and Briefings
+            const sortedStops = [...currentStops].sort((a, b) =>
+                new Date(a.target_date) - new Date(b.target_date)
+            );
+
+            const briefingPromises = sortedStops.map(s => API.getBriefing(s.id).catch(() => null));
+            const briefings = await Promise.all(briefingPromises);
+
+            // 4. Determine if we should show stop briefings (only if some have been researched)
+            const hasBriefings = briefings.some(b => b !== null);
+
+            // 5. Build HTML using consolidated generator
+            const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide, recommendations, hasBriefings);
+
+            // 6. Show Modal
+            const modal = document.getElementById("modal-report");
+            const content = document.getElementById("report-content");
+            const modalOverlay = document.getElementById("modal-overlay");
+
+            content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
+            modal.classList.remove("hidden");
+            modalOverlay.classList.remove("hidden");
+
+            // 7. Render charts if stop briefings are included
+            if (hasBriefings) {
+                for (const [idx, stop] of sortedStops.entries()) {
+                    const b = briefings[idx];
+                    if (b && b.tides && b.tides.events) {
+                        await renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
+                        await renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+                    }
+                }
+            }
+
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', "Failed to generate report.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
     }
-}
+
 function getIconForWeather(description) {
     const d = (description || '').toLowerCase();
     if (d.includes('clear')) return 'clear_day';
@@ -3766,77 +3981,77 @@ function generateGuideHTML(guide) {
     return html;
 }
 
-function generateReportHTML(voyage, stops, briefings, guide) {
-    const sortedStops = [...stops].sort((a, b) => 
+function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings) {
+    const sortedStops = [...stops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
 
     let html = `
         <h1 class="report-title">${DOMPurify.sanitize(voyage.title)}</h1>
-        <p class="report-dates">
+        <p class="report-dates text-center mb-lg">
             ${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
         </p>
+        <p class="report-location text-center mb-lg"><strong>Area:</strong> ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
         <hr />
     `;
 
-    // --- Consolidated View ---
-    const gridCols = Math.min(sortedStops.length, 4);
-    html += `<div class="report-section-wrapper">
-        <h2 class="report-day-header brand-blue">Voyage Overview</h2>
-        <div class="overview-grid grid-cols-${gridCols}">
-    `;
-        
-    sortedStops.forEach((stop, idx) => {
-        const briefing = briefings.find(br => br.stop_id === stop.id) || {};
-        const date = new Date(stop.target_date);
-        const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-        
-        // Weather
-        const w = briefing.weather_summary || {};
-        const weatherIcon = getIconForWeather(w.condition);
-        const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-        // Sun
-        const sun = briefing.sun_phase || {};
-        const formatSunTime = (t) => {
-            if (!t) return '--:--';
-            const d = new Date(t);
-            return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        };
-        const sunrise = formatSunTime(sun.sunrise);
-        const sunset = formatSunTime(sun.sunset);
-
-        // Use a consistent ID format based on loop index, caller handles prefix mapping if needed
-        // Actually, we need unique IDs. Let's assume the caller will prefix chart rendering.
-        // We will use a placeholder here and the caller must render based on index.
-        const canvasId = `reportMiniTideChart_${idx}`;
-
-        html += `
-            <div class="overview-card">
-                <div class="overview-date">
-                    ${dateStr}
-                </div>
-                <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                    ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
-                </div>
-                
-                <div class="overview-weather">
-                    <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                    <span class="overview-temp">${temp}</span>
-                </div>
-
-                <div class="overview-sun">
-                    <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                    <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                </div>
-
-                <div class="overview-chart">
-                    <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                </div>
-            </div>
+    // --- Voyage Overview (Consolidated View) ---
+    if (hasBriefings) {
+        const gridCols = Math.min(sortedStops.length, 4);
+        html += `<div class="report-section-wrapper">
+            <h2 class="report-day-header brand-blue">Voyage Overview</h2>
+            <div class="overview-grid grid-cols-${gridCols}">
         `;
-    });
-    html += `</div></div><hr />`;
+
+        sortedStops.forEach((stop, idx) => {
+            const briefing = briefings.find(br => br.stop_id === stop.id) || {};
+            const date = new Date(stop.target_date);
+            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+            // Weather
+            const w = briefing.weather_summary || {};
+            const weatherIcon = getIconForWeather(w.condition);
+            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
+
+            // Sun
+            const sun = briefing.sun_phase || {};
+            const formatSunTime = (t) => {
+                if (!t) return '--:--';
+                const d = new Date(t);
+                return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            };
+            const sunrise = formatSunTime(sun.sunrise);
+            const sunset = formatSunTime(sun.sunset);
+
+            const canvasId = `reportMiniTideChart_${idx}`;
+
+            html += `
+                <div class="overview-card">
+                    <div class="overview-date">
+                        ${dateStr}
+                    </div>
+                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
+                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
+                    </div>
+
+                    <div class="overview-weather">
+                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
+                        <span class="overview-temp">${temp}</span>
+                    </div>
+
+                    <div class="overview-sun">
+                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
+                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
+                    </div>
+
+                    <div class="overview-chart">
+                        <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div><hr />`;
+    }
 
     // --- Destination Guide ---
     if (guide) {
@@ -3849,272 +4064,177 @@ function generateReportHTML(voyage, stops, briefings, guide) {
         `;
     }
 
+    // --- Recommendations ---
+    // Only show if we don't have specific stop briefings (Discovery Mode vs Planning Mode)
+    if (!hasBriefings && recommendations && recommendations.length > 0) {
+        html += `<div class="report-section-wrapper">
+                    <h2 class="report-day-header brand-blue">Resource Hubs & Recommended Spots</h2>`;
+
+        // Group by normalized type
+        const groups = {
+            marina: { title: 'Resource Hubs & Marinas', items: [] },
+            anchorage: { title: 'Recommended Anchorages', items: [] },
+            mooring: { title: 'Mooring Fields', items: [] },
+            other: { title: 'Other Recommendations', items: [] }
+        };
+
+        recommendations.forEach(rec => {
+            const t = (rec.type || '').toLowerCase();
+            if (t.includes('marina') || t.includes('hub')) groups.marina.items.push(rec);
+            else if (t.includes('anchor')) groups.anchorage.items.push(rec);
+            else if (t.includes('mooring')) groups.mooring.items.push(rec);
+            else groups.other.items.push(rec);
+        });
+
+        // Render in specific order
+        ['marina', 'anchorage', 'mooring', 'other'].forEach(key => {
+            const group = groups[key];
+            if (group.items.length === 0) return;
+
+            html += `<div class="recommendation-group mb-xl">
+                        <h3 class="group-header border-b pb-xs mb-md text-brand-medium">${group.title}</h3>
+                        <div class="recommendations-list">`;
+
+            group.items.forEach(rec => {
+                const type = rec.type || 'Spot';
+                const typeClass = key === 'other' ? 'spot' : key;
+                
+                html += `
+                    <div class="recommendation-item mb-lg p-md border-radius border">
+                        <div class="flex justify-between align-center mb-sm">
+                            <h4 class="m-0">${DOMPurify.sanitize(rec.name)}</h4>
+                            <span class="badge badge-${typeClass}">${DOMPurify.sanitize(type)}</span>
+                        </div>
+                        <p class="mb-sm"><strong>Description:</strong> ${DOMPurify.sanitize(rec.description)}</p>
+                        <div class="pilot-reasoning p-sm bg-light border-radius italic">
+                            <strong>Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        });
+
+        html += `</div><hr />`;
+    }
+
     // --- Daily Itinerary ---
-    sortedStops.forEach((stop, idx) => {
-        const b = briefings.find(br => br.stop_id === stop.id);
-        const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
-        
-        html += `
-            <div class="report-daily-wrapper">
-                <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
-                <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
-        `;
-        
-        if (b) {
-             const isInvalid = (v) => {
+    if (hasBriefings) {
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings.find(br => br.stop_id === stop.id);
+            if (!b) return;
+
+            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
+
+            html += `
+                <div class="report-daily-wrapper">
+                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
+                    <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
+            `;
+
+            const isInvalid = (v) => {
                 if (!v) return true;
                 const sv = String(v).toLowerCase().trim();
                 return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
-             };
+            };
 
-             // Weather
-            if (b.weather_summary) {
-                const w = b.weather_summary;
+            // Weather
+            const w = b.weather_summary || {};
+            if (w && !isInvalid(w.condition)) {
+                const weatherIcon = getIconForWeather(w.condition);
                 html += `
                     <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">${getIconForWeather(w.condition)}</span>
-                            Weather
-                        </h3>
-                        <div class="weather-box">
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Summary</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.summary) ? 'N/A' : w.summary}</td>
-                                </tr>
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Conditions</th>
-                                    <td class="briefing-td briefing-td-icon" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; display: flex; align-items: center; gap: 0.5rem;">
-                                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">${getIconForWeather(w.condition)}</span>
-                                        ${isInvalid(w.condition) ? 'N/A' : w.condition}
-                                    </td>
-                                </tr>
-                                ${(w.temp_max_f || w.temp_min_f) ? `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Temp</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">High: ${Math.round(w.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(w.temp_min_f)}°F</td>
-                                </tr>
-                                ` : ''}
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Wind</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${isInvalid(w.wind_direction) ? 'N/A' : w.wind_direction} ${w.wind_speed_kt || '0'} kt</td>
-                                </tr>
-                                ${w.wave_height_ft > 0 ? `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Waves</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${w.wave_height_ft} ft</td>
-                                </tr>
-                                ` : ''}
-                            </table>
+                        <h3>Weather Outlook</h3>
+                        <div class="flex align-center gap-md">
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-dark);">${weatherIcon}</span>
+                            <div>
+                                <p class="m-0"><strong>Condition:</strong> ${w.condition}</p>
+                                <p class="m-0"><strong>Temperature:</strong> ${Math.round(w.temp_max_f)}°F / ${Math.round(w.temp_min_f)}°F</p>
+                                <p class="m-0"><strong>Precipitation:</strong> ${w.precip_prob}%</p>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
-            // Sun Phase
-            if (b.sun_phase && (b.sun_phase.sunrise || b.sun_phase.sunset)) {
-                const sun = b.sun_phase;
-                const formatTime = (t) => {
-                    if (!t) return 'N/A';
-                    try {
-                        const d = new Date(t);
-                        if (isNaN(d.getTime())) return t;
-                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    } catch (e) {
-                        return t;
-                    }
-                };
-
-                html += `
-                <div class="briefing-section">
-                    <h3 class="briefing-header-icon">
-                        <span class="material-symbols-outlined">wb_twilight</span>
-                        Sun Phase
-                    </h3>
-                    <div class="weather-box">
-                        <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em;">
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Sunrise</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunrise)}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Sunset</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${formatTime(sun.sunset)}</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-                `;
-            }
-            
             // Tides
             if (b.tides && b.tides.events) {
-                // Use consistent ID format
-                const canvasId = `reportTideChart_${idx}`;
-                const targetDateYMD = stop.target_date.split('T')[0];
-                const displayEvents = b.tides.events.filter(e => e.time.startsWith(targetDateYMD));
-                
-                const tideEventsHtml = displayEvents.map(e => {
-                    let timeStr = e.time;
-                    try {
-                        const d = new Date(e.time.replace(' ', 'T'));
-                        if (!isNaN(d.getTime())) {
-                            let hours = d.getHours();
-                            const minutes = String(d.getMinutes()).padStart(2, '0');
-                            const ampm = hours >= 12 ? 'pm' : 'am';
-                            hours = hours % 12;
-                            hours = hours ? hours : 12;
-                            timeStr = `${hours}:${minutes} ${ampm}`;
-                        }
-                    } catch (ignore) {}
-
-                    return `<tr style="border: 1px solid #ddd;">
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${timeStr}</td>
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.type}</td>
-                        <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${e.height_ft} ft</td>
-                    </tr>`;
-                }).join('');
-
-                const [y, m, d] = targetDateYMD.split('-');
-                const displayDateHeader = `${m}/${d}/${y}`;
-
                 html += `
                     <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">waves</span>
-                            Tides (${b.tides.station_name || 'Station Unknown'}) - ${displayDateHeader}
-                        </h3>
-                        <div class="tide-box" style="margin-bottom:1rem;">
-                            <div style="height:200px; width:100%; position:relative;">
-                                <canvas id="${canvasId}" data-tide-json='${JSON.stringify(b.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                            </div>
-                            <table class="briefing-table" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif;">
-                                <thead>
-                                    <tr style="background-color: #f4f4f4;">
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Time</th>
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Type</th>
-                                        <th class="briefing-th" style="border: 1px solid #ddd; padding: 8px; text-align: left; font-weight: bold;">Height</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data" style="border: 1px solid #ddd; padding: 8px;">No tide data for this date</td></tr>'}
-                                </tbody>
-                            </table>
+                        <h3>Tides & Currents</h3>
+                        <div style="height: 300px; margin-bottom: 1rem;">
+                            <canvas id="reportTideChart_${idx}"></canvas>
                         </div>
                     </div>
                 `;
             }
-            
+
             // Facilities
-            const stopName = displayLocationName(stop.location_name);
-            // Check if this is the last stop and it's a loop (same location as start)
-            // Need first stop location name.
-            const firstStopName = stops.length > 0 ? displayLocationName(stops[0].location_name) : null;
-            const isLastStopLoop = (idx === stops.length - 1 && stops.length > 1 && stopName === firstStopName);
-
             if (b.facilities && b.facilities.length > 0) {
-                if (isLastStopLoop) {
-                    html += `
-                    <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">warehouse</span>
-                            Facilities
-                        </h3>
-                        <p class="text-gray italic">Facilities omitted as this is the return to the starting location.</p>
-                    </div>`;
-                } else {
-                    html += `
-                    <div class="briefing-section">
-                        <h3 class="briefing-header-icon">
-                            <span class="material-symbols-outlined">warehouse</span>
-                            Facilities
-                        </h3>
-                        <ul class="facility-list">
-                            ${b.facilities.map(f => {
-                     // Icon Mapping
-                     let icon = 'place';
-                     const typeLower = (f.type || '').toLowerCase();
-                     if (typeLower.includes('anchorage')) icon = 'anchor';
-                     else if (typeLower.includes('marina')) icon = 'storefront';
-                     else if (typeLower.includes('mooring')) icon = 'crisis_alert';
-                     else if (typeLower.includes('bar')) icon = 'local_bar';
-                     else if (typeLower.includes('restaurant')) icon = 'restaurant';
-
-                     let detailsHtml = '';
-                     if (typeof f.details === 'string') {
-                         detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
-                     } else if (f.details && typeof f.details === 'object') {
-                        // Table format for details
-                        let rows = `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
-                            </tr>
+                html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
+                b.facilities.forEach(f => {
+                    const name = DOMPurify.sanitize(f.name);
+                    const desc = DOMPurify.sanitize(f.description || '');
+                    
+                    let website = '';
+                    if (f.website) {
+                        website = `
+                            <p class="m-0 font-sm">
+                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
+                                <a href="${f.website}" target="_blank">Visit Website</a>
+                            </p>
                         `;
-                        
-                        rows += Object.entries(f.details)
+                    }
+
+                    let location = '';
+                    if (f.latitude && f.longitude) {
+                        const query = f.address ? `${f.name}, ${f.address}` : `${f.latitude},${f.longitude}`;
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+                        location = `
+                            <p class="m-0 font-sm text-gray">
+                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
+                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
+                                <a href="${mapsUrl}" target="_blank" class="ml-xs">(Open Map)</a>
+                            </p>
+                        `;
+                    }
+
+                    let detailsHtml = '';
+                    if (f.details && typeof f.details === 'object' && Object.keys(f.details).length > 0) {
+                        const rows = Object.entries(f.details)
                             .filter(([_, v]) => {
                                 if (!v) return false;
                                 const sv = String(v).toLowerCase().trim();
                                 return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
                             })
                             .map(([k, v]) => `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
+                                <tr>
+                                    <th class="briefing-th capitalize" style="text-align: left; background: #f9f9f9; width: 120px;">${k.replace(/_/g, ' ')}</th>
+                                    <td class="briefing-td">${DOMPurify.sanitize(String(v))}</td>
                                 </tr>
                             `).join('');
                         
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
-                    }
-
-                    let locHtml = '';
-                    if (f.latitude && f.longitude) {
-                        let query = f.latitude + "," + f.longitude;
-                        if (f.address) {
-                            query = f.name + ", " + f.address;
+                        if (rows) {
+                            detailsHtml = `<table class="briefing-table mt-sm" style="width:100%; font-size: 0.85em;">${rows}</table>`;
                         }
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                        locHtml = `
-                            <p class="map-link-p">
-                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
-                            </p>
-                        `;
                     }
-
-                    let websiteHtml = '';
-                    if (f.website) {
-                        websiteHtml = `
-                            <p class="map-link-p" style="margin-top: 0;">
-                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
-                            </p>
-                        `;
-                    }
-
-                    return `
-                        <li class="facility-item">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined icon-lg">${icon}</span>
-                                ${f.name}
-                            </h4>
-                            ${locHtml}
-                            ${websiteHtml}
-                            ${detailsHtml}
-                            ${renderReferences(f.references)}
-                        </li>
-                    `;
-                }).join('')}
-                </ul></div>`;
-                }
+                    
+                    html += `<li class="facility-item mb-xl">
+                        <h4 class="mb-xs">${name}</h4>
+                        ${location}
+                        ${website}
+                        <p class="mt-sm mb-sm">${desc}</p>
+                        ${detailsHtml}
+                        ${renderReferences(f.references)}
+                    </li>`;
+                });
+                html += `</ul></div>`;
             }
-        } else {
-             html += `<p class="text-gray italic">No briefing data available.</p>`;
-        }
-        html += `</div>`;
-    });
+
+            html += `</div><hr />`;
+        });
+    }
 
     html += `
         <footer class="mt-xl text-center text-gray font-sm p-lg">
@@ -4130,17 +4250,19 @@ function renderSharedReport(data, container) {
     const voyage = data.voyage || {};
     const stops = data.stops || [];
     const briefings = data.briefings || [];
-    const mapUrl = data.map_url;
+    const recommendations = data.recommendations || [];
 
-    const html = generateReportHTML(voyage, stops, briefings, guide);
-    
+    const hasBriefings = briefings.some(b => b !== null);
+
+    const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings);
+
     // Inject and Render - Wrapped in a container for styling (max-width etc)
     container.innerHTML = DOMPurify.sanitize(`<div class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
 
     // ... (Chart rendering logic preserved below) ...
     setTimeout(() => {
         const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
-        
+
         sortedStops.forEach((stop, idx) => {
             const b = briefings.find(br => br.stop_id === stop.id) || {};
             // Main Chart
@@ -4154,7 +4276,6 @@ function renderSharedReport(data, container) {
         });
     }, 100);
 }
-
 let currentAdminPage = 1;
 const ADMIN_PAGE_LIMIT = 20;
 

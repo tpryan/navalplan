@@ -303,3 +303,55 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"msg": "Deleted"})
 }
+
+// GetPilotReport aggregates voyage info, the voyage guide, and all area recommendations.
+func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Fetch Voyage and check ownership
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Voyage not found", http.StatusNotFound)
+		return
+	}
+	if v.PersonID != person.ID {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
+		return
+	}
+
+	// 2. Fetch VoyageGuide (if exists)
+	guide, err := h.DB.GetVoyageGuide(r.Context(), id)
+	if err != nil {
+		// It's okay if it doesn't exist yet
+		slog.DebugContext(r.Context(), "Voyage guide not found for pilot report", "voyage_id", id, "err", err)
+		guide = nil
+	}
+
+	// 3. Fetch Recommendations
+	recs, err := h.DB.ListVoyageRecommendations(r.Context(), id)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list recommendations for pilot report", "voyage_id", id, "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	report := models.PilotReport{
+		Voyage:          v,
+		Guide:           guide,
+		Recommendations: recs,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}

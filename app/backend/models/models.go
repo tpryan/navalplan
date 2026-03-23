@@ -35,12 +35,12 @@ type Session struct {
 
 // Voyage represents a planned trip.
 type Voyage struct {
-	ID               int64     `json:"id" db:"id"`
-	PersonID         int64     `json:"person_id" db:"person_id"`
-	Title            string    `json:"title" db:"title"`
-	StartDate        time.Time `json:"start_date" db:"start_date"`
-	EndDate          time.Time `json:"end_date" db:"end_date"`
-	LocationName     *string   `json:"location_name" db:"location_name"`
+	ID               int64      `json:"id" db:"id"`
+	PersonID         int64      `json:"person_id" db:"person_id"`
+	Title            string     `json:"title" db:"title"`
+	StartDate        *time.Time `json:"start_date" db:"start_date"`
+	EndDate          *time.Time `json:"end_date" db:"end_date"`
+	LocationName     *string    `json:"location_name" db:"location_name"`
 	PreciseLocation  *string   `json:"precise_location" db:"precise_location"`
 	Latitude         *float64  `json:"latitude" db:"latitude"`
 	Longitude        *float64  `json:"longitude" db:"longitude"`
@@ -149,6 +149,13 @@ type VoyageRecommendation struct {
 	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this
 	References  RawJSON   `json:"reference_links" db:"reference_links"` // Links to more information
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+}
+
+// PilotReport aggregates voyage info, the voyage guide, and all area recommendations.
+type PilotReport struct {
+	Voyage          *Voyage                `json:"voyage"`
+	Guide           *VoyageGuide           `json:"guide,omitempty"`
+	Recommendations []VoyageRecommendation `json:"recommendations"`
 }
 
 // RawJSON is a helper for JSONB columns

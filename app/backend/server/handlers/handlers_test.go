@@ -762,3 +762,32 @@ func TestGuideHandlers(t *testing.T) {
 		assert.Equal(t, http.StatusAccepted, w.Code)
 	})
 }
+
+func TestGetPilotReport(t *testing.T) {
+	mockStore := new(MockStore)
+	handler := handlers.New(mockStore, "test_content", "http://test-agent")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/voyages/{id}/pilot_report", handler.GetPilotReport)
+
+	personID := int64(1)
+	voyageID := int64(123)
+
+	t.Run("Success", func(t *testing.T) {
+		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
+		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{Summary: "Test Guide"}, nil)
+		mockStore.On("ListVoyageRecommendations", voyageID).Return([]models.VoyageRecommendation{{Name: "Rec 1"}}, nil)
+
+		req := httptest.NewRequest("GET", "/api/v1/voyages/123/pilot_report", nil)
+		req = addPerson(req, personID)
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var report models.PilotReport
+		json.NewDecoder(w.Body).Decode(&report)
+		assert.Equal(t, "Test Guide", report.Guide.Summary)
+		assert.Equal(t, 1, len(report.Recommendations))
+		mockStore.AssertExpectations(t)
+	})
+}

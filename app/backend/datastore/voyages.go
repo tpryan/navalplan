@@ -15,7 +15,7 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 		       search_radius, search_radius_unit, share_token, is_public, created_at
 		FROM voyage 
 		WHERE person_id = $1 
-		ORDER BY start_date DESC`
+		ORDER BY created_at DESC`
 
 	if limit > 0 {
 		query += " LIMIT $2 OFFSET $3"
