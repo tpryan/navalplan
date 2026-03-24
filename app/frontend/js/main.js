@@ -3103,21 +3103,46 @@ async function captureAndUploadMap(voyageId) {
         markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
     }
 
-    // Add recommendations as small teal markers if they exist
+    // Add recommendations as "blobs" (paths) if they exist
     const recommendations = await API.getRecommendations(voyageId).catch(() => []);
     if (recommendations && recommendations.length > 0) {
-        // Draw most recommendations as tiny teal dots
-        let recMarkers = "&markers=color:0x00BFA5%7Csize:tiny";
-        recommendations.slice(0, 30).forEach(rec => {
-            recMarkers += `%7C${rec.latitude},${rec.longitude}`;
-        });
-        markersParam += recMarkers;
+        recommendations.slice(0, 20).forEach(rec => {
+            const type = (rec.type || '').toLowerCase();
+            let color = '00BFA5'; // Teal (Anchorage) - Hex only
+            if (type.includes('hub')) color = 'FF5722'; // Orange (Hub)
+            else if (type.includes('moor')) color = '9B59B6'; // Purple (Mooring)
 
-        // Draw top 5 recommendations with labels if we have space
+            if (rec.geometry && rec.geometry.type === 'Polygon' && rec.geometry.coordinates) {
+                // Render the "Blob" as a filled path
+                // Format: color:0xRRGGBBAA|fillcolor:0xRRGGBBAA
+                let path = `&path=color:0x${color}AA|weight:1|fillcolor:0x${color}44`;
+                const ring = rec.geometry.coordinates[0]; // Main ring
+                if (ring && ring.length > 0) {
+                    ring.forEach(coord => {
+                        // GeoJSON is [lng, lat], Static Map is [lat, lng]
+                        path += `|${coord[1]},${coord[0]}`;
+                    });
+                    // Close the path for proper filling
+                    const first = ring[0];
+                    path += `|${first[1]},${first[0]}`;
+                    pathParam += path;
+                }
+            }
+            
+            // Add a small center marker for each blob
+            markersParam += `&markers=color:0x${color}%7Csize:tiny%7C${rec.latitude},${rec.longitude}`;
+        });
+
+        // Top 5 labels for readability
         let labeledRecs = "";
         recommendations.slice(0, 5).forEach(rec => {
+            const type = (rec.type || '').toLowerCase();
+            let color = '00BFA5';
+            if (type.includes('hub')) color = 'FF5722';
+            else if (type.includes('moor')) color = '9B59B6';
+            
             const label = rec.name.charAt(0).toUpperCase();
-            labeledRecs += `&markers=color:0x00BFA5%7Csize:small%7Clabel:${label}%7C${rec.latitude},${rec.longitude}`;
+            labeledRecs += `&markers=color:0x${color}%7Csize:small%7Clabel:${label}%7C${rec.latitude},${rec.longitude}`;
         });
         markersParam += labeledRecs;
     }
