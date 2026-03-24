@@ -7,9 +7,10 @@ Call 'google_search' for:
 - "Sailing season months hurricane season [Location]"
 - "Sailing hazards coral reefs currents [Location]"
 - "Major sailing hubs marinas [Location]"
-- "Yacht charter companies [Location]"
+- "Comprehensive list of yacht charter companies in [Location]"
 - "Nearest airports to [Location]"
 - "Currency language emergency numbers [Location]"
+- "Security safety crime report for tourists and sailors in [Location]"
 - "Top sailing points of interest [Location]"
 
 Output: Produce a JSON object strictly following this schema:
@@ -26,6 +27,13 @@ Output: Produce a JSON object strictly following this schema:
   "hazards": [
 	{ "title": "...", "description": "...", "url": "...", "references" : [...] }
   ],
+  "security_safety": {
+     "summary": "Overall security and safety situation for sailors.",
+     "crime_report": "Specific details on crime, theft, or piracy if applicable.",
+     "safety_tips": ["...", "..."],
+     "risk_level": "Low/Medium/High",
+     "references": [...]
+  },
   "hubs": [
 	{ "name": "...", "description": "...", "url": "...", "references" : [...] }
   ],
@@ -54,6 +62,7 @@ Output: Produce a JSON object strictly following this schema:
 ```
 
 Important: 
+- For 'charter_info.companies', try to find as many reputable local and international companies as possible (at least 5-10 if available).
 - Limit "references" to a maximum of 2 URLs per section.
 - Prefer direct source URLs over long redirect URLs.
 - If you cannot find specific data, leave the field empty or null, but MUST return the valid JSON structure.

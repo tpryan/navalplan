@@ -19,6 +19,7 @@ import (
 type GuideAgentOutput struct {
 	Summary          string          `json:"summary"`
 	SailingSeason    json.RawMessage `json:"sailing_season"`
+	SecuritySafety   json.RawMessage `json:"security_safety"`
 	Hazards          json.RawMessage `json:"hazards"`
 	Hubs             json.RawMessage `json:"hubs"`
 	CharterInfo      json.RawMessage `json:"charter_info"`
@@ -281,6 +282,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		VoyageID:         voyage.ID,
 		Summary:          output.Summary,
 		SailingSeason:    models.RawJSON(output.SailingSeason),
+		SecuritySafety:   models.RawJSON(output.SecuritySafety),
 		Hazards:          models.RawJSON(output.Hazards),
 		Hubs:             models.RawJSON(output.Hubs),
 		CharterInfo:      models.RawJSON(output.CharterInfo),
@@ -302,6 +304,7 @@ func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *models.Voyage) {
 		VoyageID:         voyage.ID,
 		Summary:          "Error: Research agent failed to provide a guide for this location.",
 		SailingSeason:    models.RawJSON([]byte(`{}`)),
+		SecuritySafety:   models.RawJSON([]byte(`{}`)),
 		Hazards:          models.RawJSON([]byte(`{}`)),
 		Hubs:             models.RawJSON([]byte(`[]`)),
 		CharterInfo:      models.RawJSON([]byte(`{}`)),

@@ -18,11 +18,12 @@ func (db *DB) GetVoyageGuide(ctx context.Context, voyageID int64) (*models.Voyag
 
 func (db *DB) CreateVoyageGuide(ctx context.Context, g *models.VoyageGuide) error {
 	query := `
-		INSERT INTO voyage_guide (voyage_id, summary, sailing_season, hazards, hubs, charter_info, airports, country_info, currencies, points_of_interest)
-		VALUES (:voyage_id, :summary, :sailing_season, :hazards, :hubs, :charter_info, :airports, :country_info, :currencies, :points_of_interest)
+		INSERT INTO voyage_guide (voyage_id, summary, sailing_season, security_safety, hazards, hubs, charter_info, airports, country_info, currencies, points_of_interest)
+		VALUES (:voyage_id, :summary, :sailing_season, :security_safety, :hazards, :hubs, :charter_info, :airports, :country_info, :currencies, :points_of_interest)
 		ON CONFLICT (voyage_id) DO UPDATE SET
 			summary = EXCLUDED.summary,
 			sailing_season = EXCLUDED.sailing_season,
+			security_safety = EXCLUDED.security_safety,
 			hazards = EXCLUDED.hazards,
 			hubs = EXCLUDED.hubs,
 			charter_info = EXCLUDED.charter_info,
