@@ -3139,6 +3139,19 @@ async function captureAndUploadMap(voyageId) {
             modal.classList.remove("hidden");
             modalOverlay.classList.remove("hidden");
 
+            // Inject Share button
+            const headerControls = modal.querySelector('.modal-header-row .flex.gap-sm');
+            let btnShare = document.getElementById('btn-share-report');
+            if (!btnShare) {
+                btnShare = document.createElement('button');
+                btnShare.id = 'btn-share-report';
+                btnShare.className = 'btn secondary p-xs font-sm';
+                btnShare.title = 'Share Report';
+                btnShare.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">share</span>';
+                headerControls.insertBefore(btnShare, headerControls.firstChild);
+            }
+            btnShare.onclick = () => handleShareClick(guide);
+
             // 7. Render charts if stop briefings are included
             if (hasBriefings) {
                 for (const [idx, stop] of sortedStops.entries()) {
@@ -3272,21 +3285,6 @@ function showVoyageGuide(guide) {
             } else {
                 showNotification('Error', 'Failed to capture map. Ensure the map is visible.');
             }
-    };
-
-    let btnShare = document.getElementById('btn-share-guide');
-    if (!btnShare) {
-        btnShare = document.createElement('button');
-        btnShare.id = 'btn-share-guide';
-        btnShare.className = 'btn secondary p-xs font-sm ml-sm';
-        btnShare.title = 'Share Guide';
-        btnShare.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">share</span>';
-        headerControls.insertBefore(btnShare, headerControls.firstChild);
-    }
-    
-    // Always update handler
-    btnShare.onclick = () => {
-            handleShareClick(guide);
     };
 
     const html = generateGuideHTML(guide);
@@ -3685,7 +3683,7 @@ async function handleShareClick(guide) {
     const content = `
         <div class="text-left">
             <h3 class="mt-0">Public Sharing</h3>
-            <p class="text-gray mb-md">Share this guide with friends and crew.</p>
+            <p class="text-gray mb-md">Share this report with friends and crew.</p>
             
             <div class="form-group">
                 <label class="flex align-center gap-sm" style="cursor:pointer;">
@@ -3765,7 +3763,8 @@ async function handleShareClick(guide) {
     
     shareModal.querySelector('#btn-close-share').onclick = () => {
         shareModal.classList.add('hidden');
-        if (document.getElementById('modal-guide').classList.contains('hidden')) {
+        if (document.getElementById('modal-guide').classList.contains('hidden') &&
+            document.getElementById('modal-report').classList.contains('hidden')) {
              document.getElementById('modal-overlay').classList.add('hidden');
         }
     };
