@@ -156,6 +156,7 @@ type PilotReport struct {
 	Voyage          *Voyage                `json:"voyage"`
 	Guide           *VoyageGuide           `json:"guide,omitempty"`
 	Recommendations []VoyageRecommendation `json:"recommendations"`
+	MapURL          string                 `json:"map_url,omitempty"`
 }
 
 // RawJSON is a helper for JSONB columns

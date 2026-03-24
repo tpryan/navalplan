@@ -315,8 +315,8 @@ func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *models.Voyage) {
 }
 
 type VoyageGuideResponse struct {
-	*models.VoyageGuide
-	MapURL string `json:"map_url,omitempty"`
+	Guide  *models.VoyageGuide `json:"guide"`
+	MapURL string              `json:"map_url,omitempty"`
 }
 
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
@@ -371,8 +371,8 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := VoyageGuideResponse{
-		VoyageGuide: guide,
-		MapURL:      mapURL,
+		Guide:  guide,
+		MapURL: mapURL,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
