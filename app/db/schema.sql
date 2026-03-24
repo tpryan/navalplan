@@ -71,6 +71,7 @@ CREATE TABLE voyage_guide (
     voyage_id INTEGER REFERENCES voyage(id) ON DELETE CASCADE UNIQUE,
     summary TEXT,
     sailing_season JSONB,
+    security_safety JSONB,
     hazards JSONB,
     hubs JSONB,
     charter_info JSONB,

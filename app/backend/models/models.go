@@ -83,6 +83,7 @@ type VoyageGuide struct {
 	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
 	Summary          string    `json:"summary" db:"summary"`
 	SailingSeason    RawJSON   `json:"sailing_season" db:"sailing_season"`
+	SecuritySafety   RawJSON   `json:"security_safety" db:"security_safety"`
 	Hazards          RawJSON   `json:"hazards" db:"hazards"`
 	Hubs             RawJSON   `json:"hubs" db:"hubs"`
 	CharterInfo      RawJSON   `json:"charter_info" db:"charter_info"`

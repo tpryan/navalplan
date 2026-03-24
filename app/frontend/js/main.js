@@ -3940,6 +3940,28 @@ function generateGuideHTML(guide) {
         html += `</ul></div>`;
     }
 
+    // Security & Safety
+    if (guide.security_safety && (guide.security_safety.summary || guide.security_safety.crime_report)) {
+        const s = guide.security_safety;
+        let tipsHtml = '';
+        if (s.safety_tips && s.safety_tips.length > 0) {
+            tipsHtml = `<div class="mt-sm"><strong>Safety Tips:</strong> <ul class="font-sm">${s.safety_tips.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+        }
+        
+        const riskClass = (s.risk_level || '').toLowerCase() === 'high' ? 'text-red' : (s.risk_level || '').toLowerCase() === 'medium' ? 'text-orange' : 'text-green';
+
+        html += `
+            <div class="briefing-section">
+                <h3>Security & Safety</h3>
+                <p><strong>Risk Level:</strong> <span class="${riskClass} font-bold">${s.risk_level || 'Low'}</span></p>
+                <p class="mt-xs">${s.summary || ''}</p>
+                ${s.crime_report ? `<div class="mt-sm"><strong>Crime Report:</strong> <p class="font-sm">${s.crime_report}</p></div>` : ''}
+                ${tipsHtml}
+                ${renderReferences(s.references)}
+            </div>
+        `;
+    }
+
     // Hubs
     if (guide.hubs && guide.hubs.length > 0) {
         html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
