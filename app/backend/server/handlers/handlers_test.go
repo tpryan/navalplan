@@ -727,8 +727,8 @@ func TestGuideHandlers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp handlers.VoyageGuideResponse
 		json.NewDecoder(w.Body).Decode(&resp)
-		assert.NotNil(t, resp.VoyageGuide)
-		assert.Equal(t, "Found", resp.Summary)
+		assert.NotNil(t, resp.Guide)
+		assert.Equal(t, "Found", resp.Guide.Summary)
 		assert.Contains(t, resp.MapURL, "/api/v1/voyages/1/map_image")
 	})
 
@@ -776,6 +776,7 @@ func TestGetPilotReport(t *testing.T) {
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 		mockStore.On("GetVoyageGuide", voyageID).Return(&models.VoyageGuide{Summary: "Test Guide"}, nil)
 		mockStore.On("ListVoyageRecommendations", voyageID).Return([]models.VoyageRecommendation{{Name: "Rec 1"}}, nil)
+		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
 
 		req := httptest.NewRequest("GET", "/api/v1/voyages/123/pilot_report", nil)
 		req = addPerson(req, personID)

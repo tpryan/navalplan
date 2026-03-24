@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -346,10 +347,17 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 4. Check for Map Snapshot
+	var mapURL string
+	if mapData, _ := h.DB.GetVoyageMap(r.Context(), id); len(mapData) > 0 {
+		mapURL = fmt.Sprintf("/api/v1/voyages/%d/map_image", id)
+	}
+
 	report := models.PilotReport{
 		Voyage:          v,
 		Guide:           guide,
 		Recommendations: recs,
+		MapURL:          mapURL,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

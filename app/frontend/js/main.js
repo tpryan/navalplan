@@ -3052,11 +3052,7 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   }
 
 async function captureAndUploadMap(voyageId) {
-    if (!currentStops || currentStops.length === 0) return false;
-
-    const sortedStops = [...currentStops].sort((a, b) => 
-        new Date(a.target_date) - new Date(b.target_date)
-    );
+    if (!currentVoyage) return false;
 
     // Construct Static Map URL
     const baseUrl = "https://maps.googleapis.com/maps/api/staticmap";
@@ -3066,19 +3062,67 @@ async function captureAndUploadMap(voyageId) {
     const key = GOOGLE_MAPS_API_KEY;
 
     let markersParam = "";
-    const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
-    
-    // Draw markers in reverse order (N to 1) so that the first marker (1) is drawn last and appears on top of others
-    for (let i = stopsToDraw.length - 1; i >= 0; i--) {
-        const s = stopsToDraw[i];
-        markersParam += `&markers=color:red%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
+    let pathParam = "";
+    let centerParam = "";
+
+    const sortedStops = [...(currentStops || [])].sort((a, b) => 
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+
+    if (sortedStops.length > 0) {
+        const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
+        // Draw markers in reverse order (N to 1) so that the first marker (1) is drawn last and appears on top of others
+        for (let i = stopsToDraw.length - 1; i >= 0; i--) {
+            const s = stopsToDraw[i];
+            markersParam += `&markers=color:orange%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
+        }
+
+        pathParam = "&path=color:0x314c3bff|weight:4";
+        stopsToDraw.forEach(s => {
+            pathParam += `|${s.latitude},${s.longitude}`;
+        });
     }
 
-    let pathParam = "&path=color:0x314c3bff|weight:4";
-    stopsToDraw.forEach(s => {
-        pathParam += `|${s.latitude},${s.longitude}`;
-    });
+    // Add search radius circle (approximate with a few points)
+    if (currentVoyage.latitude && currentVoyage.longitude && currentVoyage.search_radius) {
+        const radiusInKm = currentVoyage.search_radius * 1.852; // nm to km
+        const numPoints = 36; // More points for a smoother circle
+        let circlePoints = `&path=color:0x4285F4AA|weight:1|fillcolor:0x4285F411`;
+        for (let i = 0; i <= numPoints; i++) {
+            const angle = (i * 360 / numPoints) * Math.PI / 180;
+            const lat = currentVoyage.latitude + (radiusInKm / 111) * Math.cos(angle);
+            const lng = currentVoyage.longitude + (radiusInKm / (111 * Math.cos(currentVoyage.latitude * Math.PI / 180))) * Math.sin(angle);
+            circlePoints += `|${lat},${lng}`;
+        }
+        pathParam += circlePoints;
+        
+        // Add a marker for the voyage center (hub)
+        markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
+    } else if (currentVoyage.latitude && currentVoyage.longitude) {
+        // Fallback: at least show the center if no radius/stops
+        markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
+    }
 
+    // Add recommendations as small teal markers if they exist
+    const recommendations = await API.getRecommendations(voyageId).catch(() => []);
+    if (recommendations && recommendations.length > 0) {
+        // Draw most recommendations as tiny teal dots
+        let recMarkers = "&markers=color:0x00BFA5%7Csize:tiny";
+        recommendations.slice(0, 30).forEach(rec => {
+            recMarkers += `%7C${rec.latitude},${rec.longitude}`;
+        });
+        markersParam += recMarkers;
+
+        // Draw top 5 recommendations with labels if we have space
+        let labeledRecs = "";
+        recommendations.slice(0, 5).forEach(rec => {
+            const label = rec.name.charAt(0).toUpperCase();
+            labeledRecs += `&markers=color:0x00BFA5%7Csize:small%7Clabel:${label}%7C${rec.latitude},${rec.longitude}`;
+        });
+        markersParam += labeledRecs;
+    }
+
+    // Omit center and zoom to allow Google to auto-fit markers and paths
     const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${markersParam}${pathParam}&key=${key}`;
 
     try {
@@ -3105,14 +3149,19 @@ async function captureAndUploadMap(voyageId) {
             // 1. Fetch Pilot Report data (Voyage, Guide, Recommendations)
             const pilotReport = await API.getPilotReport(currentVoyage.id);
             let guide = pilotReport.guide;
+            let mapURL = pilotReport.map_url;
             const recommendations = pilotReport.recommendations;
 
             // 2. Check/Capture Map
-            if (!guide || !guide.map_url) {
+            if (!mapURL) {
                  const captured = await captureAndUploadMap(currentVoyage.id);
                  if (captured) {
-                     const updatedGuide = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-                     if (updatedGuide) guide = updatedGuide;
+                     // Check again to get the fresh URL
+                     const resp = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
+                     if (resp) {
+                         guide = resp.guide;
+                         mapURL = resp.map_url;
+                     }
                  }
             }
 
@@ -3128,7 +3177,7 @@ async function captureAndUploadMap(voyageId) {
             const hasBriefings = briefings.some(b => b !== null);
 
             // 5. Build HTML using consolidated generator
-            const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide, recommendations, hasBriefings);
+            const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide, recommendations, hasBriefings, mapURL);
 
             // 6. Show Modal
             const modal = document.getElementById("modal-report");
@@ -3187,9 +3236,9 @@ async function handleGuideClick(voyage, button) {
     const originalContent = button.innerHTML;
     
     try {
-        const existing = await API.getVoyageGuide(voyage.id);
-        if (existing) {
-            showVoyageGuide(existing);
+        const resp = await API.getVoyageGuide(voyage.id);
+        if (resp && resp.guide && resp.guide.summary) {
+            showVoyageGuide(resp);
             return;
         }
 
@@ -3215,11 +3264,11 @@ async function handleGuideClick(voyage, button) {
         // Poll
         const poll = setInterval(async () => {
             try {
-                const g = await API.getVoyageGuide(voyage.id);
-                if (g) {
+                const resp = await API.getVoyageGuide(voyage.id);
+                if (resp && resp.guide && resp.guide.summary && resp.guide.summary.length > 0) {
                     clearInterval(poll);
                     button.innerHTML = originalContent;
-                    showVoyageGuide(g); // Updates the already-open modal with data
+                    showVoyageGuide(resp); // Updates the already-open modal with data
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
@@ -3231,7 +3280,10 @@ async function handleGuideClick(voyage, button) {
     }
 }
 
-function showVoyageGuide(guide) {
+function showVoyageGuide(resp) {
+    const guide = resp.guide;
+    const mapURL = resp.map_url;
+
     const modal = document.getElementById('modal-guide');
     const content = document.getElementById('guide-content');
     const btnRedo = document.getElementById('btn-redo-guide');
@@ -3287,7 +3339,19 @@ function showVoyageGuide(guide) {
             }
     };
 
-    const html = generateGuideHTML(guide);
+    let html = '';
+    // Map Snapshot
+    if (mapURL) {
+        const sep = mapURL.includes('?') ? '&' : '?';
+        const url = `${mapURL}${sep}t=${Date.now()}`;
+        html += `
+            <div class="briefing-section">
+                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
+            </div>
+        `;
+    }
+
+    html += generateGuideHTML(guide);
 
     content.innerHTML = DOMPurify.sanitize(html);
 
@@ -3840,18 +3904,6 @@ function renderReferences(refs) {
 function generateGuideHTML(guide) {
     let html = '';
     
-    // Map Snapshot
-    if (guide.map_url) {
-        // Cache bust
-        const sep = guide.map_url.includes('?') ? '&' : '?';
-        const url = `${guide.map_url}${sep}t=${Date.now()}`;
-        html += `
-            <div class="briefing-section">
-                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
-            </div>
-        `;
-    }
-
     html += `
         <div class="briefing-section">
             <h3>Overview</h3>
@@ -3980,19 +4032,35 @@ function generateGuideHTML(guide) {
     return html;
 }
 
-function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings) {
+function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL) {
     const sortedStops = [...stops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
 
+    let dateDisplay = 'Dates Pending';
+    if (voyage.start_date && voyage.end_date) {
+        dateDisplay = `${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}`;
+    }
+
     let html = `
         <h1 class="report-title">${DOMPurify.sanitize(voyage.title)}</h1>
-        <p class="report-dates text-center mb-lg">
-            ${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}
-        </p>
+        <p class="report-dates text-center mb-lg">${dateDisplay}</p>
         <p class="report-location text-center mb-lg"><strong>Area:</strong> ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
         <hr />
     `;
+
+    // Map Snapshot (Show if present, even if no guide)
+    if (mapURL) {
+        // Cache bust
+        const sep = mapURL.includes('?') ? '&' : '?';
+        const url = `${mapURL}${sep}t=${Date.now()}`;
+        html += `
+            <div class="report-section-wrapper">
+                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 2rem;" />
+            </div>
+            <hr />
+        `;
+    }
 
     // --- Voyage Overview (Consolidated View) ---
     if (hasBriefings) {
@@ -4252,8 +4320,9 @@ function renderSharedReport(data, container) {
     const recommendations = data.recommendations || [];
 
     const hasBriefings = briefings.some(b => b !== null);
+    const mapURL = data.map_url;
 
-    const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings);
+    const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL);
 
     // Inject and Render - Wrapped in a container for styling (max-width etc)
     container.innerHTML = DOMPurify.sanitize(`<div class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
