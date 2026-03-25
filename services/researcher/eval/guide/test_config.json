@@ -1,0 +1,32 @@
+{
+  "criteria": {
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash"
+      },
+      "rubrics": [
+        {
+          "rubric_id": "search_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'google_search' to find information about sailing in the location mentioned in the user prompt."
+          }
+        }
+      ]
+    },
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash"
+      },
+      "rubrics": [
+        {
+          "rubric_id": "summary_contains_location",
+          "rubric_content": {
+            "text_property": "The final response summary mentions the location (e.g. BVI, British Virgin Islands) provided in the prompt."
+          }
+        }
+      ]
+    }
+  }
+}
