@@ -1,0 +1,65 @@
+{
+  "eval_set_id": "researcher_agent_eval_set",
+  "name": "Researcher Agent Evaluation",
+  "description": "Evaluates the researcher agent's ability to provide location briefings.",
+  "eval_cases": [
+    {
+      "eval_id": "oak_bluffs_research",
+      "session_input": {
+        "app_name": "researcher_agent",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "inv_1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Research anchorages and weather for 41.388800 N, -70.613100 W (Oak Bluffs, MA) for May 1, 2025. Radius 5 nm."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Oak Bluffs Briefing"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "newport_ri_research",
+      "session_input": {
+        "app_name": "researcher_agent",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "inv_2",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Research anchorages and weather for 41.490100 N, -71.312800 W (Newport, RI) for June 15, 2025. Radius 10 nm."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Newport Briefing"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

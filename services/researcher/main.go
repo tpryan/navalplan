@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/a2aproject/a2a-go/a2a"
+	"github.com/a2aproject/a2a-go/a2asrv"
 	"github.com/joho/godotenv"
 	"github.com/tpryan/navalplan/services/researcher/config"
 	"github.com/tpryan/navalplan/services/researcher/logging"
@@ -21,8 +23,11 @@ import (
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/runner"
 	"google.golang.org/adk/server/adkrest"
+	"google.golang.org/adk/server/adka2a"
 	"google.golang.org/adk/session"
+
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
 	"google.golang.org/adk/tool/geminitool"
@@ -160,22 +165,30 @@ func (s *Server) run(ctx context.Context) error {
 		SessionService: &autoCreateSessionService{session.InMemoryService()},
 	}
 
-	// Create the ADK HTTP Handler
-	adkHandler := adkrest.NewHandler(config, 120*time.Second)
-
 	// Start Custom Server
 	mux := http.NewServeMux()
 
-	// Health Check
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("OK"))
-	})
-	// Health Check
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("OK"))
-	})
+	// 1. Researcher Agent (Default/Legacy path)
+	s.registerAgentA2A(mux, stopAgent, "/invoke", config.SessionService)
+	// Also expose researcher explicitly
+	s.registerAgentA2A(mux, stopAgent, "/invoke/researcher", config.SessionService)
+
+	// 2. Guide Agent
+	s.registerAgentA2A(mux, voyageAgent, "/invoke/guide", config.SessionService)
+
+	// 3. Discovery Agent
+	s.registerAgentA2A(mux, discoveryAgent, "/invoke/discovery", config.SessionService)
+
+	// 4. Navigator Agent
+	s.registerAgentA2A(mux, navigatorAgent, "/invoke/navigator", config.SessionService)
+
+	// Special case: The root Agent Card at .well-known usually points to the main agent.
+	// We'll point it to stopAgent (Researcher) for now.
+	agentCard := s.buildAgentCard(stopAgent, "/invoke")
+	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
+
+	// Create the ADK HTTP Handler
+	adkHandler := adkrest.NewHandler(config, 120*time.Second)
 
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
@@ -216,6 +229,34 @@ func (s *Server) createAgent(ctx context.Context, acfg *agentConfig) (agent.Agen
 		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
 		GenerateContentConfig: genConfig,
 	})
+}
+
+func (s *Server) registerAgentA2A(mux *http.ServeMux, a agent.Agent, path string, sessionService session.Service) {
+	card := s.buildAgentCard(a, path)
+	executor := adka2a.NewExecutor(adka2a.ExecutorConfig{
+		RunnerConfig: runner.Config{
+			AppName:        a.Name(),
+			Agent:          a,
+			SessionService: sessionService,
+		},
+	})
+	handler := a2asrv.NewHandler(executor)
+
+	mux.Handle(path, a2asrv.NewJSONRPCHandler(handler))
+	mux.Handle(path+"/agent-card.json", a2asrv.NewStaticAgentCardHandler(card))
+	slog.Info("Registered A2A agent", "name", a.Name(), "path", path)
+}
+
+func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
+	return &a2a.AgentCard{
+		Name:               a.Name(),
+		Skills:             adka2a.BuildAgentSkills(a),
+		PreferredTransport: a2a.TransportProtocolJSONRPC,
+		URL:                "http://localhost:" + s.config.Port + path,
+		Capabilities:       a2a.AgentCapabilities{Streaming: true},
+		DefaultInputModes:  []string{},
+		DefaultOutputModes: []string{},
+	}
 }
 
 func (s *Server) setupTools() ([]tool.Tool, error) {

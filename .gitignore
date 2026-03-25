@@ -12,3 +12,5 @@ app/backend/navalplan-backend
 services/researcher/navalplan-agent
 .DS_Store
 temp/**
+services/researcher/.adk/
+services/researcher/__pycache__/

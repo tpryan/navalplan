@@ -16,6 +16,9 @@ type Config struct {
 func New(getEnv func(string) string) (*Config, error) {
 	mapsKey := getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if mapsKey == "" {
+		mapsKey = getEnv("GOOGLE_MAPS_API_KEY")
+	}
+	if mapsKey == "" {
 		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY is not set")
 	}
 
@@ -25,6 +28,12 @@ func New(getEnv func(string) string) (*Config, error) {
 	}
 
 	geminiKey := getEnv("GEMINI_API_KEY")
+	if geminiKey == "" {
+		geminiKey = getEnv("GOOGLE_API_KEY")
+	}
+	if geminiKey == "" {
+		geminiKey = getEnv("NAVALPLAN_GEMINI_KEY")
+	}
 	if geminiKey == "" {
 		return nil, fmt.Errorf("GEMINI_API_KEY is not set")
 	}
