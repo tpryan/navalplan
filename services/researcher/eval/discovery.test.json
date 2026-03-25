@@ -1,0 +1,50 @@
+{
+  "eval_set_id": "discovery_agent_eval_set",
+  "name": "Discovery Agent Evaluation",
+  "description": "Evaluates the discovery agent's ability to identify prime sailing regions.",
+  "eval_cases": [
+    {
+      "eval_id": "january_discovery",
+      "session_input": {
+        "app_name": "discovery_agent",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "rubrics": [
+        {
+          "rubric_id": "diverse_regions",
+          "rubric_content": {
+            "text_property": "The agent identifies sailing regions in at least three different global areas (e.g. Caribbean, Asia, Oceania)."
+          }
+        },
+        {
+          "rubric_id": "geojson_output",
+          "rubric_content": {
+            "text_property": "The final response contains simplified GeoJSON polygons for each region."
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "inv_1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Identify prime sailing regions for the month of January."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "January Sailing Regions"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

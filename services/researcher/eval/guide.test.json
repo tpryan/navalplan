@@ -1,0 +1,50 @@
+{
+  "eval_set_id": "guide_agent_eval_set",
+  "name": "Guide Agent Evaluation",
+  "description": "Evaluates the guide agent's ability to provide regional sailing summaries.",
+  "eval_cases": [
+    {
+      "eval_id": "british_virgin_islands_guide",
+      "session_input": {
+        "app_name": "guide_agent",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "rubrics": [
+        {
+          "rubric_id": "search_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'google_search' to find information about sailing in the BVI."
+          }
+        },
+        {
+          "rubric_id": "summary_contains_bvi",
+          "rubric_content": {
+            "text_property": "The final response summary mentions the British Virgin Islands."
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "inv_1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Research the general sailing region for 18.4286 N, 64.6176 W (Tortola, BVI)."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "BVI Guide"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

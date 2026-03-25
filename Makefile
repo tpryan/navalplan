@@ -31,7 +31,10 @@ STORAGE_BUCKET=navallog-system
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-.PHONY: run db-start db-stop db-reset test build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy
+# ADK CLI
+ADK?=/Users/tpryan/Library/Python/3.13/bin/adk
+
+.PHONY: run db-start db-stop db-reset test test-agent-eval test-agent-eval-all test-researcher test-guide test-discovery test-navigator test-agent build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy
 
 # --- Development ---
 
@@ -226,7 +229,58 @@ migrate-prod-version:
 
 # --- Testing ---
 
-test: test-backend test-frontend
+test: test-backend test-frontend test-agent-eval-all
+
+test-researcher:
+	@$(MAKE) test-agent AGENT=researcher
+
+test-guide:
+	@$(MAKE) test-agent AGENT=guide
+
+test-discovery:
+	@$(MAKE) test-agent AGENT=discovery
+
+test-navigator:
+	@$(MAKE) test-agent AGENT=navigator
+
+test-agent:
+	@echo "Starting Boat Agent ($$AGENT) for evaluation..."
+	@mkdir -p .adk
+	@ln -sf $$(pwd)/.env services/researcher/.env
+	@echo "from . import agent" > services/researcher/__init__.py
+	@(cd services/researcher && go run -mod=vendor .) & \
+	echo $$! > agent.pid; \
+	echo "Waiting for agents to start..."; \
+	sleep 15; \
+	if ! lsof -i :8081 > /dev/null; then \
+		echo "Error: Agents failed to start on port 8081"; \
+		kill $$(cat agent.pid) 2>/dev/null || true; \
+		rm agent.pid; \
+		exit 1; \
+	fi; \
+	if [ "$$AGENT" = "researcher" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
+	echo "from google.adk.agents import remote_a2a_agent" > services/researcher/agent.py; \
+	echo "agent = remote_a2a_agent.RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD')" >> services/researcher/agent.py; \
+	echo "root_agent = agent" >> services/researcher/agent.py; \
+	$(ADK) eval services/researcher services/researcher/eval/$$AGENT.test.json --config_file_path=services/researcher/eval/test_config.json --print_detailed_results; \
+	EXIT_CODE=$$?; \
+	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
+	rm -f agent.pid; \
+	rm -f services/researcher/.env; \
+	rm -f services/researcher/__init__.py services/researcher/agent.py; \
+	exit $$EXIT_CODE
+
+test-agent-eval: test-researcher
+
+test-agent-eval-all:
+	@echo "Starting all Boat Agents for evaluation..."
+	@EXIT_CODE=0; \
+	for agent in researcher guide discovery navigator; do \
+		$(MAKE) test-agent AGENT=$$agent; \
+		CUR_EXIT=$$?; \
+		if [ $$CUR_EXIT -ne 0 ]; then EXIT_CODE=$$CUR_EXIT; fi; \
+	done; \
+	exit $$EXIT_CODE
 
 test-backend:
 	@echo "Running Backend Tests..."

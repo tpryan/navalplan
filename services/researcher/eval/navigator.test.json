@@ -1,0 +1,50 @@
+{
+  "eval_set_id": "navigator_agent_eval_set",
+  "name": "Navigator Agent Evaluation",
+  "description": "Evaluates the navigator agent's ability to identify resource hubs and anchorages.",
+  "eval_cases": [
+    {
+      "eval_id": "nantucket_navigator",
+      "session_input": {
+        "app_name": "navigator_agent",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "rubrics": [
+        {
+          "rubric_id": "hub_identified",
+          "rubric_content": {
+            "text_property": "The agent identifies Nantucket Harbor as a major hub."
+          }
+        },
+        {
+          "rubric_id": "anchorage_ratio",
+          "rubric_content": {
+            "text_property": "The agent identifies more anchorages than marinas (approx 60-70% ratio)."
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "inv_1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Identify resource hubs and anchorages for 41.2835 N, 70.0995 W (Nantucket, MA). Radius 10 nm."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Nantucket Navigation"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

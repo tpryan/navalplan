@@ -1,0 +1,30 @@
+{
+  "criteria": {
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash"
+      },
+      "rubrics": [
+        {
+          "rubric_id": "weather_tool_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'get_weather_forecast' with the latitude and longitude mentioned in the user prompt."
+          }
+        },
+        {
+          "rubric_id": "tides_tool_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'get_tides' with the date mentioned in the user prompt."
+          }
+        },
+        {
+          "rubric_id": "radius_check",
+          "rubric_content": {
+            "text_property": "The agent calls 'find_places_nearby' with a radius that matches the nautical miles mentioned in the user prompt (converted to meters)."
+          }
+        }
+      ]
+    }
+  }
+}
