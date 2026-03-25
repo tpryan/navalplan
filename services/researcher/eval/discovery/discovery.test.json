@@ -8,22 +8,10 @@
       "session_input": {
         "app_name": "discovery_agent",
         "user_id": "test_user",
-        "state": {}
-      },
-      "rubrics": [
-        {
-          "rubric_id": "diverse_regions",
-          "rubric_content": {
-            "text_property": "The agent identifies sailing regions in at least three different global areas (e.g. Caribbean, Asia, Oceania)."
-          }
-        },
-        {
-          "rubric_id": "geojson_output",
-          "rubric_content": {
-            "text_property": "The final response contains simplified GeoJSON polygons for each region."
-          }
+        "state": {
+          "Month": "January"
         }
-      ],
+      },
       "conversation": [
         {
           "invocation_id": "inv_1",

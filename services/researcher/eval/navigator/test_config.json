@@ -1,0 +1,24 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash"
+      },
+      "rubrics": [
+        {
+          "rubric_id": "hub_identified",
+          "rubric_content": {
+            "text_property": "The agent identifies the major harbor/hub requested in the area (e.g. Nantucket Harbor)."
+          }
+        },
+        {
+          "rubric_id": "anchorage_ratio",
+          "rubric_content": {
+            "text_property": "The agent identifies a high number of anchorages compared to hubs (approx 60-70% ratio)."
+          }
+        }
+      ]
+    }
+  }
+}

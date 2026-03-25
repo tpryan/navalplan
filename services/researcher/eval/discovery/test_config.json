@@ -1,0 +1,24 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash"
+      },
+      "rubrics": [
+        {
+          "rubric_id": "diverse_regions",
+          "rubric_content": {
+            "text_property": "The agent identifies sailing regions in at least three different global areas (e.g. Caribbean, Asia, Oceania)."
+          }
+        },
+        {
+          "rubric_id": "geojson_output",
+          "rubric_content": {
+            "text_property": "The final response contains simplified GeoJSON polygons for each region."
+          }
+        }
+      ]
+    }
+  }
+}

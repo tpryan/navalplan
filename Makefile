@@ -262,7 +262,7 @@ test-agent:
 	echo "from google.adk.agents import remote_a2a_agent" > services/researcher/agent.py; \
 	echo "agent = remote_a2a_agent.RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD')" >> services/researcher/agent.py; \
 	echo "root_agent = agent" >> services/researcher/agent.py; \
-	$(ADK) eval services/researcher services/researcher/eval/$$AGENT.test.json --config_file_path=services/researcher/eval/test_config.json --print_detailed_results; \
+	$(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
 	rm -f agent.pid; \
