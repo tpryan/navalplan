@@ -244,15 +244,21 @@ test-navigator:
 	@$(MAKE) test-agent AGENT=navigator
 
 test-agent:
-	@echo "Starting Boat Agent ($$AGENT) for evaluation..."
+	@if [ "$(VERBOSE)" != "1" ]; then \
+		echo "Evaluating Boat Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
+	else \
+		echo "Starting Boat Agent ($$AGENT) for evaluation..."; \
+	fi
 	@mkdir -p .adk
 	@ln -sf $$(pwd)/.env services/researcher/.env
 	@echo "from . import agent" > services/researcher/__init__.py
-	@(cd services/researcher && go run -mod=vendor .) & \
-	echo $$! > agent.pid; \
-	echo "Waiting for agents to start..."; \
-	sleep 15; \
-	if ! lsof -i :8081 > /dev/null; then \
+	@if [ "$(VERBOSE)" != "1" ]; then \
+		(cd services/researcher && go run -mod=vendor .) > /dev/null 2>&1 & echo $$! > agent.pid; \
+	else \
+		(cd services/researcher && go run -mod=vendor .) & echo $$! > agent.pid; \
+	fi
+	@sleep 15
+	@if ! lsof -i :8081 > /dev/null; then \
 		echo "Error: Agents failed to start on port 8081"; \
 		kill $$(cat agent.pid) 2>/dev/null || true; \
 		rm agent.pid; \
@@ -262,7 +268,11 @@ test-agent:
 	echo "from google.adk.agents import remote_a2a_agent" > services/researcher/agent.py; \
 	echo "agent = remote_a2a_agent.RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD')" >> services/researcher/agent.py; \
 	echo "root_agent = agent" >> services/researcher/agent.py; \
-	$(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
+	if [ "$(VERBOSE)" != "1" ]; then \
+		PYTHONWARNINGS=ignore $(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+	else \
+		$(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
+	fi; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
 	rm -f agent.pid; \
