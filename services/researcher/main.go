@@ -24,8 +24,8 @@ import (
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
-	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/server/adka2a"
+	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/session"
 
 	"google.golang.org/adk/tool"
@@ -186,6 +186,11 @@ func (s *Server) run(ctx context.Context) error {
 	// We'll point it to stopAgent (Researcher) for now.
 	agentCard := s.buildAgentCard(stopAgent, "/invoke")
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
 	// Create the ADK HTTP Handler
 	adkHandler := adkrest.NewHandler(config, 120*time.Second)
