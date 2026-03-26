@@ -13,7 +13,7 @@ curl -X POST "$SESSION_ENDPOINT"
 # Endpoint for invoking the resaearcher agent
 ENDPOINT="${BASEURL}/api/run"
 
-# Sample boat query
+# Sample agent query
 QUERY="{
     \"appName\": \"${APPNAME}\",
     \"userId\": \"${USER}\",
