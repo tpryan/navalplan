@@ -1,17 +1,23 @@
 {
   "eval_set_id": "discovery_agent_eval_set",
   "name": "Discovery Agent Evaluation",
-  "description": "Evaluates the discovery agent's ability to identify prime sailing regions.",
+  "description": "Evaluates the discovery agent's ability to identify seasonal sailing regions.",
   "eval_cases": [
     {
       "eval_id": "january_discovery",
       "session_input": {
         "app_name": "discovery_agent",
         "user_id": "test_user",
-        "state": {
-          "Month": "January"
-        }
+        "state": {}
       },
+      "rubrics": [
+        {
+          "rubric_id": "contains_multiple_regions",
+          "rubric_content": {
+            "text_property": "The response identifies multiple sailing regions."
+          }
+        }
+      ],
       "conversation": [
         {
           "invocation_id": "inv_1",
@@ -27,7 +33,7 @@
             "role": "model",
             "parts": [
               {
-                "text": "January Sailing Regions"
+                "text": "Sailing Regions"
               }
             ]
           }
