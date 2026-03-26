@@ -293,12 +293,17 @@ func (s *Server) setupTools() ([]tool.Tool, error) {
 }
 
 func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "guide_search_specialist")
+	if err != nil {
+		return nil, err
+	}
+
 	return s.createAgent(ctx, &agentConfig{
 		name:        "guide_agent",
 		description: "A Local Knowledge Expert and Sailing Guide.",
 		instruction: _voyageAgentPrompt,
 		tools: []tool.Tool{
-			geminitool.GoogleSearch{},
+			searchSpecialist,
 		},
 		temperature: 0.4,
 	})
@@ -330,15 +335,36 @@ func (s *Server) createStopAgent(ctx context.Context, researcherTools []tool.Too
 }
 
 func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "discovery_search_specialist")
+	if err != nil {
+		return nil, err
+	}
+
 	return s.createAgent(ctx, &agentConfig{
 		name:        "discovery_agent",
 		description: "The Commodore - Global Seasonal Discovery Expert.",
 		instruction: _discoveryAgentPrompt,
 		tools: []tool.Tool{
-			geminitool.GoogleSearch{},
+			searchSpecialist,
 		},
 		temperature: 0.2,
 	})
+}
+
+func (s *Server) createSearchSpecialist(ctx context.Context, name string) (tool.Tool, error) {
+	searchAgent, err := s.createAgent(ctx, &agentConfig{
+		name:        name,
+		description: "Finds information on the web using Google Search.",
+		instruction: _searchSpecialistPrompt,
+		tools: []tool.Tool{
+			geminitool.GoogleSearch{},
+		},
+		temperature: 0.4,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return agenttool.New(searchAgent, nil), nil
 }
 
 func (s *Server) createNavigatorAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
