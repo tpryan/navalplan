@@ -14,15 +14,24 @@
           }
         },
         {
-          "rubric_id": "search_suggestions_present",
-          "rubric_content": {
-            "text_property": "The response includes evidence of a web search, such as grounding links or search suggestions."
-          }
-        },
-        {
           "rubric_id": "json_format",
           "rubric_content": {
             "text_property": "The response is a valid JSON object."
+          }
+        }
+      ]
+    },
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.0-flash",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "search_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'guide_search_specialist' to gather real-time data."
           }
         }
       ]

@@ -14,7 +14,19 @@
         {
           "rubric_id": "contains_multiple_regions",
           "rubric_content": {
-            "text_property": "The response identifies multiple sailing regions."
+            "text_property": "The response identifies multiple sailing regions suitable for the requested month."
+          }
+        },
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON array of objects."
+          }
+        },
+        {
+          "rubric_id": "search_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'discovery_search_specialist' to gather real-time data."
           }
         }
       ],
