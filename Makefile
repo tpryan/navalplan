@@ -245,9 +245,9 @@ test-navigator:
 
 test-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
-		echo "Evaluating Boat Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
+		echo "Evaluating NavalPlan Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
 	else \
-		echo "Starting Boat Agent ($$AGENT) for evaluation..."; \
+		echo "Starting NavalPlan Agent ($$AGENT) for evaluation..."; \
 	fi
 	@mkdir -p .adk
 	@ln -sf $$(pwd)/.env services/researcher/.env
@@ -283,7 +283,7 @@ test-agent:
 test-agent-eval: test-researcher
 
 test-agent-eval-all:
-	@echo "Starting all Boat Agents for evaluation..."
+	@echo "Starting all NavalPlan Agents for evaluation..."
 	@EXIT_CODE=0; \
 	for agent in researcher guide discovery navigator; do \
 		$(MAKE) test-agent AGENT=$$agent; \

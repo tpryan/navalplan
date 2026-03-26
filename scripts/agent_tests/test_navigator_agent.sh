@@ -13,10 +13,10 @@ echo "Creating session for ${APPNAME}..."
 curl -X POST "$ENDPOINT_SESSION"
 echo -e "\n"
 
-# Endpoint for querying the boat agent
+# Endpoint for querying the NavalPlan agent
 ENDPOINT_QUERY="${BASEURL}/api/run"
 
-# Sample boat query, note the session info embedded in it. 
+# Sample agent query, note the session info embedded in it. 
 QUERY="{
     \"appName\": \"${APPNAME}\",
     \"userId\": \"${USER}\",
