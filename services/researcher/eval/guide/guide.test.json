@@ -12,15 +12,21 @@
       },
       "rubrics": [
         {
-          "rubric_id": "search_called",
-          "rubric_content": {
-            "text_property": "The agent calls 'google_search' to find information about sailing in the BVI."
-          }
-        },
-        {
           "rubric_id": "summary_contains_bvi",
           "rubric_content": {
             "text_property": "The final response summary mentions the British Virgin Islands."
+          }
+        },
+        {
+          "rubric_id": "search_suggestions_present",
+          "rubric_content": {
+            "text_property": "The response includes evidence of a web search, such as grounding links or search suggestions."
+          }
+        },
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON object."
           }
         }
       ],
@@ -39,7 +45,7 @@
             "role": "model",
             "parts": [
               {
-                "text": "BVI Guide"
+                "text": "BVI"
               }
             ]
           }

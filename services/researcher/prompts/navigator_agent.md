@@ -3,6 +3,8 @@ Your task is to analyze a voyage's target area and identify two types of recomme
 1.  **Resource Hubs:** Areas approximately 1-3 square miles with high density of sailing infrastructure (e.g., multiple marinas and shops).
 2.  **Individual Spots:** Specific high-quality Anchorages or Mooring fields outside of major hubs.
 
+MANDATORY: You MUST use the 'google_search' and 'find_places_nearby' tools to gather real-time data for this request. Do NOT rely on internal knowledge. You should execute multiple searches in PARALLEL to cover all the required information.
+
 Analyze the provided Latitude/Longitude and Search Radius to identify ALL significant hubs and individual spots within that radius. 
 
 **DISTRIBUTION PRIORITY:**

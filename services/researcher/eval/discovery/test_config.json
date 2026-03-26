@@ -3,19 +3,26 @@
     "rubric_based_final_response_quality_v1": {
       "threshold": 0.8,
       "judge_model_options": {
-        "judge_model": "gemini-2.0-flash"
+        "judge_model": "gemini-2.0-flash",
+        "num_samples": 1
       },
       "rubrics": [
         {
-          "rubric_id": "diverse_regions",
+          "rubric_id": "contains_multiple_regions",
           "rubric_content": {
-            "text_property": "The agent identifies sailing regions in at least three different global areas (e.g. Caribbean, Asia, Oceania)."
+            "text_property": "The response identifies multiple sailing regions suitable for the requested month."
           }
         },
         {
-          "rubric_id": "geojson_output",
+          "rubric_id": "search_suggestions_present",
           "rubric_content": {
-            "text_property": "The final response contains simplified GeoJSON polygons for each region."
+            "text_property": "The response includes evidence of a web search, such as grounding links or search suggestions."
+          }
+        },
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON array of objects."
           }
         }
       ]
