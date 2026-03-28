@@ -26,7 +26,7 @@ steps:
 - name: 'golang'
   script: |
     apt-get update && apt-get install -y python3 python3-pip lsof
-    pip3 install google-adk --break-system-packages
+    pip3 install "google-adk[a2a]" --break-system-packages
     # We use the adk command from the path in Cloud Build
     make test-agent-eval ADK=adk
   secretEnv: ['GEMINI_API_KEY', 'NAVALPLAN_BACKEND_MAPS_API_KEY']

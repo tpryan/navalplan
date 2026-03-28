@@ -10,6 +10,7 @@ Before you begin, ensure you have the following installed:
 
 *   **Go** (1.21 or later)
 *   **Node.js** (20 or later) & **npm**
+*   **Python** (3.10 or later) & `venv` (for ADK agent evaluations)
 *   **Podman** (for running the PostgreSQL database). *Note: You can replace `podman` with `docker` in the Makefile if you prefer Docker.*
 *   **Google Cloud SDK** (`gcloud`) - Optional, for deployment and cloud-specific tasks.
 
@@ -27,7 +28,15 @@ Before you begin, ensure you have the following installed:
     make setup
     ```
 
-3.  **Configure Environment:**
+3.  **Setup Agent Evaluation (ADK):**
+    Install the Agent Developer Kit (ADK) and its Python dependencies. It is recommended to use a virtual environment.
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    make setup-adk
+    ```
+
+4.  **Configure Environment:**
     Open the newly created `.env` file and fill in the required values:
     *   `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: Create these in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
     *   `NAVALPLAN_FRONTEND_MAPS_API_KEY` & `NAVALPLAN_BACKEND_MAPS_API_KEY`: Get API keys from [Google Maps Platform](https://developers.google.com/maps).
@@ -53,12 +62,27 @@ Before you begin, ensure you have the following installed:
 *   `make run-frontend`: Runs the frontend in dev mode (Vite).
 *   `make run-agent`: Runs the Researcher Agent.
 *   `make db-reset`: Stops, restarts, and reseeds the database.
-*   `make migrate-up`: Applies pending database migrations.
-*   `make migrate-create`: Creates a new migration file.
+*   `migrate-up`: Applies pending database migrations.
+*   `migrate-create`: Creates a new migration file.
+
+## Agent Evaluation (ADK)
+
+NavalPlan uses the **Agent Developer Kit (ADK)** to evaluate the performance of its AI agents.
+
+*   `make eval-all`: Runs evaluations for all agents (Researcher, Guide, Discovery, Navigator).
+*   `make eval-researcher`: Evaluates only the Researcher agent.
+*   `make eval-guide`: Evaluates only the Guide agent.
+*   `make eval-discovery`: Evaluates only the Discovery agent.
+*   `make eval-navigator`: Evaluates only the Navigator agent.
+
+By default, evaluations provide a summary. Set `VERBOSE=1` to see detailed logs and trace information:
+```bash
+make eval-researcher VERBOSE=1
+```
 
 ## Testing
 
-*   **Run all tests:**
+*   **Run all tests (including agent evaluations):**
     ```bash
     make test
     ```
@@ -69,6 +93,10 @@ Before you begin, ensure you have the following installed:
 *   **Frontend tests only:**
     ```bash
     make test-frontend
+    ```
+*   **Agent evaluations only:**
+    ```bash
+    make eval-all
     ```
 
 ## Architecture

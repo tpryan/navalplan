@@ -32,9 +32,9 @@ STORAGE_BUCKET=navallog-system
 GO_FILES=$(shell find . -name '*.go')
 
 # ADK CLI
-ADK?=/Users/tpryan/Library/Python/3.13/bin/adk
+ADK?=adk
 
-.PHONY: run db-start db-stop db-reset test test-agent-eval test-agent-eval-all test-researcher test-guide test-discovery test-navigator test-agent build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy
+.PHONY: run db-start db-stop db-reset test eval eval-all eval-agent eval-researcher eval-guide eval-discovery eval-navigator build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy setup-adk
 
 # --- Development ---
 
@@ -78,6 +78,14 @@ run-agent:
 	@echo "Starting NavalPlan Researcher Agent..."
 	# Requires GEMINI_API_KEY to be set
 	cd services/researcher && go run -mod=vendor main.go
+
+setup-adk:
+	@echo "Setting up ADK..."
+	@if [ -d venv ]; then \
+		./venv/bin/pip install "google-adk[a2a]"; \
+	else \
+		pip install "google-adk[a2a]" || echo "Warning: Could not install google-adk[a2a] globally. Please ensure it is installed."; \
+	fi
 
 # --- Combined Dev ---
 
@@ -229,21 +237,34 @@ migrate-prod-version:
 
 # --- Testing ---
 
-test: test-backend test-frontend test-agent-eval-all
+test: test-backend test-frontend eval-all
 
-test-researcher:
-	@$(MAKE) test-agent AGENT=researcher
+test-backend:
+	@echo "Running Backend Tests..."
+	cd app/backend && go test ./... -cover
+	cd services/researcher && go test ./... -cover
 
-test-guide:
-	@$(MAKE) test-agent AGENT=guide
+test-frontend:
+	@echo "Running Frontend Tests..."
+	cd app/frontend && npm test
 
-test-discovery:
-	@$(MAKE) test-agent AGENT=discovery
+# --- Evaluation ---
 
-test-navigator:
-	@$(MAKE) test-agent AGENT=navigator
+eval: eval-all
 
-test-agent:
+eval-researcher:
+	@$(MAKE) eval-agent AGENT=researcher
+
+eval-guide:
+	@$(MAKE) eval-agent AGENT=guide
+
+eval-discovery:
+	@$(MAKE) eval-agent AGENT=discovery
+
+eval-navigator:
+	@$(MAKE) eval-agent AGENT=navigator
+
+eval-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
 		echo "Evaluating NavalPlan Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
 	else \
@@ -265,8 +286,8 @@ test-agent:
 		exit 1; \
 	fi; \
 	if [ "$$AGENT" = "researcher" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
-	echo "from google.adk.agents import remote_a2a_agent" > services/researcher/agent.py; \
-	echo "agent = remote_a2a_agent.RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD')" >> services/researcher/agent.py; \
+	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > services/researcher/agent.py; \
+	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> services/researcher/agent.py; \
 	echo "root_agent = agent" >> services/researcher/agent.py; \
 	if [ "$(VERBOSE)" != "1" ]; then \
 		PYTHONWARNINGS=ignore $(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
@@ -280,26 +301,15 @@ test-agent:
 	rm -f services/researcher/__init__.py services/researcher/agent.py; \
 	exit $$EXIT_CODE
 
-test-agent-eval: test-researcher
-
-test-agent-eval-all:
+eval-all:
 	@echo "Starting all NavalPlan Agents for evaluation..."
 	@EXIT_CODE=0; \
 	for agent in researcher guide discovery navigator; do \
-		$(MAKE) test-agent AGENT=$$agent; \
+		$(MAKE) eval-agent AGENT=$$agent; \
 		CUR_EXIT=$$?; \
 		if [ $$CUR_EXIT -ne 0 ]; then EXIT_CODE=$$CUR_EXIT; fi; \
 	done; \
 	exit $$EXIT_CODE
-
-test-backend:
-	@echo "Running Backend Tests..."
-	cd app/backend && go test ./... -cover
-	cd services/researcher && go test ./... -cover
-
-test-frontend:
-	@echo "Running Frontend Tests..."
-	cd app/frontend && npm test
 
 deps: deps-backend deps-researcher
 

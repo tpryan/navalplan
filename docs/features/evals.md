@@ -91,4 +91,4 @@ test-agent-eval:
 Incorporate the validation step into Cloud Build:
 
 1.  **Update `cloudbuild.yaml`**: Add a test step using a Python-enabled image.
-2.  **Logic**: Install `google-adk`, inject the `GOOGLE_API_KEY`, and trigger `make test-agent-eval` to block deployments if agent responses drop below the configured threshold.
+2.  **Logic**: Install `google-adk[a2a]`, inject the `GOOGLE_API_KEY`, and trigger `make test-agent-eval` to block deployments if agent responses drop below the configured threshold.
