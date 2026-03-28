@@ -11,6 +11,7 @@ type Config struct {
 	GeminiAPIKey string
 	MapsAPIKey   string
 	Port         string
+	BaseURL      string
 }
 
 func New(getEnv func(string) string) (*Config, error) {
@@ -46,6 +47,8 @@ func New(getEnv func(string) string) (*Config, error) {
 		port = "8081"
 	}
 
+	baseURL := getEnv("NAVALPLAN_AGENT_BASE_URL")
+
 	env := getEnv("ENV")
 	if env == "" {
 		env = "development"
@@ -60,6 +63,7 @@ func New(getEnv func(string) string) (*Config, error) {
 		GeminiAPIKey: geminiKey,
 		MapsAPIKey:   mapsKey,
 		Port:         port,
+		BaseURL:      baseURL,
 	}
 
 	return cfg, nil

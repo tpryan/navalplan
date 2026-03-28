@@ -253,11 +253,15 @@ func (s *Server) registerAgentA2A(mux *http.ServeMux, a agent.Agent, path string
 }
 
 func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
+	baseURL := s.config.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:" + s.config.Port
+	}
 	return &a2a.AgentCard{
 		Name:               a.Name(),
 		Skills:             adka2a.BuildAgentSkills(a),
 		PreferredTransport: a2a.TransportProtocolJSONRPC,
-		URL:                "http://localhost:" + s.config.Port + path,
+		URL:                baseURL + path,
 		Capabilities:       a2a.AgentCapabilities{Streaming: true},
 		DefaultInputModes:  []string{},
 		DefaultOutputModes: []string{},
