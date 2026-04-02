@@ -17,7 +17,7 @@ func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, 
 }
 
 func (db *DB) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error) {
-	var briefings []models.Briefing
+	briefings := []models.Briefing{}
 	query := `
 		SELECT b.*
 		FROM briefing b

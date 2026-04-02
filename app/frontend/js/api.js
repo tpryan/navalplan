@@ -85,13 +85,15 @@ export const API = {
 	async getVoyageBriefings(voyageId) {
 		const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/briefings`);
 		if (!res.ok) throw new Error('Failed to get voyage briefings');
-		return res.json();
+		const data = await res.json();
+		return data || [];
 	},
 
 	  async getStops(voyageId, page = 1, limit = 50) {
 	    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops?page=${page}&limit=${limit}`);
 	    if (!res.ok) throw new Error('Failed to load stops');
-	    return res.json();
+	    const data = await res.json();
+	    return data || [];
 	  },
   async createStop(voyageId, stop) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`, {
