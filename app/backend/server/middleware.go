@@ -106,6 +106,12 @@ func (s *Server) gzipMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Skip gzip for SSE (Server-Sent Events)
+		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") || strings.Contains(r.URL.Path, "/stream") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Don't compress small responses or images
 		// http.ServeFile might set content type later, so we check extension
 		ext := filepath.Ext(r.URL.Path)
@@ -218,6 +224,12 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (s *Server) traceMiddleware(next http.Handler) http.Handler {

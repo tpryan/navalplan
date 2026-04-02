@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { API } from './api.js';
+import { API, API_BASE } from './api.js';
 import { checkSession, currentUser } from './auth.js';
 import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
@@ -42,7 +42,7 @@ let markers = [];
 let routePolyline = null;
 let facilityMarkers = [];
 let recommendationMarkers = [];
-let recommendations = [];
+let voyageRecommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
@@ -72,6 +72,16 @@ function displayLocationName(name) {
 }
 
 /**
+ * Ensures the input is an array, handling the wrapped {"recommendations": [...]} format
+ */
+function ensureRecommendationsArray(data) {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (data.recommendations && Array.isArray(data.recommendations)) return data.recommendations;
+    return [];
+}
+
+/**
  * Smoothing algorithm for polygons (Chaikin's)
  */
 function smoothPolygon(coordinates, iterations = 2) {
@@ -82,6 +92,37 @@ function smoothPolygon(coordinates, iterations = 2) {
         result = chaikin(result);
     }
     return result;
+}
+
+/**
+ * Generate a circular polygon from a center point and radius in miles
+ */
+function getCirclePolygon(center, radiusMiles, numPoints = 32) {
+    const coords = [];
+    const R = 3958.8; // Earth's radius in miles
+    const d = radiusMiles / R; // angular distance in radians
+    const lat1 = (center.lat * Math.PI) / 180;
+    const lon1 = (center.lng * Math.PI) / 180;
+
+    for (let i = 0; i <= numPoints; i++) {
+        const brng = (2 * Math.PI * i) / numPoints;
+        const lat2 = Math.asin(
+            Math.sin(lat1) * Math.cos(d) +
+            Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
+        );
+        const lon2 =
+            lon1 +
+            Math.atan2(
+                Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+                Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+            );
+        coords.push([ (lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI ]);
+    }
+    // Close the loop
+    if (coords.length > 0) {
+        coords.push([coords[0][0], coords[0][1]]);
+    }
+    return coords;
 }
 
 function chaikin(coords) {
@@ -1060,23 +1101,23 @@ async function loadStops() {
 
         // Auto-load recommendations if they exist
         try {
-            const recs = await API.getRecommendations(currentVoyage.id);
-            recommendations = recs || [];
+            const res = await API.getRecommendations(currentVoyage.id);
+            voyageRecommendations = ensureRecommendationsArray(res);
             renderRecommendations();
             
             // Re-render itinerary now that we have recommendations (to hide the prompt in Discovery Mode)
             renderItinerary();
         } catch (e) {
-            recommendations = [];
+            voyageRecommendations = [];
             console.warn("No recommendations found or failed to load", e);
         }
 
         // Check if itinerary is empty AND research hasn't been done - Show Prompt
         const hasDates = currentVoyage.start_date && currentVoyage.end_date;
-        if (hasDates && currentStops.length === 0 && currentStopPage === 1 && recommendations.length === 0) {
+        if (hasDates && currentStops.length === 0 && currentStopPage === 1 && voyageRecommendations.length === 0) {
             document.getElementById('modal-empty-voyage').classList.remove('hidden');
             document.getElementById('modal-overlay').classList.remove('hidden');
-        } else if (recommendations.length > 0) {
+        } else if (voyageRecommendations.length > 0) {
             // Ensure empty voyage modal is hidden if we have recommendations (Discovery Mode or Planner)
             document.getElementById('modal-empty-voyage').classList.add('hidden');
             const modalNewVoyage = document.getElementById('modal-new-voyage');
@@ -1414,7 +1455,7 @@ async function handlePilotSuggestionsClick() {
         await renderPilotCircle();
         
         // Trigger both Local Pilot (Recommendations) and Voyage Guide research
-        await Promise.all([
+        const [recRes] = await Promise.all([
             API.generateRecommendations(currentVoyage.id),
             API.triggerVoyageGuideResearch(currentVoyage.id)
         ]);
@@ -1424,31 +1465,65 @@ async function handlePilotSuggestionsClick() {
             researchTicker.start("The AI is researching resource hubs, anchorages, and moorings...");
         }
 
-        // Poll for results
+        const sessionID = recRes.session_id;
+        let eventSource = null;
+        if (sessionID) {
+            console.log("Connecting to recommendation stream...", sessionID);
+            eventSource = new EventSource(`${API_BASE}/voyages/${currentVoyage.id}/recommendations/stream?session_id=${sessionID}`);
+            
+            eventSource.addEventListener('recommendation', (e) => {
+                try {
+                    const rec = JSON.parse(e.data);
+                    if (!voyageRecommendations.some(r => r.id === rec.id)) {
+                        voyageRecommendations.push(rec);
+                        renderRecommendations();
+                        renderItinerary();
+                    }
+                } catch (err) {
+                    console.error("Failed to parse streamed recommendation:", err);
+                }
+            });
+
+            eventSource.onerror = (e) => {
+                console.warn("SSE stream closed or error:", e);
+                if (eventSource) eventSource.close();
+            };
+        }
+
+        // Poll for results (fallback or to detect completion)
         let attempts = 0;
-        const maxAttempts = 18; // 3 minutes (10s interval)
+        const maxAttempts = 30; // 5 minutes (10s interval)
         
         const poll = setInterval(async () => {
             attempts++;
             try {
-                const recs = await API.getRecommendations(currentVoyage.id);
+                const res = await API.getRecommendations(currentVoyage.id);
+                const recs = ensureRecommendationsArray(res);
+                
+                // Update full list (in case streaming missed some or they arrived fast)
                 if (recs && recs.length > 0) {
-                    clearInterval(poll);
-                    recommendations = recs;
-                    isPilotResearching = false;
+                    voyageRecommendations = recs;
                     renderRecommendations();
                     renderItinerary();
+                }
+
+                // Stop polling if we have 15+ recommendations or hit max attempts
+                if (recs && recs.length >= 15) {
+                    clearInterval(poll);
+                    if (eventSource) eventSource.close();
+                    
+                    isPilotResearching = false;
                     if (researchTicker) researchTicker.stop();
                     icon.classList.remove('spin');
                     btn.disabled = false;
                     
-                    showNotification("Research Complete", `We've identified ${recommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
+                    showNotification("Research Complete", `We've identified ${voyageRecommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
 
                     // Zoom out to show recommendations and research area
-                    if (map && recommendations.length > 0) {
+                    if (map && voyageRecommendations.length > 0) {
                         const { LatLngBounds } = await importLibrary("core");
                         const bounds = new LatLngBounds();
-                        recommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
+                        voyageRecommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
                         
                         if (pilotCircle) {
                             bounds.union(pilotCircle.getBounds());
@@ -1463,12 +1538,15 @@ async function handlePilotSuggestionsClick() {
 
             if (attempts >= maxAttempts) {
                 clearInterval(poll);
+                if (eventSource) eventSource.close();
                 isPilotResearching = false;
                 renderItinerary();
                 if (researchTicker) researchTicker.stop();
                 icon.classList.remove('spin');
                 btn.disabled = false;
-                showNotification('Error', "The AI research is taking longer than expected. The agent may have encountered an error. Please try again in a few minutes.");
+                if (voyageRecommendations.length === 0) {
+                    showNotification('Incomplete', "The AI research is taking longer than expected. Please try again or check back in a few minutes.");
+                }
             }
         }, 10000);
 
@@ -1483,108 +1561,98 @@ async function handlePilotSuggestionsClick() {
 }
 
 async function renderRecommendations() {
-    clearRecommendations();
-    if (!map || !currentVoyage) return;
+    try {
+        clearRecommendations();
+        if (!map || !currentVoyage) return;
 
-    // Only render if itinerary is NOT full OR if we have recommendations
-    if (!lastKnownItineraryFull || (recommendations && recommendations.length > 0)) {
-        await renderPilotCircle();
-    }
+        console.log("Rendering recommendations:", voyageRecommendations);
+        if (!Array.isArray(voyageRecommendations)) {
+            console.error("voyageRecommendations is not an array!", voyageRecommendations);
+            return;
+        }
 
-    if (!recommendations || recommendations.length === 0) return;
+        // Only render if itinerary is NOT full OR if we have recommendations
+        if (!lastKnownItineraryFull || (voyageRecommendations && voyageRecommendations.length > 0)) {
+            await renderPilotCircle();
+        }
 
-    const { InfoWindow } = await importLibrary("maps");
+        if (!voyageRecommendations || voyageRecommendations.length === 0) return;
 
-    const features = [];
+        const { InfoWindow } = await importLibrary("maps");
+        const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
 
-    const styles = {
-        hub: { color: '#FF5722', icon: 'hub', label: 'Resource Hub' }, // Safety Orange
-        anchorage: { color: '#00BFA5', icon: 'anchor', label: 'Anchorage' }, // Vibrant Teal
-        mooring: { color: '#9B59B6', icon: 'crisis_alert', label: 'Mooring' } // Purple
-    };
+        const features = [];
 
-    recommendations.forEach((rec) => {
-        const type = (rec.type || '').toLowerCase();
-        let style = styles.hub;
-        if (type.includes('anchor')) style = styles.anchorage;
-        else if (type.includes('moor')) style = styles.mooring;
+        const styles = {
+            hub: { color: '#FF5722', icon: 'hub', label: 'Resource Hub' }, // Safety Orange
+            anchorage: { color: '#00BFA5', icon: 'anchor', label: 'Anchorage' }, // Vibrant Teal
+            mooring: { color: '#9B59B6', icon: 'crisis_alert', label: 'Mooring' } // Purple
+        };
 
-        // Add Blob (MANDATORY for all types now)
-        if (rec.geometry && rec.geometry.type === 'Polygon') {
-            features.push({
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: rec.geometry.coordinates.map(ring => {
-                        // Defensively ensure ring is closed before smoothing
-                        let coords = [...ring];
-                        if (coords.length > 0) {
-                            const first = coords[0];
-                            const last = coords[coords.length - 1];
-                            if (first[0] !== last[0] || first[1] !== last[1]) {
-                                coords.push([first[0], first[1]]);
-                            }
-                        }
-                        return smoothPolygon(coords, 3);
-                    })
-                },
-                properties: {
-                    type: 'recommendation',
-                    recId: rec.id,
-                    color: style.color,
-                    name: rec.name,
-                    style: style // Pass style info for click handler
-                }
+        voyageRecommendations.forEach((rec) => {
+            const type = (rec.type || '').toLowerCase();
+            let style = styles.hub;
+            if (type.includes('anchor')) style = styles.anchorage;
+            else if (type.includes('moor')) style = styles.mooring;
+
+            // 1. Add Marker for center visibility
+            const pin = new PinElement({
+                scale: 0.7,
+                background: style.color,
+                borderColor: "white",
+                glyph: style.icon,
+                glyphColor: "white",
+            });
+
+            const marker = new AdvancedMarkerElement({
+                map: map,
+                position: { lat: rec.latitude, lng: rec.longitude },
+                content: pin,
+                title: rec.name,
+                zIndex: 25
+            });
+
+            marker.addListener('gmp-click', () => {
+                showRecommendationInfoWindow(rec, marker, style);
+            });
+
+            recommendationMarkers.push(marker);
+
+            // 2. Add Blob (MANDATORY for all types now)
+            let coords = null;
+            if (rec.geometry && rec.geometry.type === 'Polygon') {
+                coords = rec.geometry.coordinates[0];
+            } else if (rec.radius_miles > 0) {
+                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, rec.radius_miles);
+            }
+
+            if (coords) {
+                features.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [smoothPolygon(coords, 3)]
+                    },
+                    properties: {
+                        type: 'recommendation',
+                        recId: rec.id,
+                        color: style.color,
+                        name: rec.name,
+                        style: style // Pass style info for click handler
+                    }
+                });
+            }
+        });
+
+        if (features.length > 0) {
+            map.data.addGeoJson({
+                type: 'FeatureCollection',
+                features: features
             });
         }
-    });
 
-    if (features.length > 0) {
-        map.data.addGeoJson({
-            type: 'FeatureCollection',
-            features: features
-        });
-
-        map.data.setStyle((feature) => {
-            if (feature.getProperty('type') === 'recommendation') {
-                const recId = feature.getProperty('recId');
-                const rec = recommendations.find(r => r.id === recId);
-                let zIndex = 10; // Default for Hubs
-                
-                if (rec && rec.type) {
-                    const t = rec.type.toLowerCase();
-                    if (t.includes('anchor') || t.includes('moor')) {
-                        zIndex = 20; // Higher for smaller items
-                    }
-                }
-
-                return {
-                    fillColor: feature.getProperty('color'),
-                    strokeColor: feature.getProperty('color'),
-                    strokeWeight: 4, 
-                    fillOpacity: 0.35,
-                    clickable: true,
-                    zIndex: zIndex
-                };
-            }
-            return {
-                fillColor: '#4285F4',
-                strokeWeight: 1,
-                fillOpacity: 0.2
-            };
-        });
-        
-        // Handle clicks on blobs
-        map.data.addListener('click', (event) => {
-            if (event.feature.getProperty('type') === 'recommendation') {
-                const recId = event.feature.getProperty('recId');
-                const rec = recommendations.find(r => r.id === recId);
-                const style = event.feature.getProperty('style');
-                if (rec) {
-                    showRecommendationInfoWindow(rec, { position: event.latLng }, style);
-                }
-            }
-        });
+    } catch (err) {
+        console.error("Error in renderRecommendations:", err);
     }
 }
 
@@ -1807,7 +1875,7 @@ async function renderPilotCircle() {
 }
 
 window.addRecommendationToItinerary = async function(recId) {
-    const rec = recommendations.find(r => r.id === recId);
+    const rec = voyageRecommendations.find(r => r.id === recId);
     if (!rec) return;
 
     if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
@@ -1873,14 +1941,14 @@ function renderItinerary() {
             return;
         }
 
-        if (recommendations && recommendations.length > 0) {
+        if (voyageRecommendations && voyageRecommendations.length > 0) {
             // Show Discovery Results in Sidebar
             const header = document.createElement('div');
             header.className = 'p-sm border-b text-gray font-xs uppercase tracking-wider';
             header.textContent = 'Recommended Hubs & Spots';
             list.appendChild(header);
 
-            recommendations.forEach(rec => {
+            voyageRecommendations.forEach(rec => {
                 const el = document.createElement('div');
                 el.className = 'day-item';
                 el.innerHTML = `
@@ -2577,13 +2645,91 @@ async function initMap() {
   map = new Map(document.getElementById("map-container"), {
     center: { lat: 20, lng: 0 },
     zoom: 3,
-    mapId: __GOOGLE_MAPS_MAP_ID__, 
+    mapId: __GOOGLE_MAPS_MAP_ID__,
     disableDefaultUI: false,
     clickableIcons: false
   });
 
+  // Global Data Layer Styling
+  map.data.setStyle((feature) => {
+      const type = feature.getProperty('type');
+
+      // 1. Recommendations
+      if (type === 'recommendation') {
+          return {
+              fillColor: feature.getProperty('color'),
+              strokeColor: feature.getProperty('color'),
+              strokeWeight: 2,
+              fillOpacity: 0.4,
+              clickable: true,
+              zIndex: 20
+          };
+      }
+
+      // 2. Discovery Regions
+      const tier = feature.getProperty('tier');
+      if (tier) {
+          let color = '#0077be'; // Standard Blue
+          let strokeColor = '#005fa3';
+
+          if (tier === 'Hidden Gem') {
+              color = '#9c27b0'; // Purple
+              strokeColor = '#6a1b9a';
+          } else if (tier === 'Regional Favorite') {
+              color = '#ff9800'; // Orange
+              strokeColor = '#ef6c00';
+          } else if (tier === 'Challenging') {
+              color = '#d32f2f'; // Red
+              strokeColor = '#b71c1c';
+          }
+
+          return {
+              fillColor: color,
+              fillOpacity: 0.6,
+              strokeColor: strokeColor,
+              strokeWeight: 2,
+              zIndex: 10
+          };
+      }
+
+      // Default
+      return {
+          fillColor: '#4285F4',
+          strokeWeight: 1,
+          fillOpacity: 0.2
+      };
+  });
+
+  // Global Data Layer Click Handler
+  map.data.addListener('click', (event) => {
+      const type = event.feature.getProperty('type');
+
+      if (type === 'recommendation') {
+          const recId = event.feature.getProperty('recId');
+          const rec = voyageRecommendations.find(r => r.id === recId);
+          const style = event.feature.getProperty('style');
+          if (rec) {
+              showRecommendationInfoWindow(rec, { position: event.latLng }, style);
+          }
+      } else if (event.feature.getProperty('tier')) {
+          // Discovery Click
+          const props = {
+              id: event.feature.getProperty('id'),
+              name: event.feature.getProperty('name'),
+              tier: event.feature.getProperty('tier'),
+              suitability_score: event.feature.getProperty('suitability_score'),
+              is_hidden_gem: event.feature.getProperty('is_hidden_gem'),
+              summary: event.feature.getProperty('summary'),
+              avg_wind_speed_knots: event.feature.getProperty('avg_wind_speed_knots'),
+              avg_temp_c: event.feature.getProperty('avg_temp_c'),
+              deep_cut_reasoning: event.feature.getProperty('deep_cut_reasoning')
+          };
+          const month = document.getElementById('month-slider').value;
+          showRegionBriefing(props, month);
+      }
+  });
+
   console.log('NavalPlan: Map Loaded Successfully');
-  
   map.addListener('click', async (e) => {
       if (!currentVoyage) return;
 
@@ -3104,18 +3250,22 @@ async function captureAndUploadMap(voyageId) {
     }
 
     // Add recommendations as "blobs" (paths) if they exist
-    const recommendations = await API.getRecommendations(voyageId).catch(() => []);
-    if (recommendations && recommendations.length > 0) {
-        recommendations.slice(0, 20).forEach(rec => {
+    const res = await API.getRecommendations(voyageId).catch(() => ({ recommendations: [] }));
+    const recs = ensureRecommendationsArray(res);
+
+    if (recs && recs.length > 0) {
+        recs.slice(0, 20).forEach(rec => {
             const type = (rec.type || '').toLowerCase();
             let color = '00BFA5'; // Teal (Anchorage) - Hex only
             if (type.includes('hub')) color = 'FF5722'; // Orange (Hub)
             else if (type.includes('moor')) color = '9B59B6'; // Purple (Mooring)
 
+            let path = `&path=color:0x${color}AA|weight:1|fillcolor:0x${color}44`;
+            let hasPath = false;
+
             if (rec.geometry && rec.geometry.type === 'Polygon' && rec.geometry.coordinates) {
                 // Render the "Blob" as a filled path
                 // Format: color:0xRRGGBBAA|fillcolor:0xRRGGBBAA
-                let path = `&path=color:0x${color}AA|weight:1|fillcolor:0x${color}44`;
                 const ring = rec.geometry.coordinates[0]; // Main ring
                 if (ring && ring.length > 0) {
                     ring.forEach(coord => {
@@ -3125,8 +3275,24 @@ async function captureAndUploadMap(voyageId) {
                     // Close the path for proper filling
                     const first = ring[0];
                     path += `|${first[1]},${first[0]}`;
-                    pathParam += path;
+                    hasPath = true;
                 }
+            } else if (rec.radius_miles > 0) {
+                // Approximate a circle with 8 points for static maps (to save URL length)
+                const radiusInKm = rec.radius_miles * 1.60934;
+                let circlePoints = "";
+                for (let i = 0; i <= 8; i++) {
+                    const angle = (i * 360 / 8) * Math.PI / 180;
+                    const lat = rec.latitude + (radiusInKm / 111) * Math.cos(angle);
+                    const lng = rec.longitude + (radiusInKm / (111 * Math.cos(rec.latitude * Math.PI / 180))) * Math.sin(angle);
+                    circlePoints += `|${lat},${lng}`;
+                }
+                path += circlePoints;
+                hasPath = true;
+            }
+
+            if (hasPath) {
+                pathParam += path;
             }
             
             // Add a small center marker for each blob
@@ -3135,7 +3301,7 @@ async function captureAndUploadMap(voyageId) {
 
         // Top 5 labels for readability
         let labeledRecs = "";
-        recommendations.slice(0, 5).forEach(rec => {
+        recs.slice(0, 5).forEach(rec => {
             const type = (rec.type || '').toLowerCase();
             let color = '00BFA5';
             if (type.includes('hub')) color = 'FF5722';
@@ -3580,48 +3746,6 @@ async function renderDiscoveryLayer() {
     };
 
     map.data.addGeoJson(geojson);
-
-    // Styling
-    map.data.setStyle((feature) => {
-        const tier = feature.getProperty('tier');
-        let color = '#0077be'; // Standard Blue
-        let strokeColor = '#005fa3';
-
-        if (tier === 'Hidden Gem') {
-            color = '#9c27b0'; // Purple
-            strokeColor = '#6a1b9a';
-        } else if (tier === 'Regional Favorite') {
-            color = '#ff9800'; // Orange
-            strokeColor = '#ef6c00';
-        } else if (tier === 'Challenging') {
-            color = '#d32f2f'; // Red
-            strokeColor = '#b71c1c';
-        }
-
-        return {
-            fillColor: color,
-            fillOpacity: 0.6,
-            strokeColor: strokeColor,
-            strokeWeight: 2
-        };
-    });
-
-    // Click handler
-    map.data.addListener('click', (event) => {
-        const props = {
-            id: event.feature.getProperty('id'),
-            name: event.feature.getProperty('name'),
-            tier: event.feature.getProperty('tier'),
-            suitability_score: event.feature.getProperty('suitability_score'),
-            is_hidden_gem: event.feature.getProperty('is_hidden_gem'),
-            summary: event.feature.getProperty('summary'),
-            avg_wind_speed_knots: event.feature.getProperty('avg_wind_speed_knots'),
-            avg_temp_c: event.feature.getProperty('avg_temp_c'),
-            deep_cut_reasoning: event.feature.getProperty('deep_cut_reasoning')
-        };
-        const month = document.getElementById('month-slider').value;
-        showRegionBriefing(props, month);
-    });
 
     // Hover effect
     map.data.addListener('mouseover', () => {

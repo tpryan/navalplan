@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	appcontext "app/context"
@@ -111,7 +112,64 @@ func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(recommendations)
+	json.NewEncoder(w).Encode(map[string]any{
+		"recommendations": recommendations,
+	})
+}
+
+var (
+	muRecStreams sync.RWMutex
+	recStreams   = make(map[string]chan models.VoyageRecommendation)
+)
+
+func broadcastRecommendation(sessionID string, rec models.VoyageRecommendation) {
+	muRecStreams.RLock()
+	defer muRecStreams.RUnlock()
+	if ch, ok := recStreams[sessionID]; ok {
+		select {
+		case ch <- rec:
+		default:
+		}
+	}
+}
+
+// StreamRecommendations provides an SSE endpoint for real-time recommendation updates.
+func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		http.Error(w, "Missing session_id", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	rc := http.NewResponseController(w)
+
+	ch := make(chan models.VoyageRecommendation, 10)
+	muRecStreams.Lock()
+	recStreams[sessionID] = ch
+	muRecStreams.Unlock()
+
+	defer func() {
+		muRecStreams.Lock()
+		delete(recStreams, sessionID)
+		close(ch)
+		muRecStreams.Unlock()
+	}()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case rec := <-ch:
+			jsonData, _ := json.Marshal(rec)
+			fmt.Fprintf(w, "event: recommendation\ndata: %s\n\n", jsonData)
+			rc.Flush()
+		}
+	}
 }
 
 // GenerateRecommendations triggers the navigator_agent to research the voyage area.
@@ -139,15 +197,21 @@ func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	sessionID := fmt.Sprintf("recommendation_%d_%d", voyage.ID, time.Now().Unix())
+
 	// Respond immediately
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"msg": "Recommendation generation started", "voyage_id": idStr})
+	json.NewEncoder(w).Encode(map[string]string{
+		"msg":        "Recommendation generation started",
+		"voyage_id":  idStr,
+		"session_id": sessionID,
+	})
 
 	// Async processing
-	go h.performRecommendationGeneration(voyage)
+	go h.performRecommendationGeneration(voyage, sessionID)
 }
 
-func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
+func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID string) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
 
@@ -161,11 +225,10 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 
 	appName := "navigator_agent"
 	userID := "system"
-	sessionID := fmt.Sprintf("recommendation_%d_%d", v.ID, time.Now().Unix())
 
 	client := h.AgentClient
 
-	// 0. Clear old recommendations immediately so poller doesn't get stale data
+	// 0. Clear old recommendations
 	if err := h.DB.DeleteVoyageRecommendations(ctx, v.ID); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "err", err)
 	}
@@ -185,19 +248,14 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 		locInfo = *v.LocationName
 	}
 
-	prompt := ""
-	if v.Latitude != nil && v.Longitude != nil {
-		prompt = fmt.Sprintf("Recommend anchorages, moorings, and marinas within %d %s of %f N, %f W (%s).",
-			v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, locInfo)
-	} else {
-		prompt = fmt.Sprintf("Recommend anchorages, moorings, and marinas within %d %s of %s.",
-			v.SearchRadius, v.SearchRadiusUnit, locInfo)
-	}
+	prompt := fmt.Sprintf("Recommend 15-20 anchorages, moorings, and marinas within %d %s of %f N, %f W (%s).",
+		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, locInfo)
 
 	reqBody := AgentRunRequest{
 		AppName:   appName,
 		UserID:    userID,
 		SessionID: sessionID,
+		Stream:    true,
 	}
 	reqBody.NewMessage.Role = "user"
 	reqBody.NewMessage.Parts = []struct {
@@ -218,55 +276,85 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage) {
 		return
 	}
 
-	var events []AgentEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		slog.ErrorContext(ctx, "Failed to decode agent response", "error", err)
-		return
-	}
+	// 3. Stream and Parse Recommendations
+	// Read first byte to determine format
+	firstByte := make([]byte, 1)
+	n, _ := resp.Body.Read(firstByte)
+	
+	var fullText string
+	var parsedCount int
 
-	// Find the model response
-	var responseText string
-	for _, e := range events {
-		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			responseText = e.Content.Parts[0].Text
-		}
-	}
-
-	if responseText == "" {
-		slog.ErrorContext(ctx, "No response from agent")
-		return
-	}
-
-	responseText = cleanJSON(responseText)
-	responseText = repairMathInJSON(responseText)
-
-	var recommendations []models.VoyageRecommendation
-	if err := json.Unmarshal([]byte(responseText), &recommendations); err != nil {
-		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
-		return
-	}
-
-	// Filter by radius
-	if v.Latitude != nil && v.Longitude != nil {
-		var filtered []models.VoyageRecommendation
-		for _, rec := range recommendations {
-			dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
-			if dist <= float64(v.SearchRadius) {
-				filtered = append(filtered, rec)
-			} else {
-				slog.WarnContext(ctx, "Filtering recommendation out of range", "name", rec.Name, "dist", dist, "radius", v.SearchRadius, "unit", v.SearchRadiusUnit)
+	if n > 0 && firstByte[0] == '[' {
+		// It's a full array of events (likely non-streamed or final output)
+		// Read the rest
+		rest, _ := io.ReadAll(resp.Body)
+		var events []AgentEvent
+		allData := append(firstByte, rest...)
+		if err := json.Unmarshal(allData, &events); err != nil {
+			slog.ErrorContext(ctx, "Failed to unmarshal agent events array", "error", err)
+		} else {
+			for _, e := range events {
+				if len(e.Content.Parts) > 0 {
+					fullText += e.Content.Parts[0].Text
+				}
 			}
 		}
-		recommendations = filtered
-	}
+	} else {
+		// It's likely NDJSON or a single object (streaming mode)
+		// We need to re-read the first byte from our combined reader
+		multi := io.MultiReader(bytes.NewReader(firstByte), resp.Body)
+		decoder := json.NewDecoder(multi)
+		for {
+			var event AgentEvent
+			if err := decoder.Decode(&event); err == io.EOF {
+				break
+			} else if err != nil {
+				// Try to see if it's just raw text remaining
+				slog.ErrorContext(ctx, "Failed to decode agent event", "error", err)
+				break
+			}
 
-	// Save new recommendations
-	for i := range recommendations {
-		recommendations[i].VoyageID = v.ID
-		if err := h.DB.CreateVoyageRecommendation(ctx, &recommendations[i]); err != nil {
-			slog.ErrorContext(ctx, "Failed to save recommendation", "voyage_id", v.ID, "err", err)
+			if len(event.Content.Parts) > 0 {
+				text := event.Content.Parts[0].Text
+				fullText += text
+				// Optional: In a more advanced implementation, we could try parsing individual 
+				// recommendations from fullText here for even faster broadcast.
+			}
 		}
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("Generated %d recommendations for voyage %d", len(recommendations), v.ID))
+	fullText = cleanJSON(fullText)
+	fullText = repairMathInJSON(fullText)
+
+	var wrapper struct {
+		Recommendations []models.VoyageRecommendation `json:"recommendations"`
+	}
+	if err := json.Unmarshal([]byte(fullText), &wrapper); err != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
+		return
+	}
+
+	recommendations := wrapper.Recommendations
+
+	// Process and save
+	for _, rec := range recommendations {
+		// Filter by radius
+		if v.Latitude != nil && v.Longitude != nil {
+			dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
+			if dist > float64(v.SearchRadius) {
+				continue
+			}
+		}
+
+		rec.VoyageID = v.ID
+		if err := h.DB.CreateVoyageRecommendation(ctx, &rec); err != nil {
+			slog.ErrorContext(ctx, "Failed to save recommendation", "voyage_id", v.ID, "err", err)
+			continue
+		}
+		
+		broadcastRecommendation(sessionID, rec)
+		parsedCount++
+	}
+
+	slog.InfoContext(ctx, fmt.Sprintf("Generated %d recommendations for voyage %d", parsedCount, v.ID))
 }

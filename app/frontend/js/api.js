@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+export const API_BASE = '/api/v1';
 
 async function apiFetch(url, options = {}) {
   const headers = {
