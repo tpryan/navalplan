@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -87,6 +88,76 @@ type Server struct {
 	timings map[string]time.Time
 
 	providers []Provider
+
+	// Telemetry streaming
+	muClients sync.RWMutex
+	clients   map[chan TelemetryEvent]bool
+}
+
+type TelemetryEvent struct {
+	SessionID string `json:"session_id,omitempty"`
+	Event     string `json:"event"` // "tool_start", "tool_end"
+	Tool      string `json:"tool"`
+	Duration  string `json:"duration,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+func (s *Server) broadcast(event TelemetryEvent) {
+	s.muClients.RLock()
+	defer s.muClients.RUnlock()
+	for client := range s.clients {
+		select {
+		case client <- event:
+		default:
+			// Client slow, skip or drop
+		}
+	}
+}
+
+func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	f, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	messageChan := make(chan TelemetryEvent, 10)
+	s.muClients.Lock()
+	if s.clients == nil {
+		s.clients = make(map[chan TelemetryEvent]bool)
+	}
+	s.clients[messageChan] = true
+	s.muClients.Unlock()
+
+	defer func() {
+		s.muClients.Lock()
+		delete(s.clients, messageChan)
+		close(messageChan)
+		s.muClients.Unlock()
+	}()
+
+	// Heartbeat
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			fmt.Fprintf(w, "event: heartbeat\ndata: {}\n\n")
+			f.Flush()
+		case event := <-messageChan:
+			jsonData, _ := json.Marshal(event)
+			fmt.Fprintf(w, "event: message\ndata: %s\n\n", jsonData)
+			f.Flush()
+		}
+	}
 }
 
 func (s *Server) Close() {
@@ -193,10 +264,13 @@ func (s *Server) run(ctx context.Context) error {
 	})
 
 	// Create the ADK HTTP Handler
-	adkHandler := adkrest.NewHandler(config, 120*time.Second)
+	adkHandler := adkrest.NewHandler(config, 300*time.Second)
 
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
+
+	// Telemetry endpoint
+	mux.HandleFunc("/telemetry", s.handleTelemetry)
 
 	slog.Info("Starting custom server", "port", s.config.Port)
 	// Apply Trace Middleware then Logging Middleware
@@ -400,6 +474,13 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.timings[ctx.FunctionCallID()] = time.Now()
+
+	s.broadcast(TelemetryEvent{
+		SessionID: ctx.SessionID(),
+		Event:     "tool_start",
+		Tool:      t.Name(),
+		Timestamp: time.Now().UnixMilli(),
+	})
 	return nil, nil
 }
 
@@ -411,11 +492,21 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 	}
 	s.mu.Unlock()
 
+	var duration string
 	if ok {
 		timesince := time.Since(startTime)
-		str := timesince.String()
-		slog.Debug("tool execution", "tool", t.Name(), "duration", str)
+		duration = timesince.String()
+		slog.Debug("tool execution", "tool", t.Name(), "duration", duration)
 	}
+
+	s.broadcast(TelemetryEvent{
+		SessionID: ctx.SessionID(),
+		Event:     "tool_end",
+		Tool:      t.Name(),
+		Duration:  duration,
+		Timestamp: time.Now().UnixMilli(),
+	})
+
 	return result, nil
 }
 

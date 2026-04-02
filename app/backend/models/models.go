@@ -145,6 +145,7 @@ type VoyageRecommendation struct {
 	Type        string    `json:"type" db:"type"` // "Anchorage", "Mooring", "Marina"
 	Latitude    float64   `json:"latitude" db:"latitude"`
 	Longitude   float64   `json:"longitude" db:"longitude"`
+	RadiusMiles float64   `json:"radius_miles" db:"radius_miles"`
 	Geometry    RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon for "blob" visualization
 	Description string    `json:"description" db:"description"`
 	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this

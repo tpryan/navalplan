@@ -22,6 +22,7 @@ type AgentRunRequest struct {
 	AppName    string `json:"appName"`
 	UserID     string `json:"userId"`
 	SessionID  string `json:"sessionId"`
+	Stream     bool   `json:"stream"`
 	NewMessage struct {
 		Role  string `json:"role"`
 		Parts []struct {
