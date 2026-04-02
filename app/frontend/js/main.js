@@ -1217,7 +1217,7 @@ async function executeResearchAll() {
             const existingGuide = await API.getVoyageGuide(currentVoyage.id);
             if (existingGuide) initialTimestamps['guide'] = new Date(existingGuide.created_at).getTime();
             
-            const existingBriefings = await API.getVoyageBriefings(currentVoyage.id);
+            const existingBriefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
             existingBriefings.forEach(b => {
                 if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
             });
@@ -1274,11 +1274,11 @@ async function executeResearchAll() {
 
                 // Check Stops
                 try {
-                    const briefings = await API.getVoyageBriefings(currentVoyage.id);
+                    const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
                     
                     for (let i = pendingStops.length - 1; i >= 0; i--) {
                         const stop = pendingStops[i];
-                        const b = briefings.find(br => br.stop_id === stop.id);
+                        const b = (briefings || []).find(br => br.stop_id === stop.id);
                         
                         if (b && isNewData(b, 'stop', stop.id)) {
                             // Mark as done in our list
@@ -1393,12 +1393,12 @@ async function checkItineraryFullness(isManualAction = false) {
 
     try {
         // Fetch ALL stops for this voyage to be sure (bypass pagination)
-        const allStops = await API.getStops(currentVoyage.id, 1, 1000);
+        const allStops = (await API.getStops(currentVoyage.id, 1, 1000)) || [];
         isFull = allStops.length >= diffDays;
 
         if (isFull) {
             // Check if briefings exist for all stops AND guide exists
-            const briefings = await API.getVoyageBriefings(currentVoyage.id);
+            const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
             const guide = await API.getVoyageGuide(currentVoyage.id);
             
             // Criteria: Briefings for every stop + Global Voyage Guide
