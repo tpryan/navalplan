@@ -96,16 +96,27 @@ function smoothPolygon(coordinates, iterations = 2) {
 
 /**
  * Generate a circular polygon from a center point and radius in miles
+ * with organic jitter to make it look like a 'blob'.
  */
-function getCirclePolygon(center, radiusMiles, numPoints = 32) {
+function getCirclePolygon(center, radiusMiles, numPoints = 24, jitter = 0.3, seed = 0) {
     const coords = [];
     const R = 3958.8; // Earth's radius in miles
-    const d = radiusMiles / R; // angular distance in radians
     const lat1 = (center.lat * Math.PI) / 180;
     const lon1 = (center.lng * Math.PI) / 180;
 
-    for (let i = 0; i <= numPoints; i++) {
+    // Deterministic pseudo-random based on seed + index
+    const getJitter = (i) => {
+        const val = Math.sin(seed + i) * 10000;
+        return val - Math.floor(val);
+    };
+
+    for (let i = 0; i < numPoints; i++) {
         const brng = (2 * Math.PI * i) / numPoints;
+        
+        // Random factor between (1-jitter) and (1+jitter)
+        const randomFactor = (1 - jitter) + (getJitter(i) * jitter * 2);
+        const d = (radiusMiles * randomFactor) / R;
+
         const lat2 = Math.asin(
             Math.sin(lat1) * Math.cos(d) +
             Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
@@ -123,6 +134,16 @@ function getCirclePolygon(center, radiusMiles, numPoints = 32) {
         coords.push([coords[0][0], coords[0][1]]);
     }
     return coords;
+}
+
+function hashString(str) {
+    let hash = 0;
+    if (!str) return hash;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
 }
 
 function chaikin(coords) {
@@ -1601,7 +1622,8 @@ async function renderRecommendations() {
                 coords = rec.geometry.coordinates[0];
             } else {
                 const radius = rec.radius_miles || 0.5;
-                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, radius);
+                const seed = hashString(rec.id || rec.name);
+                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, radius, 24, 0.3, seed);
             }
 
             if (coords) {
@@ -3262,16 +3284,15 @@ async function captureAndUploadMap(voyageId) {
                     hasPath = true;
                 }
             } else if (rec.radius_miles > 0) {
-                // Approximate a circle with 8 points for static maps (to save URL length)
-                const radiusInKm = rec.radius_miles * 1.60934;
-                let circlePoints = "";
-                for (let i = 0; i <= 8; i++) {
-                    const angle = (i * 360 / 8) * Math.PI / 180;
-                    const lat = rec.latitude + (radiusInKm / 111) * Math.cos(angle);
-                    const lng = rec.longitude + (radiusInKm / (111 * Math.cos(rec.latitude * Math.PI / 180))) * Math.sin(angle);
-                    circlePoints += `|${lat},${lng}`;
-                }
-                path += circlePoints;
+                // Approximate a circle with 12 points for static maps (to save URL length but keep blob feel)
+                const seed = hashString(rec.id || rec.name);
+                const circlePoints = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, rec.radius_miles, 12, 0.2, seed);
+                
+                let pathStr = "";
+                circlePoints.forEach(p => {
+                    pathStr += `|${p[1]},${p[0]}`;
+                });
+                path += pathStr;
                 hasPath = true;
             }
 
