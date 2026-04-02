@@ -1579,7 +1579,6 @@ async function renderRecommendations() {
         if (!voyageRecommendations || voyageRecommendations.length === 0) return;
 
         const { InfoWindow } = await importLibrary("maps");
-        const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
 
         const features = [];
 
@@ -1595,35 +1594,14 @@ async function renderRecommendations() {
             if (type.includes('anchor')) style = styles.anchorage;
             else if (type.includes('moor')) style = styles.mooring;
 
-            // 1. Add Marker for center visibility
-            const pin = new PinElement({
-                scale: 0.7,
-                background: style.color,
-                borderColor: "white",
-                glyph: style.icon,
-                glyphColor: "white",
-            });
+            // 1. Determine coordinates for the 'blob'
 
-            const marker = new AdvancedMarkerElement({
-                map: map,
-                position: { lat: rec.latitude, lng: rec.longitude },
-                content: pin,
-                title: rec.name,
-                zIndex: 25
-            });
-
-            marker.addListener('gmp-click', () => {
-                showRecommendationInfoWindow(rec, marker, style);
-            });
-
-            recommendationMarkers.push(marker);
-
-            // 2. Add Blob (MANDATORY for all types now)
             let coords = null;
             if (rec.geometry && rec.geometry.type === 'Polygon') {
                 coords = rec.geometry.coordinates[0];
-            } else if (rec.radius_miles > 0) {
-                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, rec.radius_miles);
+            } else {
+                const radius = rec.radius_miles || 0.5;
+                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, radius);
             }
 
             if (coords) {
@@ -2656,16 +2634,22 @@ async function initMap() {
 
       // 1. Recommendations
       if (type === 'recommendation') {
+          const color = feature.getProperty('color');
           return {
-              fillColor: feature.getProperty('color'),
-              strokeColor: feature.getProperty('color'),
+              fillColor: color,
+              strokeColor: color,
               strokeWeight: 2,
               fillOpacity: 0.4,
               clickable: true,
-              zIndex: 20
+              zIndex: 20,
+              visible: true
           };
       }
 
+      // If it's a point in the data layer (default), hide it because we use AdvancedMarkers
+      if (feature.getGeometry().getType() === 'Point') {
+          return { visible: false };
+      }
       // 2. Discovery Regions
       const tier = feature.getProperty('tier');
       if (tier) {
