@@ -1463,7 +1463,9 @@ async function checkItineraryFullness(isManualAction = false) {
     // Toggle visibility of Research All button
     const btnResearchAll = document.getElementById('btn-research-all');
     if (btnResearchAll) {
-        if (currentStops.length > 0) {
+        // Hide small button if we are showing the big "Itinerary Complete!" prompt
+        const showBigPrompt = isFull && !allResearchDone && !isResearchAllRunning;
+        if (currentStops.length > 0 && !showBigPrompt) {
             btnResearchAll.classList.remove('hidden');
         } else {
             btnResearchAll.classList.add('hidden');
