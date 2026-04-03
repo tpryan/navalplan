@@ -122,7 +122,7 @@ dev: db-start build-js
 
 dev-mine: 
 	curl -X POST "http://localhost:8080/api/v1/discovery/mine?month=all" \
-		-H "Cookie: navalplan_session=${NAVALPLAN_SYSTEM_KEY}" \
+		-H "Authorization: Bearer ${NAVALPLAN_SYSTEM_KEY}" \
 		-H "X-Requested-With: XMLHttpRequest"
 
 
