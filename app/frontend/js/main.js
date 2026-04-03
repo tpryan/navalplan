@@ -55,6 +55,48 @@ let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
 
+// Research Area Sync State
+let syncTimeout;
+const syncToBackend = (force = false) => {
+    return new Promise((resolve, reject) => {
+        clearTimeout(syncTimeout);
+        const runSync = async () => {
+            if (!pilotCircle) return resolve();
+            const c = pilotCircle.getCenter();
+            const rMeters = pilotCircle.getRadius();
+            const rNm = Math.round(rMeters / 1852);
+            
+            try {
+                // Update local state first for immediate UI responsiveness
+                currentVoyage.latitude = c.lat();
+                currentVoyage.longitude = c.lng();
+                currentVoyage.search_radius = rNm;
+                currentVoyage.search_radius_unit = currentVoyage.search_radius_unit || 'nm';
+                
+                const updated = await API.updateVoyage(currentVoyage.id, {
+                    ...currentVoyage,
+                    latitude: c.lat(),
+                    longitude: c.lng(),
+                    search_radius: rNm,
+                    search_radius_unit: currentVoyage.search_radius_unit
+                });
+                currentVoyage = updated;
+                console.log("NavalPlan: Voyage research area synced to DB:", rNm, "nm");
+                resolve(updated);
+            } catch (err) {
+                console.error("NavalPlan: Failed to sync voyage research area:", err);
+                reject(err);
+            }
+        };
+
+        if (force) {
+            runSync();
+        } else {
+            syncTimeout = setTimeout(runSync, 1000);
+        }
+    });
+};
+
 // Pagination
 let currentVoyagePage = 1;
 const VOYAGE_PAGE_LIMIT = 20;
@@ -1473,9 +1515,18 @@ async function handlePilotSuggestionsClick() {
         icon.classList.add('spin');
         btn.disabled = true;
         
-        await renderPilotCircle();
+        // 1. Ensure latest drag state is synced to DB before triggering research
+        if (pilotCircle) {
+            await syncToBackend(true);
+        } else {
+            await renderPilotCircle();
+        }
         
-        // Trigger both Local Pilot (Recommendations) and Voyage Guide research
+        // 2. Clear existing recommendations from UI before starting fresh
+        voyageRecommendations = [];
+        renderRecommendations();
+
+        // 3. Trigger both Local Pilot (Recommendations) and Voyage Guide research
         const [recRes] = await Promise.all([
             API.generateRecommendations(currentVoyage.id),
             API.triggerVoyageGuideResearch(currentVoyage.id)
@@ -1837,39 +1888,8 @@ async function renderPilotCircle() {
         updateRadiusDisplay();
     });
 
-    // Add a debounced sync to backend
-    let syncTimeout;
-    const syncToBackend = () => {
-        clearTimeout(syncTimeout);
-        syncTimeout = setTimeout(async () => {
-            if (!pilotCircle) return;
-            const c = pilotCircle.getCenter();
-            const rMeters = pilotCircle.getRadius();
-            const rNm = Math.round(rMeters / 1852);
-            
-            try {
-                // Update local state
-                currentVoyage.latitude = c.lat();
-                currentVoyage.longitude = c.lng();
-                currentVoyage.search_radius = rNm;
-                currentVoyage.search_radius_unit = currentVoyage.search_radius_unit || 'nm';
-                
-                await API.updateVoyage(currentVoyage.id, {
-                    ...currentVoyage,
-                    latitude: c.lat(),
-                    longitude: c.lng(),
-                    search_radius: rNm,
-                    search_radius_unit: currentVoyage.search_radius_unit
-                });
-                console.log("NavalPlan: Voyage research area synced to DB:", rNm, "nm");
-            } catch (err) {
-                console.error("NavalPlan: Failed to sync voyage research area:", err);
-            }
-        }, 1000);
-    };
-
-    pilotCenterMarker.addListener('dragend', syncToBackend);
-    pilotRadiusMarker.addListener('dragend', syncToBackend);
+    pilotCenterMarker.addListener('dragend', () => syncToBackend());
+    pilotRadiusMarker.addListener('dragend', () => syncToBackend());
 
     updateRadiusDisplay();
 }
