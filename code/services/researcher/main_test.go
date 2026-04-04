@@ -38,12 +38,12 @@ func TestCreateResearcherAgent(t *testing.T) {
 		t.Fatalf("Failed to setup tools: %v", err)
 	}
 
-	a, err := srv.createStopAgent(context.Background(), researcherTools)
+	a, err := srv.createHarbourmasterAgent(context.Background(), researcherTools)
 	if err != nil {
-		t.Fatalf("Failed to create researcher agent: %v", err)
+		t.Fatalf("Failed to create harbourmaster agent: %v", err)
 	}
 
-	if a.Name() != "researcher_agent" {
-		t.Errorf("Expected agent name researcher_agent, got %s", a.Name())
+	if a.Name() != "harbourmaster" {
+		t.Errorf("Expected agent name harbourmaster, got %s", a.Name())
 	}
 }

@@ -8,15 +8,15 @@
       },
       "rubrics": [
         {
-          "rubric_id": "contains_multiple_regions",
+          "rubric_id": "summary_contains_location",
           "rubric_content": {
-            "text_property": "The response identifies multiple sailing regions suitable for the requested month."
+            "text_property": "The final response summary mentions the location (e.g. BVI, British Virgin Islands) provided in the prompt."
           }
         },
         {
           "rubric_id": "json_format",
           "rubric_content": {
-            "text_property": "The response is a valid JSON array of objects."
+            "text_property": "The response is a valid JSON object."
           }
         }
       ]
@@ -31,7 +31,7 @@
         {
           "rubric_id": "search_called",
           "rubric_content": {
-            "text_property": "The agent calls 'discovery_search_specialist' to gather real-time data."
+            "text_property": "The agent calls 'pilot_search_specialist' to gather real-time data."
           }
         }
       ]

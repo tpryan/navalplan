@@ -69,15 +69,15 @@ Before you begin, ensure you have the following installed:
 
 NavalPlan uses the **Agent Developer Kit (ADK)** to evaluate the performance of its AI agents.
 
-*   `make eval-all`: Runs evaluations for all agents (Researcher, Guide, Discovery, Navigator).
-*   `make eval-researcher`: Evaluates only the Researcher agent.
-*   `make eval-guide`: Evaluates only the Guide agent.
-*   `make eval-discovery`: Evaluates only the Discovery agent.
-*   `make eval-navigator`: Evaluates only the Navigator agent.
+*   `make eval-all`: Runs evaluations for all agents (Harbourmaster, Pilot, Commodore, Specialist).
+*   `make eval-harbourmaster`: Evaluates only the Harbourmaster agent.
+*   `make eval-pilot`: Evaluates only the Pilot agent.
+*   `make eval-commodore`: Evaluates only the Commodore agent.
+*   `make eval-specialist`: Evaluates only the Specialist agent.
 
 By default, evaluations provide a summary. Set `VERBOSE=1` to see detailed logs and trace information:
 ```bash
-make eval-researcher VERBOSE=1
+make eval-harbourmaster VERBOSE=1
 ```
 
 ## Testing

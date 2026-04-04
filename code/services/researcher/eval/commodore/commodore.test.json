@@ -1,12 +1,12 @@
 {
-  "eval_set_id": "discovery_agent_eval_set",
-  "name": "Discovery Agent Evaluation",
-  "description": "Evaluates the discovery agent's ability to identify seasonal sailing regions.",
+  "eval_set_id": "commodore_eval_set",
+  "name": "Commodore Agent Evaluation",
+  "description": "Evaluates the commodore agent's ability to identify seasonal sailing regions.",
   "eval_cases": [
     {
       "eval_id": "january_discovery",
       "session_input": {
-        "app_name": "discovery_agent",
+        "app_name": "commodore",
         "user_id": "test_user",
         "state": {}
       },
@@ -26,7 +26,7 @@
         {
           "rubric_id": "search_called",
           "rubric_content": {
-            "text_property": "The agent calls 'discovery_search_specialist' to gather real-time data."
+            "text_property": "The agent calls 'commodore_search_specialist' to gather real-time data."
           }
         }
       ],

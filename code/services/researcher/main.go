@@ -38,17 +38,17 @@ import (
 //go:embed prompts/search_specialist.md
 var _searchSpecialistPrompt string
 
-//go:embed prompts/stop_agent.md
-var _stopAgentPrompt string
+//go:embed prompts/harbourmaster.md
+var _harbourmasterPrompt string
 
-//go:embed prompts/voyage_agent.md
-var _voyageAgentPrompt string
+//go:embed prompts/pilot.md
+var _pilotPrompt string
 
-//go:embed prompts/discovery_agent.md
-var _discoveryAgentPrompt string
+//go:embed prompts/commodore.md
+var _commodorePrompt string
 
-//go:embed prompts/navigator_agent.md
-var _navigatorAgentPrompt string
+//go:embed prompts/specialist.md
+var _specialistPrompt string
 
 const maxOutputTokens = 65536
 
@@ -206,27 +206,27 @@ func (s *Server) run(ctx context.Context) error {
 		return fmt.Errorf("setting up tools: %w", err)
 	}
 
-	voyageAgent, err := s.createVoyageAgent(ctx)
+	pilotAgent, err := s.createPilotAgent(ctx)
 	if err != nil {
-		return fmt.Errorf("creating guide agent: %w", err)
+		return fmt.Errorf("creating pilot agent: %w", err)
 	}
 
-	stopAgent, err := s.createStopAgent(ctx, researcherTools)
+	harbourmasterAgent, err := s.createHarbourmasterAgent(ctx, researcherTools)
 	if err != nil {
-		return fmt.Errorf("creating researcher agent: %w", err)
+		return fmt.Errorf("creating harbourmaster agent: %w", err)
 	}
 
-	discoveryAgent, err := s.createDiscoveryAgent(ctx)
+	commodoreAgent, err := s.createCommodoreAgent(ctx)
 	if err != nil {
-		return fmt.Errorf("creating discovery agent: %w", err)
+		return fmt.Errorf("creating commodore agent: %w", err)
 	}
 
-	navigatorAgent, err := s.createNavigatorAgent(ctx, researcherTools)
+	specialistAgent, err := s.createSpecialistAgent(ctx, researcherTools)
 	if err != nil {
-		return fmt.Errorf("creating navigator agent: %w", err)
+		return fmt.Errorf("creating specialist agent: %w", err)
 	}
 
-	loader, err := agent.NewMultiLoader(stopAgent, voyageAgent, discoveryAgent, navigatorAgent)
+	loader, err := agent.NewMultiLoader(harbourmasterAgent, pilotAgent, commodoreAgent, specialistAgent)
 	if err != nil {
 		return fmt.Errorf("creating multi loader: %w", err)
 	}
@@ -239,23 +239,23 @@ func (s *Server) run(ctx context.Context) error {
 	// Start Custom Server
 	mux := http.NewServeMux()
 
-	// 1. Researcher Agent (Default/Legacy path)
-	s.registerAgentA2A(mux, stopAgent, "/invoke", config.SessionService)
-	// Also expose researcher explicitly
-	s.registerAgentA2A(mux, stopAgent, "/invoke/researcher", config.SessionService)
+	// 1. Harbourmaster Agent (Default/Legacy path)
+	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke", config.SessionService)
+	// Also expose harbourmaster explicitly
+	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke/harbourmaster", config.SessionService)
 
-	// 2. Guide Agent
-	s.registerAgentA2A(mux, voyageAgent, "/invoke/guide", config.SessionService)
+	// 2. Pilot Agent
+	s.registerAgentA2A(mux, pilotAgent, "/invoke/pilot", config.SessionService)
 
-	// 3. Discovery Agent
-	s.registerAgentA2A(mux, discoveryAgent, "/invoke/discovery", config.SessionService)
+	// 3. Commodore Agent
+	s.registerAgentA2A(mux, commodoreAgent, "/invoke/commodore", config.SessionService)
 
-	// 4. Navigator Agent
-	s.registerAgentA2A(mux, navigatorAgent, "/invoke/navigator", config.SessionService)
+	// 4. Specialist Agent
+	s.registerAgentA2A(mux, specialistAgent, "/invoke/specialist", config.SessionService)
 
 	// Special case: The root Agent Card at .well-known usually points to the main agent.
-	// We'll point it to stopAgent (Researcher) for now.
-	agentCard := s.buildAgentCard(stopAgent, "/invoke")
+	// We'll point it to harbourmasterAgent for now.
+	agentCard := s.buildAgentCard(harbourmasterAgent, "/invoke")
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -370,16 +370,16 @@ func (s *Server) setupTools() ([]tool.Tool, error) {
 	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, nil
 }
 
-func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "guide_search_specialist")
+func (s *Server) createPilotAgent(ctx context.Context) (agent.Agent, error) {
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "pilot_search_specialist")
 	if err != nil {
 		return nil, err
 	}
 
 	return s.createAgent(ctx, &agentConfig{
-		name:        "guide_agent",
+		name:        "pilot",
 		description: "A Local Knowledge Expert and Sailing Guide.",
-		instruction: _voyageAgentPrompt,
+		instruction: _pilotPrompt,
 		tools: []tool.Tool{
 			searchSpecialist,
 		},
@@ -387,9 +387,9 @@ func (s *Server) createVoyageAgent(ctx context.Context) (agent.Agent, error) {
 	})
 }
 
-func (s *Server) createStopAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
+func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
 	searchAgent, err := s.createAgent(ctx, &agentConfig{
-		name:        "search_specialist",
+		name:        "harbourmaster_search_specialist",
 		description: "Finds information on the web (facilities, reviews).",
 		instruction: _searchSpecialistPrompt,
 		tools: []tool.Tool{
@@ -404,24 +404,24 @@ func (s *Server) createStopAgent(ctx context.Context, researcherTools []tool.Too
 	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
 
 	return s.createAgent(ctx, &agentConfig{
-		name:        "researcher_agent",
+		name:        "harbourmaster",
 		description: "A Virtual Harbourmaster that researches sailing destinations.",
-		instruction: _stopAgentPrompt,
+		instruction: _harbourmasterPrompt,
 		tools:       allTools,
 		temperature: 0.4,
 	})
 }
 
-func (s *Server) createDiscoveryAgent(ctx context.Context) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "discovery_search_specialist")
+func (s *Server) createCommodoreAgent(ctx context.Context) (agent.Agent, error) {
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "commodore_search_specialist")
 	if err != nil {
 		return nil, err
 	}
 
 	return s.createAgent(ctx, &agentConfig{
-		name:        "discovery_agent",
+		name:        "commodore",
 		description: "The Commodore - Global Seasonal Discovery Expert.",
-		instruction: _discoveryAgentPrompt,
+		instruction: _commodorePrompt,
 		tools: []tool.Tool{
 			searchSpecialist,
 		},
@@ -445,9 +445,9 @@ func (s *Server) createSearchSpecialist(ctx context.Context, name string) (tool.
 	return agenttool.New(searchAgent, nil), nil
 }
 
-func (s *Server) createNavigatorAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
+func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
 	searchAgent, err := s.createAgent(ctx, &agentConfig{
-		name:        "navigator_search_specialist",
+		name:        "specialist_search_specialist",
 		description: "Finds navigation info on the web.",
 		instruction: _searchSpecialistPrompt,
 		tools: []tool.Tool{
@@ -462,9 +462,9 @@ func (s *Server) createNavigatorAgent(ctx context.Context, researcherTools []too
 	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
 
 	return s.createAgent(ctx, &agentConfig{
-		name:        "navigator_agent",
+		name:        "specialist",
 		description: "A Local Pilot and Navigation Specialist.",
-		instruction: _navigatorAgentPrompt,
+		instruction: _specialistPrompt,
 		tools:       allTools,
 		temperature: 0.4,
 	})

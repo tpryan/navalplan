@@ -176,7 +176,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		agentURL = "http://127.0.0.1:8081"
 	}
 
-	appName := "researcher_agent"
+	appName := "harbourmaster"
 	userID := "system"
 	sessionID := fmt.Sprintf("stop_%d", stop.ID)
 

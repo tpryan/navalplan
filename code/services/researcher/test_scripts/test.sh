@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASEURL="http://localhost:8081"
-APPNAME="researcher_agent"
+APPNAME="harbourmaster"
 USER="testuser"
 SESSION="testsession"
 

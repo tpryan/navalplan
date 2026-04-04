@@ -1,12 +1,12 @@
 {
-  "eval_set_id": "guide_agent_eval_set",
-  "name": "Guide Agent Evaluation",
-  "description": "Evaluates the guide agent's ability to provide regional sailing summaries.",
+  "eval_set_id": "pilot_eval_set",
+  "name": "Pilot Agent Evaluation",
+  "description": "Evaluates the pilot agent's ability to provide regional sailing summaries.",
   "eval_cases": [
     {
       "eval_id": "british_virgin_islands_guide",
       "session_input": {
-        "app_name": "guide_agent",
+        "app_name": "pilot",
         "user_id": "test_user",
         "state": {}
       },
@@ -26,7 +26,7 @@
         {
           "rubric_id": "search_called",
           "rubric_content": {
-            "text_property": "The agent calls 'guide_search_specialist' to gather real-time data."
+            "text_property": "The agent calls 'pilot_search_specialist' to gather real-time data."
           }
         }
       ],

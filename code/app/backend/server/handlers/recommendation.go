@@ -172,7 +172,7 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// GenerateRecommendations triggers the navigator_agent to research the voyage area.
+// GenerateRecommendations triggers the specialist agent to research the voyage area.
 func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
@@ -223,7 +223,7 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 		agentURL = "http://127.0.0.1:8081"
 	}
 
-	appName := "navigator_agent"
+	appName := "specialist"
 	userID := "system"
 
 	client := h.AgentClient
