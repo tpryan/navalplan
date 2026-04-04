@@ -1,0 +1,4 @@
+1.  if "Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop." is shown then the button " Run Full Voyage Research" should not be shown. 
+2.  If the last stop of a trip is within 1 nautical mile of the first stop, do not bother to show "Local Facilities" for that last shop.  Maybe also indicate why they are omitted. 
+3.  We have multiple places where we show markers for harbors, anchorages, marinas, and other points of interest on the map. Sometimes a pointer, sometimes a blob. Can we make the colors consistent across views: anchorages:green, moorings:purple, marinas:orange. Assign colors for other ones and lets keep them consistent. 
+4. I think there are lot more possible anchorages than we are showing. Can we try and increase the number of anchorages without reducing the amounts of other points of interest.  
