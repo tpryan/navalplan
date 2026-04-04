@@ -1608,8 +1608,8 @@ async function handlePilotSuggestionsClick() {
                     renderItinerary();
                 }
 
-                // Stop polling if we have 15+ recommendations or hit max attempts
-                if (recs && recs.length >= 15) {
+                // Stop polling if we have 25+ recommendations or hit max attempts
+                if (recs && recs.length >= 25) {
                     clearInterval(poll);
                     if (eventSource) eventSource.close();
                     
