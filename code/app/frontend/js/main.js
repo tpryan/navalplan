@@ -1083,6 +1083,7 @@ function showVoyageList() {
     selectedDate = null;
     lastKnownItineraryFull = false;
     clearRecommendations();
+    clearPilotCircle();
     clearMap();
 }
 
@@ -1123,6 +1124,7 @@ async function selectVoyage(voyage) {
 
     lastKnownItineraryFull = false;
     clearRecommendations();
+    clearPilotCircle();
     updateItineraryHeader(currentVoyage);
 
     // Hide/Show Stop-based actions in Discovery Mode
@@ -1494,13 +1496,15 @@ async function checkItineraryFullness(isManualAction = false) {
             }
         );
         clearRecommendations();
+        clearPilotCircle();
     }
-    
+
     lastKnownItineraryFull = isFull;
 
     // Ensure recommendations are hidden if full
     if (isFull) {
         clearRecommendations();
+        clearPilotCircle();
     }
 }
 
@@ -1756,20 +1760,16 @@ function showRecommendationInfoWindow(rec, anchor, style) {
     activeInfoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
 }
 
+function clearPilotCircle() {
+    if (pilotCircle) { pilotCircle.setMap(null); pilotCircle = null; }
+    if (pilotCenterMarker) { pilotCenterMarker.map = null; pilotCenterMarker = null; }
+    if (pilotRadiusMarker) { pilotRadiusMarker.map = null; pilotRadiusMarker = null; }
+}
+
 function clearRecommendations() {
     recommendationMarkers.forEach(m => m.map = null);
     recommendationMarkers = [];
-    
-    if (pilotCircle) {
-        pilotCircle.setMap(null);
-        pilotCircle = null;
-    }
 
-    if (pilotCenterMarker) {
-        pilotCenterMarker.map = null;
-        pilotCenterMarker = null;
-    }
-    
     // Clear blobs from map.data
     if (map && map.data) {
         map.data.forEach((feature) => {
@@ -1782,7 +1782,7 @@ function clearRecommendations() {
 
 async function renderPilotCircle() {
     if (!map || !currentVoyage) return;
-    if (pilotCircle) pilotCircle.setMap(null);
+    if (pilotCircle) return; // Already rendered; avoid destroying an active drag handle
     if (pilotCenterMarker) pilotCenterMarker.map = null;
     if (pilotRadiusMarker) pilotRadiusMarker.map = null;
 
@@ -1879,6 +1879,8 @@ async function renderPilotCircle() {
         const currentRadius = pilotCircle.getRadius();
         pilotCircle.setCenter(newCenter);
         pilotRadiusMarker.position = spherical.computeOffset(newCenter, currentRadius, 90);
+        currentVoyage.latitude = newCenter.lat();
+        currentVoyage.longitude = newCenter.lng();
         updateRadiusDisplay();
     });
 
@@ -1887,6 +1889,7 @@ async function renderPilotCircle() {
         const c = pilotCircle.getCenter();
         const newRadius = spherical.computeDistanceBetween(c, e.latLng);
         pilotCircle.setRadius(newRadius);
+        currentVoyage.search_radius = Math.round(newRadius / 1852);
         updateRadiusDisplay();
     });
 
@@ -3693,6 +3696,7 @@ async function toggleDiscoveryMode(active) {
         document.getElementById('month-display').textContent = months[currentMonth - 1];
         
         clearRecommendations();
+        clearPilotCircle();
         clearMap(); // Clear existing markers/routes
         loadDiscoveryRegions(currentMonth);
         
