@@ -1666,22 +1666,19 @@ async function renderRecommendations() {
         clearRecommendations();
         if (!map || !currentVoyage) return;
 
-        console.log("Rendering recommendations:", voyageRecommendations);
         if (!Array.isArray(voyageRecommendations)) {
             console.error("voyageRecommendations is not an array!", voyageRecommendations);
             return;
         }
 
-        // Only render if itinerary is NOT full OR if we have recommendations
+        // Only render pilot circle if itinerary is NOT full OR if we have recommendations
         if (!lastKnownItineraryFull || (voyageRecommendations && voyageRecommendations.length > 0)) {
             await renderPilotCircle();
         }
 
         if (!voyageRecommendations || voyageRecommendations.length === 0) return;
 
-        const { InfoWindow } = await importLibrary("maps");
-
-        const features = [];
+        const { AdvancedMarkerElement } = await importLibrary("marker");
 
         const styles = {
             hub:       { color: MARKER_COLORS.hub,       icon: 'hub',          label: 'Resource Hub' },
@@ -1695,41 +1692,33 @@ async function renderRecommendations() {
             if (type.includes('anchor')) style = styles.anchorage;
             else if (type.includes('moor')) style = styles.mooring;
 
-            // 1. Determine coordinates for the 'blob'
+            const iconDiv = document.createElement('div');
+            iconDiv.style.backgroundColor = style.color;
+            iconDiv.style.borderRadius = '50%';
+            iconDiv.style.width = '32px';
+            iconDiv.style.height = '32px';
+            iconDiv.style.display = 'flex';
+            iconDiv.style.alignItems = 'center';
+            iconDiv.style.justifyContent = 'center';
+            iconDiv.style.border = '2px solid #ffffff';
+            iconDiv.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
+            iconDiv.style.cursor = 'pointer';
+            iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${style.icon}</span>`;
 
-            let coords = null;
-            if (rec.geometry && rec.geometry.type === 'Polygon') {
-                coords = rec.geometry.coordinates[0];
-            } else {
-                const radius = rec.radius_miles || 0.5;
-                const seed = hashString(rec.id || rec.name);
-                coords = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, radius, 24, 0.3, seed);
-            }
-
-            if (coords) {
-                features.push({
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Polygon',
-                        coordinates: [smoothPolygon(coords, 3)]
-                    },
-                    properties: {
-                        type: 'recommendation',
-                        recId: rec.id,
-                        color: style.color,
-                        name: rec.name,
-                        style: style // Pass style info for click handler
-                    }
-                });
-            }
-        });
-
-        if (features.length > 0) {
-            map.data.addGeoJson({
-                type: 'FeatureCollection',
-                features: features
+            const marker = new AdvancedMarkerElement({
+                map,
+                position: { lat: rec.latitude, lng: rec.longitude },
+                content: iconDiv,
+                title: rec.name,
+                zIndex: 20,
             });
-        }
+
+            marker.addListener('gmp-click', () => {
+                showRecommendationInfoWindow(rec, marker, style);
+            });
+
+            recommendationMarkers.push(marker);
+        });
 
     } catch (err) {
         console.error("Error in renderRecommendations:", err);
@@ -2694,20 +2683,6 @@ async function initMap() {
   map.data.setStyle((feature) => {
       const type = feature.getProperty('type');
 
-      // 1. Recommendations
-      if (type === 'recommendation') {
-          const color = feature.getProperty('color');
-          return {
-              fillColor: color,
-              strokeColor: color,
-              strokeWeight: 2,
-              fillOpacity: 0.4,
-              clickable: true,
-              zIndex: 20,
-              visible: true
-          };
-      }
-
       // If it's a point in the data layer (default), hide it because we use AdvancedMarkers
       if (feature.getGeometry().getType() === 'Point') {
           return { visible: false };
@@ -2748,16 +2723,7 @@ async function initMap() {
 
   // Global Data Layer Click Handler
   map.data.addListener('click', (event) => {
-      const type = event.feature.getProperty('type');
-
-      if (type === 'recommendation') {
-          const recId = event.feature.getProperty('recId');
-          const rec = voyageRecommendations.find(r => r.id === recId);
-          const style = event.feature.getProperty('style');
-          if (rec) {
-              showRecommendationInfoWindow(rec, { position: event.latLng }, style);
-          }
-      } else if (event.feature.getProperty('tier')) {
+      if (event.feature.getProperty('tier')) {
           // Discovery Click
           const props = {
               id: event.feature.getProperty('id'),
