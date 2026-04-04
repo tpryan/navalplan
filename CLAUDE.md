@@ -65,6 +65,10 @@ make deps-researcher    # update + vendor agent deps
 - Keep logically joined sections of code together.
 - Run `go mod tidy` in the respective module directory (`code/app/backend/` or `code/services/researcher/`) after dependency changes.
 
+## Git Usage
+
+Only run read-only git commands (e.g. `git status`, `git log`, `git diff`, `git show`, `git ls-files`). Never run commands that modify the repository — no `git add`, `git commit`, `git mv`, `git rm`, `git reset`, `git checkout`, `git restore`, `git rebase`, `git merge`, `git push`, or similar. The user handles all staging and committing.
+
 ## Commit Messages
 
 Use Conventional Commits format:
