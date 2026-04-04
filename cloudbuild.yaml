@@ -77,8 +77,8 @@ availableSecrets:
     env: 'NAVALPLAN_FRONTEND_MAPS_API_KEY'
   - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_MAP_ID/versions/latest
     env: 'NAVALPLAN_MAP_ID'
-  - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_GEMINI_KEY/versions/latest
-    env: 'GEMINI_API_KEY'
+  # - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_GEMINI_KEY/versions/latest
+  #   env: 'GEMINI_API_KEY'
   - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_BACKEND_MAPS_API_KEY/versions/latest
     env: 'NAVALPLAN_BACKEND_MAPS_API_KEY'
 substitutions:
