@@ -49,6 +49,8 @@ CRITICAL RULES:
 	facility found within the radius.
 8. **Websites:** Populate the "website" field using the 'website_uri' returned 
 	by the 'find_places_nearby' tool whenever available.
+8a. **Ratings:** Populate "rating", "user_rating_count", and "business_status" 
+	directly from the values returned by 'find_places_nearby'. Leave null if not provided.
 9. **Sun Phase Formatting:** Ensure 'sun_phase.sunrise' and 'sun_phase.sunset' 
 	are strict time strings in the format "HH:MM AM/PM" (e.g. "06:30 AM"). 
 	Do NOT include the date or timezone.
@@ -86,6 +88,9 @@ CRITICAL RULES:
 			"address": "...",
 			"latitude": 0.0,
 			"longitude": 0.0,
+			"rating": 4.2,
+			"user_rating_count": 123,
+			"business_status": "OPERATIONAL",
 			"details": {
 				"description": "...",
 				"protection": "...",
