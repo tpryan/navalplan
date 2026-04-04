@@ -1,12 +1,12 @@
 {
-  "eval_set_id": "researcher_agent_eval_set",
-  "name": "Researcher Agent Evaluation",
-  "description": "Evaluates the researcher agent's ability to provide location briefings.",
+  "eval_set_id": "harbourmaster_eval_set",
+  "name": "Harbourmaster Agent Evaluation",
+  "description": "Evaluates the harbourmaster agent's ability to provide location briefings.",
   "eval_cases": [
     {
       "eval_id": "oak_bluffs_research",
       "session_input": {
-        "app_name": "researcher_agent",
+        "app_name": "harbourmaster",
         "user_id": "test_user",
         "state": {}
       },
@@ -35,7 +35,7 @@
     {
       "eval_id": "newport_ri_research",
       "session_input": {
-        "app_name": "researcher_agent",
+        "app_name": "harbourmaster",
         "user_id": "test_user",
         "state": {}
       },

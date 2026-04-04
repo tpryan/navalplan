@@ -193,7 +193,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		agentURL = "http://127.0.0.1:8081"
 	}
 
-	appName := "guide_agent"
+	appName := "pilot"
 	userID := "system"
 	sessionID := fmt.Sprintf("voyage_%d", voyage.ID)
 

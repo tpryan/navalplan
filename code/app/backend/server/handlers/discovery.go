@@ -175,7 +175,7 @@ func (h *Handler) performDiscoveryMining(month int) {
 		agentURL = "http://127.0.0.1:8081"
 	}
 
-	appName := "discovery_agent"
+	appName := "commodore"
 	userID := "system"
 	sessionID := fmt.Sprintf("discovery_%d_%d", month, time.Now().Unix())
 

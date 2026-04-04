@@ -31,10 +31,10 @@ STORAGE_BUCKET=navallog-system
 # Go
 GO_FILES=$(shell find . -name '*.go')
 
-# ADK CLI
-ADK?=adk
+# ADK CLI — prefer venv if present
+ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test eval eval-all eval-agent eval-researcher eval-guide eval-discovery eval-navigator build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy setup-adk
+.PHONY: run db-start db-stop db-reset test eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy setup-adk
 
 # --- Development ---
 
@@ -82,9 +82,9 @@ run-agent:
 setup-adk:
 	@echo "Setting up ADK..."
 	@if [ -d venv ]; then \
-		./venv/bin/pip install "google-adk[a2a]"; \
+		./venv/bin/pip install "google-adk[a2a,eval]"; \
 	else \
-		pip install "google-adk[a2a]" || echo "Warning: Could not install google-adk[a2a] globally. Please ensure it is installed."; \
+		pip install "google-adk[a2a,eval]" || echo "Warning: Could not install google-adk[a2a,eval] globally. Please ensure it is installed."; \
 	fi
 
 # --- Combined Dev ---
@@ -252,17 +252,17 @@ test-frontend:
 
 eval: eval-all
 
-eval-researcher:
-	@$(MAKE) eval-agent AGENT=researcher
+eval-harbourmaster:
+	@$(MAKE) eval-agent AGENT=harbourmaster
 
-eval-guide:
-	@$(MAKE) eval-agent AGENT=guide
+eval-pilot:
+	@$(MAKE) eval-agent AGENT=pilot
 
-eval-discovery:
-	@$(MAKE) eval-agent AGENT=discovery
+eval-commodore:
+	@$(MAKE) eval-agent AGENT=commodore
 
-eval-navigator:
-	@$(MAKE) eval-agent AGENT=navigator
+eval-specialist:
+	@$(MAKE) eval-agent AGENT=specialist
 
 eval-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
@@ -285,7 +285,7 @@ eval-agent:
 		rm agent.pid; \
 		exit 1; \
 	fi; \
-	if [ "$$AGENT" = "researcher" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
+	if [ "$$AGENT" = "harbourmaster" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
 	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > code/services/researcher/agent.py; \
 	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> code/services/researcher/agent.py; \
 	echo "root_agent = agent" >> code/services/researcher/agent.py; \
@@ -304,7 +304,7 @@ eval-agent:
 eval-all:
 	@echo "Starting all NavalPlan Agents for evaluation..."
 	@EXIT_CODE=0; \
-	for agent in researcher guide discovery navigator; do \
+	for agent in harbourmaster pilot commodore specialist; do \
 		$(MAKE) eval-agent AGENT=$$agent; \
 		CUR_EXIT=$$?; \
 		if [ $$CUR_EXIT -ne 0 ]; then EXIT_CODE=$$CUR_EXIT; fi; \

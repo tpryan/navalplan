@@ -1,12 +1,12 @@
 {
-  "eval_set_id": "navigator_agent_eval_set",
-  "name": "Navigator Agent Evaluation",
-  "description": "Evaluates the navigator agent's ability to identify resource hubs and anchorages.",
+  "eval_set_id": "specialist_eval_set",
+  "name": "Specialist Agent Evaluation",
+  "description": "Evaluates the specialist agent's ability to identify resource hubs and anchorages.",
   "eval_cases": [
     {
       "eval_id": "nantucket_navigator",
       "session_input": {
-        "app_name": "navigator_agent",
+        "app_name": "specialist",
         "user_id": "test_user",
         "state": {}
       },
