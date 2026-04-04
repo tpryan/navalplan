@@ -2083,14 +2083,31 @@ function renderItinerary() {
             list.appendChild(header);
 
             voyageRecommendations.forEach(rec => {
+                const recColor = markerColor(rec.type);
+                const tl = (rec.type || '').toLowerCase();
+                let recIcon = 'location_on';
+                if (tl.includes('anchor')) recIcon = 'anchor';
+                else if (tl.includes('moor')) recIcon = 'crisis_alert';
+                else if (tl.includes('hub') || tl.includes('marina')) recIcon = 'hub';
+
                 const el = document.createElement('div');
                 el.className = 'day-item';
-                el.innerHTML = `
-                    <div class="day-info flex-1">
-                        <span class="day-location set">${DOMPurify.sanitize(displayLocationName(rec.name))}</span>
-                        <p class="font-xs text-gray">${rec.type}</p>
+                el.style.alignItems = 'flex-start';
+                el.style.flexDirection = 'column';
+                el.innerHTML = DOMPurify.sanitize(`
+                    <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">
+                        <span class="material-symbols-outlined" style="color:${recColor};font-size:20px;">${recIcon}</span>
+                        <span style="font-weight:700;flex:1;">${displayLocationName(rec.name)}</span>
+                        <span style="font-size:0.7rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${recColor};padding:2px 7px;border-radius:20px;white-space:nowrap;">${rec.type || 'Spot'}</span>
                     </div>
-                `;
+                    ${rec.description ? `<p style="margin:0 0 6px;font-size:0.82rem;color:var(--text-color);line-height:1.4;">${rec.description}</p>` : ''}
+                    ${rec.reasoning ? `
+                        <div style="background:${recColor}1A;padding:7px 10px;border-radius:5px;border-left:3px solid ${recColor};width:100%;box-sizing:border-box;">
+                            <p style="margin:0;font-size:0.78rem;font-style:italic;color:#555;">
+                                <strong style="font-style:normal;color:${recColor};">Pilot's Reasoning:</strong> "${rec.reasoning}"
+                            </p>
+                        </div>` : ''}
+                `);
                 el.onclick = () => {
                     if (map) {
                         map.panTo({lat: rec.latitude, lng: rec.longitude});
