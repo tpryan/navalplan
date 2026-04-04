@@ -13,7 +13,7 @@ We will move from a single "do-it-all" prompt to a **Tool-Augmented Agent**. Thi
 First, ensure your service can access your custom library.
 
 ```bash
-# Inside services/researcher
+# Inside code/services/researcher
 go get github.com/tpryan/openmeteogo
 go mod tidy
 
@@ -23,7 +23,7 @@ go mod tidy
 
 ### Step 2: Implement the Weather Tool
 
-Create `services/researcher/tools/weather.go`. This wrapper connects the generic ADK interface to your strongly-typed `openmeteogo` library.
+Create `code/services/researcher/tools/weather.go`. This wrapper connects the generic ADK interface to your strongly-typed `openmeteogo` library.
 
 ```go
 package tools
@@ -88,7 +88,7 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 
 ### Step 3: Implement the Tides Tool
 
-Create `services/researcher/tools/tides.go`.
+Create `code/services/researcher/tools/tides.go`.
 
 ```go
 package tools
@@ -142,7 +142,7 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 
 ### Step 4: The Agent Service (`main.go`)
 
-Update `services/researcher/main.go` to register these tools and use a refined system instruction.
+Update `code/services/researcher/main.go` to register these tools and use a refined system instruction.
 
 ```go
 func (s *Server) createResearcherAgent() (agent.Agent, error) {

@@ -2,17 +2,17 @@ Here is the updated implementation plan for `navalplan`. This plan assumes the d
 
 ### **Phase 1: Context & Models**
 
-1. **Create `app/backend/context/context.go**`
+1. **Create `code/app/backend/context/context.go**`
 * **Goal**: Pass authenticated `Person` data through the request context.
 * **Implementation**:
 * Define a context key (e.g., `personKey`).
 * Implement `AddPersonToContext(ctx, person)` and `GetPersonFromContext(ctx)`.
-* *Reference*: See `navallog/app/backend/context/context.go`.
+* *Reference*: See `navallog/code/app/backend/context/context.go`.
 
 
 
 
-2. **Update `app/backend/models/models.go**`
+2. **Update `code/app/backend/models/models.go**`
 * **Goal**: Define data structures for authentication.
 * **Add Structs**:
 ```go
@@ -40,7 +40,7 @@ type Session struct {
 
 ### **Phase 2: Datastore Layer**
 
-1. **Create `app/backend/datastore/person.go**`
+1. **Create `code/app/backend/datastore/person.go**`
 * **Goal**: Database operations for the `person` table.
 * **Methods to Implement**:
 * `FindPersonByGoogleID(ctx, googleID)`: Returns `*models.Person`.
@@ -51,7 +51,7 @@ type Session struct {
 
 
 
-2. **Create `app/backend/datastore/sessions.go**`
+2. **Create `code/app/backend/datastore/sessions.go**`
 * **Goal**: Manage session tokens.
 * **Methods to Implement**:
 * `CreateSession(ctx, token, personID, expiresAt)`
@@ -59,17 +59,17 @@ type Session struct {
 * `DeleteSession(ctx, token)`
 
 
-* *Reference*: Port strictly from `navallog/app/backend/datastore/session.go`, ensuring SQL queries reference `person_id`.
+* *Reference*: Port strictly from `navallog/code/app/backend/datastore/session.go`, ensuring SQL queries reference `person_id`.
 
 
-3. **Update `app/backend/datastore/interface.go**`
+3. **Update `code/app/backend/datastore/interface.go**`
 * Add the new methods above to the `Store` interface so they can be accessed via the `Server` struct.
 
 
 
 ### **Phase 3: Auth Handlers & Middleware**
 
-1. **Create `app/backend/server/auth.go**`
+1. **Create `code/app/backend/server/auth.go**`
 * **Goal**: Handle OAuth flow and session management.
 * **Google OAuth Config**: Setup `oauth2.Config` using env vars (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL`).
 * **Handlers**:
@@ -94,7 +94,7 @@ type Session struct {
 
 
 
-2. **Create `app/backend/server/handlers/person.go**`
+2. **Create `code/app/backend/server/handlers/person.go**`
 * **Goal**: API for the frontend to get/update the current user.
 * **Struct**: `PersonHandler{store, log}`.
 * **Methods**:
@@ -107,7 +107,7 @@ type Session struct {
 
 ### **Phase 4: Server Wiring**
 
-1. **Update `app/backend/server/server.go**`
+1. **Update `code/app/backend/server/server.go**`
 * Initialize `PersonHandler`.
 * Register Routes:
 ```go
@@ -131,11 +131,11 @@ r.Route("/api/v1/person", func(r chi.Router) {
 
 ### **Phase 5: Frontend**
 
-1. **Update `app/frontend/js/api.js**`
+1. **Update `code/app/frontend/js/api.js**`
 * Ensure `apiFetch` detects `401 Unauthorized` responses and updates the UI state (e.g., triggers a "logged out" view).
 
 
-2. **Create `app/frontend/js/auth.js**`
+2. **Create `code/app/frontend/js/auth.js**`
 * **Function**: `checkSession()`
 * **Logic**: Call `GET /api/v1/person`.
 * **Success**: Update UI to show "Logged in as [Name]" + Logout button.

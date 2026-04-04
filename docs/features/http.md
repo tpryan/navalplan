@@ -2,7 +2,7 @@ Based on the `navallog` implementation, here is a detailed explanation of the ch
 
 This refactor involves moving away from the `chi` router to the standard library's `http.ServeMux` (Go 1.22+), defining routes in a structured slice, and centralizing handler registration.
 
-### 1. Create `app/backend/server/routes.go`
+### 1. Create `code/app/backend/server/routes.go`
 
 You need to create a new file `routes.go` in `navalplan`. This file will define the `route` struct, the `Register` method, and the `Routes` configuration method.
 
@@ -12,7 +12,7 @@ You need to create a new file `routes.go` in `navalplan`. This file will define 
 2. **Implement `Register`:** Iterate through the routes, wrap them in middleware (Auth, Gzip) based on `AuthLevel`, and register them to the `Mux`.
 3. **Implement `Routes`:** Define the static file handlers (manually, as `navallog` does) and the slice of API routes mapping your existing `handlers` methods to HTTP paths.
 
-**Code for `app/backend/server/routes.go`:**
+**Code for `code/app/backend/server/routes.go`:**
 
 ```go
 package server
@@ -133,7 +133,7 @@ func (s *Server) Routes(staticPath string) {
 
 ```
 
-### 2. Update `app/backend/server/server.go`
+### 2. Update `code/app/backend/server/server.go`
 
 You need to modify the `Server` struct to match `navallog`'s dependencies (specifically holding the handlers and using `http.ServeMux` instead of `chi`) and update the `New` constructor.
 
@@ -144,7 +144,7 @@ You need to modify the `Server` struct to match `navallog`'s dependencies (speci
 3. **New function:** Initialize `http.NewServeMux()`. Remove the inline route definitions. Call `s.Routes(cfg.ContentDir)` *inside* or allow the caller to call it (Navallog's `New` does not call `Routes`, it is called in `main`).
 4. **Middleware:** Port the global middleware logic (logging) to a `Middleware` method on the Server struct, rather than `r.Use`.
 
-**Code for `app/backend/server/server.go`:**
+**Code for `code/app/backend/server/server.go`:**
 
 ```go
 package server

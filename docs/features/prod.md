@@ -17,25 +17,25 @@ steps:
 # 1. Install Frontend Dependencies
 - name: 'gcr.io/cloud-builders/npm'
   args: ['install']
-  dir: 'app/frontend'
+  dir: 'code/app/frontend'
 
 # 2. Build Frontend
-# This creates the production assets (usually in app/frontend/dist)
+# This creates the production assets (usually in code/app/frontend/dist)
 - name: 'gcr.io/cloud-builders/npm'
   args: ['run', 'build']
-  dir: 'app/frontend'
+  dir: 'code/app/frontend'
 
 # 3. Prepare Static Assets for Backend
 # Move the built frontend assets to the folder the Go backend expects (./static.min)
 - name: 'ubuntu'
   script: |
-    rm -rf app/backend/static.min
-    mv app/frontend/dist app/backend/static.min
+    rm -rf code/app/backend/static.min
+    mv code/app/frontend/dist code/app/backend/static.min
   
 # 4. Test Backend
 - name: 'golang'
   args: ['test', './...']
-  dir: 'app/backend'
+  dir: 'code/app/backend'
   env:
   - 'GO111MODULE=on'
 
@@ -54,7 +54,7 @@ steps:
   - '--allow-unauthenticated' # Publicly accessible
   - '--set-env-vars'
   - 'NAVALPLAN_DB_HOST=your-db-host,NAVALPLAN_DB_USER=your-db-user,NAVALPLAN_DB_PASS=your-db-pass,NAVALPLAN_DB_NAME=navalplan'
-  dir: 'app/backend'
+  dir: 'code/app/backend'
   
 logsBucket: gs://navalplan-logging-bucket
 
@@ -66,7 +66,7 @@ logsBucket: gs://navalplan-logging-bucket
 
 The current `research.go` uses a standard `http.Post`, which will fail because the agent now rejects unauthenticated requests. You must update the handler to use Google's `idtoken` library to authenticate the request.
 
-**File:** `app/backend/server/handlers/research.go`
+**File:** `code/app/backend/server/handlers/research.go`
 
 First, add the import:
 
@@ -140,7 +140,7 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 
 ```
 
-*Don't forget to run `go get google.golang.org/api/idtoken` in `app/backend` to update your `go.mod`.*
+*Don't forget to run `go get google.golang.org/api/idtoken` in `code/app/backend` to update your `go.mod`.*
 
 ### 4. Deployment Plan
 

@@ -3,7 +3,7 @@ This implementation plan outlines the steps to create a new **Local Pilot Report
 ### Implementation Plan: Local Pilot Report
 
 #### 1. Model Updates
-**File:** `app/backend/models/models.go`
+**File:** `code/app/backend/models/models.go`
 * Define a new `PilotReport` struct to aggregate the data for the new endpoint.
 
 ```go
@@ -16,7 +16,7 @@ type PilotReport struct {
 ```
 
 #### 2. Handler Implementation
-**File:** `app/backend/server/handlers/voyages.go` (or a new file)
+**File:** `code/app/backend/server/handlers/voyages.go` (or a new file)
 * Create a `GetPilotReport` handler.
 * The handler must:
     1.  Validate the user session.
@@ -26,7 +26,7 @@ type PilotReport struct {
     5.  Return the aggregated `PilotReport` as JSON.
 
 #### 3. Route Registration
-**File:** `app/backend/server/routes.go`
+**File:** `code/app/backend/server/routes.go`
 * Register the new endpoint as a protected (Level 1) route.
 
 ```go
@@ -34,7 +34,7 @@ type PilotReport struct {
 ```
 
 #### 4. (Optional) Pilot Summary Prompt
-**File:** `services/researcher/prompts/pilot_summary_agent.md` (New)
+**File:** `code/services/researcher/prompts/pilot_summary_agent.md` (New)
 * If a specific synthesized summary of the *recommendations* is desired (beyond the general `VoyageGuide` summary), create a new prompt for the Researcher service.
 * This prompt would take the list of recommendations and generate a "Skipper's Overview" of the best options in the area.
 

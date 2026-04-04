@@ -15,7 +15,7 @@ steps:
   - '--set-secrets=GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
-  dir: 'services/researcher'        # Build context
+  dir: 'code/services/researcher'        # Build context
 substitutions:
   _NAVALPLAN_AGENT_MODEL: "gemini-2.5-flash"
   _ENV: "production"

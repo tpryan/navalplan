@@ -23,7 +23,7 @@ We will add a `VoyageGuide` entity linked to the `Voyage`. This is similar to th
 
 We need a new table to store this high-level research. It will use `JSONB` columns to store structured data returned by the agent, similar to your existing `briefing` table.
 
-**File:** `app/db/schema.sql` (Add this)
+**File:** `code/app/db/schema.sql` (Add this)
 
 ```sql
 CREATE TABLE voyage_guide (
@@ -45,7 +45,7 @@ CREATE INDEX idx_voyage_guide_voyage_id ON voyage_guide(voyage_id);
 
 Update your Go models to support the new table.
 
-**File:** `app/backend/models/models.go`
+**File:** `code/app/backend/models/models.go`
 
 ```go
 package models
@@ -69,7 +69,7 @@ type VoyageGuide struct {
 
 #### **Step 3: Agent Implementation**
 
-You need a new agent configuration. Since you are using the `google.golang.org/adk` framework, you can add a new agent definition (e.g., `guide_agent`) alongside your existing `researcher_agent` inside `services/researcher/main.go`.
+You need a new agent configuration. Since you are using the `google.golang.org/adk` framework, you can add a new agent definition (e.g., `guide_agent`) alongside your existing `researcher_agent` inside `code/services/researcher/main.go`.
 
 **New System Prompt for "Destination Guide Agent":**
 

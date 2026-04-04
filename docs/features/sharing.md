@@ -49,7 +49,7 @@ The existing `Voyage` model already supports `ShareToken` and `IsPublic`. We nee
 
 * **Update Endpoint:** `POST /api/v1/voyages/{id}/guide/snapshot`
 * **AuthLevel:** 1 (Owner Only).
-* **Logic:** Accepts a raw image file (blob) captured from the frontend canvas. Saves it to `app/content/maps/voyage_{id}.png`. This replaces the existing `UploadVoyageMap` handler logic to specifically align with the "Screenshot" workflow.
+* **Logic:** Accepts a raw image file (blob) captured from the frontend canvas. Saves it to `code/app/content/maps/voyage_{id}.png`. This replaces the existing `UploadVoyageMap` handler logic to specifically align with the "Screenshot" workflow.
 
 
 
@@ -109,12 +109,12 @@ The existing `Voyage` model already supports `ShareToken` and `IsPublic`. We nee
 
 ### Step 1: Backend API Extension
 
-1. Modify `app/backend/server/routes.go` to add the public guide route.
-2. Update `app/backend/server/handlers/guide.go` to implement `GetPublicVoyageGuide` (reusing logic from `GetVoyageGuide` but resolving via Token instead of ID).
+1. Modify `code/app/backend/server/routes.go` to add the public guide route.
+2. Update `code/app/backend/server/handlers/guide.go` to implement `GetPublicVoyageGuide` (reusing logic from `GetVoyageGuide` but resolving via Token instead of ID).
 
 ### Step 2: Frontend "Read-Only" State
 
-1. Update `app/frontend/js/state.js` to include `viewMode: 'owner' | 'public'`.
+1. Update `code/app/frontend/js/state.js` to include `viewMode: 'owner' | 'public'`.
 2. Refactor `ui.js` to conditionally render action buttons based on `viewMode`.
 
 ### Step 3: Map Capture Feature
@@ -124,7 +124,7 @@ The existing `Voyage` model already supports `ShareToken` and `IsPublic`. We nee
 
 ### Step 4: Public Page Entry Point
 
-1. Create `app/frontend/shared.html` (or handle via routing in `index.html`).
+1. Create `code/app/frontend/shared.html` (or handle via routing in `index.html`).
 2. On load, fetch data from `/api/v1/public/voyages/{token}/guide`.
 3. Render the static report view.
 

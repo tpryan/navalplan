@@ -59,7 +59,7 @@ This guide details the specific code changes required in the `navalplan` reposit
 
 #### Step 1: Database Migrations
 
-Create a new migration file (e.g., `app/db/migrations/00000X_add_invitations.up.sql`) or update `schema.sql` if you are still in early development.
+Create a new migration file (e.g., `code/app/db/migrations/00000X_add_invitations.up.sql`) or update `schema.sql` if you are still in early development.
 
 ```sql
 -- Add admin and invitation tracking to person
@@ -75,7 +75,7 @@ CREATE TABLE invitation (
 
 ```
 
-#### Step 2: Datastore Updates (`app/backend/datastore`)
+#### Step 2: Datastore Updates (`code/app/backend/datastore`)
 
 **2.1 Update `models/models.go**`
 Add the new fields to the `Person` struct and create an `Invitation` struct.
@@ -99,7 +99,7 @@ type Invitation struct {
 Modify the signature to accept the `invitedBy` ID.
 
 ```go
-// app/backend/datastore/person.go
+// code/app/backend/datastore/person.go
 
 func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error) {
 	query := `
@@ -127,11 +127,11 @@ func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pi
 Add methods to manage invitations.
 
 ```go
-// app/backend/datastore/invitation.go
+// code/app/backend/datastore/invitation.go
 package datastore
 
 import (
-	"app/backend/models" // Adjust import path based on your project structure
+	"code/app/backend/models" // Adjust import path based on your project structure
 	"context"
 	"database/sql"
 )
@@ -177,7 +177,7 @@ func (db *DB) ListPeople(ctx context.Context) ([]models.Person, error) {
 
 ```
 
-#### Step 3: Update Authentication Logic (`app/backend/server/auth.go`)
+#### Step 3: Update Authentication Logic (`code/app/backend/server/auth.go`)
 
 Modify `oauthGoogleCallback` to enforce the invitation check.
 
@@ -227,7 +227,7 @@ Modify `oauthGoogleCallback` to enforce the invitation check.
 
 ```
 
-#### Step 4: Admin Handlers (`app/backend/server/handlers/admin.go`)
+#### Step 4: Admin Handlers (`code/app/backend/server/handlers/admin.go`)
 
 Create new handlers for the admin interface.
 
@@ -237,8 +237,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-    "app/backend/datastore"
-    "app/backend/context" // wrapper for getting person from context
+    "code/app/backend/datastore"
+    "code/app/backend/context" // wrapper for getting person from context
 )
 
 type AdminHandler struct {
@@ -301,7 +301,7 @@ func (h *AdminHandler) RevokeInvitation(w http.ResponseWriter, r *http.Request) 
 
 ```
 
-#### Step 5: Middleware & Routes (`app/backend/server/server.go`)
+#### Step 5: Middleware & Routes (`code/app/backend/server/server.go`)
 
 1. **Middleware:** Create a `requireAdmin` middleware.
 2. **Routes:** Register the new endpoints.

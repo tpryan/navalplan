@@ -13,24 +13,24 @@ PROJECT_NAME=navalplan
 # 1. RUN: Builds the frontend first, then runs Go serving that static folder
 run: build
 	@echo "Starting NavalPlan (Production Mode)..."
-	cd app/backend && go run main.go --content=./static.min
+	cd code/app/backend && go run main.go --content=./static.min
 
 # 2. BUILD: The master build command
 build: build-js
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
-	rm -rf app/backend/static.min
+	rm -rf code/app/backend/static.min
 
 # 4. BUILD-JS: Installs deps and runs Vite Build
 build-js: clean-static
 	@echo "Building Frontend..."
-	cd app/frontend && npm install
-	cd app/frontend && npm run build
+	cd code/app/frontend && npm install
+	cd code/app/frontend && npm run build
 
 ```
 
-### 2. Frontend Config (`app/frontend/vite.config.js`)
+### 2. Frontend Config (`code/app/frontend/vite.config.js`)
 
 This configuration ensures that when `npm run build` is called by the Makefile, the files land exactly where the Go server expects them (`../backend/static.min`).
 
@@ -58,7 +58,7 @@ export default defineConfig({
 
 ```
 
-### 3. Backend Entry Point (`app/backend/main.go`)
+### 3. Backend Entry Point (`code/app/backend/main.go`)
 
 We need to update `main.go` to parse the `--content` flag (just like `Navallog` does) so it knows which folder to serve.
 
@@ -71,7 +71,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/tpryan/navalplan/app/backend/server"
+	"github.com/tpryan/navalplan/code/app/backend/server"
 )
 
 func main() {
@@ -115,6 +115,6 @@ With these changes, your workflow mirrors `Navallog`:
 
 
 2. **To Develop Frontend (Hot Reload):**
-* Command: `cd app/frontend && npm run dev`
+* Command: `cd code/app/frontend && npm run dev`
 * Action: Starts Vite dev server.
 * Result: You open `localhost:5173`. It proxies API calls to Go (running in another terminal), but gives you instant updates for JS/CSS changes.

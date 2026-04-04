@@ -83,7 +83,7 @@ graph TD
 ### A. The "Monolithic" Dev Experience
 In production, the Go backend serves the compiled frontend assets (`static.min`). This simplifies deployment to a single URL.
 *   **Development:** `make dev` runs the Backend (Go), Agent (Go), and Frontend (Vite) concurrently. Vite proxies API requests to the Go backend.
-*   **Production:** `make run` builds the frontend to `app/backend/static.min` and the Go server serves these static files alongside its API routes.
+*   **Production:** `make run` builds the frontend to `code/app/backend/static.min` and the Go server serves these static files alongside its API routes.
 
 ### B. The Research Loop
 1.  **Trigger:** User clicks a location on the map and selects a date.
