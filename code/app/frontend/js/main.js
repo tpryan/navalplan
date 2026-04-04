@@ -38,7 +38,7 @@ const MARKER_COLORS = {
     marina:      '#E65100', // orange
     hub:         '#E65100', // orange (resource hubs treated same as marina)
     'yacht club':'#E65100', // orange
-    bar:         '#5D4037', // brown
+    bar:         '#F9A825', // yellow
     restaurant:  '#5D4037', // brown
     default:     '#455A64', // blue-gray
 };
@@ -51,8 +51,8 @@ function markerColor(type) {
     if (t.includes('marina'))    return MARKER_COLORS.marina;
     if (t.includes('hub'))       return MARKER_COLORS.hub;
     if (t.includes('yacht'))     return MARKER_COLORS['yacht club'];
-    if (t.includes('bar'))       return MARKER_COLORS.bar;
     if (t.includes('restaurant'))return MARKER_COLORS.restaurant;
+    if (t.includes('bar'))       return MARKER_COLORS.bar;
     return MARKER_COLORS.default;
 }
 
@@ -65,7 +65,8 @@ let selectedDate = null;
 let map = null;
 let markers = [];
 let routePolyline = null;
-let facilityMarkers = [];
+let facilityMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
+const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'other']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
 const activeFilters = new Set(['anchorage', 'mooring', 'hub']);
 let voyageRecommendations = [];
@@ -350,6 +351,23 @@ function initUI() {
           }
           recommendationMarkers.forEach(({ marker, type: markerType }) => {
               marker.map = activeFilters.has(markerType) ? map : null;
+          });
+      });
+  });
+
+  // Facility filter buttons
+  document.querySelectorAll('.facility-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+          const type = btn.dataset.type;
+          if (activeFacilityFilters.has(type)) {
+              activeFacilityFilters.delete(type);
+              btn.classList.remove('active');
+          } else {
+              activeFacilityFilters.add(type);
+              btn.classList.add('active');
+          }
+          facilityMarkers.forEach(({ marker, type: markerType }) => {
+              marker.map = activeFacilityFilters.has(markerType) ? map : null;
           });
       });
   });
@@ -2908,13 +2926,20 @@ async function initMap() {
                 if (b && b.facilities) {
                     b.facilities.forEach(f => {
                          if (f.latitude && f.longitude) {
-                             let iconName = 'location_on'; // default
                              const type = (f.type || '').toLowerCase();
+                             let iconName = 'location_on';
                              if (type.includes('anchorage')) iconName = 'anchor';
                              else if (type.includes('marina')) iconName = 'directions_boat';
                              else if (type.includes('bar')) iconName = 'local_bar';
                              else if (type.includes('restaurant')) iconName = 'restaurant';
-                             
+
+                             const filterKey = type.includes('anchor') ? 'anchorage'
+                                 : type.includes('marina') ? 'marina'
+                                 : type.includes('moor') ? 'mooring'
+                                 : type.includes('restaurant') ? 'restaurant'
+                                 : type.includes('bar') ? 'bar'
+                                 : 'other';
+
                              const iconDiv = document.createElement('div');
                              iconDiv.style.backgroundColor = markerColor(f.type);
                              iconDiv.style.borderRadius = '50%';
@@ -2928,7 +2953,7 @@ async function initMap() {
                              iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${iconName}</span>`;
 
                              const fMarker = new AdvancedMarkerElement({
-                                 map: map,
+                                 map: activeFacilityFilters.has(filterKey) ? map : null,
                                  position: { lat: f.latitude, lng: f.longitude },
                                  content: iconDiv,
                                  title: f.name,
@@ -2952,13 +2977,16 @@ async function initMap() {
                                  });
                                  activeInfoWindow.open(map, fMarker);
                              });
-                             facilityMarkers.push(fMarker);
+                             facilityMarkers.push({ marker: fMarker, type: filterKey });
                          }
                     });
                 }
             } catch (err) {
                // Ignore errors
             }
+        }
+        if (facilityMarkers.length > 0) {
+            document.getElementById('facility-controls').classList.remove('hidden');
         }
     })();
 
@@ -2989,8 +3017,9 @@ async function initMap() {
           routePolyline = null;
       }
 
-      facilityMarkers.forEach(m => m.map = null);
+      facilityMarkers.forEach(({ marker }) => marker.map = null);
       facilityMarkers = [];
+      document.getElementById('facility-controls').classList.add('hidden');
 
       if (map && map.data) {
           map.data.forEach((feature) => {
