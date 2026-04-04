@@ -66,7 +66,8 @@ let map = null;
 let markers = [];
 let routePolyline = null;
 let facilityMarkers = [];
-let recommendationMarkers = [];
+let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
+const activeFilters = new Set(['anchorage', 'mooring', 'hub']);
 let voyageRecommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
@@ -335,6 +336,23 @@ function initUI() {
   if (btnCloseDiscovery) {
       btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
   }
+
+  // Pilot filter buttons
+  document.querySelectorAll('.pilot-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+          const type = btn.dataset.type;
+          if (activeFilters.has(type)) {
+              activeFilters.delete(type);
+              btn.classList.remove('active');
+          } else {
+              activeFilters.add(type);
+              btn.classList.add('active');
+          }
+          recommendationMarkers.forEach(({ marker, type: markerType }) => {
+              marker.map = activeFilters.has(markerType) ? map : null;
+          });
+      });
+  });
   
   const btnCloseDiscoveryIntro = document.getElementById('btn-close-discovery-intro');
   if (btnCloseDiscoveryIntro) {
@@ -1717,8 +1735,15 @@ async function renderRecommendations() {
                 showRecommendationInfoWindow(rec, marker, style);
             });
 
-            recommendationMarkers.push(marker);
+            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : 'hub';
+            if (!activeFilters.has(filterKey)) marker.map = null;
+
+            recommendationMarkers.push({ marker, type: filterKey });
         });
+
+        if (recommendationMarkers.length > 0) {
+            document.getElementById('pilot-controls').classList.remove('hidden');
+        }
 
     } catch (err) {
         console.error("Error in renderRecommendations:", err);
@@ -1779,17 +1804,9 @@ function clearPilotCircle() {
 }
 
 function clearRecommendations() {
-    recommendationMarkers.forEach(m => m.map = null);
+    recommendationMarkers.forEach(({ marker }) => marker.map = null);
     recommendationMarkers = [];
-
-    // Clear blobs from map.data
-    if (map && map.data) {
-        map.data.forEach((feature) => {
-            if (feature.getProperty('type') === 'recommendation') {
-                map.data.remove(feature);
-            }
-        });
-    }
+    document.getElementById('pilot-controls').classList.add('hidden');
 }
 
 async function renderPilotCircle() {
