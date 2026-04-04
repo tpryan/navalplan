@@ -472,6 +472,20 @@
 }
 
 /* --- Discovery (Commodore) Styles --- */
+#facility-controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--surface-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-main);
+    padding: 0.75rem 1.25rem;
+    z-index: 100;
+}
+
 #pilot-controls {
     position: absolute;
     bottom: 30px;
