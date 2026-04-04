@@ -27,9 +27,16 @@ steps:
   script: |
     apt-get update && apt-get install -y python3 python3-pip lsof
     pip3 install "google-adk[a2a]" --break-system-packages
-    # Install dependencies to create the vendor directory
-    make deps 
-    make eval-all ADK=adk VERBOSE=1
+    
+    # Check version for debugging
+    go version
+    
+    # Ensure dependencies are ready
+    make deps
+    
+    # Force VERBOSE and capture Go logs in a file
+    # If eval fails, we cat the log to see the crash reason
+    make eval-all ADK=adk VERBOSE=1 || (cat code/services/researcher/agent.log && exit 1)
   secretEnv: ['GEMINI_API_KEY', 'NAVALPLAN_BACKEND_MAPS_API_KEY']
 
 # 5. Deploy Backend to Cloud Run
