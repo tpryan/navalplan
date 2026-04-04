@@ -31,6 +31,31 @@ loadChart();
 
 // Configuration
 
+// Consistent marker colors across all map views
+const MARKER_COLORS = {
+    anchorage:   '#388E3C', // green
+    mooring:     '#7B1FA2', // purple
+    marina:      '#E65100', // orange
+    hub:         '#E65100', // orange (resource hubs treated same as marina)
+    'yacht club':'#E65100', // orange
+    bar:         '#5D4037', // brown
+    restaurant:  '#5D4037', // brown
+    default:     '#455A64', // blue-gray
+};
+
+function markerColor(type) {
+    if (!type) return MARKER_COLORS.default;
+    const t = type.toLowerCase();
+    if (t.includes('anchor'))    return MARKER_COLORS.anchorage;
+    if (t.includes('moor'))      return MARKER_COLORS.mooring;
+    if (t.includes('marina'))    return MARKER_COLORS.marina;
+    if (t.includes('hub'))       return MARKER_COLORS.hub;
+    if (t.includes('yacht'))     return MARKER_COLORS['yacht club'];
+    if (t.includes('bar'))       return MARKER_COLORS.bar;
+    if (t.includes('restaurant'))return MARKER_COLORS.restaurant;
+    return MARKER_COLORS.default;
+}
+
 // State
 let researchTicker = null;
 let voyages = [];
@@ -1659,9 +1684,9 @@ async function renderRecommendations() {
         const features = [];
 
         const styles = {
-            hub: { color: '#FF5722', icon: 'hub', label: 'Resource Hub' }, // Safety Orange
-            anchorage: { color: '#00BFA5', icon: 'anchor', label: 'Anchorage' }, // Vibrant Teal
-            mooring: { color: '#9B59B6', icon: 'crisis_alert', label: 'Mooring' } // Purple
+            hub:       { color: MARKER_COLORS.hub,       icon: 'hub',          label: 'Resource Hub' },
+            anchorage: { color: MARKER_COLORS.anchorage, icon: 'anchor',       label: 'Anchorage' },
+            mooring:   { color: MARKER_COLORS.mooring,   icon: 'crisis_alert', label: 'Mooring' },
         };
 
         voyageRecommendations.forEach((rec) => {
@@ -2908,7 +2933,7 @@ async function initMap() {
                              else if (type.includes('restaurant')) iconName = 'restaurant';
                              
                              const iconDiv = document.createElement('div');
-                             iconDiv.style.backgroundColor = '#000000';
+                             iconDiv.style.backgroundColor = markerColor(f.type);
                              iconDiv.style.borderRadius = '50%';
                              iconDiv.style.width = '28px';
                              iconDiv.style.height = '28px';
@@ -3277,9 +3302,10 @@ async function captureAndUploadMap(voyageId) {
     if (recs && recs.length > 0) {
         recs.slice(0, 20).forEach(rec => {
             const type = (rec.type || '').toLowerCase();
-            let color = '00BFA5'; // Teal (Anchorage) - Hex only
-            if (type.includes('hub')) color = 'FF5722'; // Orange (Hub)
-            else if (type.includes('moor')) color = '9B59B6'; // Purple (Mooring)
+            let color = MARKER_COLORS.anchorage.slice(1); // green (anchorage default)
+            if (type.includes('hub'))    color = MARKER_COLORS.hub.slice(1);
+            else if (type.includes('moor')) color = MARKER_COLORS.mooring.slice(1);
+            else if (type.includes('marina')) color = MARKER_COLORS.marina.slice(1);
 
             let path = `&path=color:0x${color}AA|weight:1|fillcolor:0x${color}44`;
             let hasPath = false;
@@ -3323,9 +3349,10 @@ async function captureAndUploadMap(voyageId) {
         let labeledRecs = "";
         recs.slice(0, 5).forEach(rec => {
             const type = (rec.type || '').toLowerCase();
-            let color = '00BFA5';
-            if (type.includes('hub')) color = 'FF5722';
-            else if (type.includes('moor')) color = '9B59B6';
+            let color = MARKER_COLORS.anchorage.slice(1);
+            if (type.includes('hub'))    color = MARKER_COLORS.hub.slice(1);
+            else if (type.includes('moor'))   color = MARKER_COLORS.mooring.slice(1);
+            else if (type.includes('marina')) color = MARKER_COLORS.marina.slice(1);
             
             const label = rec.name.charAt(0).toUpperCase();
             labeledRecs += `&markers=color:0x${color}%7Csize:small%7Clabel:${label}%7C${rec.latitude},${rec.longitude}`;
