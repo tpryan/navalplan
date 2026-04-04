@@ -4442,17 +4442,25 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             group.items.forEach(rec => {
                 const type = rec.type || 'Spot';
-                const typeClass = key === 'other' ? 'spot' : key;
-                
+                const recColor = markerColor(type);
+                const tl = type.toLowerCase();
+                let recIcon = 'location_on';
+                if (tl.includes('anchor')) recIcon = 'anchor';
+                else if (tl.includes('moor')) recIcon = 'crisis_alert';
+                else if (tl.includes('hub') || tl.includes('marina')) recIcon = 'hub';
+
                 html += `
                     <div class="recommendation-item mb-lg p-md border-radius border">
-                        <div class="flex justify-between align-center mb-sm">
-                            <h4 class="m-0">${DOMPurify.sanitize(rec.name)}</h4>
-                            <span class="badge badge-${typeClass}">${DOMPurify.sanitize(type)}</span>
-                        </div>
-                        <p class="mb-sm"><strong>Description:</strong> ${DOMPurify.sanitize(rec.description)}</p>
-                        <div class="pilot-reasoning p-sm bg-light border-radius italic">
-                            <strong>Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"
+                        <h4 class="m-0 mb-sm briefing-header-icon">
+                            <span class="material-symbols-outlined icon-lg" style="color:${recColor};">${recIcon}</span>
+                            ${DOMPurify.sanitize(rec.name)}
+                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${recColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${DOMPurify.sanitize(type)}</span>
+                        </h4>
+                        <p class="mb-sm">${DOMPurify.sanitize(rec.description)}</p>
+                        <div style="background:${recColor}1A;padding:10px 12px;border-radius:6px;border-left:3px solid ${recColor};margin-top:8px;">
+                            <p style="margin:0;font-size:0.85rem;font-style:italic;color:#555;">
+                                <strong style="font-style:normal;color:${recColor};">Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"
+                            </p>
                         </div>
                     </div>
                 `;
