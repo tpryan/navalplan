@@ -17,7 +17,7 @@ DB_PORT=${NAVALPLAN_DB_PORT}
 
 # Migrations
 MIGRATE_IMAGE=migrate/migrate
-MIGRATE_PATH=app/db/migrations
+MIGRATE_PATH=code/app/db/migrations
 DB_URL=postgres://$(DB_USER):$(DB_PASS)@localhost:$(DB_PORT)/$(DB_NAME)?sslmode=disable
 
 # Production DB Config
@@ -42,19 +42,19 @@ ADK?=adk
 run: build-js
 	@echo "Starting NavalPlan backend (Production Mode)..."
 	# Variables are automatically loaded from .env
-	cd app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
+	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
 # 2. BUILD: The master build command
 build: build-js
 
 # 2. RUN-BACKEND: Runs the Go backend without rebuilding JS (for dev)
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
-	mkdir -p app/backend/static.min
-	cd app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
+	mkdir -p code/app/backend/static.min
+	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
-	rm -rf app/backend/static.min
+	rm -rf code/app/backend/static.min
 
 # 4. BUILD-JS: Installs deps and runs Vite Build
 build-js: clean-static
@@ -63,21 +63,21 @@ build-js: clean-static
 		echo "Error: NAVALPLAN_FRONTEND_MAPS_API_KEY is not set. Please set it in your environment or .env file."; \
 		exit 1; \
 	fi
-	cd app/frontend && npm install
-	cd app/frontend && npm run build
+	cd code/app/frontend && npm install
+	cd code/app/frontend && npm run build
 
 # --- Frontend ---
 
 run-frontend:
 	@echo "Starting NavalPlan frontend..."
-	cd app/frontend && npm run dev
+	cd code/app/frontend && npm run dev
 
 # --- Agent ---
 
 run-agent:
 	@echo "Starting NavalPlan Researcher Agent..."
 	# Requires GEMINI_API_KEY to be set
-	cd services/researcher && go run -mod=vendor main.go
+	cd code/services/researcher && go run -mod=vendor main.go
 
 setup-adk:
 	@echo "Setting up ADK..."
@@ -101,7 +101,7 @@ setup:
 	@echo "Installing Go dependencies..."
 	@make deps
 	@echo "Installing Frontend dependencies..."
-	@cd app/frontend && npm install
+	@cd code/app/frontend && npm install
 	@echo "Setup complete."
 	@echo "1. Edit .env"
 	@echo "2. Run 'make db-start' to start the database."
@@ -168,11 +168,11 @@ db-reset: db-stop db-start
 
 db-schema:
 	@echo "Applying schema (DEPRECATED: use migrate-up)..."
-	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/schema.sql
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < code/app/db/schema.sql
 
 db-seed:
 	@echo "Seeding database..."
-	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < app/db/seed.sql
+	@podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < code/app/db/seed.sql
 
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
@@ -241,12 +241,12 @@ test: test-backend test-frontend eval-all
 
 test-backend:
 	@echo "Running Backend Tests..."
-	cd app/backend && go test ./... -cover
-	cd services/researcher && go test ./... -cover
+	cd code/app/backend && go test ./... -cover
+	cd code/services/researcher && go test ./... -cover
 
 test-frontend:
 	@echo "Running Frontend Tests..."
-	cd app/frontend && npm test
+	cd code/app/frontend && npm test
 
 # --- Evaluation ---
 
@@ -271,12 +271,12 @@ eval-agent:
 		echo "Starting NavalPlan Agent ($$AGENT) for evaluation..."; \
 	fi
 	@mkdir -p .adk
-	@ln -sf $$(pwd)/.env services/researcher/.env
-	@echo "from . import agent" > services/researcher/__init__.py
+	@ln -sf $$(pwd)/.env code/services/researcher/.env
+	@echo "from . import agent" > code/services/researcher/__init__.py
 	@if [ "$(VERBOSE)" != "1" ]; then \
-		(cd services/researcher && go run -mod=vendor .) > /dev/null 2>&1 & echo $$! > agent.pid; \
+		(cd code/services/researcher && go run -mod=vendor .) > /dev/null 2>&1 & echo $$! > agent.pid; \
 	else \
-		(cd services/researcher && go run -mod=vendor .) & echo $$! > agent.pid; \
+		(cd code/services/researcher && go run -mod=vendor .) & echo $$! > agent.pid; \
 	fi
 	@sleep 15
 	@if ! lsof -i :8081 > /dev/null; then \
@@ -286,19 +286,19 @@ eval-agent:
 		exit 1; \
 	fi; \
 	if [ "$$AGENT" = "researcher" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
-	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > services/researcher/agent.py; \
-	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> services/researcher/agent.py; \
-	echo "root_agent = agent" >> services/researcher/agent.py; \
+	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > code/services/researcher/agent.py; \
+	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> code/services/researcher/agent.py; \
+	echo "root_agent = agent" >> code/services/researcher/agent.py; \
 	if [ "$(VERBOSE)" != "1" ]; then \
-		PYTHONWARNINGS=ignore $(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=code/services/researcher/eval/$$AGENT/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
 	else \
-		$(ADK) eval services/researcher services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
+		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=code/services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
 	fi; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
 	rm -f agent.pid; \
-	rm -f services/researcher/.env; \
-	rm -f services/researcher/__init__.py services/researcher/agent.py; \
+	rm -f code/services/researcher/.env; \
+	rm -f code/services/researcher/__init__.py code/services/researcher/agent.py; \
 	exit $$EXIT_CODE
 
 eval-all:
@@ -314,18 +314,18 @@ eval-all:
 deps: deps-backend deps-researcher
 
 deps-backend:
-	cd app/backend && go mod tidy && go mod vendor
+	cd code/app/backend && go mod tidy && go mod vendor
 
 deps-researcher:
-	cd services/researcher && go mod tidy && go mod vendor
+	cd code/services/researcher && go mod tidy && go mod vendor
 
 tidy: tidy-backend tidy-researcher
 
 tidy-backend:
-	cd app/backend && go mod tidy && go mod vendor
+	cd code/app/backend && go mod tidy && go mod vendor
 
 tidy-researcher:
-	cd services/researcher && go mod tidy && go mod vendor
+	cd code/services/researcher && go mod tidy && go mod vendor
 
 # --- Deployment ---
 
@@ -377,9 +377,9 @@ deploy-sql:
 		echo "Aborting."; \
 		exit 1; \
 	fi
-	gcloud storage cp app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
-	gcloud storage cp app/db/schema.sql gs://$(STORAGE_BUCKET)/
-	gcloud storage cp app/db/seed.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp code/app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp code/app/db/schema.sql gs://$(STORAGE_BUCKET)/
+	gcloud storage cp code/app/db/seed.sql gs://$(STORAGE_BUCKET)/
 	
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/pg-shortkey.sql --database=$(PROD_DB_NAME) -q
 	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/schema.sql --database=$(PROD_DB_NAME) -q

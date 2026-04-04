@@ -4,7 +4,7 @@ This design plan outlines the addition of the **Voyage Navigator** feature, whic
 
 To support these recommendations, a new model and database table are required to store the agent's findings independently of the actual voyage stops.
 
-* **New Model (`app/backend/models/models.go`):**
+* **New Model (`code/app/backend/models/models.go`):**
     ```go
     type Recommendation struct {
         ID          int64   `json:"id" db:"id"`
@@ -24,7 +24,7 @@ To support these recommendations, a new model and database table are required to
 
 A new agent, the **Local Pilot**, will be added to the Researcher service using the Agent Developer Kit (ADK).
 
-* **Agent Configuration (`services/researcher/main.go`):**
+* **Agent Configuration (`code/services/researcher/main.go`):**
     * **Name:** `navigator_agent`.
     * **Tools:** `Google Search` (to find reviews and current harbor conditions) and the existing `Places API` tool (to gather coordinates and facility types).
     * **Instruction (`navigator_agent.md`):** Similar to the "Commodore" agent, this prompt will instruct the model to identify the top 3-5 locations in each category (Anchor, Moor, Dock) within the voyage's search radius. It must analyze the density of facilities to ensure recommendations are diverse and high-quality.
@@ -42,7 +42,7 @@ New endpoints are needed to trigger the analysis and fetch the results.
 The frontend will be updated to display these "potential" stops as a distinct layer on the map, similar to the discovery mode.
 
 * **UI Trigger:** In the `itinerary-view`, an "Explore Area" or "AI Suggestions" button will appear when a voyage has no stops.
-* **Map Layer (`app/frontend/js/main.js`):**
+* **Map Layer (`code/app/frontend/js/main.js`):**
     * **Recommendation Layer:** A new `recommendationMarkers` array will manage the lifecycle of these suggested points.
     * **Visual Style:** Use distinct icons for each type:
         * **Anchor:** `anchor` icon.

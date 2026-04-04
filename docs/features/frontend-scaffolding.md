@@ -10,15 +10,15 @@
 * **Testing:** Jasmine (Browser Runner)
 * **Styling:** Native CSS (CSS Variables)
 
-**Directory Root:** `app/frontend`
+**Directory Root:** `code/app/frontend`
 
 ---
 
 ### Step 1: Project Structure & Configuration
 
-Create the following directory structure inside `app/frontend`:
+Create the following directory structure inside `code/app/frontend`:
 ```text
-app/frontend/
+code/app/frontend/
 ├── css/
 │   └── main.css
 ├── js/

@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "navallog",
+  "private_key_id": "ed7e23aa998afcf030d83a7de8ca1e4bacf546c1",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCmNQNyvPH6OVeU\ne/rHgklgZE63gLU8gJzYuLvll844HHulKSc04lYGcxRo4uJHFdIjb7SpB1VSSimQ\nnwUl9ek1cggx/M9DpCBxraTr/R/yXBejHgrmjsXvpZr3pt6UcwuOXr5yQNE2yp2S\nO3yZGH4aDHy0R6/5y019AsgFa5T3AeKA/1WPWmWl2sbjo9xyC3dkdJboFZxTd2ld\no2TYT/6gHo2ToekwV6rrfdFi5oL/u2iTvkGMCemr74rUhEefLtQP++yWvtBPSDCH\nC+kfnXeLZv3+sQwvbTAhNNEgiSRSJCJ3uXf0nomAU1l2KF3r9bKlTrxGeVwysJw4\nJuX7Y8vZAgMBAAECgf9b+aTu2aBj2AJJ06dIwHsv3FJd5IZmn3Asfg4nVNp0MqQ5\nwYxGDPo4l3ZelISjfG/NLFkihexb8q5jBEd/ukBTqHGLOAYlEwOL5OEJtrRMaf9V\nRPVt9j7oCby3+fUyMSKJUToSqnZxhlkBkz8KzthO50TF1Ds4VZ42j6jLVxLC8mO1\nfxjb3aAmMYJtXwLO+pQUcth8O7EsnyWT3UYGWUSpOgz6B0XbODE5n8IM01DbnJZ7\nELKH1YHu+MolC8owxvWcWo3jkefZYjQFWtVe2u6ROFrlcPLDf8kSBROHfYyDjr32\nafBBWKxlToSLzOheDXlSHLIaN1gfMawmQff4DG0CgYEA0uuNlEdZMjKcyuc1aj6A\naHdpglgqiiU18VHdCsVxu7AZRs8UzCea+Z6vGbxOLyLIfsBMZBziF0tbEJWSYGjs\nnd24firlVL5SGfKG5f1QSPUqN3obw/y01C5DbaXQfcavmYAfdIA6Rjx7rsjjttMK\nQ+cJxLo2cKpdkovGHbLOxSsCgYEAybr/Dle7qEeY9D0ZUygd739dvLzzySl46FNv\nR5ngJDMxKrEiC8Yw2920PpB1VQmnapABgWb3kIng39U6Tclpsi6vjoKDt6WFWoRz\nzp+NFlTolh6NIUb+cc8nVdZ1pe9A315SgyYsX3Bz1RuGsaLuIPejgbOS1AhBVsGW\nLavweQsCgYAaT1W+zFOdBmE2kjbAhQFhhpu7raHIz7F1479N66kvP103zvcKLFqR\njrDK5gleqdkWrogY6N1vCHBYlj/HFO+HFbRA0LsAoij9oZogMEQGhcZ5WxsBjJFF\n8mtozwk91z3qSOgjkSczwbGv8NEu6g5awAQg7RWDYkz/zb2t0LMoNwKBgHw0fVu4\nWttmkd83S0Nu/Nd8BRvy/urJdR8eV/Ku5FmFh20wuLSlJ2oIHDU1PnjIQ+MRnUuu\nORkuO121bHt+WmyR4BePdkf5Sp0L1j3O8NBiIP5k+yIVEw7BrAdmzvMG11twOL91\nHnb4xujcVNdEaPe1YV+3T9zq5EflU3D1X083AoGAVIEF7d9WMw2rl+ZUDeqQKf6T\nGkLg3aQFay1Rb834odivwHNqpdfH6YrvVp2qrEDS3gN2cMXumkaKJ7XbK3NOyxGP\nl1P84mlZTy7EkpCddh9md+piLX7eY/tbnMe3rFPr+8DzuAEie4nHh/n1NzA/Y8nT\nibc1RTxRvQdcObWDS5I=\n-----END PRIVATE KEY-----\n",
+  "client_email": "navallog-backend-sa@navallog.iam.gserviceaccount.com",
+  "client_id": "101870985548736555962",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/navallog-backend-sa%40navallog.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

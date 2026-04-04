@@ -16,7 +16,7 @@ Transition from a **Serial Agent** (single loop) to a **Parallel Agent** archite
 
 ### **Implementation Steps**
 
-#### **1. Refactor `services/researcher/main.go**`
+#### **1. Refactor `code/services/researcher/main.go**`
 
 Replace the existing agent initialization in `main.go` with the following implementation. This setup initializes all tools and wraps them in specialized agents, which are then orchestrated by the `ParallelAgent`.
 
@@ -34,7 +34,7 @@ import (
 	"github.com/google/adk/agents"
 	"github.com/google/adk/models/gemini"
 	"github.com/joho/godotenv" // Assuming this is used for .env loading
-	"navalplan/services/researcher/tools"
+	"navalplan/code/services/researcher/tools"
 )
 
 //go:embed prompts/researcher_agent.md

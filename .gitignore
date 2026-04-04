@@ -3,22 +3,6 @@
 temp/**
 .gemini/settings.json
 
-app/db/user.sql
-app/backend/vendor
-app/backend/static.min
-app/frontend/dist
-app/frontend/node_modules
-config/navallog-sa.json
-services/researcher/researcher
-services/researcher/vendor
-
-app/backend/navalplan-backend
-services/researcher/navalplan-agent
-services/researcher/.adk/
-services/researcher/__pycache__/
-
-
-
 code/app/db/user.sql
 code/app/backend/vendor
 code/app/backend/static.min

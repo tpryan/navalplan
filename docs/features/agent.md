@@ -7,15 +7,15 @@ This agent will act as your "Virtual Harbourmaster," taking a location and date 
 Create a new folder for the service inside your `navalplan` repository:
 
 ```bash
-mkdir -p services/researcher
-cd services/researcher
-go mod init github.com/tpryan/navalplan/services/researcher
+mkdir -p code/services/researcher
+cd code/services/researcher
+go mod init github.com/tpryan/navalplan/code/services/researcher
 
 ```
 
 ### Step 2: Create the Agent Code (`main.go`)
 
-Create `services/researcher/main.go`. This code is adapted from your `boatagent`, but I have updated the **System Instruction** to match the "Virtual Harbourmaster" persona defined in your design doc.
+Create `code/services/researcher/main.go`. This code is adapted from your `boatagent`, but I have updated the **System Instruction** to match the "Virtual Harbourmaster" persona defined in your design doc.
 
 I also added a structured JSON definition in the prompt to ensure the LLM returns data your backend can easily parse.
 
@@ -132,7 +132,7 @@ func main() {
 
 ### Step 3: Install Dependencies
 
-Run this in the `services/researcher` directory to fetch the ADK and GenAI libraries:
+Run this in the `code/services/researcher` directory to fetch the ADK and GenAI libraries:
 
 ```bash
 go get google.golang.org/adk
@@ -143,7 +143,7 @@ go mod tidy
 
 ### Step 4: Create Deployment Config (`cloudbuild-agent.yaml`)
 
-Create `cloudbuild-agent.yaml` in the **root** of your `navalplan` repo (or inside `services/researcher` if you prefer, but root is standard).
+Create `cloudbuild-agent.yaml` in the **root** of your `navalplan` repo (or inside `code/services/researcher` if you prefer, but root is standard).
 
 This matches `navallog`'s config but targets the new `navalplan-researcher` service.
 
@@ -161,7 +161,7 @@ steps:
   - '--project'
   - 'navalplan'                     # Your Google Cloud Project ID
   - '--no-allow-unauthenticated'    # Security: Only backend can call this
-  dir: 'services/researcher'        # Build context
+  dir: 'code/services/researcher'        # Build context
 logsBucket: gs://navalplan-logging-bucket
 
 ```
@@ -174,7 +174,7 @@ You can run this agent locally and test it with `curl` before wiring it up to th
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
 export PORT=8081
-cd services/researcher
+cd code/services/researcher
 go run main.go
 
 ```

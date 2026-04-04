@@ -24,7 +24,7 @@ Here is a comprehensive technical plan to migrate the NavalPlan application from
 
 ### **Phase 1: Backend & Configuration Updates**
 
-**Target File:** `app/backend/config/config.go`
+**Target File:** `code/app/backend/config/config.go`
 **Action:** Replace Mapbox configuration with Google Maps configuration.
 
 1. **Update Struct:**
@@ -41,13 +41,13 @@ Here is a comprehensive technical plan to migrate the NavalPlan application from
 
 ### **Phase 2: Frontend Dependencies & Loading**
 
-**Target File:** `app/frontend/index.html`
+**Target File:** `code/app/frontend/index.html`
 **Action:** Remove Mapbox resources.
 
 1. **Remove:** Links to `mapbox-gl.css` and the preconnects to `api.mapbox.com`.
 2. **Add:** No strict need to add a script tag here if using dynamic loading in JS, but ensure `Material Symbols` (already present) remains, as it will be used for markers.
 
-**Target File:** `app/frontend/js/main.js`
+**Target File:** `code/app/frontend/js/main.js`
 **Action:** Switch library loaders.
 
 1. **Remove:** `import('mapbox-gl')`.
@@ -61,7 +61,7 @@ Here is a comprehensive technical plan to migrate the NavalPlan application from
 
 ### **Phase 3: Core Map Implementation**
 
-**Target File:** `app/frontend/js/main.js`
+**Target File:** `code/app/frontend/js/main.js`
 
 #### 1. Map Initialization (`initMap`)
 
@@ -91,7 +91,7 @@ map = new Map(document.getElementById("map-container"), {
 
 ### **Phase 4: Markers & Routing (Itinerary)**
 
-**Target File:** `app/frontend/js/main.js` -> `renderMapStops`
+**Target File:** `code/app/frontend/js/main.js` -> `renderMapStops`
 
 #### 1. Numbered Stop Markers
 
@@ -144,7 +144,7 @@ new google.maps.Polyline({
 
 ### **Phase 5: Interactions (Click-to-Plan)**
 
-**Target File:** `app/frontend/js/main.js` -> `initMap` (click listener)
+**Target File:** `code/app/frontend/js/main.js` -> `initMap` (click listener)
 
 1. **Event Listener:** Change `map.on('click', ...)` to `map.addListener('click', (e) => { ... })`.
 2. **Coordinates:** Access `e.latLng.lat()` and `e.latLng.lng()`.
@@ -167,7 +167,7 @@ const locationName = response.results[0]?.formatted_address || "Unknown Location
 
 ### **Phase 6: Discovery Mode (Polygons)**
 
-**Target File:** `app/frontend/js/main.js` -> `renderDiscoveryLayer`
+**Target File:** `code/app/frontend/js/main.js` -> `renderDiscoveryLayer`
 
 1. **Logic:** Replace Mapbox Sources/Layers with `map.data`.
 2. **Implementation:**
@@ -185,7 +185,7 @@ const locationName = response.results[0]?.formatted_address || "Unknown Location
 
 ### **Phase 7: Map Snapshots (High Risk)**
 
-**Target File:** `app/frontend/js/main.js` -> `captureAndUploadMap`
+**Target File:** `code/app/frontend/js/main.js` -> `captureAndUploadMap`
 
 * **Current:** `map.getCanvas().toBlob(...)` (Works natively in Mapbox/WebGL).
 * **Problem:** Google Maps is DOM-based (mostly) and CORS restrictions often block `html2canvas` or `toDataURL` on the map container.

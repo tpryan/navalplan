@@ -3,7 +3,7 @@ Here is the implementation plan for integrating the Gemini CLI and agentic evalu
 ### Phase 1: Enable A2A and Agent Card in Go
 To allow the Gemini CLI (`adk eval`) to communicate with your agent remotely, you need to expose an Agent Card and a JSON-RPC endpoint. 
 
-Update `services/researcher/main.go` to include the `a2a-go` server handlers:
+Update `code/services/researcher/main.go` to include the `a2a-go` server handlers:
 
 ```go
 import (
@@ -50,9 +50,9 @@ func main() {
 ### Phase 2: Evaluation Configuration and Datasets
 Set up the standard `adk` testing structure within the researcher service:
 
-1.  **Create Evaluation Directory**: Create `services/researcher/eval/`.
-2.  **Define Evaluation Criteria**: Create `services/researcher/eval/test_config.json` with your thresholds (e.g., `response_match_score` at 0.8).
-3.  **Bootstrap Golden Dataset**: Create `services/researcher/eval/researcher.test.json` with your golden test cases, ensuring each has an `eval_id`, `session_input`, and `expected_output`.
+1.  **Create Evaluation Directory**: Create `code/services/researcher/eval/`.
+2.  **Define Evaluation Criteria**: Create `code/services/researcher/eval/test_config.json` with your thresholds (e.g., `response_match_score` at 0.8).
+3.  **Bootstrap Golden Dataset**: Create `code/services/researcher/eval/researcher.test.json` with your golden test cases, ensuring each has an `eval_id`, `session_input`, and `expected_output`.
 
 ### Phase 3: Local Workflow Integration (Makefile)
 Update the `Makefile` to script the creation of the Python bridging files, start the local server, run the evaluation, and output the data directly to the `.adk` directory in your project root.
@@ -62,12 +62,12 @@ Update the `Makefile` to script the creation of the Python bridging files, start
 test-agent-eval:
 	@echo "Starting Researcher Agent for evaluation..."
 	@mkdir -p .adk
-	@ln -sf $$(pwd)/.env services/researcher/.env
-	@echo "from . import agent" > services/researcher/__init__.py
-	@echo "from google.adk.agents import remote_a2a_agent" > services/researcher/agent.py
-	@echo "agent = remote_a2a_agent.RemoteA2aAgent(name='researcher_agent', agent_card='http://localhost:8081/.well-known/agent-card.json')" >> services/researcher/agent.py
-	@echo "root_agent = agent" >> services/researcher/agent.py
-	@(cd services/researcher && go run .) & \
+	@ln -sf $$(pwd)/.env code/services/researcher/.env
+	@echo "from . import agent" > code/services/researcher/__init__.py
+	@echo "from google.adk.agents import remote_a2a_agent" > code/services/researcher/agent.py
+	@echo "agent = remote_a2a_agent.RemoteA2aAgent(name='researcher_agent', agent_card='http://localhost:8081/.well-known/agent-card.json')" >> code/services/researcher/agent.py
+	@echo "root_agent = agent" >> code/services/researcher/agent.py
+	@(cd code/services/researcher && go run .) & \
 	echo $$! > agent.pid; \
 	echo "Waiting for agent to start..."; \
 	sleep 10; \
@@ -77,12 +77,12 @@ test-agent-eval:
 		rm agent.pid; \
 		exit 1; \
 	fi; \
-	adk eval services/researcher services/researcher/eval/researcher.test.json --config_file_path=services/researcher/eval/test_config.json --output_dir=$(PWD)/.adk --print_detailed_results; \
+	adk eval code/services/researcher code/services/researcher/eval/researcher.test.json --config_file_path=code/services/researcher/eval/test_config.json --output_dir=$(PWD)/.adk --print_detailed_results; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
 	rm -f agent.pid; \
-	rm -f services/researcher/.env; \
-	rm -f services/researcher/__init__.py services/researcher/agent.py; \
+	rm -f code/services/researcher/.env; \
+	rm -f code/services/researcher/__init__.py code/services/researcher/agent.py; \
 	exit $$EXIT_CODE
 ```
 *Note: Ensure your `test` target in the `Makefile` runs `test-agent-eval` alongside existing tests.*
