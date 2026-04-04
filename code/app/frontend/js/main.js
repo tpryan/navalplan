@@ -1465,9 +1465,7 @@ async function checkItineraryFullness(isManualAction = false) {
     // Toggle visibility of Research All button
     const btnResearchAll = document.getElementById('btn-research-all');
     if (btnResearchAll) {
-        // Hide small button if we are showing the big "Itinerary Complete!" prompt
-        const showBigPrompt = isFull && !allResearchDone && !isResearchAllRunning;
-        if (currentStops.length > 0 && !showBigPrompt) {
+        if (currentStops.length > 0) {
             btnResearchAll.classList.remove('hidden');
         } else {
             btnResearchAll.classList.add('hidden');
@@ -2122,17 +2120,9 @@ function renderItinerary() {
 
         // Show Full Research Prompt if Full but research missing
         if (lastKnownItineraryFull && !lastKnownResearchDone && !isResearchAllRunning) {
-
             const container = document.createElement('div');
             container.className = 'p-md text-center border-t mt-md';
             container.innerHTML = '<p class="text-gray mb-md"><b>Itinerary Complete!</b> Run full voyage research to get weather, tides, and pilot info for every stop.</p>';
-
-            const btn = document.createElement('button');
-            btn.className = 'btn primary w-full';
-            btn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Run Full Voyage Research';
-            btn.onclick = () => handleResearchAll(false); // trigger without extra confirm
-
-            container.appendChild(btn);
             list.appendChild(container);
         }
         }
