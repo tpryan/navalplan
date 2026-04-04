@@ -995,7 +995,41 @@ function renderVoyageList() {
     return;
   }
 
-  voyages.forEach(voyage => {
+  const dated = voyages
+    .filter(v => v.start_date)
+    .sort((a, b) => {
+      const dateDiff = new Date(b.start_date) - new Date(a.start_date);
+      return dateDiff !== 0 ? dateDiff : a.title.localeCompare(b.title);
+    });
+
+  const undated = voyages
+    .filter(v => !v.start_date)
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  const sorted = [...dated, ...undated];
+
+  if (dated.length > 0 && undated.length > 0) {
+    sorted.splice(dated.length, 0, 'SEPARATOR');
+    sorted.splice(0, 0, 'DATED_HEADER');
+  }
+
+  sorted.forEach(voyage => {
+    if (voyage === 'DATED_HEADER') {
+      const hdr = document.createElement('p');
+      hdr.className = 'font-xs text-gray uppercase tracking-wider p-xs mb-xs';
+      hdr.textContent = 'Upcoming & Recent';
+      listContainer.appendChild(hdr);
+      return;
+    }
+    if (voyage === 'SEPARATOR') {
+      const sep = document.createElement('p');
+      sep.className = 'font-xs text-gray uppercase tracking-wider p-xs mt-sm mb-xs';
+      sep.style.borderTop = '1px solid var(--border-color)';
+      sep.style.paddingTop = '0.75rem';
+      sep.textContent = 'Undated';
+      listContainer.appendChild(sep);
+      return;
+    }
     const el = document.createElement('div');
     el.className = 'voyage-item';
     
