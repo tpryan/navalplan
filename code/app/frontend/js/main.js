@@ -4570,10 +4570,19 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         : '';
 
                     const typeColor = markerColor(f.type);
+                    const typeLowerR = (f.type || '').toLowerCase();
+                    let iconR = 'place';
+                    if (typeLowerR.includes('anchorage')) iconR = 'anchor';
+                    else if (typeLowerR.includes('marina')) iconR = 'storefront';
+                    else if (typeLowerR.includes('mooring')) iconR = 'crisis_alert';
+                    else if (typeLowerR.includes('bar')) iconR = 'local_bar';
+                    else if (typeLowerR.includes('restaurant')) iconR = 'restaurant';
+
                     html += `<li class="facility-item mb-xl">
-                        <h4 class="mb-xs" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <h4 class="mb-xs briefing-header-icon">
+                            <span class="material-symbols-outlined icon-lg" style="color:${typeColor};">${iconR}</span>
                             ${name}
-                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;">${DOMPurify.sanitize(f.type || 'Facility')}</span>
+                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${DOMPurify.sanitize(f.type || 'Facility')}</span>
                         </h4>
                         ${detailsHtml}
                         ${renderReferences(f.references)}
