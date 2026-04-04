@@ -4429,8 +4429,21 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 `;
             }
 
-            // Facilities
-            if (b.facilities && b.facilities.length > 0) {
+            // Facilities — skip for the last stop if it's within 1 NM of the first stop (return voyage)
+            const firstStop = sortedStops[0];
+            const isLastStop = idx === sortedStops.length - 1 && sortedStops.length > 1;
+            const isReturnStop = isLastStop && (() => {
+                const toRad = d => d * Math.PI / 180;
+                const R = 3440.065; // nautical miles
+                const dLat = toRad(stop.latitude - firstStop.latitude);
+                const dLon = toRad(stop.longitude - firstStop.longitude);
+                const a = Math.sin(dLat/2)**2 + Math.cos(toRad(firstStop.latitude)) * Math.cos(toRad(stop.latitude)) * Math.sin(dLon/2)**2;
+                return 2 * R * Math.asin(Math.sqrt(a)) < 1;
+            })();
+
+            if (isReturnStop) {
+                html += `<div class="briefing-section"><p class="text-gray italic">Local facilities omitted — this stop returns to the voyage's starting area.</p></div>`;
+            } else if (b.facilities && b.facilities.length > 0) {
                 html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
                 b.facilities.forEach(f => {
                     const name = DOMPurify.sanitize(f.name);
