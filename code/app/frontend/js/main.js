@@ -1815,6 +1815,68 @@ function showRecommendationInfoWindow(rec, anchor, style) {
     activeInfoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
 }
 
+function showFacilityInfoWindow(f, anchor, color) {
+    if (activeInfoWindow) activeInfoWindow.close();
+
+    const { InfoWindow } = googleMapsLib;
+
+    const addressHtml = f.address
+        ? `<p style="margin: 4px 0 8px; font-size: 0.85rem; color: #666;">${f.address}</p>`
+        : '';
+
+    let ratingHtml = '';
+    if (f.rating) {
+        const stars = Math.round(f.rating);
+        const filled = '★'.repeat(stars);
+        const empty = '☆'.repeat(5 - stars);
+        const count = f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()})` : '';
+        ratingHtml = `<p style="margin: 4px 0; font-size: 0.9rem; color: #555;">
+            <span style="color: #F9A825;">${filled}${empty}</span>
+            <span style="margin-left: 4px;">${f.rating.toFixed(1)}${count}</span>
+        </p>`;
+    }
+
+    let statusHtml = '';
+    if (f.business_status && f.business_status !== 'OPERATIONAL') {
+        const label = f.business_status.replace(/_/g, ' ');
+        statusHtml = `<p style="margin: 4px 0; font-size: 0.8rem; color: #C62828; font-weight: 700;">${label}</p>`;
+    }
+
+    const descriptionHtml = f.details?.description
+        ? `<p style="margin: 10px 0; font-size: 0.9rem; line-height: 1.5; color: #333;">${f.details.description}</p>`
+        : '';
+
+    const detailRows = f.details
+        ? Object.entries(f.details)
+            .filter(([k, v]) => k !== 'description' && v && String(v).toLowerCase() !== 'n/a')
+            .map(([k, v]) => `<p style="margin: 3px 0; font-size: 0.85rem; color: #444;"><strong>${k}:</strong> ${v}</p>`)
+            .join('')
+        : '';
+
+    const websiteHtml = f.website ? `
+        <a href="${f.website}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined" style="font-size: 14px;">public</span>Visit Website
+        </a>` : '';
+
+    const content = `
+        <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span class="material-symbols-outlined" style="color: ${color};">location_on</span>
+                <b style="font-size: 1.2rem; color: #1a73e8;">${f.name}</b>
+            </div>
+            <span style="font-size: 0.85rem; color: ${color}; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">${f.type || 'Facility'}</span>
+            ${addressHtml}
+            ${ratingHtml}
+            ${statusHtml}
+            ${descriptionHtml}
+            ${detailRows ? `<div style="background: ${color}1A; padding: 8px; border-radius: 6px; border-left: 3px solid ${color}; margin: 10px 0;">${detailRows}</div>` : ''}
+            ${websiteHtml}
+        </div>`;
+
+    activeInfoWindow = new InfoWindow({ content, position: anchor.position });
+    activeInfoWindow.open(map, anchor);
+}
+
 function clearPilotCircle() {
     if (pilotCircle) { pilotCircle.setMap(null); pilotCircle = null; }
     if (pilotCenterMarker) { pilotCenterMarker.map = null; pilotCenterMarker = null; }
@@ -2961,21 +3023,7 @@ async function initMap() {
                              });
 
                              fMarker.addListener('gmp-click', () => {
-                                 if (activeInfoWindow) activeInfoWindow.close();
-                                 let query = f.latitude + "," + f.longitude;
-                                 if (f.address) {
-                                     query = f.name + ", " + f.address;
-                                 }
-                                 activeInfoWindow = new InfoWindow({
-                                     content: `
-                                         <div style="color: black;">
-                                             <strong>${f.name}</strong><br>
-                                             ${f.type}<br>
-                                             <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}" target="_blank">View on Google Maps</a>
-                                         </div>
-                                     `
-                                 });
-                                 activeInfoWindow.open(map, fMarker);
+                                 showFacilityInfoWindow(f, fMarker, markerColor(f.type));
                              });
                              facilityMarkers.push({ marker: fMarker, type: filterKey });
                          }

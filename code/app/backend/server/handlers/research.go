@@ -49,12 +49,17 @@ type AgentOutput struct {
 }
 
 type Facility struct {
-	Name       string          `json:"name"`
-	Type       string          `json:"type"`
-	Latitude   float64         `json:"latitude"`
-	Longitude  float64         `json:"longitude"`
-	Details    json.RawMessage `json:"details"`
-	References []string        `json:"references"`
+	Name            string          `json:"name"`
+	Type            string          `json:"type"`
+	Website         string          `json:"website,omitempty"`
+	Address         string          `json:"address,omitempty"`
+	Latitude        float64         `json:"latitude"`
+	Longitude       float64         `json:"longitude"`
+	Rating          float64         `json:"rating,omitempty"`
+	UserRatingCount int             `json:"user_rating_count,omitempty"`
+	BusinessStatus  string          `json:"business_status,omitempty"`
+	Details         json.RawMessage `json:"details"`
+	References      []string        `json:"references"`
 }
 
 func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
