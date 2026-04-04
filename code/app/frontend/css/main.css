@@ -472,6 +472,74 @@
 }
 
 /* --- Discovery (Commodore) Styles --- */
+#pilot-controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--surface-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-main);
+    padding: 0.75rem 1.25rem;
+    z-index: 100;
+}
+
+.pilot-legend-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.pilot-legend-title {
+    font-family: var(--font-primary);
+    font-weight: 900;
+    font-size: 0.85rem;
+    color: var(--brand-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pilot-legend {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.pilot-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: 20px;
+    background: transparent;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: opacity 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.pilot-filter-btn.active {
+    background: var(--surface-bg);
+    opacity: 1;
+}
+
+.pilot-filter-btn:not(.active) {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.pilot-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
 #discovery-controls {
     position: absolute;
     bottom: 30px;
