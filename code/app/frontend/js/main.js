@@ -2582,13 +2582,38 @@ async function showBriefing(briefing) {
                         detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
                     } else if (f.details && typeof f.details === 'object') {
                         // Table format for details
+                        const starHtml = (rating) => {
+                            const stars = Math.round(rating);
+                            return '★'.repeat(stars) + '☆'.repeat(5 - stars);
+                        };
+
                         let rows = `
                             <tr style="border-bottom: 1px solid #eee;">
                                 <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
                                 <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
                             </tr>
                         `;
-                        
+                        if (f.address) rows += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Address</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.address}</td>
+                            </tr>`;
+                        if (f.rating) rows += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Rating</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; color: #F9A825;">${starHtml(f.rating)} <span style="color: #333;">${f.rating.toFixed(1)}${f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()} reviews)` : ''}</span></td>
+                            </tr>`;
+                        if (f.business_status && f.business_status !== 'OPERATIONAL') rows += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Status</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; color: #C62828; font-weight: 700;">${f.business_status.replace(/_/g, ' ')}</td>
+                            </tr>`;
+                        if (f.website) rows += `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Website</th>
+                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;"><a href="${f.website}" target="_blank">${f.website}</a></td>
+                            </tr>`;
+
                         rows += Object.entries(f.details)
                             .filter(([_, v]) => {
                                 if (!v) return false;
@@ -2605,40 +2630,14 @@ async function showBriefing(briefing) {
                         detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
                     }
 
-                    let locHtml = '';
-                    if (f.latitude && f.longitude) {
-                        let query = f.latitude + "," + f.longitude;
-                        if (f.address) {
-                            query = f.name + ", " + f.address;
-                        }
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                        locHtml = `
-                            <p class="map-link-p">
-                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${googleMapsUrl}" target="_blank" class="map-link-a">(Open Map)</a>
-                            </p>
-                        `;
-                    }
-
-                    let websiteHtml = '';
-                    if (f.website) {
-                        websiteHtml = `
-                            <p class="map-link-p" style="margin-top: 0;">
-                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                <a href="${f.website}" target="_blank" class="map-link-a">Visit Website</a>
-                            </p>
-                        `;
-                    }
-
+                    const typeColor = markerColor(f.type);
                     return `
                         <li class="facility-item">
-                            <h4 class="briefing-header-icon">
-                                <span class="material-symbols-outlined icon-lg">${icon}</span>
+                            <h4 class="briefing-header-icon" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <span class="material-symbols-outlined icon-lg" style="color:${typeColor};">${icon}</span>
                                 ${f.name}
+                                <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${f.type || 'Facility'}</span>
                             </h4>
-                            ${locHtml}
-                            ${websiteHtml}
                             ${detailsHtml}
                             ${renderReferences(f.references)}
                         </li>
@@ -4534,56 +4533,48 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
                 b.facilities.forEach(f => {
                     const name = DOMPurify.sanitize(f.name);
-                    const desc = DOMPurify.sanitize(f.description || '');
-                    
-                    let website = '';
-                    if (f.website) {
-                        website = `
-                            <p class="m-0 font-sm">
-                                <span class="material-symbols-outlined icon-md icon-bottom">public</span>
-                                <a href="${f.website}" target="_blank">Visit Website</a>
-                            </p>
-                        `;
-                    }
 
-                    let location = '';
-                    if (f.latitude && f.longitude) {
-                        const query = f.address ? `${f.name}, ${f.address}` : `${f.latitude},${f.longitude}`;
-                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-                        location = `
-                            <p class="m-0 font-sm text-gray">
-                                <span class="material-symbols-outlined icon-md icon-bottom">my_location</span>
-                                ${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}
-                                <a href="${mapsUrl}" target="_blank" class="ml-xs">(Open Map)</a>
-                            </p>
-                        `;
-                    }
+                    const isInvalid = v => !v || ['n/a', '', 'unknown', 'not specified'].includes(String(v).toLowerCase().trim());
 
-                    let detailsHtml = '';
-                    if (f.details && typeof f.details === 'object' && Object.keys(f.details).length > 0) {
-                        const rows = Object.entries(f.details)
-                            .filter(([_, v]) => {
-                                if (!v) return false;
-                                const sv = String(v).toLowerCase().trim();
-                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                            })
+                    let metaRows = '';
+                    if (f.address) metaRows += `
+                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Address</th>
+                        <td class="briefing-td">${DOMPurify.sanitize(f.address)}</td></tr>`;
+                    if (f.rating) {
+                        const stars = '★'.repeat(Math.round(f.rating)) + '☆'.repeat(5 - Math.round(f.rating));
+                        const count = f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()} reviews)` : '';
+                        metaRows += `
+                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Rating</th>
+                        <td class="briefing-td"><span style="color:#F9A825;">${stars}</span> ${f.rating.toFixed(1)}${count}</td></tr>`;
+                    }
+                    if (f.business_status && f.business_status !== 'OPERATIONAL') metaRows += `
+                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Status</th>
+                        <td class="briefing-td" style="color:#C62828;font-weight:700;">${f.business_status.replace(/_/g, ' ')}</td></tr>`;
+                    if (f.website) metaRows += `
+                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Website</th>
+                        <td class="briefing-td"><a href="${f.website}" target="_blank">${DOMPurify.sanitize(f.website)}</a></td></tr>`;
+
+                    let detailRows = '';
+                    if (f.details && typeof f.details === 'object') {
+                        detailRows = Object.entries(f.details)
+                            .filter(([_, v]) => !isInvalid(v))
                             .map(([k, v]) => `
-                                <tr>
-                                    <th class="briefing-th capitalize" style="text-align: left; background: #f9f9f9; width: 120px;">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td">${DOMPurify.sanitize(String(v))}</td>
-                                </tr>
+                                <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">${k.replace(/_/g, ' ')}</th>
+                                <td class="briefing-td">${DOMPurify.sanitize(String(v))}</td></tr>
                             `).join('');
-                        
-                        if (rows) {
-                            detailsHtml = `<table class="briefing-table mt-sm" style="width:100%; font-size: 0.85em;">${rows}</table>`;
-                        }
                     }
-                    
+
+                    const allRows = metaRows + detailRows;
+                    const detailsHtml = allRows
+                        ? `<table class="briefing-table mt-sm" style="width:100%;font-size:0.85em;">${allRows}</table>`
+                        : '';
+
+                    const typeColor = markerColor(f.type);
                     html += `<li class="facility-item mb-xl">
-                        <h4 class="mb-xs">${name}</h4>
-                        ${location}
-                        ${website}
-                        <p class="mt-sm mb-sm">${desc}</p>
+                        <h4 class="mb-xs" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            ${name}
+                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;">${DOMPurify.sanitize(f.type || 'Facility')}</span>
+                        </h4>
                         ${detailsHtml}
                         ${renderReferences(f.references)}
                     </li>`;
