@@ -3,5 +3,5 @@
 3.  Done. We have multiple places where we show markers for harbors, anchorages, marinas, and other points of interest on the map. Sometimes a pointer, sometimes a blob. Can we make the colors consistent across views: anchorages:green, moorings:purple, marinas:orange. Assign colors for other ones and lets keep them consistent. 
 4.  Done. Convert the markers rendered in the researcher phase - used to be the local pilot phase, to the same type of map markers rendered in the same colors as the previous todo instead of blobs. 
 5.  Done. I think there are lot more possible anchorages than we are showing. Can we try and increase the number of anchorages without reducing the amounts of other points of interest.  
-6. For interface labeled "<!-- Discovery Intro Modal -->." It has three buttons on it. Countinue, Cancel, and Close.  Cancel and Close are redundant to each other. Close should be removed. 
+6. Done. For interface labeled "<!-- Discovery Intro Modal -->." It has three buttons on it. Countinue, Cancel, and Close.  Cancel and Close are redundant to each other. Close should be removed. 
 7. Done. On the toolbar, the items seem unordered. The dated and undated should be grouped.  I'd like to see the dated ordered by descending by date, then by name alphabetically ascending.  Then I'd like to see the undated sorted by name ascending.    

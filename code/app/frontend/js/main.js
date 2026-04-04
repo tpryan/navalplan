@@ -3774,9 +3774,13 @@ function showNotification(title, message, actions = null) {
                 // If it's a single action object, wrap it in an array
                 const actionList = Array.isArray(actions) ? actions : [actions];
                 
-                // If any action specifies hideClose, honor it for the whole modal
-                const shouldHideClose = actionList.some(a => a.hideClose);
-                if (shouldHideClose) {
+                // Hide Close if any action is a cancel/dismiss type, or if hideClose is set
+                const hasCancelAction = actionList.some(a =>
+                    a.hideClose ||
+                    a.type === 'secondary' ||
+                    (a.label || '').toLowerCase() === 'cancel'
+                );
+                if (hasCancelAction) {
                     closeBtn.classList.add('hidden');
                 } else {
                     closeBtn.classList.remove('hidden');
