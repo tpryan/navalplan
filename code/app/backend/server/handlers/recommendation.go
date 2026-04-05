@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
 	appcontext "app/context"
@@ -117,15 +116,10 @@ func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-var (
-	muRecStreams sync.RWMutex
-	recStreams   = make(map[string]chan models.VoyageRecommendation)
-)
-
-func broadcastRecommendation(sessionID string, rec models.VoyageRecommendation) {
-	muRecStreams.RLock()
-	defer muRecStreams.RUnlock()
-	if ch, ok := recStreams[sessionID]; ok {
+func (h *Handler) broadcastRecommendation(sessionID string, rec models.VoyageRecommendation) {
+	h.muRecStreams.RLock()
+	defer h.muRecStreams.RUnlock()
+	if ch, ok := h.recStreams[sessionID]; ok {
 		select {
 		case ch <- rec:
 		default:
@@ -149,15 +143,15 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 	rc := http.NewResponseController(w)
 
 	ch := make(chan models.VoyageRecommendation, 10)
-	muRecStreams.Lock()
-	recStreams[sessionID] = ch
-	muRecStreams.Unlock()
+	h.muRecStreams.Lock()
+	h.recStreams[sessionID] = ch
+	h.muRecStreams.Unlock()
 
 	defer func() {
-		muRecStreams.Lock()
-		delete(recStreams, sessionID)
+		h.muRecStreams.Lock()
+		delete(h.recStreams, sessionID)
 		close(ch)
-		muRecStreams.Unlock()
+		h.muRecStreams.Unlock()
 	}()
 
 	for {
@@ -361,7 +355,7 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 			continue
 		}
 		
-		broadcastRecommendation(sessionID, rec)
+		h.broadcastRecommendation(sessionID, rec)
 		parsedCount++
 	}
 

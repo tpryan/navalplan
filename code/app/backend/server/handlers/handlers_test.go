@@ -580,6 +580,8 @@ func TestResearchBriefing(t *testing.T) {
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
 	// performStopResearchLogic (async) calls GetNearbyBriefing. We allow it.
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	// Agent at "http://test-agent" will fail → saveEmptyBriefing calls CreateBriefing.
+	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
 	reqTrigger = addPerson(reqTrigger, personID)
@@ -645,6 +647,9 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 	// Async stops research
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	// Agent at "http://test-agent" will fail → saveEmptyBriefing / saveEmptyGuide are called.
+	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("CreateVoyageGuide", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	req := httptest.NewRequest("POST", "/voyages/1/research", nil)
 	req = addPerson(req, personID)
@@ -753,6 +758,8 @@ func TestGuideHandlers(t *testing.T) {
 		loc := "Sea"
 		// Ownership check included in getting voyage
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, LocationName: &loc}, nil)
+		// Async goroutine: agent at "http://test-agent" will fail → saveEmptyGuide calls CreateVoyageGuide.
+		mockStore.On("CreateVoyageGuide", mock.Anything).Return(nil).Maybe()
 
 		req := httptest.NewRequest("POST", "/voyages/2/research_guide", nil)
 		req = addPerson(req, personID)
