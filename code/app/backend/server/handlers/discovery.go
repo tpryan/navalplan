@@ -90,9 +90,16 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Discovery mining started for all months")
 
 		go func() {
+			// 4 hours: 12 months × ~20 minutes each (generous for LLM calls).
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Hour)
+			defer cancel()
 			slog.Info("[discovery-mining] Starting full year mining cycle...")
 			for m := 1; m <= 12; m++ {
-				h.performDiscoveryMining(m)
+				if ctx.Err() != nil {
+					slog.Error("[discovery-mining] Context cancelled before completing all months", "completed", m-1)
+					return
+				}
+				h.performDiscoveryMining(ctx, m)
 			}
 			slog.Info("[discovery-mining] Full year mining cycle complete.")
 		}()
@@ -109,7 +116,12 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 	fmt.Fprintf(w, "Discovery mining started for month %d", month)
 
-	go h.performDiscoveryMining(month)
+	go func() {
+		// 20 minutes per single-month run.
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+		defer cancel()
+		h.performDiscoveryMining(ctx, month)
+	}()
 }
 
 func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) {
@@ -161,8 +173,7 @@ func getTierPriority(tier string, isHiddenGem bool) int {
 	return 1
 }
 
-func (h *Handler) performDiscoveryMining(month int) {
-	ctx := context.Background()
+func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.ErrorContext(ctx, "[discovery-mining] Panic", "recover", r)
@@ -191,7 +202,13 @@ func (h *Handler) performDiscoveryMining(month int) {
 	}
 	stateJSON, _ := json.Marshal(map[string]any{"state": state})
 
-	respSession, err := client.Post(createSessionURL, "application/json", bytes.NewBuffer(stateJSON))
+	sessionReq, err := http.NewRequestWithContext(ctx, http.MethodPost, createSessionURL, bytes.NewBuffer(stateJSON))
+	if err != nil {
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to build session request", "error", err)
+		return
+	}
+	sessionReq.Header.Set("Content-Type", "application/json")
+	respSession, err := client.Do(sessionReq)
 	if err != nil {
 		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "error", err)
 		return
@@ -217,7 +234,13 @@ func (h *Handler) performDiscoveryMining(month int) {
 
 	jsonData, _ := json.Marshal(reqBody)
 	slog.InfoContext(ctx, "[discovery-mining] Calling agent /api/run...")
-	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
+	runReq, err := http.NewRequestWithContext(ctx, http.MethodPost, agentURL+"/api/run", bytes.NewBuffer(jsonData))
+	if err != nil {
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to build run request", "error", err)
+		return
+	}
+	runReq.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(runReq)
 	if err != nil {
 		slog.ErrorContext(ctx, "[discovery-mining] Failed to call discovery agent", "error", err)
 		return
