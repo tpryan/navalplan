@@ -207,7 +207,8 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[navigator-agent] Generating recommendations for voyage %d", v.ID))
 
 	const appName = "specialist"
@@ -261,12 +262,13 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 
 	// Process and save
 	for _, rec := range recommendations {
-		// Filter by radius
+		// Filter by radius and record distance in miles.
 		if v.Latitude != nil && v.Longitude != nil {
 			dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
 			if dist > float64(v.SearchRadius) {
 				continue
 			}
+			rec.RadiusMiles = haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, "mi")
 		}
 
 		rec.VoyageID = v.ID

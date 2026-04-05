@@ -161,10 +161,15 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Close() {
+	var failed int
 	for _, p := range s.providers {
 		if err := p.Close(); err != nil {
 			slog.Error("Failed to close provider", "error", err)
+			failed++
 		}
+	}
+	if failed > 0 {
+		slog.Warn("Some providers failed to close cleanly", "count", failed)
 	}
 }
 
@@ -201,27 +206,32 @@ func main() {
 }
 
 func (s *Server) run(ctx context.Context) error {
+	// Use a bounded context for agent/model initialisation. If the Gemini API
+	// is unresponsive during startup we fail fast rather than hanging forever.
+	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer initCancel()
+
 	researcherTools, err := s.setupTools()
 	if err != nil {
 		return fmt.Errorf("setting up tools: %w", err)
 	}
 
-	pilotAgent, err := s.createPilotAgent(ctx)
+	pilotAgent, err := s.createPilotAgent(initCtx)
 	if err != nil {
 		return fmt.Errorf("creating pilot agent: %w", err)
 	}
 
-	harbourmasterAgent, err := s.createHarbourmasterAgent(ctx, researcherTools)
+	harbourmasterAgent, err := s.createHarbourmasterAgent(initCtx, researcherTools)
 	if err != nil {
 		return fmt.Errorf("creating harbourmaster agent: %w", err)
 	}
 
-	commodoreAgent, err := s.createCommodoreAgent(ctx)
+	commodoreAgent, err := s.createCommodoreAgent(initCtx)
 	if err != nil {
 		return fmt.Errorf("creating commodore agent: %w", err)
 	}
 
-	specialistAgent, err := s.createSpecialistAgent(ctx, researcherTools)
+	specialistAgent, err := s.createSpecialistAgent(initCtx, researcherTools)
 	if err != nil {
 		return fmt.Errorf("creating specialist agent: %w", err)
 	}
