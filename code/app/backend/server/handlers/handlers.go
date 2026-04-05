@@ -30,6 +30,10 @@ type Handler struct {
 	// Moved from package-level globals to enable per-instance isolation and testing.
 	muRecStreams sync.RWMutex
 	recStreams   map[string]chan models.VoyageRecommendation
+
+	// progressStreams holds active progress SSE channels keyed by session ID.
+	muProgressStreams sync.RWMutex
+	progressStreams   map[string]chan models.ProgressEvent
 }
 
 // New creates a new Handler with the given dependencies.
@@ -55,7 +59,8 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		AgentClient: client,
 		Agent:       &service.AgentRunner{Client: client, BaseURL: agentURL},
 		ResearchSem: make(chan struct{}, 10),
-		recStreams:   make(map[string]chan models.VoyageRecommendation),
+		recStreams:       make(map[string]chan models.VoyageRecommendation),
+		progressStreams:   make(map[string]chan models.ProgressEvent),
 	}
 }
 

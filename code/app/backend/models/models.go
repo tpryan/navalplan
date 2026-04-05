@@ -137,6 +137,12 @@ type RegionWithSeasonality struct {
 	AvgTempC          int    `json:"avg_temp_c" db:"avg_temp_c"`
 }
 
+// ProgressEvent is a real-time status update broadcast during async research operations.
+type ProgressEvent struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
+
 // VoyageRecommendation represents an AI-generated suggestion for a place to stay.
 type VoyageRecommendation struct {
 	ID          string    `json:"id" db:"id"`

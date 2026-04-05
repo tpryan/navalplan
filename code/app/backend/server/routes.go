@@ -83,6 +83,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodGet, "/api/v1/voyages/{id}/briefings", http.HandlerFunc(s.Handler.ListVoyageBriefings), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/recommendations/generate", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.GenerateRecommendations)), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/recommendations/stream", http.HandlerFunc(s.Handler.StreamRecommendations), 1},
+		{http.MethodGet, "/api/v1/progress/stream", http.HandlerFunc(s.Handler.StreamProgress), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/recommendations", http.HandlerFunc(s.Handler.ListRecommendations), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/guide/snapshot", http.HandlerFunc(s.Handler.UploadVoyageSnapshot), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/map_image", http.HandlerFunc(s.Handler.GetVoyageMapImage), 0}, // Public (Mixed Auth)

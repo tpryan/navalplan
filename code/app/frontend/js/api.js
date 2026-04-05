@@ -249,7 +249,24 @@ export const API = {
         return true;
     },
 
-    async checkHealth() {
+    streamProgress(sessionID, onProgress) {
+    console.log('[progress] connecting', sessionID);
+    const es = new EventSource(`${API_BASE}/progress/stream?session_id=${encodeURIComponent(sessionID)}`);
+    es.addEventListener('progress', (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        console.log('[progress]', evt.stage, evt.message);
+        onProgress(evt);
+      } catch (_) { /* ignore parse errors */ }
+    });
+    es.onerror = (err) => {
+      console.warn('[progress] stream error, closing', err);
+      es.close();
+    };
+    return es;
+  },
+
+  async checkHealth() {
         try {
             const res = await fetch('/health');
             if (res.ok) return { ok: true };
