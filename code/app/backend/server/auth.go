@@ -16,7 +16,12 @@ import (
 )
 
 func (s *Server) oauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
-	oauthState := generateStateOauthCookie(w)
+	oauthState, err := generateStateOauthCookie(w)
+	if err != nil {
+		log.Error("failed to generate oauth state", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	u := s.GoogleConfig.AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
@@ -86,7 +91,12 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create Session
-	token := generateSessionToken()
+	token, err := generateSessionToken()
+	if err != nil {
+		log.Error("failed to generate session token", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	expiresAt := time.Now().Add(30 * 24 * time.Hour) // 30 days
 	if err := s.DB.CreateSession(r.Context(), token, person.ID, expiresAt); err != nil {
 		log.Error("db create session", "error", err)
@@ -125,14 +135,16 @@ func (s *Server) oauthLogout(w http.ResponseWriter, r *http.Request) {
 
 // Helpers
 
-func generateStateOauthCookie(w http.ResponseWriter) string {
+func generateStateOauthCookie(w http.ResponseWriter) (string, error) {
 	var expiration = time.Now().Add(20 * time.Minute)
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random state: %w", err)
+	}
 	state := base64.URLEncoding.EncodeToString(b)
 	cookie := http.Cookie{Name: "oauthstate", Value: state, Expires: expiration, HttpOnly: true}
 	http.SetCookie(w, &cookie)
-	return state
+	return state, nil
 }
 
 func (s *Server) getUserDataFromGoogle(code string) ([]byte, error) {
@@ -152,8 +164,10 @@ func (s *Server) getUserDataFromGoogle(code string) ([]byte, error) {
 	return contents, nil
 }
 
-func generateSessionToken() string {
+func generateSessionToken() (string, error) {
 	b := make([]byte, 32)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random token: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }
