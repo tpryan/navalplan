@@ -74,6 +74,116 @@ let pilotCircle = null;
 let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
 let isPilotResearching = false;
+let radarSweep = null;
+
+// createRadarSweepOverlay — factory that returns a RadarSweep class once
+// google.maps.OverlayView is available (cannot extend it at parse time).
+function createRadarSweepOverlay(OverlayView) {
+    return class RadarSweep extends OverlayView {
+        constructor(map, center, radiusMeters) {
+            super();
+            this._map = map;
+            this._center = center;       // google.maps.LatLng
+            this._radiusMeters = radiusMeters;
+            this._canvas = null;
+            this._angle = 0;
+            this._rafId = null;
+            this._active = false;
+            this.setMap(map);
+        }
+
+        onAdd() {
+            const canvas = document.createElement('canvas');
+            canvas.style.position = 'absolute';
+            canvas.style.pointerEvents = 'none';
+            this._canvas = canvas;
+            const panes = this.getPanes();
+            panes.overlayLayer.appendChild(canvas);
+            this._active = true;
+            this._animate();
+        }
+
+        draw() {
+            if (!this._canvas || !this._active) return;
+            const proj = this.getProjection();
+            if (!proj) return;
+
+            const centerPx = proj.fromLatLngToDivPixel(this._center);
+
+            // Mercator meters-per-pixel at this latitude and zoom level
+            const lat = this._center.lat();
+            const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, this._map.getZoom());
+            const radiusPx = this._radiusMeters / metersPerPx;
+
+            const size = Math.ceil(radiusPx * 2) + 4;
+            this._canvas.width = size;
+            this._canvas.height = size;
+            this._canvas.style.left = `${Math.round(centerPx.x - size / 2)}px`;
+            this._canvas.style.top = `${Math.round(centerPx.y - size / 2)}px`;
+
+            this._radiusPx = radiusPx;
+            this._cx = size / 2;
+            this._cy = size / 2;
+        }
+
+        _animate() {
+            if (!this._active) return;
+            this._rafId = requestAnimationFrame(() => this._animate());
+            if (!this._canvas || !this._radiusPx) return;
+
+            const ctx = this._canvas.getContext('2d');
+            const cx = this._cx;
+            const cy = this._cy;
+            const r = this._radiusPx;
+
+            ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+            // Filled 60° sweep wedge fading from transparent to blue
+            const sweepAngle = Math.PI / 3;
+            const start = this._angle;
+            const end = this._angle + sweepAngle;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, r, start, end);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(
+                cx + Math.cos(start) * r, cy + Math.sin(start) * r,
+                cx + Math.cos(end) * r,   cy + Math.sin(end) * r,
+            );
+            grad.addColorStop(0, 'rgba(26, 115, 232, 0)');
+            grad.addColorStop(1, 'rgba(26, 115, 232, 0.35)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Leading edge highlight
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(end) * r, cy + Math.sin(end) * r);
+            ctx.strokeStyle = 'rgba(26, 115, 232, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+
+            this._angle += 0.025;
+            if (this._angle > Math.PI * 2) this._angle -= Math.PI * 2;
+        }
+
+        onRemove() {
+            this._active = false;
+            if (this._rafId) cancelAnimationFrame(this._rafId);
+            if (this._canvas && this._canvas.parentNode) {
+                this._canvas.parentNode.removeChild(this._canvas);
+            }
+            this._canvas = null;
+        }
+
+        stop() {
+            this.setMap(null);
+        }
+    };
+}
 let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
@@ -1636,6 +1746,16 @@ async function handlePilotSuggestionsClick() {
         voyageRecommendations = [];
         renderRecommendations();
 
+        // Start radar sweep animation — hide drag handles during research
+        if (map && pilotCircle) {
+            if (radarSweep) radarSweep.stop();
+            if (pilotCenterMarker) pilotCenterMarker.map = null;
+            if (pilotRadiusMarker) pilotRadiusMarker.map = null;
+            const { OverlayView } = await importLibrary("maps");
+            const RadarSweepClass = createRadarSweepOverlay(OverlayView);
+            radarSweep = new RadarSweepClass(map, pilotCircle.getCenter(), pilotCircle.getRadius());
+        }
+
         // 3. Trigger both Local Pilot (Recommendations) and Voyage Guide research
         const [recRes] = await Promise.all([
             API.generateRecommendations(currentVoyage.id),
@@ -1668,6 +1788,9 @@ async function handlePilotSuggestionsClick() {
             } catch (e) { /* best effort */ }
 
             isPilotResearching = false;
+            if (radarSweep) { radarSweep.stop(); radarSweep = null; }
+            if (pilotCenterMarker) pilotCenterMarker.map = map;
+            if (pilotRadiusMarker) pilotRadiusMarker.map = map;
             if (researchTicker) researchTicker.stop();
             icon.classList.remove('spin');
             btn.disabled = false;
@@ -1763,6 +1886,9 @@ async function handlePilotSuggestionsClick() {
     } catch (err) {
         console.error(err);
         isPilotResearching = false;
+        if (radarSweep) { radarSweep.stop(); radarSweep = null; }
+        if (pilotCenterMarker) pilotCenterMarker.map = map;
+        if (pilotRadiusMarker) pilotRadiusMarker.map = map;
         renderItinerary();
         showNotification('Error', 'Failed to start pilot suggestions');
         icon.classList.remove('spin');
