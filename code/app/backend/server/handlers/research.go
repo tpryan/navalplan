@@ -201,7 +201,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	client := h.AgentClient
 
 	// Check for nearby existing research to reuse facilities
-	nearbyBriefing, err := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
+	nearbyBriefing, nearbyErr := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
 	var reusableFacilities json.RawMessage
 
 	// 1. Create Session
@@ -209,8 +209,14 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
-	} else if respSession != nil {
-		respSession.Body.Close()
+		h.saveEmptyBriefing(ctx, stop)
+		return
+	}
+	respSession.Body.Close()
+	if respSession.StatusCode >= http.StatusInternalServerError {
+		slog.ErrorContext(ctx, "Agent session creation returned server error", "status", respSession.StatusCode)
+		h.saveEmptyBriefing(ctx, stop)
+		return
 	}
 
 	// 2. Run Agent
@@ -224,7 +230,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
 		stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
-	if err == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
+	if nearbyErr == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
 		slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
 		reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 		prompt += " Do not research facilities; I will provide those separately."

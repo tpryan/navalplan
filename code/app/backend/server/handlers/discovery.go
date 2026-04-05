@@ -194,8 +194,12 @@ func (h *Handler) performDiscoveryMining(month int) {
 	respSession, err := client.Post(createSessionURL, "application/json", bytes.NewBuffer(stateJSON))
 	if err != nil {
 		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "error", err)
-	} else if respSession != nil {
-		respSession.Body.Close()
+		return
+	}
+	respSession.Body.Close()
+	if respSession.StatusCode >= http.StatusInternalServerError {
+		slog.ErrorContext(ctx, "[discovery-mining] Agent session creation returned server error", "status", respSession.StatusCode)
+		return
 	}
 
 	// 2. Run Agent
