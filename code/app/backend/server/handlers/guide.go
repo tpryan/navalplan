@@ -32,25 +32,25 @@ type GuideAgentOutput struct {
 func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	// Check ownership
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	file, _, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Failed to retrieve image", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Failed to retrieve image")
 		return
 	}
 	defer file.Close()
@@ -67,30 +67,30 @@ func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 	// Validate file content is an image
 	buff := make([]byte, 512)
 	if _, err := file.Read(buff); err != nil {
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to read file")
 		return
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "Failed to reset file pointer", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to reset file pointer")
 		return
 	}
 
 	contentType := http.DetectContentType(buff)
 	if !strings.HasPrefix(contentType, "image/") {
-		http.Error(w, "Invalid file type: must be an image", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid file type: must be an image")
 		return
 	}
 
 	data, err := io.ReadAll(file)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to read image data", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	if err := h.DB.SaveVoyageMap(r.Context(), voyageID, data); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to save map image to DB", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 	isAuthorized := false
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 
@@ -130,13 +130,13 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isAuthorized {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	data, err := h.DB.GetVoyageMap(r.Context(), voyageID)
 	if err != nil || len(data) == 0 {
-		http.Error(w, "Image not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Image not found")
 		return
 	}
 
@@ -148,25 +148,25 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -332,14 +332,14 @@ type VoyageGuideResponse struct {
 func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
@@ -347,11 +347,11 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		// If voyage not found, guide also not found
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -370,7 +370,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		// Log the error if it's something other than "not found" (depending on DB impl)
 		// For now assuming err implies not found or db error
 		slog.WarnContext(r.Context(), "Voyage guide not found for voyage", "voyage_id", voyageID, "error", err)
-		http.Error(w, "Voyage guide not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage guide not found")
 		return
 	}
 
@@ -401,7 +401,7 @@ type PublicVoyageReport struct {
 func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
-		http.Error(w, "Token required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Token required")
 		return
 	}
 
@@ -409,7 +409,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	voyage, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
 		// This likely means not found or not public
-		http.Error(w, "Voyage not found or not public", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found or not public")
 		return
 	}
 
@@ -467,32 +467,32 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	// Check ownership
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list briefings for voyage", "voyage_id", voyageID, "error", err)
-		http.Error(w, "Failed to list briefings", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to list briefings")
 		return
 	}
 

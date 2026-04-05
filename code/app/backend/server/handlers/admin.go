@@ -38,21 +38,21 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	people, err := h.DB.ListPeople(r.Context(), limit, offset)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list people", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	totalPeople, err := h.DB.CountPeople(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to count people", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	invites, err := h.DB.ListInvitations(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list invitations", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -94,18 +94,18 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Bad Request")
 		return
 	}
 
 	currentUser := appContext.GetPersonFromContext(r.Context())
 	if currentUser == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	if err := h.DB.CreateInvitation(r.Context(), req.Email, currentUser.ID); err != nil {
-		http.Error(w, "Failed to create invitation", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to create invitation")
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *Handler) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
 	email := r.PathValue("email")
 	if err := h.DB.DeleteInvitation(r.Context(), email); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to delete invitation", "email", email, "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
