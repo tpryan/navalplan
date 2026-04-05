@@ -422,49 +422,82 @@
             <div class="interface-item">
                 <div class="interface-description">
                     <h3>Standard Planning Mode</h3>
-                    <p>The primary view where users click the map to add stops to their voyage. Generic Google Map red markers with numerical labels indicate the journey sequence.</p>
+                    <p>Primary planning interface. Features a dashed trajectory line connecting stops and specialized facility markers.</p>
+                    <ul>
+                        <li><strong>Dashed Path:</strong> A dark dashed polyline connects the voyage stops in chronological order.</li>
+                        <li><strong>Facility Markers:</strong> The map is populated with icons for Marinas, Restaurants, Bars, and Anchorages as the user zooms in.</li>
+                    </ul>
                 </div>
                 <div class="interface-preview">
-                    <!-- Mock Pin 1 -->
-                    <div style="position: absolute; top: 30%; left: 40%; display: flex; flex-direction: column; align-items: center;">
+                    <!-- Path -->
+                    <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
+                        <line x1="40%" y1="35%" x2="60%" y2="55%" stroke="var(--brand-dark)" stroke-width="2" stroke-dasharray="5,5" opacity="0.6" />
+                        <line x1="60%" y1="55%" x2="50%" y2="80%" stroke="var(--brand-dark)" stroke-width="2" stroke-dasharray="5,5" opacity="0.6" />
+                    </svg>
+                    <!-- Pins -->
+                    <div style="position: absolute; top: 30%; left: 40%; transform: translate(-50%, -100%);">
                         <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                             <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">1</span>
                         </div>
                     </div>
-                    <!-- Mock Pin 2 -->
-                    <div style="position: absolute; top: 50%; left: 60%; display: flex; flex-direction: column; align-items: center;">
+                    <div style="position: absolute; top: 50%; left: 60%; transform: translate(-50%, -100%);">
                         <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                             <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">2</span>
                         </div>
                     </div>
-                    <div style="position: absolute; top: 35%; left: 45%; width: 50px; height: 2px; background: #EA4335; transform: rotate(35deg); transform-origin: 0 0; opacity: 0.5;"></div>
+                    <!-- Facilities -->
+                    <div style="position: absolute; top: 40%; left: 55%; width: 20px; height: 20px; border-radius: 50%; background: #F9A825; border: 1px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span class="material-symbols-outlined" style="font-size: 12px; color: white;">local_bar</span></div>
+                    <div style="position: absolute; top: 60%; left: 45%; width: 20px; height: 20px; border-radius: 50%; background: #E65100; border: 1px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span class="material-symbols-outlined" style="font-size: 12px; color: white;">hub</span></div>
                 </div>
             </div>
 
             <div class="interface-item">
                 <div class="interface-description">
                     <h3>Pilot Mode (Research)</h3>
-                    <p>Active research view with a draggable search radius and categorized recommendation markers.</p>
+                    <p>Research interface for discovering new spots. Features a dynamic search radius and AI-generated reasoning in the sidebar.</p>
+                    <ul>
+                        <li><strong>Search Radius:</strong> A large blue circle with a draggable handle and a distance label (e.g., "39 nm").</li>
+                        <li><strong>Pilot's Reasoning:</strong> Recommendations in the sidebar include a distinct block for the AI agent's justification for the spot.</li>
+                    </ul>
                 </div>
                 <div class="interface-preview">
-                    <!-- Pilot Center -->
-                    <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--brand-medium); border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2;"></div>
-                    <!-- Radius Circle -->
-                    <div style="position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 2px dashed var(--brand-medium); background: rgba(149, 104, 45, 0.1);"></div>
-                    <!-- Recommendation Markers -->
-                    <div style="position: absolute; top: 20%; left: 30%; width: 24px; height: 24px; border-radius: 50%; background: #E65100; border: 2px solid white; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined" style="font-size: 14px; color: white;">hub</span></div>
-                    <div style="position: absolute; top: 60%; left: 70%; width: 24px; height: 24px; border-radius: 50%; background: #388E3C; border: 2px solid white; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined" style="font-size: 14px; color: white;">anchor</span></div>
+                    <!-- Sidebar Mock -->
+                    <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 150px; background: white; border-right: 1px solid #ddd; z-index: 10; padding: 10px; font-size: 0.6rem; overflow: hidden;">
+                        <div style="padding: 8px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; margin-bottom: 5px;">
+                            <div style="font-weight: bold; display: flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 10px; color: #388E3C;">anchor</span> Isla San Jose</div>
+                            <div style="background: #388E3C22; padding: 4px; border-left: 2px solid #388E3C; margin-top: 4px; font-style: italic;">
+                                <strong>Pilot's Reasoning:</strong> "Excellent 'wild' anchorage for nature lovers."
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Radius -->
+                    <div style="position: absolute; top: 50%; left: 60%; width: 160px; height: 160px; border-radius: 50%; border: 2px solid #2196F3; background: rgba(33, 150, 243, 0.05); transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center;">
+                         <div style="position: absolute; top: 0; width: 1px; height: 50%; background: #2196F3;"></div>
+                         <div style="position: absolute; top: 25%; left: 55%; background: #2196F3; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold;">39 nm</div>
+                    </div>
+                    <div style="width: 15px; height: 15px; border-radius: 50%; background: #2196F3; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2;"></div>
                 </div>
             </div>
 
             <div class="interface-item">
                 <div class="interface-description">
                     <h3>Commodore Mode (Discovery)</h3>
-                    <p>Global exploration view highlighting sailing regions with seasonal optimal periods.</p>
+                    <p>Global discovery view. Seasonal sailing data is controlled by a month slider with a specific legend for sailing profiles.</p>
+                    <ul>
+                        <li><strong>Month Slider:</strong> A centered floating panel at the bottom of the map for temporal filtering.</li>
+                        <li><strong>Discovery Legend:</strong> Color-coded badges for Standard, Regional, Hidden Gem, and Challenging regions.</li>
+                    </ul>
                 </div>
                 <div class="interface-preview">
-                    <div style="width: 80%; height: 60%; background: rgba(156, 39, 176, 0.1); border: 3px solid #9c27b0; border-radius: 40% 60% 30% 70%; display: flex; align-items: center; justify-content: center; color: #9c27b0; font-weight: bold; transform: rotate(10deg);">
-                        PACIFIC NW
+                    <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);">
+                        <div class="glass-panel" style="padding: 10px 20px; min-width: 250px;">
+                            <div style="font-weight: 900; color: var(--brand-dark); margin-bottom: 5px; font-size: 0.8rem; text-align: center;">Month: April</div>
+                            <input type="range" style="width: 100%; accent-color: var(--brand-medium);">
+                            <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px;">
+                                <div style="display: flex; align-items: center; gap: 4px; font-size: 0.6rem; font-weight: bold;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #0077be;"></span> Standard</div>
+                                <div style="display: flex; align-items: center; gap: 4px; font-size: 0.6rem; font-weight: bold;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ff9800;"></span> Regional</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -535,19 +568,67 @@
 
         <section id="interfaces">
             <h2>Interface Inventory</h2>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Global Utility Navigation</h3>
+                    <p>Floating in the top-right corner, this menu provides user identity and global application controls.</p>
+                    <ul>
+                        <li><strong>User Profile:</strong> Circular avatar image.</li>
+                        <li><strong>Theme Toggle:</strong> Switch between light/dark mode.</li>
+                        <li><strong>Logout/Fullscreen:</strong> Standard application utilities.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview" style="justify-content: flex-end; align-items: flex-start;">
+                    <div class="glass-panel" style="padding: 5px 10px; display: flex; align-items: center; gap: 10px; border-radius: 10px;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #ccc; overflow: hidden; border: 1px solid #ddd;">
+                            <img src="https://ui-avatars.com/api/?name=User&background=random" style="width: 100%; height: 100%;">
+                        </div>
+                        <span class="material-symbols-outlined" style="font-size: 20px;">dark_mode</span>
+                        <span class="material-symbols-outlined" style="font-size: 20px;">logout</span>
+                        <span class="material-symbols-outlined" style="font-size: 20px;">fullscreen</span>
+                    </div>
+                </div>
+            </div>
             
             <div class="interface-item">
                 <div class="interface-description">
-                    <h3>Main Sidebar</h3>
-                    <p>Primary navigation and voyage management container.</p>
+                    <h3>Voyage Dashboard (Sidebar)</h3>
+                    <p>The entry point for voyage management. Lists all planned trips with summary data and quick actions.</p>
+                    <ul>
+                        <li><strong>Voyage Cards:</strong> Show title, dates, and primary location.</li>
+                        <li><strong>Quick Actions:</strong> Edit and Delete icons on each card.</li>
+                        <li><strong>Pagination:</strong> Standardized controls at the bottom of the list.</li>
+                    </ul>
                 </div>
                 <div class="interface-preview">
-                    <div class="sidebar-mock glass-panel" style="width: 220px; padding: 0;">
-                        <div class="sidebar-header">NAVPLAN</div>
-                        <div class="sidebar-item">Voyage: Gulf Islands</div>
-                        <div class="sidebar-item">Voyage: Desolation Sound</div>
-                        <div style="padding: 1.5rem; margin-top: auto;">
-                            <button class="btn primary" style="width: 100%;">+ NEW TRIP</button>
+                    <div class="sidebar-mock glass-panel" style="width: 250px; padding: 0; background: #fdfdfd;">
+                        <div class="sidebar-header" style="font-size: 1.2rem; padding: 1rem;">PLAN</div>
+                        <div style="padding: 10px; display: flex; gap: 10px;">
+                            <button class="btn primary" style="flex: 1; font-size: 0.7rem; padding: 8px;">+ NEW VOYAGE</button>
+                            <button class="btn secondary" style="flex: 1; font-size: 0.7rem; padding: 8px;">DISCOVER</button>
+                        </div>
+                        <div style="flex-grow: 1; overflow-y: auto;">
+                            <!-- Mock Voyage Card -->
+                            <div style="margin: 5px 10px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: white; position: relative;">
+                                <div style="font-weight: bold; font-size: 0.9rem;">2026 May Sailing</div>
+                                <div style="font-size: 0.7rem; color: #777;">5/1/2026 - 5/4/2026</div>
+                                <div style="display: flex; gap: 5px; position: absolute; top: 10px; right: 10px;">
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #999;">edit</span>
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #999;">delete</span>
+                                </div>
+                            </div>
+                            <!-- Mock Voyage Card -->
+                            <div style="margin: 5px 10px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: white; opacity: 0.8;">
+                                <div style="font-weight: bold; font-size: 0.9rem;">Gulf Islands</div>
+                                <div style="font-size: 0.7rem; color: #777;">No dates set</div>
+                            </div>
+                        </div>
+                        <!-- Pagination -->
+                        <div style="padding: 10px; border-top: 1px solid #eee; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 0.7rem;">
+                            <button class="btn secondary" style="padding: 2px 5px;"><span class="material-symbols-outlined" style="font-size: 14px;">chevron_left</span></button>
+                            <span>Page 1</span>
+                            <button class="btn secondary" style="padding: 2px 5px;"><span class="material-symbols-outlined" style="font-size: 14px;">chevron_right</span></button>
                         </div>
                     </div>
                 </div>
@@ -647,6 +728,52 @@
             <div class="ticker-preview" style="margin-top: 1rem;">
                 <span class="material-symbols-outlined" style="animation: spin 2s linear infinite; color: var(--brand-medium);">radar</span>
                 Analyzing weather patterns for Voyage Day 4...
+            </div>
+
+            <h3>Data Visualization (Tide Charts)</h3>
+            <p>Interactive tide charts are rendered using <code>Chart.js</code>. They feature a smooth area chart, a dashed zero-line, and specific labels for High and Low water marks.</p>
+            <div class="interface-preview" style="background: #f0f4f8; flex-direction: column; gap: 20px; padding: 2rem;">
+                <div style="display: flex; gap: 15px; width: 100%; justify-content: center;">
+                    <!-- Mock Card 1 -->
+                    <div style="background: white; border-radius: 8px; border: 1px solid #ddd; padding: 10px; width: 180px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <div style="font-weight: 900; text-align: center; font-size: 0.9rem; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;">FRI, MAY 1</div>
+                        <div style="text-align: center; font-size: 0.75rem; color: #666;">Parham Town</div>
+                        <div style="text-align: center; margin: 5px 0;"><span class="material-symbols-outlined" style="font-size: 20px; vertical-align: middle;">partly_cloudy_day</span> <span style="font-weight: bold;">80° / 78°</span></div>
+                        <div style="font-size: 0.6rem; color: #888; text-align: center; margin-bottom: 8px;">
+                            <span class="material-symbols-outlined" style="font-size: 10px; vertical-align: middle;">wb_twilight</span> 05:50 AM &nbsp; 
+                            <span class="material-symbols-outlined" style="font-size: 10px; vertical-align: middle;">bedtime</span> 06:39 PM
+                        </div>
+                        <!-- Mock Chart -->
+                        <div style="height: 80px; width: 100%; border: 1px solid #ccc; position: relative; background: #fafafa; overflow: hidden;">
+                            <svg viewBox="0 0 100 50" preserveAspectRatio="none" style="width: 100%; height: 100%;">
+                                <path d="M0,25 Q25,10 50,25 T100,25 L100,50 L0,50 Z" fill="rgba(0, 119, 190, 0.1)" />
+                                <path d="M0,25 Q25,10 50,25 T100,25" fill="none" stroke="#0077be" stroke-width="1" />
+                                <line x1="0" y1="35" x2="100" y2="35" stroke="#ccc" stroke-dasharray="2,2" />
+                            </svg>
+                            <span style="position: absolute; top: 5px; right: 5px; font-size: 8px; color: #EA4335; font-weight: bold;">0.9</span>
+                            <span style="position: absolute; bottom: 5px; left: 50%; font-size: 8px; color: black; font-weight: bold;">-0.1</span>
+                        </div>
+                    </div>
+                    <!-- Mock Card 2 -->
+                    <div style="background: white; border-radius: 8px; border: 1px solid #ddd; padding: 10px; width: 180px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <div style="font-weight: 900; text-align: center; font-size: 0.9rem; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;">SAT, MAY 2</div>
+                        <div style="text-align: center; font-size: 0.75rem; color: #666;">Parham Town</div>
+                        <div style="text-align: center; margin: 5px 0;"><span class="material-symbols-outlined" style="font-size: 20px; vertical-align: middle;">sunny</span> <span style="font-weight: bold;">80° / 79°</span></div>
+                        <div style="font-size: 0.6rem; color: #888; text-align: center; margin-bottom: 8px;">
+                            <span class="material-symbols-outlined" style="font-size: 10px; vertical-align: middle;">wb_twilight</span> 05:49 AM &nbsp; 
+                            <span class="material-symbols-outlined" style="font-size: 10px; vertical-align: middle;">bedtime</span> 06:39 PM
+                        </div>
+                        <div style="height: 80px; width: 100%; border: 1px solid #ccc; position: relative; background: #fafafa; overflow: hidden;">
+                            <svg viewBox="0 0 100 50" preserveAspectRatio="none" style="width: 100%; height: 100%;">
+                                <path d="M0,15 Q30,40 60,30 T100,5 L100,50 L0,50 Z" fill="rgba(0, 119, 190, 0.1)" />
+                                <path d="M0,15 Q30,40 60,30 T100,5" fill="none" stroke="#0077be" stroke-width="1" />
+                                <line x1="0" y1="25" x2="100" y2="25" stroke="#ccc" stroke-dasharray="2,2" />
+                            </svg>
+                            <span style="position: absolute; top: 5px; right: 5px; font-size: 8px; color: #EA4335; font-weight: bold;">0.9</span>
+                            <span style="position: absolute; bottom: 10px; left: 40%; font-size: 8px; color: black; font-weight: bold;">-0.2</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </div>
