@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"errors"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -206,12 +209,27 @@ func main() {
 }
 
 func (s *Server) run(ctx context.Context) error {
+	// Validate embedded prompts before attempting agent creation so that an
+	// accidentally empty file fails fast with a clear message.
+	prompts := map[string]string{
+		"harbourmaster":    _harbourmasterPrompt,
+		"pilot":            _pilotPrompt,
+		"commodore":        _commodorePrompt,
+		"specialist":       _specialistPrompt,
+		"search_specialist": _searchSpecialistPrompt,
+	}
+	for name, p := range prompts {
+		if len(strings.TrimSpace(p)) == 0 {
+			return fmt.Errorf("embedded prompt %q is empty — check prompts/ directory", name)
+		}
+	}
+
 	// Use a bounded context for agent/model initialisation. If the Gemini API
 	// is unresponsive during startup we fail fast rather than hanging forever.
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 
-	researcherTools, err := s.setupTools()
+	researcherTools, err := s.setupTools(initCtx)
 	if err != nil {
 		return fmt.Errorf("setting up tools: %w", err)
 	}
@@ -279,12 +297,35 @@ func (s *Server) run(ctx context.Context) error {
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
 
-	// Telemetry endpoint
+	// Telemetry endpoint — streams internal tool execution events.
+	// In production this is protected by Cloud Run IAM; no additional
+	// application-level auth is enforced here.
 	mux.HandleFunc("/telemetry", s.handleTelemetry)
 
+	httpSrv := &http.Server{
+		Addr:    ":" + s.config.Port,
+		Handler: traceMiddleware(s.config.Project, loggingMiddleware(mux)),
+	}
+
+	// Listen for SIGTERM/SIGINT so Cloud Run scale-down drains in-flight requests.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-quit
+		slog.Info("Shutdown signal received, draining requests...")
+		// Allow up to 5 minutes for in-flight LLM calls to finish.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("HTTP server shutdown error", "error", err)
+		}
+	}()
+
 	slog.Info("Starting custom server", "port", s.config.Port)
-	// Apply Trace Middleware then Logging Middleware
-	return http.ListenAndServe(":"+s.config.Port, traceMiddleware(s.config.Project, loggingMiddleware(mux)))
+	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 type agentConfig struct {
@@ -352,7 +393,7 @@ func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
 	}
 }
 
-func (s *Server) setupTools() ([]tool.Tool, error) {
+func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, error) {
 	weatherTool, wp, err := tools.NewWeatherTool()
 	if err != nil {
 		return nil, err
@@ -371,7 +412,7 @@ func (s *Server) setupTools() ([]tool.Tool, error) {
 	}
 	s.providers = append(s.providers, sp)
 
-	placesTool, pp, err := tools.NewPlacesTool(s.config.MapsAPIKey)
+	placesTool, pp, err := tools.NewPlacesTool(ctx, s.config.MapsAPIKey)
 	if err != nil {
 		return nil, err
 	}

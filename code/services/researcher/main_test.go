@@ -33,12 +33,15 @@ func TestCreateResearcherAgent(t *testing.T) {
 		timings: make(map[string]time.Time),
 	}
 
-	researcherTools, err := srv.setupTools()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	researcherTools, err := srv.setupTools(ctx)
 	if err != nil {
 		t.Fatalf("Failed to setup tools: %v", err)
 	}
 
-	a, err := srv.createHarbourmasterAgent(context.Background(), researcherTools)
+	a, err := srv.createHarbourmasterAgent(ctx, researcherTools)
 	if err != nil {
 		t.Fatalf("Failed to create harbourmaster agent: %v", err)
 	}

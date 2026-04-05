@@ -8,11 +8,13 @@ import (
 )
 
 type mockTimezoneClient struct {
-	res *maps.TimezoneResult
-	err error
+	res     *maps.TimezoneResult
+	err     error
+	lastCtx context.Context
 }
 
 func (m *mockTimezoneClient) Timezone(ctx context.Context, r *maps.TimezoneRequest) (*maps.TimezoneResult, error) {
+	m.lastCtx = ctx
 	return m.res, m.err
 }
 
@@ -82,6 +84,39 @@ func TestGetSunriseSunset(t *testing.T) {
 				t.Errorf("GetSunriseSunset() sunset = %v, want %v", got.Sunset, tt.expected.Sunset)
 			}
 		})
+	}
+}
+
+// TestGetSunriseSunset_ContextPropagated verifies that the tool context is
+// passed through to the timezone client, enabling cancellation propagation.
+func TestGetSunriseSunset_ContextPropagated(t *testing.T) {
+	type ctxKey struct{}
+	sentinel := ctxKey{}
+	inner := context.WithValue(context.Background(), sentinel, "marker")
+	ctx := mockToolContext{Context: inner}
+
+	mockClient := &mockTimezoneClient{
+		res: &maps.TimezoneResult{
+			DstOffset:    0,
+			RawOffset:    0,
+			TimeZoneID:   "UTC",
+			TimeZoneName: "UTC",
+		},
+	}
+	sp := &SunriseProvider{client: mockClient}
+	_, err := sp.GetSunriseSunset(ctx, SunriseArgs{
+		Latitude:  0,
+		Longitude: 0,
+		Date:      "2026-06-01",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockClient.lastCtx == nil {
+		t.Fatal("timezone client received nil context")
+	}
+	if mockClient.lastCtx.Value(sentinel) != "marker" {
+		t.Error("tool context was not propagated to timezone client")
 	}
 }
 
