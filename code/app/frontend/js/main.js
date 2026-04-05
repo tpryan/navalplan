@@ -108,10 +108,13 @@ function createRadarSweepOverlay(OverlayView) {
             const proj = this.getProjection();
             if (!proj) return;
 
-            const centerPx = proj.fromLatLngToDivPixel(this._center);
+            // Accept both google.maps.LatLng objects and {lat, lng} plain literals
+            const latVal = typeof this._center.lat === 'function' ? this._center.lat() : this._center.lat;
+            const lngVal = typeof this._center.lng === 'function' ? this._center.lng() : this._center.lng;
+            const centerPx = proj.fromLatLngToDivPixel({ lat: latVal, lng: lngVal });
 
             // Mercator meters-per-pixel at this latitude and zoom level
-            const lat = this._center.lat();
+            const lat = latVal;
             const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, this._map.getZoom());
             const radiusPx = this._radiusMeters / metersPerPx;
 
@@ -184,6 +187,70 @@ function createRadarSweepOverlay(OverlayView) {
         }
     };
 }
+// Cached RadarSweep class — resolved once after Maps library loads.
+let _RadarSweepClass = null;
+async function getRadarSweepClass() {
+    if (_RadarSweepClass) return _RadarSweepClass;
+    const { OverlayView } = await importLibrary("maps");
+    _RadarSweepClass = createRadarSweepOverlay(OverlayView);
+    return _RadarSweepClass;
+}
+
+// Stop sweep sequencer state
+const STOP_SWEEP_RADIUS_M = 1852; // 1 nautical mile
+let stopSweepTimer = null;
+let activeStopSweepInstance = null;
+let activeStopSweepStop = null; // stop object currently being swept
+let stopSweepQueue = []; // pending stop objects (not yet researched)
+let stopSweepCursor = 0;
+
+
+async function advanceStopSweep() {
+    if (!map || stopSweepQueue.length === 0) return;
+    if (activeStopSweepInstance) { activeStopSweepInstance.stop(); activeStopSweepInstance = null; }
+
+    const stop = stopSweepQueue[stopSweepCursor % stopSweepQueue.length];
+    stopSweepCursor++;
+    activeStopSweepStop = stop;
+
+    const Cls = await getRadarSweepClass();
+    activeStopSweepInstance = new Cls(map, { lat: stop.latitude, lng: stop.longitude }, STOP_SWEEP_RADIUS_M);
+}
+
+async function startStopSweepSequence(stops) {
+    clearStopSweeps();
+    stopSweepQueue = [...stops];
+    stopSweepCursor = 0;
+    // Hide all stop markers for the duration of the sweep sequence
+    markers.forEach(m => m.map = null);
+    await advanceStopSweep();
+    // Only cycle if there are multiple stops; a single stop runs continuously.
+    if (stops.length > 1) {
+        stopSweepTimer = setInterval(advanceStopSweep, 3000);
+    }
+}
+
+function removeStopFromSweepQueue(stopId) {
+    stopSweepQueue = stopSweepQueue.filter(s => s.id !== stopId);
+    if (stopSweepQueue.length === 0) {
+        clearStopSweeps();
+    } else if (stopSweepQueue.length === 1 && stopSweepTimer) {
+        // Stop cycling — one stop left, let it run continuously
+        clearInterval(stopSweepTimer);
+        stopSweepTimer = null;
+    }
+}
+
+function clearStopSweeps() {
+    if (stopSweepTimer) { clearInterval(stopSweepTimer); stopSweepTimer = null; }
+    if (activeStopSweepInstance) { activeStopSweepInstance.stop(); activeStopSweepInstance = null; }
+    activeStopSweepStop = null;
+    // Restore all stop markers
+    markers.forEach(m => m.map = map);
+    stopSweepQueue = [];
+    stopSweepCursor = 0;
+}
+
 let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
@@ -1485,6 +1552,11 @@ async function executeResearchAll() {
         showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
         if (researchTicker) researchTicker.start();
 
+        // Start radar sweep sequence cycling through all stops
+        if (map && currentStops.length > 0) {
+            startStopSweepSequence(currentStops);
+        }
+
         // Stream progress updates into ticker
         let fullResProgressES = null;
         if (fullResRes && fullResRes.session_id && researchTicker) {
@@ -1506,6 +1578,7 @@ async function executeResearchAll() {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
                 if (fullResProgressES) fullResProgressES.close();
+                clearStopSweeps();
                 if (researchTicker) researchTicker.error('Research Timeout');
                 btnResearchAll.innerHTML = originalContent;
                 btnResearchAll.disabled = false;
@@ -1541,7 +1614,8 @@ async function executeResearchAll() {
                         if (b && isNewData(b, 'stop', stop.id)) {
                             // Mark as done in our list
                             pendingStops.splice(i, 1);
-                            
+                            removeStopFromSweepQueue(stop.id);
+
                             if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
 
                             // Update the specific button UI immediately
@@ -1563,6 +1637,7 @@ async function executeResearchAll() {
                 if (guideComplete && pendingStops.length === 0) {
                     clearInterval(poll);
                     if (fullResProgressES) fullResProgressES.close();
+                    clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
                     if (researchTicker) researchTicker.stop();
@@ -1575,6 +1650,7 @@ async function executeResearchAll() {
                     // Too many errors, give up
                     clearInterval(poll);
                     if (fullResProgressES) fullResProgressES.close();
+                    clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
                     if (researchTicker) researchTicker.error('Research Failed');
@@ -1593,6 +1669,7 @@ async function executeResearchAll() {
 
     } catch (err) {
         console.error(err);
+        clearStopSweeps();
         if (researchTicker) researchTicker.stop();
         btnResearchAll.innerHTML = originalContent;
         btnResearchAll.disabled = false;
@@ -1751,8 +1828,7 @@ async function handlePilotSuggestionsClick() {
             if (radarSweep) radarSweep.stop();
             if (pilotCenterMarker) pilotCenterMarker.map = null;
             if (pilotRadiusMarker) pilotRadiusMarker.map = null;
-            const { OverlayView } = await importLibrary("maps");
-            const RadarSweepClass = createRadarSweepOverlay(OverlayView);
+            const RadarSweepClass = await getRadarSweepClass();
             radarSweep = new RadarSweepClass(map, pilotCircle.getCenter(), pilotCircle.getRadius());
         }
 
@@ -2486,6 +2562,9 @@ async function handleResearchClick(stop, button) {
         if (researchTicker) researchTicker.start();
         const resRes = await API.triggerResearch(stop.id);
 
+        // Start radar sweep on this stop's position
+        if (map) startStopSweepSequence([stop]);
+
         // Stream progress updates into the ticker
         let progressES = null;
         if (resRes.session_id && researchTicker) {
@@ -2501,6 +2580,7 @@ async function handleResearchClick(stop, button) {
                 if (b) {
                     clearInterval(poll);
                     if (progressES) progressES.close();
+                    clearStopSweeps();
                     if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showBriefing(b); // Updates the already-open modal with data
@@ -2511,6 +2591,7 @@ async function handleResearchClick(stop, button) {
 
     } catch (err) {
         console.error(err);
+        clearStopSweeps();
         if (researchTicker) researchTicker.stop();
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
         setTimeout(() => button.innerHTML = originalContent, 2000);
