@@ -1371,9 +1371,17 @@ async function executeResearchAll() {
             return newTime > prevTime;
         };
 
-        await API.triggerFullResearch(currentVoyage.id);
+        const fullResRes = await API.triggerFullResearch(currentVoyage.id);
         showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
         if (researchTicker) researchTicker.start();
+
+        // Stream progress updates into ticker
+        let fullResProgressES = null;
+        if (fullResRes && fullResRes.session_id && researchTicker) {
+            fullResProgressES = API.streamProgress(fullResRes.session_id, (evt) => {
+                researchTicker.push(evt.message);
+            });
+        }
         
         // 2. Poll for completion
         const startTime = Date.now();
@@ -1387,6 +1395,7 @@ async function executeResearchAll() {
             // Check timeout
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
+                if (fullResProgressES) fullResProgressES.close();
                 if (researchTicker) researchTicker.error('Research Timeout');
                 btnResearchAll.innerHTML = originalContent;
                 btnResearchAll.disabled = false;
@@ -1443,17 +1452,19 @@ async function executeResearchAll() {
                 // If all done
                 if (guideComplete && pendingStops.length === 0) {
                     clearInterval(poll);
+                    if (fullResProgressES) fullResProgressES.close();
                     isResearchAllRunning = false;
                     renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
-                    
+
                     renderMapStops(); // Refresh map with new data markers
                     showNotification('Research Complete', 'All research tasks have been completed successfully.');
                 } else if (consecutiveErrors > 15) {
                     // Too many errors, give up
                     clearInterval(poll);
+                    if (fullResProgressES) fullResProgressES.close();
                     isResearchAllRunning = false;
                     renderItinerary();
                     if (researchTicker) researchTicker.error('Research Failed');
@@ -2319,14 +2330,23 @@ async function handleResearchClick(stop, button) {
 
         // Trigger
         if (researchTicker) researchTicker.start();
-        await API.triggerResearch(stop.id);
-        
+        const resRes = await API.triggerResearch(stop.id);
+
+        // Stream progress updates into the ticker
+        let progressES = null;
+        if (resRes.session_id && researchTicker) {
+            progressES = API.streamProgress(resRes.session_id, (evt) => {
+                researchTicker.push(evt.message);
+            });
+        }
+
         // Poll
         const poll = setInterval(async () => {
             try {
                 const b = await API.getBriefing(stop.id);
                 if (b) {
                     clearInterval(poll);
+                    if (progressES) progressES.close();
                     if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showBriefing(b); // Updates the already-open modal with data
@@ -2334,7 +2354,7 @@ async function handleResearchClick(stop, button) {
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
-        
+
     } catch (err) {
         console.error(err);
         if (researchTicker) researchTicker.stop();
@@ -2735,16 +2755,26 @@ async function redoBriefing(oldBriefing, btn) {
     btn.disabled = true;
 
     try {
-        await API.triggerResearch(oldBriefing.stop_id);
-        
+        const redoRes = await API.triggerResearch(oldBriefing.stop_id);
+
+        let redoProgressES = null;
+        if (redoRes && redoRes.session_id && researchTicker) {
+            researchTicker.start();
+            redoProgressES = API.streamProgress(redoRes.session_id, (evt) => {
+                researchTicker.push(evt.message);
+            });
+        }
+
         const oldTime = new Date(oldBriefing.created_at).getTime();
         const startTime = Date.now();
         const TIMEOUT_MS = 45000; // 45 seconds
-        
+
         // Poll
         const poll = setInterval(async () => {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
+                if (redoProgressES) redoProgressES.close();
+                if (researchTicker) researchTicker.stop();
                 content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
                 btn.disabled = false;
                 return;
@@ -2757,6 +2787,8 @@ async function redoBriefing(oldBriefing, btn) {
                     // Wait for newer timestamp
                     if (newTime > oldTime) {
                         clearInterval(poll);
+                        if (redoProgressES) redoProgressES.close();
+                        if (researchTicker) researchTicker.stop();
                         btn.disabled = false;
                         showBriefing(b); // Re-render with new data
                         renderMapStops();
@@ -3607,14 +3639,25 @@ async function handleGuideClick(voyage, button) {
         button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
         // Trigger
-        await API.triggerVoyageGuideResearch(voyage.id);
-        
+        const guideRes = await API.triggerVoyageGuideResearch(voyage.id);
+
+        // Stream progress updates into ticker
+        let guideProgressES = null;
+        if (guideRes && guideRes.session_id && researchTicker) {
+            researchTicker.start();
+            guideProgressES = API.streamProgress(guideRes.session_id, (evt) => {
+                researchTicker.push(evt.message);
+            });
+        }
+
         // Poll
         const poll = setInterval(async () => {
             try {
                 const resp = await API.getVoyageGuide(voyage.id);
                 if (resp && resp.guide && resp.guide.summary && resp.guide.summary.length > 0) {
                     clearInterval(poll);
+                    if (guideProgressES) guideProgressES.close();
+                    if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showVoyageGuide(resp); // Updates the already-open modal with data
                 }
@@ -3723,14 +3766,25 @@ async function redoGuide(oldGuide, btn) {
     btn.disabled = true;
 
     try {
-        await API.triggerVoyageGuideResearch(oldGuide.voyage_id);
+        const redoGuideRes = await API.triggerVoyageGuideResearch(oldGuide.voyage_id);
+
+        let redoGuideProgressES = null;
+        if (redoGuideRes && redoGuideRes.session_id && researchTicker) {
+            researchTicker.start();
+            redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, (evt) => {
+                researchTicker.push(evt.message);
+            });
+        }
+
         const oldTime = new Date(oldGuide.created_at).getTime();
         const startTime = Date.now();
-        const TIMEOUT_MS = 60000; 
-        
+        const TIMEOUT_MS = 60000;
+
         const poll = setInterval(async () => {
-             if (Date.now() - startTime > TIMEOUT_MS) {
+            if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
+                if (redoGuideProgressES) redoGuideProgressES.close();
+                if (researchTicker) researchTicker.stop();
                 content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p></div>';
                 btn.disabled = false;
                 return;
@@ -3741,6 +3795,8 @@ async function redoGuide(oldGuide, btn) {
                     const newTime = new Date(g.created_at).getTime();
                     if (newTime > oldTime) {
                         clearInterval(poll);
+                        if (redoGuideProgressES) redoGuideProgressES.close();
+                        if (researchTicker) researchTicker.stop();
                         btn.disabled = false;
                         showVoyageGuide(g);
                     }

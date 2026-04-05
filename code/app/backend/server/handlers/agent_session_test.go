@@ -93,7 +93,7 @@ func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 		SearchRadiusUnit: "nm",
 	}
 
-	h.performStopResearchLogic(stop)
+	h.performStopResearchLogic(stop, "")
 
 	// Session creation failed → /api/run must NOT have been called.
 	if *runCalled {
@@ -132,7 +132,7 @@ func TestPerformGuideResearch_SessionFailure_SavesEmptyGuide(t *testing.T) {
 		LocationName: &locName,
 	}
 
-	h.performGuideResearch(voyage)
+	h.performGuideResearch(voyage, "")
 
 	if *runCalled {
 		t.Error("expected /api/run to be skipped after session creation failure")

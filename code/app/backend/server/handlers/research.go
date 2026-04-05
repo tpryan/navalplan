@@ -148,39 +148,50 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
+
+	// Pre-register progress channel before spawning goroutine so early events are buffered.
+	h.ensureProgressChannel(sessionID, 25*time.Minute)
+
 	// Respond immediately
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "stop_id": idStr})
+	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "stop_id": idStr, "session_id": sessionID})
 
 	// Async processing
-	go h.performStopResearch(stop)
+	go h.performStopResearch(stop, sessionID)
 }
 
-func (h *Handler) performStopResearch(stop *models.Stop) {
+func (h *Handler) performStopResearch(stop *models.Stop, sessionID string) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
-	h.performStopResearchLogic(stop)
+	h.performStopResearchLogic(stop, sessionID)
 }
 
-func (h *Handler) performStopResearchLogic(stop *models.Stop) {
+func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
+	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Starting research for %s", stop.LocationName))
 
 	const appName = "harbourmaster"
 	const userID = "system"
-	sessionID := fmt.Sprintf("stop_%d", stop.ID)
+	// agentSessionID is stable per stop for ADK session management.
+	// sessionID is the progress stream key and must not be used for the ADK session
+	// because multiple stops may share the same progress sessionID in full-voyage research.
+	agentSessionID := fmt.Sprintf("stop_%d", stop.ID)
 
 	// Check for nearby existing research to reuse facilities
 	nearbyBriefing, nearbyErr := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
 	var reusableFacilities json.RawMessage
 
 	// 1. Create Session
-	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
+	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.saveEmptyBriefing(ctx, stop)
 		return
 	}
+
+	h.broadcastProgress(sessionID, "agent", fmt.Sprintf("Consulting the Harbourmaster for %s", stop.LocationName))
 
 	// 2. Build prompt
 	var locInfo string
@@ -200,7 +211,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	}
 
 	// 3. Run Agent
-	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
+	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		h.saveEmptyBriefing(ctx, stop)
@@ -273,6 +284,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		slog.ErrorContext(ctx, "Failed to save briefing", "error", err)
 	}
 	slog.InfoContext(ctx, fmt.Sprintf("Briefing saved for stop %d", stop.ID))
+	h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete for %s", stop.LocationName))
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
@@ -345,11 +357,17 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	sessionID := fmt.Sprintf("voyage_%d_%d", voyageID, time.Now().Unix())
+
+	// Pre-register progress channel before spawning goroutines so early events are buffered.
+	h.ensureProgressChannel(sessionID, 25*time.Minute)
+
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"msg":        "Full research started",
 		"voyage_id":  voyageID,
 		"stop_count": len(stops),
+		"session_id": sessionID,
 	})
 
 	go func() {
@@ -363,7 +381,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		go func() {
 			defer wg.Done()
 			slog.InfoContext(ctx, fmt.Sprintf("Starting guide research for voyage %d", voyageID))
-			h.performGuideResearch(voyage)
+			h.performGuideResearch(voyage, sessionID)
 		}()
 
 		// 2. Research each stop (Parallel)
@@ -374,7 +392,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 				defer wg.Done()
 				defer func() { <-h.ResearchSem }() // Release slot
 				slog.InfoContext(ctx, fmt.Sprintf("Starting stop research for stop %d", s.ID))
-				h.performStopResearchLogic(&s)
+				h.performStopResearchLogic(&s, sessionID)
 			}(stop)
 		}
 

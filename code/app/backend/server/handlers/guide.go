@@ -169,35 +169,43 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionID := fmt.Sprintf("guide_%d_%d", voyageID, time.Now().Unix())
+
+	// Pre-register progress channel before spawning goroutine so early events are buffered.
+	h.ensureProgressChannel(sessionID, 25*time.Minute)
+
 	// Respond immediately
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "voyage_id": idStr})
+	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "voyage_id": idStr, "session_id": sessionID})
 
 	// Async processing
-	go h.performGuideResearch(voyage)
+	go h.performGuideResearch(voyage, sessionID)
 }
 
-func (h *Handler) performGuideResearch(voyage *models.Voyage) {
+func (h *Handler) performGuideResearch(voyage *models.Voyage, sessionID string) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
-	h.performGuideResearchLogic(voyage)
+	h.performGuideResearchLogic(voyage, sessionID)
 }
 
-func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
+func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[guide-agent] Starting research for voyage %d", voyage.ID))
+	h.broadcastProgress(sessionID, "start", "Starting voyage guide research")
 
 	const appName = "pilot"
 	const userID = "system"
-	sessionID := fmt.Sprintf("voyage_%d", voyage.ID)
+	agentSessionID := fmt.Sprintf("voyage_%d", voyage.ID)
 
 	// 1. Create Session
-	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
+	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.saveEmptyGuide(ctx, voyage)
 		return
 	}
+
+	h.broadcastProgress(sessionID, "agent", "Consulting the Pilot guide agent")
 
 	// 2. Build prompt
 	locName := "Unknown"
@@ -213,7 +221,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail)
 
 	// 3. Run Agent
-	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
+	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		h.saveEmptyGuide(ctx, voyage)
@@ -259,6 +267,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 		slog.ErrorContext(ctx, "Failed to save voyage guide", "error", err)
 	}
 	slog.InfoContext(ctx, fmt.Sprintf("Voyage guide saved for voyage %d", voyage.ID))
+	h.broadcastProgress(sessionID, "done", "Voyage guide research complete")
 }
 
 func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *models.Voyage) {
