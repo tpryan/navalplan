@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -34,9 +35,26 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
-	people, _ := h.DB.ListPeople(r.Context(), limit, offset)
-	totalPeople, _ := h.DB.CountPeople(r.Context())
-	invites, _ := h.DB.ListInvitations(r.Context())
+	people, err := h.DB.ListPeople(r.Context(), limit, offset)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list people", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	totalPeople, err := h.DB.CountPeople(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to count people", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	invites, err := h.DB.ListInvitations(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list invitations", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	var view []AdminUserView
 
@@ -59,6 +77,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"users": map[string]interface{}{
 			"data":  view,
@@ -96,6 +115,10 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
 	email := r.PathValue("email")
-	h.DB.DeleteInvitation(r.Context(), email)
+	if err := h.DB.DeleteInvitation(r.Context(), email); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to delete invitation", "email", email, "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
