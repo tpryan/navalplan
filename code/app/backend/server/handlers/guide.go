@@ -204,8 +204,14 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	respSession, err := client.Post(createSessionURL, "application/json", nil)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
-	} else if respSession != nil {
-		respSession.Body.Close()
+		h.saveEmptyGuide(ctx, voyage)
+		return
+	}
+	respSession.Body.Close()
+	if respSession.StatusCode >= http.StatusInternalServerError {
+		slog.ErrorContext(ctx, "Agent session creation returned server error", "status", respSession.StatusCode)
+		h.saveEmptyGuide(ctx, voyage)
+		return
 	}
 
 	// 2. Run Agent
