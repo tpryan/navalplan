@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"app/datastore"
@@ -35,7 +36,7 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := s.getUserDataFromGoogle(r.FormValue("code"))
+	data, err := s.getUserDataFromGoogle(r.Context(), r.FormValue("code"))
 	if err != nil {
 		log.Error("getUserDataFromGoogle", "error", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -147,12 +148,19 @@ func generateStateOauthCookie(w http.ResponseWriter) (string, error) {
 	return state, nil
 }
 
-func (s *Server) getUserDataFromGoogle(code string) ([]byte, error) {
-	token, err := s.GoogleConfig.Exchange(context.Background(), code)
+func (s *Server) getUserDataFromGoogle(ctx context.Context, code string) ([]byte, error) {
+	token, err := s.GoogleConfig.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}
-	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
+	userinfoURL := "https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + url.QueryEscape(token.AccessToken)
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, userinfoURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build userinfo request: %s", err.Error())
+	}
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting user info: %s", err.Error())
 	}

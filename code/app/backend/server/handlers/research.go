@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	appcontext "app/context"
 	"app/models"
@@ -71,7 +72,13 @@ func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
 	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=12&size=600x400&maptype=roadmap&markers=color:red%%7C%f,%f&key=%s",
 		lat, lng, lat, lng, apiKey)
 
-	resp, err := http.Get(endpoint)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +105,13 @@ func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float
 	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s",
 		url.QueryEscape(query), url.QueryEscape(bounds), apiKey)
 
-	resp, err := http.Get(endpoint)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return 0, 0, err
 	}
