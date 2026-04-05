@@ -1,4 +1,4 @@
-.button-base, .btn {
+.btn {
   font-family: var(--font-primary);
   font-weight: 900; /* Heavy weight is key to the look */
   text-transform: uppercase; /* Often used */
@@ -13,7 +13,7 @@
   color: var(--brand-dark);
 }
 
-.button-base:hover, .btn:hover {
+.btn:hover {
   background-color: rgba(255, 255, 255, 0.9);
   transform: translateY(-1px);
 }

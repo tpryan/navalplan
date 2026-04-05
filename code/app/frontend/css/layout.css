@@ -95,8 +95,8 @@
   padding: 1rem;
 }
 
-/* List Items */
-.list-item, .voyage-item {
+/* Voyage List Items */
+.voyage-item {
   background-color: var(--surface-bg-dim-light);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
@@ -346,12 +346,6 @@
   margin-bottom: 1.5rem;
 }
 
-.briefing-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
 .weather-box, .tide-box {
   background: rgba(255, 255, 255, 0.5);
   padding: 1rem;
@@ -373,64 +367,6 @@
   margin-bottom: 5px;
 }
 
-/* --- Floating User Menu --- */
-#auth-container {
-  position: absolute;
-  top: 10px;
-  right: 50px;
-  z-index: 50; /* High z-index to ensure visibility */
-}
-
-#user-floating-menu {
-  background-color: var(--surface-bg);
-  backdrop-filter: blur(10px);
-  border: 2px solid var(--border-color);
-  border-radius: var(--border-radius); /* Match brand style (8px) */
-  box-shadow: var(--shadow-main);
-  padding: 5px 10px 5px 5px; 
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#user-floating-menu img.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--border-color);
-  object-fit: cover;
-}
-
-#user-floating-menu .menu-actions {
-    display: flex;
-    gap: 5px;
-    border-left: 1px solid var(--border-color);
-    padding-left: 8px;
-}
-
-#user-floating-menu .btn-icon {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-dark);
-  transition: all 0.2s;
-  padding: 0;
-}
-
-#user-floating-menu .btn-icon:hover {
-  background-color: rgba(0,0,0,0.1);
-  color: var(--brand-dark);
-}
-
-/* Login Button (Floating) */
-#btn-login-floating {
-    display: block; /* Ensure it respects box model */
-}
 
 /* --- Mobile Overrides --- */
 @media (max-width: 768px) {
@@ -488,11 +424,6 @@
     padding-right: 0 !important;
   }
 
-  /* Linearize Content */
-  .briefing-grid {
-      grid-template-columns: 1fr;
-  }
-
   .briefing-table, 
   .briefing-table tbody, 
   .briefing-table tr, 
@@ -523,17 +454,6 @@
   .briefing-table-label-width {
       width: auto !important;
       white-space: normal !important;
-  }
-
-  /* Linearize Overview Report */
-  .overview-table, 
-  .overview-table tbody, 
-  .overview-table tr, 
-  .overview-table td {
-      display: block;
-      width: 100% !important;
-      box-sizing: border-box;
-      border-spacing: 0;
   }
 
   .overview-card {

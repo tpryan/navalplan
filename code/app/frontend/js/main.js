@@ -1844,7 +1844,7 @@ async function handlePilotSuggestionsClick() {
 
 async function renderRecommendations() {
     try {
-        clearRecommendations();
+        clearRecommendationMarkers();
         if (!map || !currentVoyage) return;
 
         if (!Array.isArray(voyageRecommendations)) {
@@ -2020,10 +2020,14 @@ function clearPilotCircle() {
     if (pilotRadiusMarker) { pilotRadiusMarker.map = null; pilotRadiusMarker = null; }
 }
 
-function clearRecommendations() {
+function clearRecommendationMarkers() {
     recommendationMarkers.forEach(({ marker }) => marker.map = null);
     recommendationMarkers = [];
     document.getElementById('pilot-controls').classList.add('hidden');
+}
+
+function clearRecommendations() {
+    clearRecommendationMarkers();
     // Tear down any in-flight pilot research streams/polls
     if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
     if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
