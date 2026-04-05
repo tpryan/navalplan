@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -188,33 +187,18 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	ctx := context.Background()
 	slog.InfoContext(ctx, fmt.Sprintf("[guide-agent] Starting research for voyage %d", voyage.ID))
 
-	agentURL := h.AgentURL
-	if agentURL == "" {
-		agentURL = "http://127.0.0.1:8081"
-	}
-
-	appName := "pilot"
-	userID := "system"
+	const appName = "pilot"
+	const userID = "system"
 	sessionID := fmt.Sprintf("voyage_%d", voyage.ID)
 
-	client := h.AgentClient
-
 	// 1. Create Session
-	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	respSession, err := client.Post(createSessionURL, "application/json", nil)
-	if err != nil {
+	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.saveEmptyGuide(ctx, voyage)
 		return
 	}
-	respSession.Body.Close()
-	if respSession.StatusCode >= http.StatusInternalServerError {
-		slog.ErrorContext(ctx, "Agent session creation returned server error", "status", respSession.StatusCode)
-		h.saveEmptyGuide(ctx, voyage)
-		return
-	}
 
-	// 2. Run Agent
+	// 2. Build prompt
 	locName := "Unknown"
 	if voyage.LocationName != nil {
 		locName = *voyage.LocationName
@@ -227,42 +211,12 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
 	}
 	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail)
 
-	reqBody := AgentRunRequest{
-		AppName:   appName,
-		UserID:    userID,
-		SessionID: sessionID,
-	}
-	reqBody.NewMessage.Role = "user"
-	reqBody.NewMessage.Parts = []struct {
-		Text string `json:"text"`
-	}{{Text: prompt}}
-
-	jsonData, _ := json.Marshal(reqBody)
-	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
+	// 3. Run Agent
+	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to call agent", "error", err)
+		slog.ErrorContext(ctx, "Agent run failed", "error", err)
+		h.saveEmptyGuide(ctx, voyage)
 		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.ErrorContext(ctx, "Agent returned error", "body", string(body))
-		return
-	}
-
-	var events []AgentEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		slog.ErrorContext(ctx, "Failed to decode agent response", "error", err)
-		return
-	}
-
-	// Find the model response
-	var responseText string
-	for _, e := range events {
-		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			responseText = e.Content.Parts[0].Text
-		}
 	}
 
 	if responseText == "" {

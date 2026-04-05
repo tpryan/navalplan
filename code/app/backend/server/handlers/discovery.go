@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -181,94 +179,31 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 	}()
 	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Starting mining for month %d", month))
 
-	agentURL := h.AgentURL
-	if agentURL == "" {
-		agentURL = "http://127.0.0.1:8081"
-	}
-
-	appName := "commodore"
-	userID := "system"
+	const appName = "commodore"
+	const userID = "system"
 	sessionID := fmt.Sprintf("discovery_%d_%d", month, time.Now().Unix())
 
-	client := h.AgentClient
+	monthName := time.Month(month).String()
 
 	// 1. Create Session with initial state
-	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Creating agent session: %s", createSessionURL))
-
-	monthName := time.Month(month).String()
-	state := map[string]any{
-		"Month": monthName,
-	}
-	stateJSON, _ := json.Marshal(map[string]any{"state": state})
-
-	sessionReq, err := http.NewRequestWithContext(ctx, http.MethodPost, createSessionURL, bytes.NewBuffer(stateJSON))
-	if err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to build session request", "error", err)
-		return
-	}
-	sessionReq.Header.Set("Content-Type", "application/json")
-	respSession, err := client.Do(sessionReq)
-	if err != nil {
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Creating agent session for month %s", monthName))
+	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, map[string]any{"Month": monthName}); err != nil {
 		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "error", err)
 		return
 	}
-	respSession.Body.Close()
-	if respSession.StatusCode >= http.StatusInternalServerError {
-		slog.ErrorContext(ctx, "[discovery-mining] Agent session creation returned server error", "status", respSession.StatusCode)
-		return
-	}
 
-	// 2. Run Agent
+	// 2. Build prompt and run agent
 	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
 
-	reqBody := AgentRunRequest{
-		AppName:   appName,
-		UserID:    userID,
-		SessionID: sessionID,
-	}
-	reqBody.NewMessage.Role = "user"
-	reqBody.NewMessage.Parts = []struct {
-		Text string `json:"text"`
-	}{{Text: prompt}}
-
-	jsonData, _ := json.Marshal(reqBody)
 	slog.InfoContext(ctx, "[discovery-mining] Calling agent /api/run...")
-	runReq, err := http.NewRequestWithContext(ctx, http.MethodPost, agentURL+"/api/run", bytes.NewBuffer(jsonData))
+	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
 	if err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to build run request", "error", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Agent run failed", "error", err)
 		return
-	}
-	runReq.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(runReq)
-	if err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to call discovery agent", "error", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to read agent response body", "error", err)
-		return
-	}
-
-	var events []AgentEvent
-	if err := json.Unmarshal(bodyBytes, &events); err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to decode agent response. Raw body: %s", string(bodyBytes)), "error", err)
-		return
-	}
-
-	// Find the model response
-	var responseText string
-	for _, e := range events {
-		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			responseText += e.Content.Parts[0].Text
-		}
 	}
 
 	if responseText == "" {
-		slog.ErrorContext(ctx, "[discovery-mining] No response text found in events", "events", events)
+		slog.ErrorContext(ctx, "[discovery-mining] No response text from agent")
 		return
 	}
 

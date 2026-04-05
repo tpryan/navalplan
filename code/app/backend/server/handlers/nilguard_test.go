@@ -9,7 +9,20 @@ import (
 	"time"
 
 	"app/models"
+	"app/service"
 )
+
+func newHandlerWithAgent(t *testing.T, agentURL string) *Handler {
+	t.Helper()
+	client := &http.Client{Timeout: 5 * time.Second}
+	return &Handler{
+		DB:          &sessionTrackingStore{},
+		AgentURL:    agentURL,
+		AgentClient: client,
+		Agent:       &service.AgentRunner{Client: client, BaseURL: agentURL},
+		ResearchSem: make(chan struct{}, 10),
+	}
+}
 
 // agentOKServer returns a test server that accepts requests without error
 // but returns an empty JSON array for /api/run so that no DB writes occur.
@@ -30,13 +43,7 @@ func TestPerformGuideResearch_NilLatLng_DoesNotPanic(t *testing.T) {
 	srv := agentOKServer(t)
 	defer srv.Close()
 
-	store := &sessionTrackingStore{}
-	h := &Handler{
-		DB:          store,
-		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
-		ResearchSem: make(chan struct{}, 10),
-	}
+	h := newHandlerWithAgent(t, srv.URL)
 
 	precise := "Some Marina"
 	voyage := &models.Voyage{
@@ -61,13 +68,7 @@ func TestPerformGuideResearch_WithLatLng_IncludesCoords(t *testing.T) {
 
 	_ = capturedPrompt // used via agent server; coords verified via no-panic
 
-	store := &sessionTrackingStore{}
-	h := &Handler{
-		DB:          store,
-		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
-		ResearchSem: make(chan struct{}, 10),
-	}
+	h := newHandlerWithAgent(t, srv.URL)
 
 	locName := "Tortola"
 	precise := "Road Harbour"
@@ -100,13 +101,7 @@ func TestPerformRecommendationGeneration_NilLatLng_DoesNotPanic(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store := &sessionTrackingStore{}
-	h := &Handler{
-		DB:          store,
-		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
-		ResearchSem: make(chan struct{}, 10),
-	}
+	h := newHandlerWithAgent(t, srv.URL)
 
 	voyage := &models.Voyage{
 		ID:               20,
@@ -136,13 +131,7 @@ func TestPerformRecommendationGeneration_WithLatLng_CallsRun(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store := &sessionTrackingStore{}
-	h := &Handler{
-		DB:          store,
-		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
-		ResearchSem: make(chan struct{}, 10),
-	}
+	h := newHandlerWithAgent(t, srv.URL)
 
 	lat := 18.45
 	lng := -64.62

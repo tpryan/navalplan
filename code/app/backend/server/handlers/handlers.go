@@ -12,6 +12,7 @@ import (
 
 	"app/datastore"
 	"app/models"
+	"app/service"
 
 	"google.golang.org/api/idtoken"
 )
@@ -22,6 +23,7 @@ type Handler struct {
 	ContentDir  string
 	AgentURL    string
 	AgentClient *http.Client
+	Agent       *service.AgentRunner
 	ResearchSem chan struct{}
 
 	// recStreams holds active SSE channels keyed by session ID.
@@ -51,6 +53,7 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		ContentDir:  contentDir,
 		AgentURL:    agentURL,
 		AgentClient: client,
+		Agent:       &service.AgentRunner{Client: client, BaseURL: agentURL},
 		ResearchSem: make(chan struct{}, 10),
 		recStreams:   make(map[string]chan models.VoyageRecommendation),
 	}

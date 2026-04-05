@@ -13,6 +13,7 @@ import (
 
 	"app/datastore"
 	"app/models"
+	"app/service"
 )
 
 // sessionTrackingStore records CreateBriefing and CreateVoyageGuide calls so
@@ -73,10 +74,12 @@ func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 	defer agentSrv.Close()
 
 	store := &sessionTrackingStore{}
+	client := &http.Client{Timeout: 5 * time.Second}
 	h := &Handler{
 		DB:          store,
 		AgentURL:    agentSrv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
+		AgentClient: client,
+		Agent:       &service.AgentRunner{Client: client, BaseURL: agentSrv.URL},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -113,10 +116,12 @@ func TestPerformGuideResearch_SessionFailure_SavesEmptyGuide(t *testing.T) {
 	defer agentSrv.Close()
 
 	store := &sessionTrackingStore{}
+	client2 := &http.Client{Timeout: 5 * time.Second}
 	h := &Handler{
 		DB:          store,
 		AgentURL:    agentSrv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
+		AgentClient: client2,
+		Agent:       &service.AgentRunner{Client: client2, BaseURL: agentSrv.URL},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -148,10 +153,12 @@ func TestPerformRecommendation_SessionFailure_DoesNotCallRun(t *testing.T) {
 	defer agentSrv.Close()
 
 	store := &sessionTrackingStore{}
+	client3 := &http.Client{Timeout: 5 * time.Second}
 	h := &Handler{
 		DB:          store,
 		AgentURL:    agentSrv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
+		AgentClient: client3,
+		Agent:       &service.AgentRunner{Client: client3, BaseURL: agentSrv.URL},
 		ResearchSem: make(chan struct{}, 10),
 	}
 

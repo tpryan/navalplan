@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -212,15 +210,8 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 	ctx := context.Background()
 	slog.InfoContext(ctx, fmt.Sprintf("[navigator-agent] Generating recommendations for voyage %d", v.ID))
 
-	agentURL := h.AgentURL
-	if agentURL == "" {
-		agentURL = "http://127.0.0.1:8081"
-	}
-
-	appName := "specialist"
-	userID := "system"
-
-	client := h.AgentClient
+	const appName = "specialist"
+	const userID = "system"
 
 	// 0. Clear old recommendations
 	if err := h.DB.DeleteVoyageRecommendations(ctx, v.ID); err != nil {
@@ -228,19 +219,12 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 	}
 
 	// 1. Create Session
-	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	respSession, err := client.Post(createSessionURL, "application/json", nil)
-	if err != nil {
+	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		return
 	}
-	respSession.Body.Close()
-	if respSession.StatusCode >= http.StatusInternalServerError {
-		slog.ErrorContext(ctx, "Agent session creation returned server error", "status", respSession.StatusCode)
-		return
-	}
 
-	// 2. Run Agent
+	// 2. Build prompt
 	if v.Latitude == nil || v.Longitude == nil {
 		slog.ErrorContext(ctx, "Voyage has no coordinates, cannot generate recommendations", "voyage_id", v.ID)
 		return
@@ -254,76 +238,12 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 	prompt := fmt.Sprintf("Recommend 15-20 anchorages, moorings, and marinas within %d %s of %f N, %f W (%s).",
 		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, locInfo)
 
-	reqBody := AgentRunRequest{
-		AppName:   appName,
-		UserID:    userID,
-		SessionID: sessionID,
-		Stream:    true,
-	}
-	reqBody.NewMessage.Role = "user"
-	reqBody.NewMessage.Parts = []struct {
-		Text string `json:"text"`
-	}{{Text: prompt}}
-
-	jsonData, _ := json.Marshal(reqBody)
-	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to call agent", "error", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.ErrorContext(ctx, "Agent returned error", "body", string(body))
-		return
-	}
-
-	// 3. Stream and Parse Recommendations
-	// Read first byte to determine format
-	firstByte := make([]byte, 1)
-	n, _ := resp.Body.Read(firstByte)
-	
-	var fullText string
+	// 3. Run Agent (streaming)
 	var parsedCount int
-
-	if n > 0 && firstByte[0] == '[' {
-		// It's a full array of events (likely non-streamed or final output)
-		// Read the rest
-		rest, _ := io.ReadAll(resp.Body)
-		var events []AgentEvent
-		allData := append(firstByte, rest...)
-		if err := json.Unmarshal(allData, &events); err != nil {
-			slog.ErrorContext(ctx, "Failed to unmarshal agent events array", "error", err)
-		} else {
-			for _, e := range events {
-				if len(e.Content.Parts) > 0 {
-					fullText += e.Content.Parts[0].Text
-				}
-			}
-		}
-	} else {
-		// It's likely NDJSON or a single object (streaming mode)
-		// We need to re-read the first byte from our combined reader
-		multi := io.MultiReader(bytes.NewReader(firstByte), resp.Body)
-		decoder := json.NewDecoder(multi)
-		for {
-			var event AgentEvent
-			if err := decoder.Decode(&event); err == io.EOF {
-				break
-			} else if err != nil {
-				// Try to see if it's just raw text remaining
-				slog.ErrorContext(ctx, "Failed to decode agent event", "error", err)
-				break
-			}
-
-			if len(event.Content.Parts) > 0 {
-				text := event.Content.Parts[0].Text
-				fullText += text
-				// Optional: In a more advanced implementation, we could try parsing individual 
-				// recommendations from fullText here for even faster broadcast.
-			}
-		}
+	fullText, err := h.Agent.RunStreaming(ctx, appName, userID, sessionID, prompt)
+	if err != nil {
+		slog.ErrorContext(ctx, "Agent run failed", "error", err)
+		return
 	}
 
 	fullText = cleanJSON(fullText)
