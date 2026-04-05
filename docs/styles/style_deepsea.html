@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavalPlan: Deep Sea Style Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <style>
+        :root {
+            --brand-midnight: #000814;
+            --brand-neon: #00F5D4;
+            --brand-glow: rgba(0, 245, 212, 0.3);
+            --brand-magenta: #FF00FF;
+            --text-light: #E0E1DD;
+            --border-color: rgba(0, 245, 212, 0.4);
+            --surface-bg: rgba(0, 8, 20, 0.8);
+            --border-radius: 12px;
+            --shadow-glow: 0 0 15px var(--brand-glow);
+            --font-display: "Orbitron", sans-serif;
+            --font-body: "Inter", sans-serif;
+        }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--text-light);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+        }
+
+        .main-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--brand-midnight);
+            box-shadow: 0 0 50px rgba(0, 245, 212, 0.1);
+        }
+
+        header {
+            background: linear-gradient(180deg, #001219 0%, var(--brand-midnight) 100%);
+            padding: 3rem 2rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            margin: 0;
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            font-weight: 900;
+            letter-spacing: 8px;
+            color: var(--brand-neon);
+            text-shadow: 0 0 10px var(--brand-glow);
+        }
+
+        nav {
+            background: rgba(0, 8, 20, 0.9);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        nav a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        nav a:hover { color: var(--brand-neon); }
+
+        .container { padding: 2rem; }
+
+        section { margin-bottom: 4rem; }
+
+        h2 {
+            border-left: 4px solid var(--brand-neon);
+            padding-left: 1rem;
+            color: var(--brand-neon);
+            text-transform: uppercase;
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            margin-top: 0;
+            letter-spacing: 2px;
+        }
+
+        .btn {
+            font-family: var(--font-display);
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: var(--border-radius);
+            padding: 0.6rem 1.5rem;
+            cursor: pointer;
+            border: 1px solid var(--brand-neon);
+            background: transparent;
+            color: var(--brand-neon);
+            transition: all 0.3s;
+            box-shadow: inset 0 0 5px var(--brand-glow);
+        }
+
+        .btn:hover {
+            background: var(--brand-neon);
+            color: var(--brand-midnight);
+            box-shadow: 0 0 20px var(--brand-glow);
+        }
+
+        .glass-panel {
+            background: var(--surface-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-glow);
+            padding: 1.5rem;
+        }
+
+        .interface-item {
+            display: flex;
+            gap: 3rem;
+            margin-bottom: 3rem;
+            align-items: flex-start;
+        }
+
+        .interface-preview {
+            flex: 1.2;
+            background-color: #000;
+            background-image: 
+                radial-gradient(circle at center, #001219 0%, #000 100%);
+            border: 1px solid #111;
+            border-radius: var(--border-radius);
+            min-height: 250px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .ticker-preview {
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            color: var(--brand-neon);
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem;
+            font-family: var(--font-display);
+            font-size: 0.7rem;
+            color: #444;
+            letter-spacing: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <header>
+        <h1>Deep Sea Protocol</h1>
+        <p>Tactical Immersion & Night Navigation</p>
+    </header>
+
+    <nav>
+        <a href="#optics">Optics</a>
+        <a href="#sonar">Sonar Map</a>
+        <a href="#systems">Systems</a>
+    </nav>
+
+    <div class="container">
+        <section id="optics">
+            <h2>Optical Palette</h2>
+            <div style="display: flex; gap: 2rem;">
+                <div style="flex: 1; text-align: center;">
+                    <div style="height: 80px; background: var(--brand-midnight); border: 1px solid var(--brand-neon); border-radius: 8px;"></div>
+                    <code>MIDNIGHT</code>
+                </div>
+                <div style="flex: 1; text-align: center;">
+                    <div style="height: 80px; background: var(--brand-neon); border-radius: 8px; box-shadow: 0 0 15px var(--brand-neon);"></div>
+                    <code>PHOSPHOR</code>
+                </div>
+            </div>
+        </section>
+
+        <section id="sonar">
+            <h2>Sonar Map Visualization</h2>
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Active Trajectory</h3>
+                    <p>Neon cyan lines with subtle outer glows. Markers appear as glowing blips.</p>
+                </div>
+                <div class="interface-preview">
+                    <!-- Glow Line -->
+                    <svg style="position: absolute; width: 100%; height: 100%;">
+                        <defs>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <line x1="20%" y1="70%" x2="50%" y2="30%" stroke="var(--brand-neon)" stroke-width="2" filter="url(#glow)" />
+                        <line x1="50%" y1="30%" x2="80%" y2="50%" stroke="var(--brand-neon)" stroke-width="2" filter="url(#glow)" />
+                    </svg>
+                    <!-- Phosphor Marker -->
+                    <div style="position: absolute; top: 30%; left: 50%; width: 10px; height: 10px; background: var(--brand-neon); border-radius: 50%; box-shadow: 0 0 15px var(--brand-neon);"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="systems">
+            <h2>System Interfaces</h2>
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Dark Glass Panels</h3>
+                    <p>High blur, low opacity backgrounds with glowing hairline borders.</p>
+                </div>
+                <div class="interface-preview">
+                    <div class="glass-panel" style="width: 220px;">
+                        <div style="font-family: var(--font-display); font-size: 0.7rem; color: var(--brand-neon); margin-bottom: 10px;">SUBSYSTEM: BRAVO</div>
+                        <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-bottom: 15px;">
+                            <div style="width: 65%; height: 100%; background: var(--brand-neon); box-shadow: 0 0 10px var(--brand-neon);"></div>
+                        </div>
+                        <button class="btn" style="width: 100%; font-size: 0.7rem;">INITIATE</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Oscilloscope Charts</h3>
+                    <p>Tide data rendered as a glowing frequency wave with gradient fills.</p>
+                </div>
+                <div class="interface-preview">
+                    <div style="width: 80%; height: 120px; position: relative;">
+                        <svg viewBox="0 0 100 50" preserveAspectRatio="none" style="width: 100%; height: 100%;">
+                            <defs>
+                                <linearGradient id="waveGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--brand-neon)" stop-opacity="0.5" />
+                                    <stop offset="100%" stop-color="var(--brand-neon)" stop-opacity="0" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M0,40 Q25,5 50,25 T100,10 L100,50 L0,50 Z" fill="url(#waveGrad)" />
+                            <path d="M0,40 Q25,5 50,25 T100,10" fill="none" stroke="var(--brand-neon)" stroke-width="1.5" filter="url(#glow)" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        DEEP SEA INTERFACE // SECTOR 7G // ENCRYPTED
+    </footer>
+</div>
+
+</body>
+</html>

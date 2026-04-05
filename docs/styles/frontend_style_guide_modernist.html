@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavalPlan: Coastal Modernist Style Guide & Inventory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <style>
+        :root {
+            --brand-ocean: #F0F4F7;
+            --brand-navy: #1B263B;
+            --brand-accent: #583D1B;
+            --brand-blue: #3b82f6;
+            --text-main: #2D3436;
+            --text-muted: #636E72;
+            --surface-card: #FFFFFF;
+            --border-radius: 32px;
+            --border-radius-sm: 16px;
+            --shadow-soft: 0 15px 40px rgba(0,0,0,0.04);
+            --font-display: "Raleway", sans-serif;
+            --font-body: "Plus Jakarta Sans", sans-serif;
+        }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--text-main);
+            background-color: var(--brand-ocean);
+            margin: 0;
+            padding: 0;
+            line-height: 1.8;
+        }
+
+        .main-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: transparent;
+        }
+
+        header {
+            text-align: center;
+            padding: 6rem 2rem;
+        }
+
+        header h1 {
+            margin: 0;
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            color: var(--brand-accent);
+            font-size: 3rem;
+        }
+
+        header p {
+            color: var(--text-muted);
+            margin-top: 1rem;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
+
+        nav {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 4rem;
+            position: sticky;
+            top: 2rem;
+            z-index: 100;
+        }
+
+        nav .nav-pill {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            padding: 0.8rem 2.5rem;
+            border-radius: 100px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            gap: 2rem;
+            border: 1px solid white;
+        }
+
+        nav a {
+            color: var(--text-main);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+
+        nav a:hover { opacity: 1; color: var(--brand-blue); }
+
+        .container {
+            padding: 0 2rem 6rem 2rem;
+        }
+
+        section {
+            background: var(--surface-card);
+            border-radius: var(--border-radius);
+            padding: 5rem;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 6rem;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            color: var(--brand-navy);
+            margin-top: 0;
+            font-size: 2.2rem;
+            letter-spacing: -0.02em;
+            margin-bottom: 3rem;
+        }
+
+        h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            color: var(--brand-accent);
+            text-transform: uppercase;
+            font-size: 1.1rem;
+            letter-spacing: 0.1em;
+            margin-top: 3rem;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .color-card {
+            text-align: left;
+        }
+
+        .color-swatch {
+            height: 100px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 1.2rem;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+        }
+
+        .typography-example {
+            border: 1px solid #f1f5f9;
+            padding: 2rem;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 2rem;
+            background-color: #fafbfc;
+        }
+
+        .font-primary { font-family: var(--font-display); }
+        .font-secondary { font-family: var(--font-body); }
+
+        .btn-preview {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+            padding: 2rem;
+            background: #f8fafd;
+            border-radius: var(--border-radius-sm);
+        }
+
+        .btn {
+            font-family: var(--font-body);
+            font-weight: 800;
+            padding: 1rem 2.2rem;
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .btn.primary {
+            background: var(--brand-navy);
+            color: white;
+            box-shadow: 0 10px 25px rgba(27, 38, 59, 0.15);
+        }
+
+        .btn.secondary {
+            background: #ffffff;
+            color: var(--brand-navy);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .btn.danger {
+            background-color: #fee2e2;
+            color: #ef4444;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+
+        .interface-item {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 5rem;
+            margin-bottom: 6rem;
+            align-items: flex-start;
+        }
+
+        .interface-description {
+            padding-top: 1rem;
+        }
+
+        .interface-preview {
+            background: #F8FAFD;
+            border-radius: var(--border-radius);
+            min-height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #edf2f7;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.02);
+        }
+
+        .interface-preview::after {
+            content: 'Background: Silver Map';
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            font-size: 10px;
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.8);
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-soft);
+            padding: 2.5rem;
+        }
+
+        .ticker-preview {
+            background: white;
+            border-radius: 100px;
+            padding: 1rem 2.5rem;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-weight: 700;
+            color: var(--brand-navy);
+            box-shadow: var(--shadow-soft);
+            border: 1px solid #f1f5f9;
+        }
+
+        .sidebar-mock {
+            width: 280px;
+            background: white;
+            border-radius: var(--border-radius);
+            height: 450px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 2rem;
+            font-weight: 900;
+            color: var(--brand-accent);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+        }
+
+        .sidebar-item-modern {
+            margin: 0 1rem 1rem 1rem;
+            padding: 1.2rem;
+            background: #f8fafc;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border: 1px solid #f1f5f9;
+        }
+
+        .briefing-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 1.5rem;
+        }
+
+        .briefing-table th {
+            text-align: left;
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px 0 0 8px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+        }
+
+        .briefing-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .badge {
+            padding: 0.4rem 1.2rem;
+            border-radius: 100px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: white;
+        }
+
+        .badge-standard { background: #3b82f6; }
+        .badge-regional { background: #f59e0b; }
+        .badge-gem { background: #8b5cf6; }
+        .badge-challenging { background: #ef4444; }
+
+        footer {
+            text-align: center;
+            padding: 6rem;
+            opacity: 0.3;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--brand-navy);
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <header>
+        <h1>Coastal Modernist</h1>
+        <p>Frontend Style Guide & Interface Inventory</p>
+    </header>
+
+    <nav>
+        <div class="nav-pill">
+            <a href="#colors">Colors</a>
+            <a href="#typography">Typography</a>
+            <a href="#buttons">Buttons</a>
+            <a href="#map-views">Map Views</a>
+            <a href="#reports">Reports</a>
+            <a href="#interfaces">Interfaces</a>
+            <a href="#components">Components</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section id="colors">
+            <h2>Brand Colors</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-navy);"></div>
+                    <code>Deep Navy</code><br>#1B263B
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-accent);"></div>
+                    <code>Signature Bronze</code><br>#583D1B
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-blue);"></div>
+                    <code>Action Blue</code><br>#3B82F6
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-ocean);"></div>
+                    <code>Ocean Grey</code><br>#F0F4F7
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: #FFFFFF; border: 1px solid #eee;"></div>
+                    <code>Pure White</code><br>#FFFFFF
+                </div>
+            </div>
+
+            <h3>UI Colors</h3>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: #2D3436;"></div>
+                    <code>Text Main</code>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: #636E72;"></div>
+                    <code>Text Muted</code>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: rgba(255, 255, 255, 0.9);"></div>
+                    <code>Surface Alt</code>
+                </div>
+            </div>
+        </section>
+
+        <section id="typography">
+            <h2>Typography</h2>
+            <div class="typography-example">
+                <h3 class="font-primary" style="margin-top:0">Primary Font: Raleway</h3>
+                <p class="font-primary">Raleway is used for headings and high-impact branding. It provides a clean, modern, yet sturdy nautical feel.</p>
+                <p class="font-primary" style="font-weight: 900; text-transform: uppercase; font-size: 1.5rem; letter-spacing: 0.15em;">HEAVY WEIGHT (900) - BRANDING</p>
+            </div>
+
+            <div class="typography-example">
+                <h3 class="font-secondary" style="margin-top:0">Secondary Font: Plus Jakarta Sans</h3>
+                <p class="font-secondary">Plus Jakarta Sans is the primary interface font. It offers exceptional legibility and a modern geometric aesthetic for data and body text.</p>
+            </div>
+        </section>
+
+        <section id="buttons">
+            <h2>Buttons</h2>
+            <div class="btn-preview">
+                <button class="btn primary">+ New Voyage</button>
+                <button class="btn secondary"><span class="material-symbols-outlined">explore</span> Discover</button>
+                <button class="btn danger"><span class="material-symbols-outlined">delete</span> Delete</button>
+                <button class="btn secondary"><span class="material-symbols-outlined">edit</span> Edit</button>
+            </div>
+            <p class="text-gray" style="margin-top: 1.5rem; font-size: 0.9rem; color: var(--text-muted);">
+                Buttons use extreme <code>50px</code> rounding and <code>Plus Jakarta Sans</code> at a heavy weight for a premium SaaS feel.
+            </p>
+        </section>
+
+        <section id="map-views">
+            <h2>Large Map Views</h2>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Standard Planning Mode</h3>
+                    <p>Primary planning interface. Features a desaturated silver map base with minimalist markers and connections.</p>
+                    <ul style="padding-left: 1.5rem; color: var(--text-muted);">
+                        <li><strong>Minimalist Path:</strong> A subtle navy dashed line connects stops.</li>
+                        <li><strong>Circular Nodes:</strong> Stops are represented by clean white circles with navy centers.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <!-- Path -->
+                    <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
+                        <line x1="40%" y1="35%" x2="60%" y2="55%" stroke="var(--brand-navy)" stroke-width="2" stroke-dasharray="10,10" opacity="0.2" />
+                        <line x1="60%" y1="55%" x2="50%" y2="80%" stroke="var(--brand-navy)" stroke-width="2" stroke-dasharray="10,10" opacity="0.2" />
+                    </svg>
+                    <!-- Modern Nodes -->
+                    <div style="position: absolute; top: 35%; left: 40%; width: 40px; height: 40px; background: white; border-radius: 50%; box-shadow: 0 10px 30px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%);">
+                        <div style="width: 12px; height: 12px; background: var(--brand-blue); border-radius: 50%;"></div>
+                    </div>
+                    <div style="position: absolute; top: 55%; left: 60%; width: 40px; height: 40px; background: white; border-radius: 50%; box-shadow: 0 10px 30px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%);">
+                        <div style="width: 12px; height: 12px; background: var(--brand-navy); border-radius: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Pilot Mode (Research)</h3>
+                    <p>Research interface utilizing a "Radar" scan aesthetic. AI-generated spots are highlighted with clean bubble UI.</p>
+                    <ul style="padding-left: 1.5rem; color: var(--text-muted);">
+                        <li><strong>Scan Radius:</strong> A monochromatic blue circle with precision labels.</li>
+                        <li><strong>Bubble Recommendations:</strong> Floating cards with soft shadows and minimal icons.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <!-- Radius -->
+                    <div style="width: 220px; height: 220px; border-radius: 50%; border: 2px solid var(--brand-blue); background: rgba(59, 130, 246, 0.03); position: relative; display: flex; align-items: center; justify-content: center;">
+                         <div style="position: absolute; top: 0; background: var(--brand-blue); color: white; padding: 4px 12px; border-radius: 100px; font-size: 0.65rem; font-weight: 800; transform: translateY(-50%);">42 NM SCAN</div>
+                         <div style="width: 10px; height: 10px; background: var(--brand-blue); border-radius: 50%; box-shadow: 0 0 20px var(--brand-blue);"></div>
+                    </div>
+                    <!-- Bubble Mock -->
+                    <div style="position: absolute; top: 20%; right: 15%; background: white; padding: 1rem; border-radius: 20px; box-shadow: 0 15px 30px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 10px; border: 1px solid #f1f5f9;">
+                        <span class="material-symbols-outlined" style="color: #10b981; font-size: 18px;">anchor</span>
+                        <div style="font-weight: 800; font-size: 0.65rem;">HIDDEN COVE</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Commodore Mode (Discovery)</h3>
+                    <p>Global discovery view. Seasonal data is filtered through a centered premium control panel.</p>
+                    <ul style="padding-left: 1.5rem; color: var(--text-muted);">
+                        <li><strong>Pill Controls:</strong> Centered month slider with high-key legend.</li>
+                        <li><strong>Soft Highlights:</strong> Regions are indicated with low-opacity colorful polygons.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);">
+                        <div class="glass-panel" style="padding: 1.5rem 3rem; min-width: 300px; border-radius: 100px;">
+                            <div style="font-weight: 800; color: var(--brand-navy); margin-bottom: 8px; font-size: 0.8rem; text-align: center; text-transform: uppercase; letter-spacing: 0.1em;">Month: April</div>
+                            <input type="range" style="width: 100%; accent-color: var(--brand-blue);">
+                        </div>
+                    </div>
+                    <!-- Region -->
+                    <div style="width: 60%; height: 40%; background: rgba(139, 92, 246, 0.05); border: 2px solid #8b5cf6; border-radius: 40% 60% 30% 70%; display: flex; align-items: center; justify-content: center; color: #8b5cf6; font-weight: 800; font-size: 0.8rem; letter-spacing: 0.1em;">PACIFIC NW</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="reports">
+            <h2>Voyage Report Formats</h2>
+            <p>Comprehensive reports provided in two high-key modernist formats.</p>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>1. Editorial Web View</h3>
+                    <p>Clean, modular layout designed for browser viewing. Emphasizes typographic hierarchy and white space.</p>
+                    <ul style="padding-left: 1.5rem; color: var(--text-muted);">
+                        <li><strong>Module Grid:</strong> Generous gaps and subtle borders.</li>
+                        <li><strong>Refined Charts:</strong> Monochromatic blue visualizations.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <div style="width: 350px; background: white; border-radius: 32px; padding: 3rem; box-shadow: var(--shadow-soft);">
+                        <div style="font-weight: 800; font-size: 1.2rem; color: var(--brand-navy); margin-bottom: 2rem;">Voyage Synthesis</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="background: #f8fafc; border-radius: 20px; padding: 1.5rem; text-align: center;">
+                                <div style="font-weight: 800; font-size: 1.5rem; color: var(--brand-blue);">74°</div>
+                                <div style="font-size: 0.55rem; font-weight: 800; opacity: 0.5;">TEMPERATURE</div>
+                            </div>
+                            <div style="background: #f8fafc; border-radius: 20px; padding: 1.5rem; text-align: center;">
+                                <div style="font-weight: 800; font-size: 1.5rem; color: var(--brand-navy);">12</div>
+                                <div style="font-size: 0.55rem; font-weight: 800; opacity: 0.5;">STOPS</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>2. Pro Clipboard Format</h3>
+                    <p>Optimized for cross-platform fidelity. Transforms complex bubble UI into clean, universal tables.</p>
+                </div>
+                <div class="interface-preview" style="background: white;">
+                    <div style="width: 100%; padding: 2rem; font-family: sans-serif;">
+                        <h2 style="font-size: 1.2rem; color: #1B263B; margin-bottom: 1rem;">Baja Expedition 2026</h2>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 15px; border: 1px solid #f1f5f9; border-radius: 12px; background: #fafbfc;">
+                                    <strong style="display: block; font-size: 0.8rem; color: #636E72;">MON, MAY 04</strong>
+                                    <span style="font-weight: 700;">Parham Town</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="interfaces">
+            <h2>Interface Inventory</h2>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Global Utility Navigation</h3>
+                    <p>A floating "Super-Pill" menu for user identity and system controls.</p>
+                </div>
+                <div class="interface-preview" style="justify-content: flex-end; align-items: flex-start; padding: 3rem;">
+                    <div style="background: white; border-radius: 100px; padding: 8px 25px; display: flex; align-items: center; gap: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #eee; overflow: hidden;">
+                            <img src="https://ui-avatars.com/api/?name=Captain&background=1B263B&color=fff" style="width: 100%;">
+                        </div>
+                        <span class="material-symbols-outlined" style="font-size: 20px; opacity: 0.3;">dark_mode</span>
+                        <span class="material-symbols-outlined" style="font-size: 20px; color: var(--brand-blue);">logout</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Voyage Dashboard (Sidebar)</h3>
+                    <p>Minimalist container for trip management. Cards emphasize content through generous white space.</p>
+                </div>
+                <div class="interface-preview">
+                    <div class="sidebar-mock">
+                        <div class="sidebar-header">PLAN</div>
+                        <div style="padding: 0 2rem 2rem 2rem;">
+                            <button class="btn primary" style="width: 100%; font-size: 0.75rem;">NEW VOYAGE</button>
+                        </div>
+                        <div class="sidebar-item-modern" style="border-left: 4px solid var(--brand-blue);">
+                            <div style="font-size: 0.9rem;">Baja Expedition</div>
+                            <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">MAY 2026</div>
+                        </div>
+                        <div class="sidebar-item-modern" style="opacity: 0.5;">
+                            <div style="font-size: 0.9rem;">Catalina Weekend</div>
+                            <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">NO DATES</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Briefing Modal</h3>
+                    <p>Detailed data views grouped into clean, airy modules.</p>
+                </div>
+                <div class="interface-preview">
+                    <div style="background: white; width: 320px; border-radius: 32px; padding: 2.5rem; box-shadow: 0 25px 60px rgba(0,0,0,0.08);">
+                        <h2 style="font-size: 1.4rem; margin-bottom: 1.5rem;">Roche Harbor</h2>
+                        <div style="background: #f8fafc; padding: 1.2rem; border-radius: 20px; margin-bottom: 1.5rem;">
+                            <strong style="font-size: 0.7rem; color: var(--brand-blue); text-transform: uppercase;">Forecast</strong>
+                            <div style="font-weight: 800; margin-top: 5px;">15KTS NW • SUNNY</div>
+                        </div>
+                        <table class="briefing-table">
+                            <tr><th>Tide</th><td>8.5FT</td></tr>
+                            <tr><th>Time</th><td>10:00</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Admin Console</h3>
+                    <p>A restricted modal for managing users and invitations. Features a clean table layout and pagination.</p>
+                    <ul>
+                        <li><strong>Invite User:</strong> Email input and invite button.</li>
+                        <li><strong>User Table:</strong> Lists email, status, and actions.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <div style="background: white; width: 350px; border-radius: 32px; padding: 2.5rem; box-shadow: 0 25px 60px rgba(0,0,0,0.08);">
+                        <h2 style="font-size: 1.4rem; margin-bottom: 1.5rem;">Admin Console</h2>
+                        <div style="display: flex; gap: 10px; margin-bottom: 2rem;">
+                            <input type="text" placeholder="user@example.com" style="flex: 1; border: 1px solid #f1f5f9; border-radius: 12px; padding: 12px; background: #f8fafc; font-family: inherit; font-size: 0.8rem;">
+                            <button class="btn primary" style="padding: 0.8rem 1.5rem; font-size: 0.7rem;">INVITE</button>
+                        </div>
+                        <table class="briefing-table">
+                            <tr><th>Email</th><td>STATUS</td></tr>
+                            <tr><td>admin@navalplan.com</td><td><span class="badge badge-standard">ACTIVE</span></td></tr>
+                            <tr><td>guest@test.com</td><td><span class="badge badge-regional" style="background: #f1f5f9; color: var(--text-muted);">PENDING</span></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Login Screen</h3>
+                    <p>High-key entry point with desaturated oceanic imagery and centered "Bubble" login.</p>
+                </div>
+                <div class="interface-preview" style="background-image: linear-gradient(rgba(240, 244, 247, 0.8), rgba(240, 244, 247, 0.8)), url('https://images.unsplash.com/photo-1534008897995-27a23e859048?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'); background-size: cover;">
+                    <div style="background: white; border-radius: 40px; padding: 4rem; text-align: center; box-shadow: 0 30px 70px rgba(0,0,0,0.1); border: 1px solid white;">
+                        <h1 style="font-size: 2rem; margin: 0; font-family: var(--font-display); letter-spacing: 0.2em; color: var(--brand-accent);">PLAN</h1>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 3rem; font-weight: 600;">PROFESSIONAL EDITION</p>
+                        <button class="btn primary" style="width: 100%;">Sign In</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="components">
+            <h2>UI Components</h2>
+
+            <h3>Map Icons & Symbols</h3>
+            <p>Circular markers used for recommendations and facilities. In the Modernist theme, these feature a <code>white</code> background with a <code>2px border</code> and <code>icon</code> matching the category color.</p>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: #ffffff; border: 2px solid #f59e0b; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><span class="material-symbols-outlined" style="font-size: 20px; color: #f59e0b;">hub</span></div>
+                    <code>HUB</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: #ffffff; border: 2px solid #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><span class="material-symbols-outlined" style="font-size: 20px; color: #10b981;">anchor</span></div>
+                    <code>ANCHORAGE</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: #ffffff; border: 2px solid #8b5cf6; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><span class="material-symbols-outlined" style="font-size: 20px; color: #8b5cf6;">crisis_alert</span></div>
+                    <code>MOORING</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: #ffffff; border: 2px solid #f43f5e; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><span class="material-symbols-outlined" style="font-size: 20px; color: #f43f5e;">local_bar</span></div>
+                    <code>BAR/REST</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: #ffffff; border: 2px solid #64748b; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><span class="material-symbols-outlined" style="font-size: 20px; color: #64748b;">help</span></div>
+                    <code>OTHER</code>
+                </div>
+            </div>
+
+            <h3>Filter & Legend Controls</h3>
+            <div style="background: white; border-radius: 100px; padding: 1rem 3rem; display: flex; align-items: center; gap: 20px; box-shadow: var(--shadow-soft); border: 1px solid #f1f5f9;">
+                <span style="font-size: 0.7rem; font-weight: 800; color: var(--brand-navy); text-transform: uppercase; letter-spacing: 0.1em;">Filter</span>
+                <div style="display: flex; gap: 10px;">
+                    <span class="badge badge-standard" style="background: #f1f5f9; color: var(--brand-navy);">Anchorages</span>
+                    <span class="badge badge-standard">Marinas</span>
+                </div>
+            </div>
+
+            <h3>Discovery Month Slider</h3>
+            <div style="background: white; border-radius: 32px; padding: 2rem; max-width: 400px; box-shadow: var(--shadow-soft); border: 1px solid #f1f5f9; margin-top: 3rem;">
+                <div style="font-weight: 800; color: var(--brand-navy); margin-bottom: 15px; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.1em; text-align: center;">April</div>
+                <input type="range" style="width: 100%; accent-color: var(--brand-blue); margin-bottom: 2rem;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                    <span class="badge badge-standard">Standard</span>
+                    <span class="badge badge-regional">Regional</span>
+                    <span class="badge badge-gem">Hidden Gem</span>
+                    <span class="badge badge-challenging">Challenging</span>
+                </div>
+            </div>
+
+            <h3>Research Ticker</h3>
+            <div class="ticker-preview" style="margin-top: 3rem;">
+                <span class="material-symbols-outlined" style="animation: spin 2s linear infinite; color: var(--brand-blue);">radar</span>
+                Synthesizing meteorological patterns for Day 04...
+            </div>
+
+            <h3>Data Visualization (Tide Charts)</h3>
+            <div class="interface-preview" style="background: #f8fafd; flex-direction: column; gap: 30px; padding: 4rem;">
+                <div style="display: flex; gap: 20px; width: 100%; justify-content: center;">
+                    <!-- Modern Chart Card -->
+                    <div style="background: white; border-radius: 24px; padding: 2rem; width: 220px; box-shadow: 0 10px 30px rgba(0,0,0,0.04);">
+                        <div style="font-weight: 800; text-align: center; font-size: 0.9rem; margin-bottom: 1.5rem; color: var(--brand-navy);">FRI, MAY 01</div>
+                        <div style="height: 100px; width: 100%; position: relative;">
+                            <svg viewBox="0 0 100 50" preserveAspectRatio="none" style="width: 100%; height: 100%;">
+                                <defs>
+                                    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.1" />
+                                        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M0,30 Q25,10 50,30 T100,20 L100,50 L0,50 Z" fill="url(#cardGrad)" />
+                                <path d="M0,30 Q25,10 50,30 T100,20" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" />
+                            </svg>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 1.5rem; font-size: 0.7rem; font-weight: 800; color: var(--brand-blue);">
+                            <span>LOW -0.1M</span>
+                            <span>HIGH 0.9M</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        NavalPlan Professional // Modernist Design System // © 2026
+    </footer>
+</div>
+
+</body>
+</html>
