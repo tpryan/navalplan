@@ -82,32 +82,32 @@ func haversine(lat1, lon1, lat2, lon2 float64, unit string) float64 {
 func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	// Check ownership
 	v, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	recommendations, err := h.DB.ListVoyageRecommendations(r.Context(), voyageID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list recommendations", "voyage_id", voyageID, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -137,7 +137,7 @@ func broadcastRecommendation(sessionID string, rec models.VoyageRecommendation) 
 func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.URL.Query().Get("session_id")
 	if sessionID == "" {
-		http.Error(w, "Missing session_id", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Missing session_id")
 		return
 	}
 
@@ -176,24 +176,24 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 

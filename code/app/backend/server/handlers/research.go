@@ -143,31 +143,31 @@ func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float
 func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Stop ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
 		return
 	}
 
 	stop, err := h.DB.GetStop(r.Context(), stopID)
 	if err != nil {
-		http.Error(w, "Stop not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Stop not found")
 		return
 	}
 
 	// Check ownership via Voyage
 	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -345,36 +345,36 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	stopID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Stop ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
 		return
 	}
 
 	briefing, err := h.DB.GetBriefing(r.Context(), stopID)
 	if err != nil {
-		http.Error(w, "Briefing not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Briefing not found")
 		return
 	}
 
 	// Check ownership via Stop -> Voyage
 	stop, err := h.DB.GetStop(r.Context(), briefing.StopID)
 	if err != nil {
-		http.Error(w, "Stop not found", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Stop not found")
 		return
 	}
 	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -385,30 +385,30 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	voyageID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid Voyage ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return
 	}
 
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if voyage.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
 	if err != nil {
-		http.Error(w, "Failed to list stops", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to list stops")
 		return
 	}
 

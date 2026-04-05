@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -107,4 +108,12 @@ func cleanJSON(s string) string {
 	// Fix common LLM JSON error: unescaped single quotes or unnecessary escapes
 	s = strings.ReplaceAll(s, `\'`, `'`)
 	return strings.TrimSpace(s)
+}
+
+// writeError writes a consistent JSON error response: {"error": "<message>"}.
+// It replaces ad-hoc http.Error calls so all API error bodies share one format.
+func writeError(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

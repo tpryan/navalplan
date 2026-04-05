@@ -10,7 +10,7 @@ import (
 func (h *Handler) GetPerson(w http.ResponseWriter, r *http.Request) {
 	person := appContext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -20,7 +20,7 @@ func (h *Handler) GetPerson(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 	person := appContext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
@@ -28,17 +28,17 @@ func (h *Handler) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
 
 	if len(req.Name) == 0 || len(req.Name) > 255 {
-		http.Error(w, "Name must be between 1 and 255 characters", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Name must be between 1 and 255 characters")
 		return
 	}
 
 	if err := h.DB.UpdatePersonName(r.Context(), person.ID, req.Name); err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 

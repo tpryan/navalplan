@@ -15,32 +15,32 @@ import (
 func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// Check ownership
 	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	token, err := h.DB.UpdateVoyageSharing(r.Context(), id, true)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to enable sharing", "voyage_id", id, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -54,31 +54,31 @@ func (h *Handler) EnableSharing(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DisableSharing(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// Check ownership
 	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	if _, err := h.DB.UpdateVoyageSharing(r.Context(), id, false); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to disable sharing", "voyage_id", id, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -93,7 +93,7 @@ func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
-		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found or not shared")
 		return
 	}
 
@@ -106,14 +106,14 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
-		http.Error(w, "Voyage not found or not shared", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found or not shared")
 		return
 	}
 
 	stops, err := h.DB.ListStops(r.Context(), v.ID, 0, 0)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list public stops", "voyage_id", v.ID, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -125,7 +125,7 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
@@ -142,7 +142,7 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 	voyages, err := h.DB.ListVoyages(r.Context(), person.ID, limit, offset)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list voyages", "person_id", person.ID, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -154,20 +154,20 @@ func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	var v models.Voyage
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	v.PersonID = person.ID
 
 	if v.SearchRadius < 0 {
-		http.Error(w, "Search radius cannot be negative", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Search radius cannot be negative")
 		return
 	}
 	if v.SearchRadius == 0 {
@@ -179,13 +179,13 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 	case "":
 		v.SearchRadiusUnit = "nm"
 	default:
-		http.Error(w, "Invalid search radius unit", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid search radius unit")
 		return
 	}
 
 	if err := h.DB.CreateVoyage(r.Context(), &v); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to create voyage", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -198,25 +198,25 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -228,31 +228,31 @@ func (h *Handler) GetVoyage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// Check ownership first
 	existing, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if existing.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	var v models.Voyage
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	v.ID = id
@@ -260,7 +260,7 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.DB.UpdateVoyage(r.Context(), &v); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to update voyage", "voyage_id", id, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -272,31 +272,31 @@ func (h *Handler) UpdateVoyage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// Check ownership
 	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
 	if err := h.DB.DeleteVoyage(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to delete voyage", "voyage_id", id, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
@@ -309,25 +309,25 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// 1. Fetch Voyage and check ownership
 	v, err := h.DB.GetVoyage(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Voyage not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 	if v.PersonID != person.ID {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
 
@@ -343,7 +343,7 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 	recs, err := h.DB.ListVoyageRecommendations(r.Context(), id)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list recommendations for pilot report", "voyage_id", id, "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 

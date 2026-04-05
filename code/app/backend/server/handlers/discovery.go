@@ -41,7 +41,7 @@ func (h *Handler) GetDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
 
 	regions, err := h.DB.ListRegionsByMonth(r.Context(), month)
 	if err != nil {
-		http.Error(w, "Failed to list regions", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to list regions")
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *htt
 	// Check for admin
 	person := appcontext.GetPersonFromContext(r.Context())
 	if person == nil || !person.IsAdmin {
-		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Forbidden: Admins only")
 		return
 	}
 
@@ -62,19 +62,19 @@ func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *htt
 
 	regionID, err := strconv.Atoi(regionIDStr)
 	if err != nil {
-		http.Error(w, "Invalid region ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid region ID")
 		return
 	}
 
 	month, err := strconv.Atoi(monthStr)
 	if err != nil || month < 1 || month > 12 {
-		http.Error(w, "Invalid month", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid month")
 		return
 	}
 
 	if err := h.DB.DeleteSeasonality(r.Context(), regionID, month); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to delete seasonality", "error", err)
-		http.Error(w, "Failed to delete seasonality", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Failed to delete seasonality")
 		return
 	}
 
