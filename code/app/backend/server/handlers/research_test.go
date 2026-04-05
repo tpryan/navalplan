@@ -39,7 +39,7 @@ func geocodeServer(lat, lng float64) *httptest.Server {
 }
 
 func TestGeocodeFacility_Timeout(t *testing.T) {
-	// GeocodeFacility uses a 10s internal timeout; verify it returns an error
+	// geocodeFacility uses a 10s internal timeout; verify it returns an error
 	// when the server exceeds that. We use a very short delay here so the test
 	// doesn't take 10 seconds — we monkey-patch by pointing at a slow server
 	// and verifying the context cancellation path is reachable. In production
@@ -52,13 +52,13 @@ func TestGeocodeFacility_Timeout(t *testing.T) {
 	defer srv.Close()
 
 	// Confirm a responsive server is reachable (proves our test server works).
-	// We can't override the URL inside GeocodeFacility without refactoring it,
+	// We can't override the URL inside geocodeFacility without refactoring it,
 	// so this test validates the happy-path parsing instead.
 	t.Run("happy path parses coordinates", func(t *testing.T) {
 		gs := geocodeServer(48.8566, 2.3522)
 		defer gs.Close()
 
-		// GeocodeFacility calls Google's real endpoint, so we can't intercept it
+		// geocodeFacility calls Google's real endpoint, so we can't intercept it
 		// without dependency injection. This test documents the expected shape.
 		// See TestGeocodeFacility_ParseResponse for response-parsing coverage.
 	})
@@ -68,7 +68,7 @@ func TestGeocodeFacility_MissingAPIKey(t *testing.T) {
 	// Unset the key so the early-return path is exercised.
 	t.Setenv("NAVALPLAN_BACKEND_MAPS_API_KEY", "")
 
-	_, _, err := GeocodeFacility("Marina Bay", "San Francisco", 37.8, -122.4)
+	_, _, err := geocodeFacility("Marina Bay", "San Francisco", 37.8, -122.4)
 	if err == nil {
 		t.Fatal("expected error when API key is missing, got nil")
 	}
@@ -89,7 +89,7 @@ func TestGeocodeFacility_ErrorStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Because GeocodeFacility builds the URL from an env var and the Google
+	// Because geocodeFacility builds the URL from an env var and the Google
 	// endpoint is hardcoded, we can only test the env-key-missing path directly.
 	// The ZERO_RESULTS branch is covered by the integration test suite.
 	// This test exists to document the expected error format.

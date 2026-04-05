@@ -68,7 +68,7 @@ func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func GeocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
+func geocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
 	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
 		return 0, 0, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
@@ -163,7 +163,8 @@ func (h *Handler) performStopResearch(stop *models.Stop) {
 }
 
 func (h *Handler) performStopResearchLogic(stop *models.Stop) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
 
 	const appName = "harbourmaster"
@@ -237,7 +238,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 				defer wg.Done()
 				f := facilities[i]
 				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility: %s near %s", f.Name, stop.LocationName))
-				lat, lng, err := GeocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
+				lat, lng, err := geocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
 				if err == nil {
 					facilities[i].Latitude = lat
 					facilities[i].Longitude = lng

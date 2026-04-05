@@ -184,7 +184,8 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage) {
 }
 
 func (h *Handler) performGuideResearchLogic(voyage *models.Voyage) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[guide-agent] Starting research for voyage %d", voyage.ID))
 
 	const appName = "pilot"
