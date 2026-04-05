@@ -757,3 +757,67 @@
     50% { opacity: 0.6; }
     100% { opacity: 1; }
 }
+
+/* --- Ticker Overlay Canvas --- */
+.ticker-canvas {
+    position: absolute;
+    pointer-events: none;
+}
+
+/* --- Map Marker Icons (AdvancedMarkerElement content divs) --- */
+.map-marker-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+
+.map-marker-icon--sm {
+    width: 28px;
+    height: 28px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.map-icon-glyph {
+    font-size: 18px;
+    color: #ffffff;
+}
+
+/* --- Pilot Circle Center Marker --- */
+.pilot-center-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.pilot-radius-label {
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #1a73e8;
+    margin-top: 4px;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #1a73e8;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    pointer-events: none;
+}
+
+/* --- Voyage List Separator --- */
+.voyage-list-separator {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+}
+
+/* --- Recommendation Day Item (stacked layout) --- */
+.day-item--stacked {
+    align-items: flex-start;
+    flex-direction: column;
+}

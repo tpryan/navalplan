@@ -105,8 +105,7 @@ function createRadarSweepOverlay(OverlayView) {
 
         onAdd() {
             const canvas = document.createElement('canvas');
-            canvas.style.position = 'absolute';
-            canvas.style.pointerEvents = 'none';
+            canvas.className = 'ticker-canvas';
             this._canvas = canvas;
             const panes = this.getPanes();
             panes.overlayLayer.appendChild(canvas);
@@ -1069,9 +1068,7 @@ function renderVoyageList() {
     }
     if (voyage === 'SEPARATOR') {
       const sep = document.createElement('p');
-      sep.className = 'font-xs text-gray uppercase tracking-wider p-xs mt-sm mb-xs';
-      sep.style.borderTop = '1px solid var(--border-color)';
-      sep.style.paddingTop = '0.75rem';
+      sep.className = 'font-xs text-gray uppercase tracking-wider p-xs mt-sm mb-xs voyage-list-separator';
       sep.textContent = 'Undated';
       listContainer.appendChild(sep);
       return;
@@ -1877,17 +1874,9 @@ async function renderRecommendations() {
             else if (type.includes('moor')) style = styles.mooring;
 
             const iconDiv = document.createElement('div');
+            iconDiv.className = 'map-marker-icon';
             iconDiv.style.backgroundColor = style.color;
-            iconDiv.style.borderRadius = '50%';
-            iconDiv.style.width = '32px';
-            iconDiv.style.height = '32px';
-            iconDiv.style.display = 'flex';
-            iconDiv.style.alignItems = 'center';
-            iconDiv.style.justifyContent = 'center';
-            iconDiv.style.border = '2px solid #ffffff';
-            iconDiv.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
-            iconDiv.style.cursor = 'pointer';
-            iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${style.icon}</span>`;
+            iconDiv.innerHTML = `<span class="material-symbols-outlined map-icon-glyph">${style.icon}</span>`;
 
             const marker = new AdvancedMarkerElement({
                 map,
@@ -2073,10 +2062,7 @@ async function renderPilotCircle() {
 
     // Add Center Dot and Label
     const centerContainer = document.createElement('div');
-    centerContainer.style.display = 'flex';
-    centerContainer.style.flexDirection = 'column';
-    centerContainer.style.alignItems = 'center';
-    centerContainer.style.pointerEvents = 'none';
+    centerContainer.className = 'pilot-center-container';
 
     const centerPin = new PinElement({
         scale: 0.6,
@@ -2087,17 +2073,7 @@ async function renderPilotCircle() {
     centerContainer.appendChild(centerPin);
 
     const label = document.createElement('div');
-    label.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-    label.style.padding = '2px 8px';
-    label.style.borderRadius = '4px';
-    label.style.border = '1px solid #1a73e8';
-    label.style.marginTop = '4px';
-    label.style.whiteSpace = 'nowrap';
-    label.style.fontSize = '12px';
-    label.style.color = '#1a73e8';
-    label.style.fontWeight = 'bold';
-    label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-    label.style.pointerEvents = 'none'; // Allow clicks to pass through label
+    label.className = 'pilot-radius-label';
     centerContainer.appendChild(label);
 
     pilotCenterMarker = new AdvancedMarkerElement({
@@ -2243,9 +2219,7 @@ function renderItinerary() {
                 else if (tl.includes('hub') || tl.includes('marina')) recIcon = 'hub';
 
                 const el = document.createElement('div');
-                el.className = 'day-item';
-                el.style.alignItems = 'flex-start';
-                el.style.flexDirection = 'column';
+                el.className = 'day-item day-item--stacked';
                 el.innerHTML = DOMPurify.sanitize(`
                     <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">
                         <span class="material-symbols-outlined" style="color:${recColor};font-size:20px;">${recIcon}</span>
@@ -3183,16 +3157,9 @@ async function initMap() {
                                  : 'other';
 
                              const iconDiv = document.createElement('div');
+                             iconDiv.className = 'map-marker-icon map-marker-icon--sm';
                              iconDiv.style.backgroundColor = markerColor(f.type);
-                             iconDiv.style.borderRadius = '50%';
-                             iconDiv.style.width = '28px';
-                             iconDiv.style.height = '28px';
-                             iconDiv.style.display = 'flex';
-                             iconDiv.style.alignItems = 'center';
-                             iconDiv.style.justifyContent = 'center';
-                             iconDiv.style.border = '2px solid #ffffff';
-                             iconDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)';
-                             iconDiv.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px; color: #ffffff;">${iconName}</span>`;
+                             iconDiv.innerHTML = `<span class="material-symbols-outlined map-icon-glyph">${iconName}</span>`;
 
                              const fMarker = new AdvancedMarkerElement({
                                  map: activeFacilityFilters.has(filterKey) ? map : null,
