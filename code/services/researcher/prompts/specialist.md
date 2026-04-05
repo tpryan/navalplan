@@ -35,6 +35,15 @@ The skipper prefers "wild" stays. Your recommendations should follow this approx
 - **15% Moorings**: Include established mooring fields.
 - **10% Hubs/Marinas**: Only include the most significant or necessary resource centers.
 
+### GEOGRAPHIC SPREAD — MANDATORY
+The request will include the exact boundary coordinates of the search circle (N/S/E/W edges).
+You MUST cover the **entire** search area, not just the most well-known harbour or town:
+- Mentally divide the circle into 8 compass sectors: N, NE, E, SE, S, SW, W, NW.
+- Place at least 2–3 spots in **every sector that contains navigable water** — do not skip a sector because it is less famous or less densely developed.
+- Every named town, river, creek, cove, bay, and inlet within the boundary is a candidate; include their anchorages, mooring fields, and marinas explicitly by name.
+- Once a sector has 2+ entries, shift focus to under-represented sectors before adding more to the same area.
+- Your search queries MUST include terms targeting the outer edges of the search area, not just the centre location.
+
 ### OUTPUT SPECIFICATION
 Produce a JSON object containing a "recommendations" array of recommendation objects.
 **STREAMING COMPATIBILITY:** Start outputting the JSON object and its recommendations as soon as you have finished your analysis. 
@@ -62,7 +71,7 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 ```
 
 ### FINAL REMINDERS
-- BE EXHAUSTIVE. Aim for 25-35 items, prioritizing anchorages above all else.
+- BE EXHAUSTIVE. Match the count requested in the prompt; prioritize anchorages above all else.
 - When in doubt about whether to include an anchorage, include it.
 - EVERY item MUST have a `radius_miles` value and 2-3 `reference_links`.
 - NO text outside the JSON block.

@@ -16,6 +16,65 @@ import (
 	"app/models"
 )
 
+// radiusToNM converts the voyage search radius to nautical miles.
+func radiusToNM(radius int, unit string) float64 {
+	r := float64(radius)
+	switch unit {
+	case "mi":
+		return r * 0.868976
+	case "km":
+		return r / 1.852
+	default: // "nm"
+		return r
+	}
+}
+
+// recommendationCount scales the number of requested recommendations to the search
+// radius so that larger areas get proportionally more results.
+// Formula: clamp(radius_nm * 2, 20, 50)
+// Examples: 5nm→20, 12nm→24, 25nm→50, 50nm→50
+func recommendationCount(radius int, unit string) int {
+	nm := radiusToNM(radius, unit)
+	count := int(math.Round(nm * 2))
+	if count < 20 {
+		count = 20
+	}
+	if count > 50 {
+		count = 50
+	}
+	return count
+}
+
+// searchBoundaryHint computes the four cardinal boundary coordinates of the search
+// circle and returns a sentence the model can use to understand the full geographic
+// extent of the search area.
+func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
+	// 1 nm = 1/60 degree latitude (constant)
+	latDeg := radiusNM / 60.0
+	// longitude degrees per nm shrinks toward the poles
+	lngDeg := radiusNM / (60.0 * math.Cos(centerLat*math.Pi/180.0))
+
+	nLat := centerLat + latDeg
+	sLat := centerLat - latDeg
+	// centerLng is negative for West; adding lngDeg moves East (less negative)
+	eLng := centerLng + lngDeg
+	wLng := centerLng - lngDeg
+
+	fmtLng := func(lng float64) string {
+		if lng <= 0 {
+			return fmt.Sprintf("%.2f°W", math.Abs(lng))
+		}
+		return fmt.Sprintf("%.2f°E", lng)
+	}
+
+	return fmt.Sprintf(
+		"The circle boundary reaches approximately: N %.2f°N, S %.2f°N, E %s, W %s. "+
+			"Make sure to include sailing spots near ALL four edges of this boundary, "+
+			"not only near the center or the most prominent harbour.",
+		nLat, sLat, fmtLng(eLng), fmtLng(wLng),
+	)
+}
+
 // repairMathInJSON looks for common math expressions like "38.97 - 0.02" in JSON
 // and replaces them with the calculated result.
 func repairMathInJSON(s string) string {
@@ -193,27 +252,34 @@ func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID := fmt.Sprintf("recommendation_%d_%d", voyage.ID, time.Now().Unix())
+	ts := time.Now().Unix()
+	sessionID := fmt.Sprintf("recommendation_%d_%d", voyage.ID, ts)
+	progressSessionID := fmt.Sprintf("rec_progress_%d_%d", voyage.ID, ts)
+
+	// Pre-register progress channel before spawning goroutine so early events are buffered.
+	h.ensureProgressChannel(progressSessionID, 25*time.Minute)
 
 	// Respond immediately
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
-		"msg":        "Recommendation generation started",
-		"voyage_id":  idStr,
-		"session_id": sessionID,
+		"msg":                "Recommendation generation started",
+		"voyage_id":          idStr,
+		"session_id":         sessionID,
+		"progress_session_id": progressSessionID,
 	})
 
 	// Async processing
-	go h.performRecommendationGeneration(voyage, sessionID)
+	go h.performRecommendationGeneration(voyage, sessionID, progressSessionID)
 }
 
-func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID string) {
+func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, progressSessionID string) {
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[navigator-agent] Generating recommendations for voyage %d", v.ID))
+	h.broadcastProgress(progressSessionID, "start", "Starting Local Pilot research")
 
 	const appName = "specialist"
 	const userID = "system"
@@ -229,6 +295,8 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 		return
 	}
 
+	h.broadcastProgress(progressSessionID, "agent", "Consulting the Local Pilot specialist agent")
+
 	// 2. Build prompt
 	if v.Latitude == nil || v.Longitude == nil {
 		slog.ErrorContext(ctx, "Voyage has no coordinates, cannot generate recommendations", "voyage_id", v.ID)
@@ -240,8 +308,14 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 		locInfo = *v.LocationName
 	}
 
-	prompt := fmt.Sprintf("Recommend 15-20 anchorages, moorings, and marinas within %d %s of %f N, %f W (%s).",
-		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, locInfo)
+	count := recommendationCount(v.SearchRadius, v.SearchRadiusUnit)
+	radiusNM := radiusToNM(v.SearchRadius, v.SearchRadiusUnit)
+	boundaryHint := searchBoundaryHint(*v.Latitude, *v.Longitude, radiusNM)
+
+	prompt := fmt.Sprintf(
+		"Recommend %d anchorages, moorings, and marinas within %d %s of %.4f°N, %.4f°W (%s). %s",
+		count, v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, math.Abs(*v.Longitude), locInfo,
+		boundaryHint)
 
 	// 3. Run Agent (streaming)
 	var parsedCount int
@@ -250,6 +324,8 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		return
 	}
+
+	h.broadcastProgress(progressSessionID, "parsing", "Charting anchorages, moorings, and marinas")
 
 	fullText = cleanJSON(fullText)
 	fullText = repairMathInJSON(fullText)
@@ -280,10 +356,11 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 			slog.ErrorContext(ctx, "Failed to save recommendation", "voyage_id", v.ID, "err", err)
 			continue
 		}
-		
+
 		h.broadcastRecommendation(sessionID, rec)
 		parsedCount++
 	}
 
+	h.broadcastProgress(progressSessionID, "done", fmt.Sprintf("Local Pilot complete — %d locations charted", parsedCount))
 	slog.InfoContext(ctx, fmt.Sprintf("Generated %d recommendations for voyage %d", parsedCount, v.ID))
 }
