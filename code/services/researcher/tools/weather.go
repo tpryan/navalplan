@@ -87,7 +87,7 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 	var weather, marine *openmeteogo.WeatherData
 	var marineErr error // We want to tolerate marine errors, so we don't return them from the group
 
-	g, _ := errgroup.WithContext(ctx)
+	g, _ := errgroup.WithContext(ctx) //nolint:errcheck // derived context unused: WeatherClient.Get has no context parameter
 
 	// Fetch Weather (Critical)
 	g.Go(func() error {
@@ -110,7 +110,7 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx tool.Context, args WeatherArgs
 	})
 
 	if err := g.Wait(); err != nil {
-		return WeatherResult{}, err
+		return WeatherResult{}, fmt.Errorf("%w: %w", ErrAPIUnavailable, err)
 	}
 
 	if weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {

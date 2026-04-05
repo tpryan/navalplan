@@ -69,6 +69,22 @@ func TestGetTides_Success(t *testing.T) {
 	if result.Tides[0].Type != "H" {
 		t.Errorf("Expected first tide to be High (H), got %s", result.Tides[0].Type)
 	}
+	// Station at 0,0 with request at 41.5,-71.3 should produce a non-zero distance.
+	if result.DistanceMiles == 0 {
+		t.Error("DistanceMiles should be non-zero when station coords differ from request")
+	}
+}
+
+func TestHaversineDistanceMiles(t *testing.T) {
+	// Newport, RI to Providence, RI is roughly 25 miles.
+	dist := haversineDistanceMiles(41.490, -71.312, 41.824, -71.413)
+	if dist < 20 || dist > 30 {
+		t.Errorf("expected ~25 miles, got %.1f", dist)
+	}
+	// Same point should be zero.
+	if d := haversineDistanceMiles(41.5, -71.3, 41.5, -71.3); d != 0 {
+		t.Errorf("expected 0 for same point, got %v", d)
+	}
 }
 
 func TestGetTides_NoStations(t *testing.T) {

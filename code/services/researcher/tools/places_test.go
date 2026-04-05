@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -31,7 +32,7 @@ func (m *mockPlacesClient) Close() error {
 }
 
 func TestNewPlacesTool(t *testing.T) {
-	tool, _, err := NewPlacesTool("dummy-key")
+	tool, _, err := NewPlacesTool(context.Background(), "dummy-key")
 	if err != nil {
 		t.Fatalf("NewPlacesTool() error = %v", err)
 	}
@@ -103,7 +104,7 @@ func TestFindPlaces_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got none")
 	}
-	if err.Error() != "SearchText API: API error" {
-		t.Errorf("Expected 'SearchText API: API error', got %v", err)
+	if !errors.Is(err, ErrAPIUnavailable) {
+		t.Errorf("expected ErrAPIUnavailable, got %v", err)
 	}
 }

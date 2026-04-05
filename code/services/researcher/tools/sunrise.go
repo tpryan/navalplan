@@ -83,7 +83,7 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx tool.Context, args SunriseArgs) 
 		Timestamp: targetDate, // Use target date for correct DST
 	}
 
-	tzResult, err := sp.client.Timezone(context.Background(), tzReq)
+	tzResult, err := sp.client.Timezone(ctx, tzReq)
 	if err != nil {
 		// Fallback to LMT (Local Mean Time) approximation
 		// Offset = Round(Longitude / 15)

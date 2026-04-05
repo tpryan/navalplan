@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/tpryan/noaago"
@@ -11,6 +12,7 @@ import (
 
 const (
 	DefaultSearchRadius = 50
+	MaxSearchRadius     = 150 // beyond this distance tide data is not locally meaningful
 	MaxStationsToCheck  = 5
 )
 
@@ -80,9 +82,10 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 		tides, err := tp.fetchPredictions(s, args.Date)
 		if err == nil {
 			return TideResult{
-				StationName: s.Name,
-				StationID:   s.ID,
-				Tides:       tides,
+				StationName:   s.Name,
+				StationID:     s.ID,
+				DistanceMiles: haversineDistanceMiles(args.Latitude, args.Longitude, s.Lat, s.Lng),
+				Tides:         tides,
 			}, nil
 		}
 		lastErr = err
@@ -92,7 +95,7 @@ func (tp *TideProvider) GetTides(ctx tool.Context, args TideArgs) (TideResult, e
 }
 
 func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
-	for radius := DefaultSearchRadius; radius <= 10*DefaultSearchRadius; radius += DefaultSearchRadius {
+	for radius := DefaultSearchRadius; radius <= MaxSearchRadius; radius += DefaultSearchRadius {
 		stationOpts := noaago.NewStationOptionsBuilder().
 			Nearby(lat, lng, float64(radius)).
 			Type(noaago.StationType("tidepredictions")).
@@ -100,7 +103,7 @@ func (tp *TideProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, 
 
 		stationsResp, err := tp.client.FindStations(stationOpts)
 		if err != nil {
-			return nil, fmt.Errorf("searching stations: %w", err)
+			return nil, fmt.Errorf("%w: searching stations: %w", ErrAPIUnavailable, err)
 		}
 
 		if stationsResp.Count > 0 && len(stationsResp.Stations) > 0 {
@@ -152,4 +155,17 @@ func (tp *TideProvider) fetchPredictions(station noaago.Station, dateStr string)
 		})
 	}
 	return events, nil
+}
+
+// haversineDistanceMiles returns the great-circle distance in miles between two
+// lat/lng coordinates.
+func haversineDistanceMiles(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusMi = 3958.8
+	phi1 := lat1 * math.Pi / 180
+	phi2 := lat2 * math.Pi / 180
+	dPhi := (lat2 - lat1) * math.Pi / 180
+	dLam := (lon2 - lon1) * math.Pi / 180
+	a := math.Sin(dPhi/2)*math.Sin(dPhi/2) +
+		math.Cos(phi1)*math.Cos(phi2)*math.Sin(dLam/2)*math.Sin(dLam/2)
+	return earthRadiusMi * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }

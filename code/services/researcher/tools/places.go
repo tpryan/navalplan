@@ -62,8 +62,7 @@ func (p *PlacesProvider) Close() error {
 }
 
 // NewPlacesTool creates a new ADK tool for searching places nearby.
-func NewPlacesTool(apiKey string) (tool.Tool, *PlacesProvider, error) {
-	ctx := context.Background()
+func NewPlacesTool(ctx context.Context, apiKey string) (tool.Tool, *PlacesProvider, error) {
 	var clientOpts []option.ClientOption
 	if apiKey != "" {
 		clientOpts = append(clientOpts, option.WithAPIKey(apiKey))
@@ -136,7 +135,7 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 
 	resp, err := p.client.SearchText(callCtx, req)
 	if err != nil {
-		return PlacesResponse{}, fmt.Errorf("SearchText API: %w", err)
+		return PlacesResponse{}, fmt.Errorf("%w: SearchText API: %w", ErrAPIUnavailable, err)
 	}
 
 	placesList := resp.Places
