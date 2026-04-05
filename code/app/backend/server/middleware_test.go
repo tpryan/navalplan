@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"app/config"
@@ -15,6 +16,7 @@ import (
 
 // RecordingHandler is a slog.Handler that records the last record it handled.
 type RecordingHandler struct {
+	mu         sync.Mutex
 	LastRecord *slog.Record
 	LastAttrs  map[string]any
 }
@@ -24,6 +26,8 @@ func (h *RecordingHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *RecordingHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.LastRecord = &r
 	h.LastAttrs = make(map[string]any)
 	r.Attrs(func(a slog.Attr) bool {

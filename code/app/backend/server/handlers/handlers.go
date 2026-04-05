@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"app/datastore"
+	"app/models"
 
 	"google.golang.org/api/idtoken"
 )
@@ -21,6 +23,11 @@ type Handler struct {
 	AgentURL    string
 	AgentClient *http.Client
 	ResearchSem chan struct{}
+
+	// recStreams holds active SSE channels keyed by session ID.
+	// Moved from package-level globals to enable per-instance isolation and testing.
+	muRecStreams sync.RWMutex
+	recStreams   map[string]chan models.VoyageRecommendation
 }
 
 // New creates a new Handler with the given dependencies.
@@ -44,7 +51,8 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		ContentDir:  contentDir,
 		AgentURL:    agentURL,
 		AgentClient: client,
-		ResearchSem: make(chan struct{}, 10), // Limit to 10 concurrent research tasks globally
+		ResearchSem: make(chan struct{}, 10),
+		recStreams:   make(map[string]chan models.VoyageRecommendation),
 	}
 }
 
