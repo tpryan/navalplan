@@ -247,6 +247,11 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID st
 	}
 
 	// 2. Run Agent
+	if v.Latitude == nil || v.Longitude == nil {
+		slog.ErrorContext(ctx, "Voyage has no coordinates, cannot generate recommendations", "voyage_id", v.ID)
+		return
+	}
+
 	locInfo := ""
 	if v.LocationName != nil {
 		locInfo = *v.LocationName
