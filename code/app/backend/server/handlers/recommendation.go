@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	appcontext "app/context"
@@ -141,6 +142,9 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 	rc := http.NewResponseController(w)
 
 	ch := make(chan models.VoyageRecommendation, 10)
+	var once sync.Once
+	closeCh := func() { once.Do(func() { close(ch) }) }
+
 	h.muRecStreams.Lock()
 	h.recStreams[sessionID] = ch
 	h.muRecStreams.Unlock()
@@ -148,7 +152,7 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 	defer func() {
 		h.muRecStreams.Lock()
 		delete(h.recStreams, sessionID)
-		close(ch)
+		closeCh()
 		h.muRecStreams.Unlock()
 	}()
 
