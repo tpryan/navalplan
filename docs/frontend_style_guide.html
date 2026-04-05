@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavalPlan Frontend Style Guide & Interface Inventory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <style>
+        :root {
+            --brand-dark: rgb(88, 61, 27);
+            --brand-darker: rgb(55, 38, 17);
+            --brand-medium: rgb(149, 104, 45);
+            --brand-light: rgb(160, 144, 123);
+            --brand-lighter: rgb(227, 220, 211);
+            --brand-green-dark: #314c3b;
+            --color-background: #AADAFF;
+            --text-dark: #333333;
+            --text-light: #777777;
+            --border-color: #cccccc;
+            --surface-bg: rgba(255, 255, 255, 0.8);
+            --border-radius: 8px;
+            --shadow-main: 0 3px 10px rgb(0 0 0 / 0.4);
+            --font-primary: "Raleway", sans-serif;
+            --font-secondary: "Lato", sans-serif;
+        }
+
+        body {
+            font-family: var(--font-secondary);
+            color: var(--text-dark);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+
+        .main-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        header {
+            background-color: var(--brand-dark);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-family: var(--font-primary);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 2.5rem;
+        }
+
+        nav {
+            background: #fff;
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        nav a {
+            color: var(--brand-dark);
+            text-decoration: none;
+            font-weight: bold;
+            font-family: var(--font-primary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        nav a:hover {
+            color: var(--brand-medium);
+        }
+
+        .container {
+            padding: 2rem;
+        }
+
+        section {
+            margin-bottom: 4rem;
+        }
+
+        h2 {
+            border-bottom: 2px solid var(--brand-medium);
+            padding-bottom: 0.5rem;
+            color: var(--brand-dark);
+            font-family: var(--font-primary);
+            text-transform: uppercase;
+            margin-top: 0;
+        }
+
+        h3 {
+            color: var(--brand-medium);
+            font-family: var(--font-primary);
+            margin-top: 2rem;
+            text-transform: uppercase;
+            font-size: 1.1rem;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .color-card {
+            text-align: center;
+            padding: 1rem;
+            border: 1px solid #eee;
+            border-radius: var(--border-radius);
+        }
+
+        .color-swatch {
+            height: 100px;
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .typography-example {
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 1.5rem;
+            background-color: #fcfcfc;
+        }
+
+        .font-primary { font-family: var(--font-primary); }
+        .font-secondary { font-family: var(--font-secondary); }
+
+        .btn-preview {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f5f5f5;
+            border-radius: var(--border-radius);
+        }
+
+        /* Replicating app styles */
+        .btn {
+            font-family: var(--font-primary);
+            font-weight: 900;
+            text-transform: uppercase;
+            border-radius: var(--border-radius);
+            padding: 0.5rem 1.2rem;
+            cursor: pointer;
+            border: 1px solid grey;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .btn.primary {
+            background-color: var(--brand-medium);
+            color: white;
+            border-color: var(--brand-dark);
+        }
+
+        .btn.secondary {
+            background-color: var(--surface-bg);
+            color: var(--brand-dark);
+        }
+
+        .btn.danger {
+            background-color: #ef4444;
+            color: white;
+            border-color: #dc2626;
+        }
+
+        .glass-panel {
+            background-color: var(--surface-bg);
+            backdrop-filter: blur(10px);
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-main);
+            padding: 1.5rem;
+        }
+
+        .interface-item {
+            display: flex;
+            gap: 3rem;
+            margin-bottom: 3rem;
+            align-items: flex-start;
+            padding: 2rem;
+            background: #fafafa;
+            border-radius: var(--border-radius);
+        }
+
+        .interface-description {
+            flex: 1;
+        }
+
+        .interface-preview {
+            flex: 1.2;
+            background: #eee;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background-image: url('https://www.google.com/maps/vt/pb=!1m4!1m3!1i10!2i163!3i395!2m3!1e0!2sm!3i633051412!3m8!2sen!3sus!5e1105!12m4!1e68!2m2!1sset!2sRoadmap!4e0!5m1!5f2!23i1301875');
+            background-size: cover;
+            border: 1px solid #ddd;
+        }
+
+        .interface-preview::after {
+            content: 'Background: Map';
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            font-size: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .ticker-preview {
+            background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.9) 100%);
+            border: 2px solid var(--brand-medium);
+            border-radius: var(--border-radius);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-weight: bold;
+            color: var(--brand-dark);
+            box-shadow: var(--shadow-main);
+        }
+
+        .sidebar-mock {
+            width: 250px;
+            background: white;
+            border: 1px solid #ccc;
+            height: 350px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-main);
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid #ccc;
+            font-weight: 900;
+            color: var(--brand-dark);
+            background: rgba(0,0,0,0.02);
+        }
+
+        .sidebar-item {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9rem;
+        }
+
+        .briefing-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        .briefing-table th {
+            text-align: left;
+            background: var(--brand-lighter);
+            padding: 6px;
+        }
+
+        .briefing-table td {
+            padding: 6px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: white;
+        }
+
+        .badge-gem { background-color: #9c27b0; }
+        .badge-regional { background-color: #ff9800; }
+        .badge-standard { background-color: #0077be; }
+        .badge-challenging { background-color: #d32f2f; }
+
+        footer {
+            text-align: center;
+            padding: 3rem;
+            color: #777;
+            font-size: 0.9rem;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.85rem;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <header>
+        <h1>NavalPlan</h1>
+        <p>Frontend Style Guide & Interface Inventory</p>
+    </header>
+
+    <nav>
+        <a href="#colors">Colors</a>
+        <a href="#typography">Typography</a>
+        <a href="#buttons">Buttons</a>
+        <a href="#map-views">Map Views</a>
+        <a href="#interfaces">Interfaces</a>
+        <a href="#components">Components</a>
+    </nav>
+
+    <div class="container">
+        <section id="colors">
+            <h2>Brand Colors</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-dark);"></div>
+                    <code>--brand-dark</code><br>#583D1B
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-medium);"></div>
+                    <code>--brand-medium</code><br>#95682D
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-light);"></div>
+                    <code>--brand-light</code><br>#A0907B
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-lighter);"></div>
+                    <code>--brand-lighter</code><br>#E3DCD3
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--brand-green-dark);"></div>
+                    <code>--brand-green</code><br>#314C3B
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: var(--color-background);"></div>
+                    <code>--color-background</code><br>#AADAFF
+                </div>
+            </div>
+
+            <h3>UI Colors</h3>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: #333333;"></div>
+                    <code>--text-dark</code>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: #777777;"></div>
+                    <code>--text-light</code>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background-color: rgba(255, 255, 255, 0.8);"></div>
+                    <code>--surface-bg</code>
+                </div>
+            </div>
+        </section>
+
+        <section id="typography">
+            <h2>Typography</h2>
+            <div class="typography-example">
+                <h3 class="font-primary" style="margin-top:0">Primary Font: Raleway</h3>
+                <p class="font-primary">Raleway is used for headings, branding, and buttons. It provides a clean, modern, yet sturdy nautical feel.</p>
+                <p class="font-primary" style="font-weight: 900; text-transform: uppercase; font-size: 1.2rem;">Heavy Weight (900) - Used for Buttons & Brand</p>
+            </div>
+
+            <div class="typography-example">
+                <h3 class="font-secondary" style="margin-top:0">Secondary Font: Lato</h3>
+                <p class="font-secondary">Lato is the primary body font. It is highly readable and works well for briefings, reports, and UI elements.</p>
+            </div>
+        </section>
+
+        <section id="buttons">
+            <h2>Buttons</h2>
+            <div class="btn-preview">
+                <button class="btn primary">+ New Voyage</button>
+                <button class="btn secondary"><span class="material-symbols-outlined">explore</span> Discover</button>
+                <button class="btn danger"><span class="material-symbols-outlined">delete</span> Delete</button>
+                <button class="btn"><span class="material-symbols-outlined">edit</span> Edit</button>
+            </div>
+            <p class="text-gray" style="margin-top: 1rem; font-size: 0.9rem;">
+                Buttons use <code>backdrop-filter: blur(10px)</code> for a glass effect and heavy <code>900</code> weight <code>Raleway</code> font.
+            </p>
+        </section>
+
+        <section id="map-views">
+            <h2>Large Map Views</h2>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Standard Planning Mode</h3>
+                    <p>The primary view where users click the map to add stops to their voyage. Generic Google Map red markers with numerical labels indicate the journey sequence.</p>
+                </div>
+                <div class="interface-preview">
+                    <!-- Mock Pin 1 -->
+                    <div style="position: absolute; top: 30%; left: 40%; display: flex; flex-direction: column; align-items: center;">
+                        <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                            <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">1</span>
+                        </div>
+                    </div>
+                    <!-- Mock Pin 2 -->
+                    <div style="position: absolute; top: 50%; left: 60%; display: flex; flex-direction: column; align-items: center;">
+                        <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                            <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">2</span>
+                        </div>
+                    </div>
+                    <div style="position: absolute; top: 35%; left: 45%; width: 50px; height: 2px; background: #EA4335; transform: rotate(35deg); transform-origin: 0 0; opacity: 0.5;"></div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Pilot Mode (Research)</h3>
+                    <p>Active research view with a draggable search radius and categorized recommendation markers.</p>
+                </div>
+                <div class="interface-preview">
+                    <!-- Pilot Center -->
+                    <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--brand-medium); border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2;"></div>
+                    <!-- Radius Circle -->
+                    <div style="position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 2px dashed var(--brand-medium); background: rgba(149, 104, 45, 0.1);"></div>
+                    <!-- Recommendation Markers -->
+                    <div style="position: absolute; top: 20%; left: 30%; width: 24px; height: 24px; border-radius: 50%; background: #E65100; border: 2px solid white; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined" style="font-size: 14px; color: white;">hub</span></div>
+                    <div style="position: absolute; top: 60%; left: 70%; width: 24px; height: 24px; border-radius: 50%; background: #388E3C; border: 2px solid white; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined" style="font-size: 14px; color: white;">anchor</span></div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Commodore Mode (Discovery)</h3>
+                    <p>Global exploration view highlighting sailing regions with seasonal optimal periods.</p>
+                </div>
+                <div class="interface-preview">
+                    <div style="width: 80%; height: 60%; background: rgba(156, 39, 176, 0.1); border: 3px solid #9c27b0; border-radius: 40% 60% 30% 70%; display: flex; align-items: center; justify-content: center; color: #9c27b0; font-weight: bold; transform: rotate(10deg);">
+                        PACIFIC NW
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="reports">
+            <h2>Voyage Report Formats</h2>
+            <p>The application provides comprehensive voyage reports in two distinct formats to balance aesthetic appeal with cross-platform compatibility.</p>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>1. Standard Web View</h3>
+                    <p>Designed for on-screen viewing within the application. Features rich visuals, interactive elements, and modern CSS effects.</p>
+                    <ul>
+                        <li><strong>Overview Grid:</strong> Responsive card-based layout (1-4 columns).</li>
+                        <li><strong>Interactive Charts:</strong> Dynamic tide and sun phase canvases.</li>
+                        <li><strong>Glassmorphism:</strong> Uses translucent backgrounds and blurs to maintain the app's aesthetic.</li>
+                        <li><strong>Media:</strong> Remote images and Material Symbols icons.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview">
+                    <div class="glass-panel" style="max-width: 350px;">
+                        <h1 style="font-size: 1.2rem; text-align: center; margin: 0 0 1rem 0;">Gulf Islands 2025</h1>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div style="border: 1px solid #ccc; border-radius: 8px; padding: 5px; background: #fff;">
+                                <div style="font-weight: bold; font-size: 0.7rem; text-align: center;">Mon, Jul 7</div>
+                                <div style="font-size: 0.6rem; text-align: center;">Seattle</div>
+                                <div style="text-align: center;"><span class="material-symbols-outlined" style="font-size: 14px;">sunny</span></div>
+                            </div>
+                            <div style="border: 1px solid #ccc; border-radius: 8px; padding: 5px; background: #fff;">
+                                <div style="font-weight: bold; font-size: 0.7rem; text-align: center;">Tue, Jul 8</div>
+                                <div style="font-size: 0.6rem; text-align: center;">Roche Harbor</div>
+                                <div style="text-align: center;"><span class="material-symbols-outlined" style="font-size: 14px;">partly_cloudy_day</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>2. Clipboard-Optimized Format</h3>
+                    <p>A specialized transformation used when "Copy to Clipboard" is triggered. This ensures the report looks correct when pasted into Email, Word, or Notes.</p>
+                    <ul>
+                        <li><strong>Grid to Table:</strong> Converts CSS Grid cards into standard HTML <code>&lt;table&gt;</code> elements.</li>
+                        <li><strong>Style Flattening:</strong> Inlines critical styles and removes complex CSS like <code>backdrop-filter</code>.</li>
+                        <li><strong>Image Embedding:</strong> Converts remote images and canvases into <code>data:base64</code> URIs.</li>
+                        <li><strong>Icon Stripping:</strong> Removes Material Symbols (which often render as text strings like "radar" in other apps) and replaces them with whitespace or simple text.</li>
+                    </ul>
+                </div>
+                <div class="interface-preview" style="background: white;">
+                    <div style="width: 100%; border: 1px solid #ddd; padding: 10px; font-family: sans-serif;">
+                        <h2 style="font-size: 1rem; color: #583D1B; border-bottom: 1px solid #ccc;">Gulf Islands 2025</h2>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <tr>
+                                <td style="border: 1px solid #ccc; padding: 5px; width: 50%;">
+                                    <strong>Mon, Jul 7</strong><br>Seattle<br>72° / 58°
+                                </td>
+                                <td style="border: 1px solid #ccc; padding: 5px; width: 50%;">
+                                    <strong>Tue, Jul 8</strong><br>Roche Harbor<br>68° / 60°
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="interfaces">
+            <h2>Interface Inventory</h2>
+            
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Main Sidebar</h3>
+                    <p>Primary navigation and voyage management container.</p>
+                </div>
+                <div class="interface-preview">
+                    <div class="sidebar-mock glass-panel" style="width: 220px; padding: 0;">
+                        <div class="sidebar-header">NAVPLAN</div>
+                        <div class="sidebar-item">Voyage: Gulf Islands</div>
+                        <div class="sidebar-item">Voyage: Desolation Sound</div>
+                        <div style="padding: 1.5rem; margin-top: auto;">
+                            <button class="btn primary" style="width: 100%;">+ NEW TRIP</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Briefing Modal</h3>
+                    <p>Detailed stop-specific information including weather and tides.</p>
+                </div>
+                <div class="interface-preview">
+                    <div class="glass-panel" style="max-width: 320px; font-size: 0.85rem;">
+                        <h2 style="font-size: 1.1rem; border-bottom: 1px solid #ddd;">Roche Harbor</h2>
+                        <div style="background: rgba(255,255,255,0.5); padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                            <strong>Weather:</strong> 15kts NW, Sunny
+                        </div>
+                        <table class="briefing-table">
+                            <tr><th>Tide</th><th>Time</th><th>Height</th></tr>
+                            <tr><td>High</td><td>10:00</td><td>8.5ft</td></tr>
+                            <tr><td>Low</td><td>16:00</td><td>1.2ft</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="interface-item">
+                <div class="interface-description">
+                    <h3>Login Screen</h3>
+                    <p>Entry point with high-impact nautical imagery.</p>
+                </div>
+                <div class="interface-preview" style="background-image: url('https://images.unsplash.com/photo-1534008897995-27a23e859048?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80');">
+                    <div class="glass-panel" style="text-align: center; max-width: 220px;">
+                        <h1 style="font-size: 1.5rem; margin: 0; font-family: var(--font-primary);">PLAN</h1>
+                        <p style="font-size: 0.8rem; margin-bottom: 1.5rem;">Nautical Voyage Planner</p>
+                        <button class="btn primary" style="width: 100%;">Sign In</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="components">
+            <h2>UI Components</h2>
+
+            <h3>Map Icons & Symbols</h3>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #E65100; border: 2px solid white; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span class="material-symbols-outlined" style="font-size: 18px; color: white;">hub</span></div>
+                    <code>Resource Hub</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #388E3C; border: 2px solid white; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span class="material-symbols-outlined" style="font-size: 18px; color: white;">anchor</span></div>
+                    <code>Anchorage</code>
+                </div>
+                <div class="color-card">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #7B1FA2; border: 2px solid white; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span class="material-symbols-outlined" style="font-size: 18px; color: white;">crisis_alert</span></div>
+                    <code>Mooring</code>
+                </div>
+            </div>
+
+            <h3>Filter & Legend Controls</h3>
+            <div class="glass-panel" style="max-width: none; margin-top: 1rem;">
+                <span style="font-size: 0.75rem; font-weight: 900; color: var(--brand-dark); text-transform: uppercase;">Filter Facilities</span>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                    <button class="btn secondary" style="border-radius: 20px; font-size: 0.7rem; padding: 4px 12px; background: white;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #388E3C; display: inline-block; margin-right: 5px;"></span> Anchorages</button>
+                    <button class="btn secondary" style="border-radius: 20px; font-size: 0.7rem; padding: 4px 12px; background: white;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #E65100; display: inline-block; margin-right: 5px;"></span> Marinas</button>
+                </div>
+            </div>
+
+            <h3>Voyage Stop Markers (Google Pins)</h3>
+            <p>Voyage stops are represented by generic Google Map red markers with numerical labels.</p>
+            <div class="interface-preview" style="justify-content: space-around; height: 100px; background: #f5f5f5;">
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                        <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">1</span>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div style="width: 25px; height: 35px; background: #EA4335; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                        <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 14px;">2</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Discovery Month Slider</h3>
+            <div class="glass-panel" style="max-width: 400px; margin-top: 1rem;">
+                <div style="font-weight: 900; color: var(--brand-dark); margin-bottom: 10px; font-family: var(--font-primary);">MONTH: JULY</div>
+                <input type="range" style="width: 100%; margin-bottom: 15px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge badge-standard">Standard</span>
+                    <span class="badge badge-regional">Regional</span>
+                    <span class="badge badge-gem">Hidden Gem</span>
+                    <span class="badge badge-challenging">Challenging</span>
+                </div>
+            </div>
+
+            <h3>Research Ticker</h3>
+            <div class="ticker-preview" style="margin-top: 1rem;">
+                <span class="material-symbols-outlined" style="animation: spin 2s linear infinite; color: var(--brand-medium);">radar</span>
+                Analyzing weather patterns for Voyage Day 4...
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        Generated by Gemini CLI &bull; NavalPlan Project Style Guide &bull; 2026
+    </footer>
+</div>
+
+</body>
+</html>
