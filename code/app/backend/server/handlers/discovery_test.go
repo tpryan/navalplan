@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"app/models"
+	"app/service"
 )
 
 // TestPerformDiscoveryMining_SessionFailure_DoesNotCallRun verifies that
@@ -24,11 +25,12 @@ func TestPerformDiscoveryMining_SessionFailure_DoesNotCallRun(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store := &sessionTrackingStore{}
+	client := &http.Client{Timeout: 5 * time.Second}
 	h := &Handler{
-		DB:          store,
+		DB:          &sessionTrackingStore{},
 		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
+		AgentClient: client,
+		Agent:       &service.AgentRunner{Client: client, BaseURL: srv.URL},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -58,11 +60,12 @@ func TestPerformDiscoveryMining_ContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store := &sessionTrackingStore{}
+	client2 := &http.Client{Timeout: 5 * time.Second}
 	h := &Handler{
-		DB:          store,
+		DB:          &sessionTrackingStore{},
 		AgentURL:    srv.URL,
-		AgentClient: &http.Client{Timeout: 5 * time.Second},
+		AgentClient: client2,
+		Agent:       &service.AgentRunner{Client: client2, BaseURL: srv.URL},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -83,11 +86,12 @@ func TestDiscoveryMining_AllMonths_HTTPTrigger(t *testing.T) {
 	// Use a store stub that satisfies the interface for any DB calls the
 	// mining loop might make (none in this test since the agent server
 	// immediately returns 500, triggering early return each month).
-	store := &sessionTrackingStore{}
+	client3 := &http.Client{Timeout: 100 * time.Millisecond}
 	h := &Handler{
-		DB:          store,
+		DB:          &sessionTrackingStore{},
 		AgentURL:    "http://127.0.0.1:0", // nothing listening — session creation fails fast
-		AgentClient: &http.Client{Timeout: 100 * time.Millisecond},
+		AgentClient: client3,
+		Agent:       &service.AgentRunner{Client: client3, BaseURL: "http://127.0.0.1:0"},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -105,11 +109,12 @@ func TestDiscoveryMining_AllMonths_HTTPTrigger(t *testing.T) {
 
 // TestDiscoveryMining_SingleMonth_HTTPTrigger verifies the single-month path.
 func TestDiscoveryMining_SingleMonth_HTTPTrigger(t *testing.T) {
-	store := &sessionTrackingStore{}
+	client4 := &http.Client{Timeout: 100 * time.Millisecond}
 	h := &Handler{
-		DB:          store,
+		DB:          &sessionTrackingStore{},
 		AgentURL:    "http://127.0.0.1:0",
-		AgentClient: &http.Client{Timeout: 100 * time.Millisecond},
+		AgentClient: client4,
+		Agent:       &service.AgentRunner{Client: client4, BaseURL: "http://127.0.0.1:0"},
 		ResearchSem: make(chan struct{}, 10),
 	}
 

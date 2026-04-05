@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,28 +17,6 @@ import (
 	appcontext "app/context"
 	"app/models"
 )
-
-type AgentRunRequest struct {
-	AppName    string `json:"appName"`
-	UserID     string `json:"userId"`
-	SessionID  string `json:"sessionId"`
-	Stream     bool   `json:"stream"`
-	NewMessage struct {
-		Role  string `json:"role"`
-		Parts []struct {
-			Text string `json:"text"`
-		} `json:"parts"`
-	} `json:"newMessage"`
-}
-
-type AgentEvent struct {
-	Content struct {
-		Parts []struct {
-			Text string `json:"text"`
-		} `json:"parts"`
-		Role string `json:"role"`
-	} `json:"content"`
-}
 
 type AgentOutput struct {
 	LocationName   string          `json:"location_name"`
@@ -189,37 +166,22 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 	ctx := context.Background()
 	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
 
-	agentURL := h.AgentURL
-	if agentURL == "" {
-		agentURL = "http://127.0.0.1:8081"
-	}
-
-	appName := "harbourmaster"
-	userID := "system"
+	const appName = "harbourmaster"
+	const userID = "system"
 	sessionID := fmt.Sprintf("stop_%d", stop.ID)
-
-	client := h.AgentClient
 
 	// Check for nearby existing research to reuse facilities
 	nearbyBriefing, nearbyErr := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
 	var reusableFacilities json.RawMessage
 
 	// 1. Create Session
-	createSessionURL := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", agentURL, appName, userID, sessionID)
-	respSession, err := client.Post(createSessionURL, "application/json", nil)
-	if err != nil {
+	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.saveEmptyBriefing(ctx, stop)
 		return
 	}
-	respSession.Body.Close()
-	if respSession.StatusCode >= http.StatusInternalServerError {
-		slog.ErrorContext(ctx, "Agent session creation returned server error", "status", respSession.StatusCode)
-		h.saveEmptyBriefing(ctx, stop)
-		return
-	}
 
-	// 2. Run Agent
+	// 2. Build prompt
 	var locInfo string
 	if stop.PreciseLocation != "" {
 		locInfo = fmt.Sprintf("%s (Lat: %f, Lng: %f)", stop.LocationName, stop.Latitude, stop.Longitude)
@@ -236,42 +198,12 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop) {
 		prompt += " Do not research facilities; I will provide those separately."
 	}
 
-	reqBody := AgentRunRequest{
-		AppName:   appName,
-		UserID:    userID,
-		SessionID: sessionID,
-	}
-	reqBody.NewMessage.Role = "user"
-	reqBody.NewMessage.Parts = []struct {
-		Text string `json:"text"`
-	}{{Text: prompt}}
-
-	jsonData, _ := json.Marshal(reqBody)
-	resp, err := client.Post(agentURL+"/api/run", "application/json", bytes.NewBuffer(jsonData))
+	// 3. Run Agent
+	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to call agent", "error", err)
+		slog.ErrorContext(ctx, "Agent run failed", "error", err)
+		h.saveEmptyBriefing(ctx, stop)
 		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.ErrorContext(ctx, "Agent returned error", "body", string(body))
-		return
-	}
-
-	var events []AgentEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		slog.ErrorContext(ctx, "Failed to decode agent response", "error", err)
-		return
-	}
-
-	// Find the model response
-	var responseText string
-	for _, e := range events {
-		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			responseText = e.Content.Parts[0].Text
-		}
 	}
 
 	if responseText == "" {
