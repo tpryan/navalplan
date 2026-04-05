@@ -75,6 +75,17 @@ let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
 let isPilotResearching = false;
 let radarSweep = null;
+// Module-level handles for pilot SSE streams and poll so clearRecommendations() can tear them down.
+let _pilotEventSource = null;
+let _pilotProgressES = null;
+let _pilotPoll = null;
+// Module-level handles for other long-running research polls cleared on voyage exit.
+let _fullResPoll = null;
+let _fullResProgressES = null;
+let _guidePoll = null;
+let _guideProgressES = null;
+let _stopPoll = null;
+let _stopProgressES = null;
 
 // createRadarSweepOverlay — factory that returns a RadarSweep class once
 // google.maps.OverlayView is available (cannot extend it at parse time).
@@ -255,6 +266,9 @@ let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
 let lastKnownResearchDone = false;
+let healthCheckInterval = null;
+// Chart.js instance registry — keyed by canvas ID so we can destroy before re-render.
+const chartInstances = new Map();
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -472,612 +486,499 @@ function startHealthCheck() {
         }
     };
 
-    // Check every 10 seconds
-    setInterval(check, 10000);
+    // Check every 10 seconds; clear any previous interval first
+    if (healthCheckInterval) clearInterval(healthCheckInterval);
+    healthCheckInterval = setInterval(check, 10000);
     // Initial check
     check();
 }
 
+/**
+ * reverseGeocode — shared helper that converts a lat/lng to a human-readable
+ * location name and plus-code precise location.
+ * Returns { locationName, preciseLocation }.
+ */
+async function reverseGeocode(latLng) {
+    const { lat, lng } = typeof latLng.lat === 'function'
+        ? { lat: latLng.lat(), lng: latLng.lng() }
+        : latLng;
+
+    const { Geocoder } = await importLibrary("geocoding");
+    const geocoder = new Geocoder();
+    const response = await geocoder.geocode({ location: { lat, lng } });
+    const r = response.results[0];
+    if (!r) return { locationName: `${lat.toFixed(3)}, ${lng.toFixed(3)}`, preciseLocation: '' };
+
+    const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
+    const locality = getComp('locality') || getComp('sublocality');
+    const region = getComp('administrative_area_level_1');
+    const country = getComp('country');
+
+    let locationName = r.formatted_address;
+    if (locality && country) {
+        locationName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
+    } else if (region && country) {
+        locationName = `${region}, ${country}`;
+    } else if (country) {
+        locationName = country;
+    }
+
+    let preciseLocation = '';
+    if (r.plus_code) {
+        preciseLocation = r.plus_code.compound_code || r.plus_code.global_code || '';
+    }
+
+    return { locationName, preciseLocation };
+}
+
 function initUI() {
-  researchTicker = new Ticker('research-ticker');
+    researchTicker = new Ticker('research-ticker');
+    initPilotAndFilterListeners();
+    initDiscoveryListeners();
+    initMobileMenuListeners();
+    initVoyageModalListeners();
+    initNavigationListeners();
+    initModalCloseListeners();
+}
 
-  const btnNewVoyage = document.getElementById('btn-new-voyage');
-  const modalOverlay = document.getElementById('modal-overlay');
-  const modalNewVoyage = document.getElementById('modal-new-voyage');
-  const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
-  const formNewVoyage = document.getElementById('form-new-voyage');
-  const btnBack = document.getElementById('btn-back-voyages');
-  const btnExport = document.getElementById('btn-export-voyage');
-  const btnPilotSuggestions = document.getElementById('btn-pilot-suggestions');
-  const btnEditVoyage = document.getElementById('btn-edit-voyage');
-  const btnSetDates = document.getElementById('btn-set-dates');
-  const btnDiscover = document.getElementById('btn-discover');
-  const btnCloseDiscovery = document.getElementById('btn-close-discovery');
-  const monthSlider = document.getElementById('month-slider');
-
-  if (btnSetDates) {
-      btnSetDates.addEventListener('click', () => {
-          if (currentVoyage) {
-              openEditModal(currentVoyage);
-          }
-      });
-  }
-
-  if (btnPilotSuggestions) {
-    btnPilotSuggestions.addEventListener('click', () => handlePilotSuggestionsClick());
-  }
-
-  // Discovery Toggle
-  if (btnDiscover) {
-      btnDiscover.addEventListener('click', () => toggleDiscoveryMode(true));
-  }
-  if (btnCloseDiscovery) {
-      btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
-  }
-
-  // Pilot filter buttons
-  document.querySelectorAll('.pilot-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-          const type = btn.dataset.type;
-          if (activeFilters.has(type)) {
-              activeFilters.delete(type);
-              btn.classList.remove('active');
-          } else {
-              activeFilters.add(type);
-              btn.classList.add('active');
-          }
-          recommendationMarkers.forEach(({ marker, type: markerType }) => {
-              marker.map = activeFilters.has(markerType) ? map : null;
-          });
-      });
-  });
-
-  // Facility filter buttons
-  document.querySelectorAll('.facility-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-          const type = btn.dataset.type;
-          if (activeFacilityFilters.has(type)) {
-              activeFacilityFilters.delete(type);
-              btn.classList.remove('active');
-          } else {
-              activeFacilityFilters.add(type);
-              btn.classList.add('active');
-          }
-          facilityMarkers.forEach(({ marker, type: markerType }) => {
-              marker.map = activeFacilityFilters.has(markerType) ? map : null;
-          });
-      });
-  });
-  
-  const btnCloseDiscoveryIntro = document.getElementById('btn-close-discovery-intro');
-  if (btnCloseDiscoveryIntro) {
-      btnCloseDiscoveryIntro.addEventListener('click', () => {
-          document.getElementById('modal-discovery-intro').classList.add('hidden');
-          document.getElementById('modal-overlay').classList.add('hidden');
-      });
-  }
-
-  // Empty Voyage Prompt
-  const btnEmptyPilot = document.getElementById('btn-empty-pilot');
-  const btnEmptyManual = document.getElementById('btn-empty-manual');
-  const modalEmptyVoyage = document.getElementById('modal-empty-voyage');
-
-  if (btnEmptyPilot) {
-      btnEmptyPilot.addEventListener('click', () => {
-          modalEmptyVoyage.classList.add('hidden');
-          modalOverlay.classList.add('hidden');
-          handlePilotSuggestionsClick();
-      });
-  }
-
-  if (btnEmptyManual) {
-      btnEmptyManual.addEventListener('click', () => {
-          modalEmptyVoyage.classList.add('hidden');
-          modalOverlay.classList.add('hidden');
-          // Start selecting first date automatically
-          if (currentVoyage) {
-              const start = new Date(currentVoyage.start_date).toISOString().split('T')[0];
-              selectDate(start);
-          }
-      });
-  }
-
-  // Month Slider
-  if (monthSlider) {
-      monthSlider.addEventListener('input', (e) => {
-          const months = [
-              'January', 'February', 'March', 'April', 'May', 'June',
-              'July', 'August', 'September', 'October', 'November', 'December'
-          ];
-          const month = parseInt(e.target.value);
-          document.getElementById('month-display').textContent = months[month - 1];
-          loadDiscoveryRegions(month);
-      });
-  }
-
-  // Mobile Menu Logic
-  const appContainer = document.getElementById('app');
-  const btnMobileMenu = document.getElementById('btn-mobile-menu');
-  const btnCloseSidebar = document.getElementById('btn-close-sidebar');
-
-  if (btnMobileMenu) {
-      btnMobileMenu.addEventListener('click', () => {
-          appContainer.classList.add('menu-open');
-      });
-  }
-
-  if (btnCloseSidebar) {
-      btnCloseSidebar.addEventListener('click', () => {
-          appContainer.classList.remove('menu-open');
-      });
-  }
-
-  const btnUseMapCenter = document.getElementById('btn-use-map-center');
-  const displayCoords = document.getElementById('voyage-coords-display');
-  const inputLat = document.getElementById('voyage-lat');
-  const inputLng = document.getElementById('voyage-lng');
-  const modalTitle = modalNewVoyage.querySelector('h2');
-  const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
-
-  // Open Modal (Create Mode)
-  btnNewVoyage.addEventListener('click', () => {
-    editingVoyageId = null;
-    modalTitle.textContent = 'Plan a New Voyage';
-    submitBtn.textContent = 'Create Voyage';
-    modalOverlay.classList.remove('hidden');
-    modalNewVoyage.classList.remove('hidden');
-    
-    // Hide date fields for initial creation (Discovery First)
-    document.getElementById('voyage-date-fields').classList.add('hidden');
-    
-    document.getElementById('voyage-start').value = '';
-    document.getElementById('voyage-end').value = '';
-    document.getElementById('voyage-title').value = '';
-    document.getElementById('voyage-location-name').value = '';
-    document.getElementById('voyage-radius').value = 60;
-    displayCoords.textContent = '';
-    inputLat.value = '';
-    inputLng.value = '';
-  });
-
-  // Close Modal Helper
-  const closeModal = () => {
-    modalOverlay.classList.add('hidden');
-    modalNewVoyage.classList.add('hidden');
-    formNewVoyage.reset();
-    displayCoords.textContent = '';
-    inputLat.value = '';
-    inputLng.value = '';
-    document.getElementById('voyage-precise-location').value = '';
-    editingVoyageId = null;
-  };
-
-  btnCancelVoyage.addEventListener('click', closeModal);
-  modalOverlay.addEventListener('click', closeModal);
-
-  // Auto-set End Date
-  const inputStart = document.getElementById('voyage-start');
-  const inputEnd = document.getElementById('voyage-end');
-
-  inputStart.addEventListener('change', () => {
-    if (inputStart.value && !inputEnd.value) {
-      const d = new Date(inputStart.value);
-      d.setUTCDate(d.getUTCDate() + 1);
-      inputEnd.value = d.toISOString().split('T')[0];
+function initPilotAndFilterListeners() {
+    const btnSetDates = document.getElementById('btn-set-dates');
+    if (btnSetDates) {
+        btnSetDates.addEventListener('click', () => { if (currentVoyage) openEditModal(currentVoyage); });
     }
-  });
 
-  // Use Map Center
-  if (btnUseMapCenter) {
-    btnUseMapCenter.addEventListener('click', async () => {
-      if (!map) return;
-      const center = map.getCenter();
-      const lat = center.lat();
-      const lng = center.lng();
-      const zoom = map.getZoom();
-      
-      inputLat.value = lat;
-      inputLng.value = lng;
-      displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-
-      // Calculate approximate search radius based on zoom
-      // At zoom 10, ~20nm is a good coverage. 
-      // Higher zoom (zoomed in) = smaller radius.
-      // Formula: radius = baseline * 2^(baseline_zoom - current_zoom)
-      let radius = Math.round(20 * Math.pow(2, 10 - zoom));
-      
-      // Constrain to reasonable limits (5nm to 200nm)
-      radius = Math.max(5, Math.min(200, radius));
-      
-      const inputRadius = document.getElementById('voyage-radius');
-      if (inputRadius) {
-          inputRadius.value = radius;
-      }
-
-      // Reverse Geocode
-      try {
-          const { Geocoder } = await importLibrary("geocoding");
-          const geocoder = new Geocoder();
-          const response = await geocoder.geocode({ location: { lat, lng } });
-          if (response.results[0]) {
-              const r = response.results[0];
-              
-              // Extract descriptive name
-              let descName = r.formatted_address;
-              const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
-              
-              const locality = getComp('locality') || getComp('sublocality'); 
-              const region = getComp('administrative_area_level_1');
-              const country = getComp('country');
-              
-              if (locality && country) {
-                  descName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
-              } else if (region && country) {
-                  descName = `${region}, ${country}`;
-              } else if (country) {
-                  descName = country;
-              }
-
-              document.getElementById('voyage-location-name').value = descName;
-
-              if (r.plus_code) {
-                  const pc = r.plus_code;
-                  document.getElementById('voyage-precise-location').value = pc.compound_code || pc.global_code || "";
-              } else {
-                  document.getElementById('voyage-precise-location').value = "";
-              }
-          }
-      } catch (e) {
-          console.warn("Failed to geocode map center", e);
-      }
-    });
-  }
-
-  // Handle Form Submit
-  formNewVoyage.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(formNewVoyage);
-    
-    const start = formData.get('start_date');
-    const end = formData.get('end_date');
-    
-    const voyageData = {
-      title: formData.get('title'),
-      start_date: start ? start + 'T00:00:00Z' : null,
-      end_date: end ? end + 'T00:00:00Z' : null,
-      location_name: formData.get('location_name'),
-      precise_location: formData.get('precise_location'),
-      latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
-      longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
-      search_radius: parseInt(formData.get('search_radius')) || 60,
-      search_radius_unit: 'nm'
-    };
-
-    try {
-      let savedVoyage;
-      if (editingVoyageId) {
-        savedVoyage = await API.updateVoyage(editingVoyageId, voyageData);
-      } else {
-        savedVoyage = await API.createVoyage(voyageData);
-      }
-      
-      closeModal();
-      await loadVoyages(); // Refresh list
-
-      // Find the most fresh version of the voyage from the loaded list if possible
-      const freshVoyage = voyages.find(v => v.id === savedVoyage.id);
-      await selectVoyage(freshVoyage || savedVoyage);
-    } catch (err) {
-      console.error(err);
-      showNotification('Error', 'Failed to save voyage. Check console.');
+    const btnPilotSuggestions = document.getElementById('btn-pilot-suggestions');
+    if (btnPilotSuggestions) {
+        btnPilotSuggestions.addEventListener('click', () => handlePilotSuggestionsClick());
     }
-  });
 
-  // Back Button
-  if (btnBack) {
-    btnBack.addEventListener('click', showVoyageList);
-  }
-
-  // Export Button
-  if (btnExport) {
-    btnExport.addEventListener('click', handleShowReport);
-  }
-
-  // Guide Button
-  const btnViewGuide = document.getElementById('btn-view-guide');
-  if (btnViewGuide) {
-      btnViewGuide.addEventListener('click', () => {
-          if (currentVoyage) {
-              handleGuideClick(currentVoyage, btnViewGuide);
-          }
-      });
-  }
-
-  // Research All Button
-  const btnResearchAll = document.getElementById('btn-research-all');
-  if (btnResearchAll) {
-      btnResearchAll.addEventListener('click', () => handleResearchAll(true));
-  }
-
-  // Edit Voyage Button (Itinerary View)
-  if (btnEditVoyage) {
-    btnEditVoyage.addEventListener('click', () => {
-      if (currentVoyage) {
-        openEditModal(currentVoyage);
-      }
+    // Pilot recommendation filter buttons
+    document.querySelectorAll('.pilot-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.type;
+            if (activeFilters.has(type)) {
+                activeFilters.delete(type);
+                btn.classList.remove('active');
+            } else {
+                activeFilters.add(type);
+                btn.classList.add('active');
+            }
+            recommendationMarkers.forEach(({ marker, type: markerType }) => {
+                marker.map = activeFilters.has(markerType) ? map : null;
+            });
+        });
     });
-  }
 
-  // Report Modal Close Handler
-  const modalReport = document.getElementById('modal-report');
-  const btnCloseReport = document.getElementById('btn-close-report');
-  const btnCopyReport = document.getElementById('btn-copy-report');
-  
-  const closeReport = () => {
-      modalReport.classList.add('hidden');
-      if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
-          modalOverlay.classList.add('hidden');
-      }
-  };
-  
-  if (btnCloseReport) {
-      btnCloseReport.onclick = closeReport;
-  }
-
-  // Notification Modal Handlers
-  const modalNotification = document.getElementById('modal-notification');
-  const btnCloseNotification = document.getElementById('btn-close-notification');
-  
-  if (btnCloseNotification) {
-      btnCloseNotification.onclick = () => {
-          modalNotification.classList.add('hidden');
-          const modalOverlay = document.getElementById('modal-overlay');
-          // Only hide overlay if no other modal is open
-          if (document.getElementById('modal-new-voyage').classList.contains('hidden') &&
-              document.getElementById('modal-briefing').classList.contains('hidden') && 
-              document.getElementById('modal-report').classList.contains('hidden') &&
-              document.getElementById('modal-guide').classList.contains('hidden')) {
-              modalOverlay.classList.add('hidden');
-          }
-      };
-  }
-
-  // Guide Modal Close Handler
-  const modalGuide = document.getElementById('modal-guide');
-  const btnCloseGuide = document.getElementById('btn-close-guide');
-
-  const closeGuide = () => {
-      modalGuide.classList.add('hidden');
-      if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
-          modalOverlay.classList.add('hidden');
-      }
-  };
-  
-  if (btnCloseGuide) btnCloseGuide.onclick = closeGuide;
-  
-  if (btnCopyReport) {
-    btnCopyReport.onclick = async () => {
-        const content = document.getElementById('report-content');
-        const originalText = btnCopyReport.textContent;
-        btnCopyReport.textContent = 'Processing...';
-        btnCopyReport.disabled = true;
-
-        // 0. Convert Remote Images (like the Map) to Data URIs
-        const remoteImages = content.querySelectorAll('img');
-        const processedImages = [];
-        
-        for (const img of remoteImages) {
-             // Skip if already data URI
-             if (img.src.startsWith('data:')) continue;
-             
-             try {
-                 const resp = await fetch(img.src);
-                 const blob = await resp.blob();
-                 const dataUrl = await new Promise(resolve => {
-                     const reader = new FileReader();
-                     reader.onload = () => resolve(reader.result);
-                     reader.readAsDataURL(blob);
-                 });
-                 
-                 processedImages.push({ el: img, src: img.src });
-                 img.src = dataUrl;
-             } catch (err) {
-                 console.warn('Failed to embed image:', img.src, err);
-             }
-        }
-        
-        // 1. Convert Canvases to Images
-        const canvases = content.querySelectorAll('canvas');
-        const tempImages = [];
-        
-        canvases.forEach(canvas => {
-            const img = document.createElement('img');
-            img.src = canvas.toDataURL();
-            img.style.width = '100%';
-            img.style.height = 'auto';
-            
-            // Insert image, hide canvas
-            canvas.parentNode.insertBefore(img, canvas);
-            canvas.style.display = 'none';
-            tempImages.push({ canvas, img });
-        });
-
-        // 2. Remove Icons (to avoid copying their text)
-        const icons = content.querySelectorAll('.material-symbols-outlined');
-        const removedIcons = [];
-        icons.forEach(icon => {
-            const placeholder = document.createComment('icon-placeholder');
-            const parent = icon.parentNode;
-            removedIcons.push({ icon, parent, next: icon.nextSibling, placeholder });
-            parent.replaceChild(placeholder, icon);
-        });
-
-        // 2b. Convert Facility Lists to Divs with H4s
-        const facilityLists = content.querySelectorAll('.facility-list');
-        const modifiedLists = [];
-        
-        facilityLists.forEach(ul => {
-            const container = document.createElement('div');
-            const listItems = ul.querySelectorAll('li.facility-item');
-            const originalItems = [];
-            
-            listItems.forEach(li => {
-                const h4 = document.createElement('h4');
-                // Move all children
-                while (li.firstChild) {
-                    h4.appendChild(li.firstChild);
-                }
-                container.appendChild(h4);
-                originalItems.push({ li, h4 });
+    // Facility filter buttons
+    document.querySelectorAll('.facility-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.type;
+            if (activeFacilityFilters.has(type)) {
+                activeFacilityFilters.delete(type);
+                btn.classList.remove('active');
+            } else {
+                activeFacilityFilters.add(type);
+                btn.classList.add('active');
+            }
+            facilityMarkers.forEach(({ marker, type: markerType }) => {
+                marker.map = activeFacilityFilters.has(markerType) ? map : null;
             });
-            
-            // Replace UL with Container
-            ul.parentNode.insertBefore(container, ul);
-            ul.style.display = 'none';
-            
-            modifiedLists.push({ ul, container, originalItems });
         });
+    });
 
-        // 2c. Convert Overview Grid to Table
-        const overviewGrid = content.querySelector('.overview-grid');
-        const overviewReplacements = [];
+    // Empty Voyage Prompt
+    const modalOverlay = document.getElementById('modal-overlay');
+    const btnEmptyPilot = document.getElementById('btn-empty-pilot');
+    const btnEmptyManual = document.getElementById('btn-empty-manual');
+    const modalEmptyVoyage = document.getElementById('modal-empty-voyage');
 
-        if (overviewGrid) {
-            const table = document.createElement('table');
-            table.style.width = '100%';
-            table.style.borderCollapse = 'separate';
-            table.style.borderSpacing = '10px';
-            
-            const cards = Array.from(overviewGrid.querySelectorAll('.overview-card'));
-            let currentRow = null;
-            
-            cards.forEach((card, index) => {
-                // Assuming max 4 columns based on existing logic
-                if (index % 4 === 0) {
-                    currentRow = document.createElement('tr');
-                    table.appendChild(currentRow);
-                }
-                
-                const td = document.createElement('td');
-                td.style.border = '1px solid #ccc';
-                td.style.borderRadius = '8px';
-                td.style.padding = '10px';
-                td.style.backgroundColor = '#fff';
-                td.style.verticalAlign = 'top';
-                td.style.width = '25%'; // Distribute evenly
-                
-                // Move card content to TD
-                while (card.firstChild) {
-                    td.appendChild(card.firstChild);
-                }
-                
-                currentRow.appendChild(td);
-            });
-            
-            // Insert table before grid
-            overviewGrid.parentNode.insertBefore(table, overviewGrid);
-            overviewGrid.style.display = 'none';
-            
-            overviewReplacements.push({
-                grid: overviewGrid,
-                table: table,
-                originalCards: cards
-            });
-        }
-
-        // 3. Strip Styles and Classes
-        const allElements = content.querySelectorAll('*');
-        const originalAttributes = [];
-        
-        allElements.forEach(el => {
-            // Skip the temp images we just created
-            if (tempImages.some(t => t.img === el)) return;
-            // Skip the original ULs we just hid
-            if (modifiedLists.some(m => m.ul === el)) return;
-            // Skip the original Grid we just hid
-            if (overviewReplacements.some(r => r.grid === el)) return;
-
-            originalAttributes.push({
-                el: el,
-                style: el.getAttribute('style'),
-                class: el.getAttribute('class')
-            });
-            
-            el.removeAttribute('style');
-            el.removeAttribute('class');
+    if (btnEmptyPilot) {
+        btnEmptyPilot.addEventListener('click', () => {
+            modalEmptyVoyage.classList.add('hidden');
+            modalOverlay.classList.add('hidden');
+            handlePilotSuggestionsClick();
         });
+    }
 
-        // 3a. Apply specific clipboard styles (e.g. left-align headers)
-        const ths = content.querySelectorAll('th');
-        ths.forEach(th => {
-            th.style.textAlign = 'left';
-            th.style.backgroundColor = 'rgb(227, 220, 211)'; // var(--brand-lighter)
-            th.style.padding = '4px 8px';
-            th.style.border = '1px solid #cccccc';
-            th.style.textTransform = 'capitalize';
-
-            // Check if it originally had the label-width class
-            const attr = originalAttributes.find(a => a.el === th);
-            if (attr && attr.class && attr.class.includes('briefing-table-label-width')) {
-                th.style.width = '20ch';
-                th.style.whiteSpace = 'nowrap';
+    if (btnEmptyManual) {
+        btnEmptyManual.addEventListener('click', () => {
+            modalEmptyVoyage.classList.add('hidden');
+            modalOverlay.classList.add('hidden');
+            if (currentVoyage) {
+                const start = new Date(currentVoyage.start_date).toISOString().split('T')[0];
+                selectDate(start);
             }
         });
+    }
+}
 
-        const theads = content.querySelectorAll('thead');
-        theads.forEach(thead => {
-            thead.style.backgroundColor = 'rgba(0,0,0,0.05)';
+function initDiscoveryListeners() {
+    const btnDiscover = document.getElementById('btn-discover');
+    const btnCloseDiscovery = document.getElementById('btn-close-discovery');
+    const monthSlider = document.getElementById('month-slider');
+
+    if (btnDiscover) btnDiscover.addEventListener('click', () => toggleDiscoveryMode(true));
+    if (btnCloseDiscovery) btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
+
+    const btnCloseDiscoveryIntro = document.getElementById('btn-close-discovery-intro');
+    if (btnCloseDiscoveryIntro) {
+        btnCloseDiscoveryIntro.addEventListener('click', () => {
+            document.getElementById('modal-discovery-intro').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.add('hidden');
         });
+    }
 
-        const tds = content.querySelectorAll('td');
-        tds.forEach(td => {
-            td.style.padding = '4px 8px';
-            td.style.border = '1px solid #cccccc';
+    if (monthSlider) {
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        monthSlider.addEventListener('input', (e) => {
+            const month = parseInt(e.target.value);
+            document.getElementById('month-display').textContent = months[month - 1];
+            loadDiscoveryRegions(month);
+        });
+    }
+}
+
+function initMobileMenuListeners() {
+    const appContainer = document.getElementById('app');
+    const btnMobileMenu = document.getElementById('btn-mobile-menu');
+    const btnCloseSidebar = document.getElementById('btn-close-sidebar');
+
+    if (btnMobileMenu) btnMobileMenu.addEventListener('click', () => appContainer.classList.add('menu-open'));
+    if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', () => appContainer.classList.remove('menu-open'));
+}
+
+function initVoyageModalListeners() {
+    const btnNewVoyage = document.getElementById('btn-new-voyage');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalNewVoyage = document.getElementById('modal-new-voyage');
+    const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
+    const formNewVoyage = document.getElementById('form-new-voyage');
+    const btnUseMapCenter = document.getElementById('btn-use-map-center');
+    const displayCoords = document.getElementById('voyage-coords-display');
+    const inputLat = document.getElementById('voyage-lat');
+    const inputLng = document.getElementById('voyage-lng');
+    const modalTitle = modalNewVoyage.querySelector('h2');
+    const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
+
+    // Open Modal (Create Mode)
+    btnNewVoyage.addEventListener('click', () => {
+        editingVoyageId = null;
+        modalTitle.textContent = 'Plan a New Voyage';
+        submitBtn.textContent = 'Create Voyage';
+        modalOverlay.classList.remove('hidden');
+        modalNewVoyage.classList.remove('hidden');
+        // Hide date fields for initial creation (Discovery First)
+        document.getElementById('voyage-date-fields').classList.add('hidden');
+        document.getElementById('voyage-start').value = '';
+        document.getElementById('voyage-end').value = '';
+        document.getElementById('voyage-title').value = '';
+        document.getElementById('voyage-location-name').value = '';
+        document.getElementById('voyage-radius').value = 60;
+        displayCoords.textContent = '';
+        inputLat.value = '';
+        inputLng.value = '';
+    });
+
+    const closeModal = () => {
+        modalOverlay.classList.add('hidden');
+        modalNewVoyage.classList.add('hidden');
+        formNewVoyage.reset();
+        displayCoords.textContent = '';
+        inputLat.value = '';
+        inputLng.value = '';
+        document.getElementById('voyage-precise-location').value = '';
+        editingVoyageId = null;
+    };
+
+    btnCancelVoyage.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', closeModal);
+
+    // Auto-set End Date
+    const inputStart = document.getElementById('voyage-start');
+    const inputEnd = document.getElementById('voyage-end');
+    inputStart.addEventListener('change', () => {
+        if (inputStart.value && !inputEnd.value) {
+            const d = new Date(inputStart.value);
+            d.setUTCDate(d.getUTCDate() + 1);
+            inputEnd.value = d.toISOString().split('T')[0];
+        }
+    });
+
+    // Use Map Center
+    if (btnUseMapCenter) {
+        btnUseMapCenter.addEventListener('click', async () => {
+            if (!map) return;
+            const center = map.getCenter();
+            const lat = center.lat();
+            const lng = center.lng();
+            const zoom = map.getZoom();
+
+            inputLat.value = lat;
+            inputLng.value = lng;
+            displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+            // At zoom 10, ~20nm is good coverage. Higher zoom = smaller radius.
+            let radius = Math.round(20 * Math.pow(2, 10 - zoom));
+            radius = Math.max(5, Math.min(200, radius));
+            const inputRadius = document.getElementById('voyage-radius');
+            if (inputRadius) inputRadius.value = radius;
+
+            try {
+                const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
+                document.getElementById('voyage-location-name').value = locationName;
+                document.getElementById('voyage-precise-location').value = preciseLocation;
+            } catch (e) {
+                console.warn("Failed to geocode map center", e);
+            }
+        });
+    }
+
+    // Form Submit
+    formNewVoyage.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(formNewVoyage);
+        const start = formData.get('start_date');
+        const end = formData.get('end_date');
+        const voyageData = {
+            title: formData.get('title'),
+            start_date: start ? start + 'T00:00:00Z' : null,
+            end_date: end ? end + 'T00:00:00Z' : null,
+            location_name: formData.get('location_name'),
+            precise_location: formData.get('precise_location'),
+            latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
+            longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
+            search_radius: parseInt(formData.get('search_radius')) || 60,
+            search_radius_unit: 'nm'
+        };
+        try {
+            let savedVoyage;
+            if (editingVoyageId) {
+                savedVoyage = await API.updateVoyage(editingVoyageId, voyageData);
+            } else {
+                savedVoyage = await API.createVoyage(voyageData);
+            }
+            closeModal();
+            await loadVoyages();
+            const freshVoyage = voyages.find(v => v.id === savedVoyage.id);
+            await selectVoyage(freshVoyage || savedVoyage);
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', 'Failed to save voyage. Check console.');
+        }
+    });
+}
+
+function initNavigationListeners() {
+    const btnBack = document.getElementById('btn-back-voyages');
+    const btnExport = document.getElementById('btn-export-voyage');
+    const btnEditVoyage = document.getElementById('btn-edit-voyage');
+
+    if (btnBack) btnBack.addEventListener('click', showVoyageList);
+    if (btnExport) btnExport.addEventListener('click', handleShowReport);
+
+    if (btnEditVoyage) {
+        btnEditVoyage.addEventListener('click', () => { if (currentVoyage) openEditModal(currentVoyage); });
+    }
+
+    const btnViewGuide = document.getElementById('btn-view-guide');
+    if (btnViewGuide) {
+        btnViewGuide.addEventListener('click', () => { if (currentVoyage) handleGuideClick(currentVoyage, btnViewGuide); });
+    }
+
+    const btnResearchAll = document.getElementById('btn-research-all');
+    if (btnResearchAll) btnResearchAll.addEventListener('click', () => handleResearchAll(true));
+}
+
+function initModalCloseListeners() {
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    // Report modal
+    const modalReport = document.getElementById('modal-report');
+    const btnCloseReport = document.getElementById('btn-close-report');
+    const btnCopyReport = document.getElementById('btn-copy-report');
+    const closeReport = () => {
+        modalReport.classList.add('hidden');
+        if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
+            modalOverlay.classList.add('hidden');
+        }
+    };
+    if (btnCloseReport) btnCloseReport.onclick = closeReport;
+    if (btnCopyReport) btnCopyReport.onclick = handleCopyReport;
+
+    // Notification modal
+    const modalNotification = document.getElementById('modal-notification');
+    const btnCloseNotification = document.getElementById('btn-close-notification');
+    if (btnCloseNotification) {
+        btnCloseNotification.onclick = () => {
+            modalNotification.classList.add('hidden');
+            if (document.getElementById('modal-new-voyage').classList.contains('hidden') &&
+                document.getElementById('modal-briefing').classList.contains('hidden') &&
+                document.getElementById('modal-report').classList.contains('hidden') &&
+                document.getElementById('modal-guide').classList.contains('hidden')) {
+                modalOverlay.classList.add('hidden');
+            }
+        };
+    }
+
+    // Guide modal
+    const modalGuide = document.getElementById('modal-guide');
+    const btnCloseGuide = document.getElementById('btn-close-guide');
+    const closeGuide = () => {
+        modalGuide.classList.add('hidden');
+        if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
+            modalOverlay.classList.add('hidden');
+        }
+    };
+    if (btnCloseGuide) btnCloseGuide.onclick = closeGuide;
+}
+
+async function handleCopyReport() {
+    const btnCopyReport = document.getElementById('btn-copy-report');
+    const content = document.getElementById('report-content');
+    const originalText = btnCopyReport.textContent;
+    btnCopyReport.textContent = 'Processing...';
+    btnCopyReport.disabled = true;
+
+    // 0. Convert Remote Images (like the Map) to Data URIs
+    const remoteImages = content.querySelectorAll('img');
+    const processedImages = [];
+    for (const img of remoteImages) {
+        if (img.src.startsWith('data:')) continue;
+        try {
+            const resp = await fetch(img.src);
+            const blob = await resp.blob();
+            const dataUrl = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+            processedImages.push({ el: img, src: img.src });
+            img.src = dataUrl;
+        } catch (err) {
+            console.warn('Failed to embed image:', img.src, err);
+        }
+    }
+
+    // 1. Convert Canvases to Images
+    const canvases = content.querySelectorAll('canvas');
+    const tempImages = [];
+    canvases.forEach(canvas => {
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL();
+        img.style.width = '100%';
+        img.style.height = 'auto';
+        canvas.parentNode.insertBefore(img, canvas);
+        canvas.style.display = 'none';
+        tempImages.push({ canvas, img });
+    });
+
+    // 2. Remove Icons (to avoid copying their text)
+    const icons = content.querySelectorAll('.material-symbols-outlined');
+    const removedIcons = [];
+    icons.forEach(icon => {
+        const placeholder = document.createComment('icon-placeholder');
+        const parent = icon.parentNode;
+        removedIcons.push({ icon, parent, next: icon.nextSibling, placeholder });
+        parent.replaceChild(placeholder, icon);
+    });
+
+    // 2b. Convert Facility Lists to Divs with H4s
+    const facilityLists = content.querySelectorAll('.facility-list');
+    const modifiedLists = [];
+    facilityLists.forEach(ul => {
+        const container = document.createElement('div');
+        const listItems = ul.querySelectorAll('li.facility-item');
+        const originalItems = [];
+        listItems.forEach(li => {
+            const h4 = document.createElement('h4');
+            while (li.firstChild) h4.appendChild(li.firstChild);
+            container.appendChild(h4);
+            originalItems.push({ li, h4 });
+        });
+        ul.parentNode.insertBefore(container, ul);
+        ul.style.display = 'none';
+        modifiedLists.push({ ul, container, originalItems });
+    });
+
+    // 2c. Convert Overview Grid to Table
+    const overviewGrid = content.querySelector('.overview-grid');
+    const overviewReplacements = [];
+    if (overviewGrid) {
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'separate';
+        table.style.borderSpacing = '10px';
+        const cards = Array.from(overviewGrid.querySelectorAll('.overview-card'));
+        let currentRow = null;
+        cards.forEach((card, index) => {
+            if (index % 4 === 0) {
+                currentRow = document.createElement('tr');
+                table.appendChild(currentRow);
+            }
+            const td = document.createElement('td');
+            td.style.border = '1px solid #ccc';
+            td.style.borderRadius = '8px';
+            td.style.padding = '10px';
+            td.style.backgroundColor = '#fff';
             td.style.verticalAlign = 'top';
+            td.style.width = '25%';
+            while (card.firstChild) td.appendChild(card.firstChild);
+            currentRow.appendChild(td);
         });
+        overviewGrid.parentNode.insertBefore(table, overviewGrid);
+        overviewGrid.style.display = 'none';
+        overviewReplacements.push({ grid: overviewGrid, table, originalCards: cards });
+    }
 
-        const tables = content.querySelectorAll('table');
-        tables.forEach(table => {
-            table.style.borderCollapse = 'collapse';
-            table.style.width = '100%';
-            table.style.marginTop = '1rem';
-            table.style.marginBottom = '1rem';
-        });
+    // 3. Strip Styles and Classes
+    const allElements = content.querySelectorAll('*');
+    const originalAttributes = [];
+    allElements.forEach(el => {
+        if (tempImages.some(t => t.img === el)) return;
+        if (modifiedLists.some(m => m.ul === el)) return;
+        if (overviewReplacements.some(r => r.grid === el)) return;
+        originalAttributes.push({ el, style: el.getAttribute('style'), class: el.getAttribute('class') });
+        el.removeAttribute('style');
+        el.removeAttribute('class');
+    });
 
-        const h3s = content.querySelectorAll('h3');
-        h3s.forEach(h3 => {
-            h3.style.color = 'rgb(88, 61, 27)'; // var(--brand-dark)
-            h3.style.marginTop = '1.5rem';
-            h3.style.marginBottom = '0.5rem';
-            h3.style.borderBottom = '1px solid #cccccc';
-            h3.style.paddingBottom = '4px';
-        });
+    // 3a. Apply clipboard-friendly styles
+    content.querySelectorAll('th').forEach(th => {
+        th.style.textAlign = 'left';
+        th.style.backgroundColor = 'rgb(227, 220, 211)';
+        th.style.padding = '4px 8px';
+        th.style.border = '1px solid #cccccc';
+        th.style.textTransform = 'capitalize';
+        const attr = originalAttributes.find(a => a.el === th);
+        if (attr && attr.class && attr.class.includes('briefing-table-label-width')) {
+            th.style.width = '20ch';
+            th.style.whiteSpace = 'nowrap';
+        }
+    });
+    content.querySelectorAll('thead').forEach(thead => { thead.style.backgroundColor = 'rgba(0,0,0,0.05)'; });
+    content.querySelectorAll('td').forEach(td => { td.style.padding = '4px 8px'; td.style.border = '1px solid #cccccc'; td.style.verticalAlign = 'top'; });
+    content.querySelectorAll('table').forEach(table => { table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.marginTop = '1rem'; table.style.marginBottom = '1rem'; });
+    content.querySelectorAll('h3').forEach(h3 => { h3.style.color = 'rgb(88, 61, 27)'; h3.style.marginTop = '1.5rem'; h3.style.marginBottom = '0.5rem'; h3.style.borderBottom = '1px solid #cccccc'; h3.style.paddingBottom = '4px'; });
+    content.querySelectorAll('h4').forEach(h4 => { h4.style.margin = '0.5rem 0'; h4.style.fontSize = '1.1rem'; h4.style.color = 'rgb(88, 61, 27)'; });
+    content.querySelectorAll('img').forEach(img => { img.style.width = '100%'; img.style.maxWidth = '600px'; img.style.height = 'auto'; img.style.display = 'block'; img.style.margin = '1rem 0'; });
 
-        const h4s = content.querySelectorAll('h4');
-        h4s.forEach(h4 => {
-            h4.style.margin = '0.5rem 0';
-            h4.style.fontSize = '1.1rem';
-            h4.style.color = 'rgb(88, 61, 27)';
-        });
-
-        const imgs = content.querySelectorAll('img');
-        imgs.forEach(img => {
-            img.style.width = '100%';
-            img.style.maxWidth = '600px';
-            img.style.height = 'auto';
-            img.style.display = 'block';
-            img.style.margin = '1rem 0';
-        });
-
-        // 4. Select and Copy
+    // 4. Copy to clipboard (Clipboard API with HTML, fallback to execCommand)
+    try {
+        const htmlBlob = new Blob([content.outerHTML], { type: 'text/html' });
+        const textBlob = new Blob([content.innerText], { type: 'text/plain' });
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+        btnCopyReport.textContent = 'Copied!';
+        setTimeout(() => btnCopyReport.textContent = originalText, 2000);
+    } catch (_clipboardErr) {
         const range = document.createRange();
         range.selectNode(content);
         window.getSelection().removeAllRanges();
         window.getSelection().addRange(range);
-        
         try {
             document.execCommand('copy');
-            
             btnCopyReport.textContent = 'Copied!';
             setTimeout(() => btnCopyReport.textContent = originalText, 2000);
         } catch (err) {
@@ -1085,65 +986,33 @@ function initUI() {
             showNotification('Error', 'Failed to copy report to clipboard');
             btnCopyReport.textContent = originalText;
         } finally {
-            // 5. Restore Attributes, Icons, Canvases, and Lists
             window.getSelection().removeAllRanges();
-            
-            // Restore attributes first
-            originalAttributes.forEach(({ el, style, class: cls }) => {
-                if (style !== null) el.setAttribute('style', style);
-                else el.removeAttribute('style');
-
-                if (cls !== null) el.setAttribute('class', cls);
-                else el.removeAttribute('class');
-            });
-
-            // Restore Lists
-            modifiedLists.forEach(({ ul, container, originalItems }) => {
-                originalItems.forEach(({ li, h4 }) => {
-                    while (h4.firstChild) {
-                        li.appendChild(h4.firstChild);
-                    }
-                });
-                container.remove();
-                ul.style.display = '';
-            });
-
-            // Restore Icons
-            removedIcons.forEach(({ icon, parent, placeholder }) => {
-                parent.replaceChild(icon, placeholder);
-            });
-
-            // Restore images/canvases
-            tempImages.forEach(({ canvas, img }) => {
-                canvas.style.display = '';
-                img.remove();
-            });
-            
-            // Restore Overview Grid
-            overviewReplacements.forEach(({ grid, table, originalCards }) => {
-                 // We need to move content back from TDs to Cards
-                 const tds = table.querySelectorAll('td');
-                 tds.forEach((td, i) => {
-                     const card = originalCards[i];
-                     if (card) {
-                         while (td.firstChild) {
-                             card.appendChild(td.firstChild);
-                         }
-                     }
-                 });
-                 table.remove();
-                 grid.style.display = '';
-            });
-
-            // Restore Remote Images
-            processedImages.forEach(({ el, src }) => {
-                el.src = src;
-            });
-            
-            btnCopyReport.disabled = false;
         }
-    };
-  }
+    } finally {
+        // 5. Restore everything
+        window.getSelection().removeAllRanges();
+        originalAttributes.forEach(({ el, style, class: cls }) => {
+            if (style !== null) el.setAttribute('style', style); else el.removeAttribute('style');
+            if (cls !== null) el.setAttribute('class', cls); else el.removeAttribute('class');
+        });
+        modifiedLists.forEach(({ ul, container, originalItems }) => {
+            originalItems.forEach(({ li, h4 }) => { while (h4.firstChild) li.appendChild(h4.firstChild); });
+            container.remove();
+            ul.style.display = '';
+        });
+        removedIcons.forEach(({ icon, parent, placeholder }) => { parent.replaceChild(icon, placeholder); });
+        tempImages.forEach(({ canvas, img }) => { canvas.style.display = ''; img.remove(); });
+        overviewReplacements.forEach(({ grid, table, originalCards }) => {
+            table.querySelectorAll('td').forEach((td, i) => {
+                const card = originalCards[i];
+                if (card) { while (td.firstChild) card.appendChild(td.firstChild); }
+            });
+            table.remove();
+            grid.style.display = '';
+        });
+        processedImages.forEach(({ el, src }) => { el.src = src; });
+        btnCopyReport.disabled = false;
+    }
 }
 
 async function loadVoyages() {
@@ -1350,13 +1219,21 @@ function showVoyageList() {
     document.getElementById('voyage-list').classList.remove('hidden');
     document.getElementById('itinerary-view').classList.add('hidden');
     document.querySelector('.sidebar-actions').classList.remove('hidden');
-    
+
     currentVoyage = null;
     selectedDate = null;
     lastKnownItineraryFull = false;
-    clearRecommendations();
+    clearRecommendations();   // also clears pilot poll/SSE
     clearPilotCircle();
     clearMap();
+    clearStopSweeps();
+    // Cancel any other in-flight research polls
+    if (_fullResPoll) { clearInterval(_fullResPoll); _fullResPoll = null; }
+    if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
+    if (_guidePoll) { clearInterval(_guidePoll); _guidePoll = null; }
+    if (_guideProgressES) { _guideProgressES.close(); _guideProgressES = null; }
+    if (_stopPoll) { clearInterval(_stopPoll); _stopPoll = null; }
+    if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
 }
 
 function updateItineraryHeader(voyage) {
@@ -1558,31 +1435,30 @@ async function executeResearchAll() {
         }
 
         // Stream progress updates into ticker
-        let fullResProgressES = null;
         if (fullResRes && fullResRes.session_id && researchTicker) {
-            fullResProgressES = API.streamProgress(fullResRes.session_id, (evt) => {
+            _fullResProgressES = API.streamProgress(fullResRes.session_id, (evt) => {
                 researchTicker.push(evt.message);
             });
         }
-        
+
         // 2. Poll for completion
         const startTime = Date.now();
         const TIMEOUT_MS = 240000; // 4 minutes timeout
-        
-        let pendingStops = [...currentStops]; 
+
+        let pendingStops = [...currentStops];
         let guideComplete = false;
         let consecutiveErrors = 0;
-        
-        const poll = setInterval(async () => {
+
+        _fullResPoll = setInterval(async () => {
             // Check timeout
             if (Date.now() - startTime > TIMEOUT_MS) {
-                clearInterval(poll);
-                if (fullResProgressES) fullResProgressES.close();
+                clearInterval(_fullResPoll); _fullResPoll = null;
+                if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                 clearStopSweeps();
                 if (researchTicker) researchTicker.error('Research Timeout');
                 btnResearchAll.innerHTML = originalContent;
                 btnResearchAll.disabled = false;
-                
+
                 // Revert stuck spinners
                 const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
                 stuckBtns.forEach(btn => {
@@ -1606,25 +1482,23 @@ async function executeResearchAll() {
                 // Check Stops
                 try {
                     const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
-                    
+
                     for (let i = pendingStops.length - 1; i >= 0; i--) {
                         const stop = pendingStops[i];
                         const b = (briefings || []).find(br => br.stop_id === stop.id);
-                        
+
                         if (b && isNewData(b, 'stop', stop.id)) {
-                            // Mark as done in our list
                             pendingStops.splice(i, 1);
                             removeStopFromSweepQueue(stop.id);
 
                             if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
 
-                            // Update the specific button UI immediately
                             const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
                             if (btn) {
                                 btn.innerHTML = '<span class="material-symbols-outlined" style="color: var(--brand-green);">check_circle</span>';
                                 btn.disabled = false;
                                 btn.title = "View Briefing";
-                                btn.classList.remove('spin'); 
+                                btn.classList.remove('spin');
                             }
                         }
                     }
@@ -1635,8 +1509,8 @@ async function executeResearchAll() {
 
                 // If all done
                 if (guideComplete && pendingStops.length === 0) {
-                    clearInterval(poll);
-                    if (fullResProgressES) fullResProgressES.close();
+                    clearInterval(_fullResPoll); _fullResPoll = null;
+                    if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                     clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
@@ -1644,12 +1518,11 @@ async function executeResearchAll() {
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
 
-                    renderMapStops(); // Refresh map with new data markers
+                    renderMapStops();
                     showNotification('Research Complete', 'All research tasks have been completed successfully.');
                 } else if (consecutiveErrors > 15) {
-                    // Too many errors, give up
-                    clearInterval(poll);
-                    if (fullResProgressES) fullResProgressES.close();
+                    clearInterval(_fullResPoll); _fullResPoll = null;
+                    if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                     clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
@@ -1658,7 +1531,7 @@ async function executeResearchAll() {
                     btnResearchAll.disabled = false;
                     showNotification('Research Failed', 'Connection to server lost. Please try again.');
                 } else {
-                    consecutiveErrors = 0; // Reset on success
+                    consecutiveErrors = 0;
                 }
 
             } catch (err) {
@@ -1669,6 +1542,8 @@ async function executeResearchAll() {
 
     } catch (err) {
         console.error(err);
+        clearInterval(_fullResPoll); _fullResPoll = null;
+        if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
         clearStopSweeps();
         if (researchTicker) researchTicker.stop();
         btnResearchAll.innerHTML = originalContent;
@@ -1848,9 +1723,9 @@ async function handlePilotSuggestionsClick() {
         const finishPilotResearch = async () => {
             if (pilotDone) return;
             pilotDone = true;
-            clearInterval(poll);
-            if (eventSource) eventSource.close();
-            if (pilotProgressES) pilotProgressES.close();
+            clearInterval(_pilotPoll); _pilotPoll = null;
+            if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
+            if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
 
             // Do a final fetch to ensure we have the full list
             try {
@@ -1886,9 +1761,8 @@ async function handlePilotSuggestionsClick() {
         };
 
         // Stream progress events into the ticker; trigger completion on 'done'.
-        let pilotProgressES = null;
         if (recRes.progress_session_id && researchTicker) {
-            pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
+            _pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
                 researchTicker.push(evt.message);
                 if (evt.stage === 'done') {
                     console.log('[progress] done received — finishing pilot research');
@@ -1898,12 +1772,11 @@ async function handlePilotSuggestionsClick() {
         }
 
         const sessionID = recRes.session_id;
-        let eventSource = null;
         if (sessionID) {
             console.log('[rec-stream] connecting', sessionID);
-            eventSource = new EventSource(`${API_BASE}/voyages/${currentVoyage.id}/recommendations/stream?session_id=${sessionID}`);
+            _pilotEventSource = new EventSource(`${API_BASE}/voyages/${currentVoyage.id}/recommendations/stream?session_id=${sessionID}`);
 
-            eventSource.addEventListener('recommendation', (e) => {
+            _pilotEventSource.addEventListener('recommendation', (e) => {
                 try {
                     const rec = JSON.parse(e.data);
                     console.log('[rec-stream] recommendation', rec.name, rec.type);
@@ -1917,9 +1790,9 @@ async function handlePilotSuggestionsClick() {
                 }
             });
 
-            eventSource.onerror = (e) => {
+            _pilotEventSource.onerror = (e) => {
                 console.warn('[rec-stream] stream closed or error', e);
-                if (eventSource) eventSource.close();
+                if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
             };
         }
 
@@ -1930,7 +1803,7 @@ async function handlePilotSuggestionsClick() {
         let stableRounds = 0;
         const maxAttempts = 30; // 5 minutes (10s interval)
 
-        const poll = setInterval(async () => {
+        _pilotPoll = setInterval(async () => {
             attempts++;
             try {
                 const res = await API.getRecommendations(currentVoyage.id);
@@ -2162,6 +2035,10 @@ function clearRecommendations() {
     recommendationMarkers.forEach(({ marker }) => marker.map = null);
     recommendationMarkers = [];
     document.getElementById('pilot-controls').classList.add('hidden');
+    // Tear down any in-flight pilot research streams/polls
+    if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
+    if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
+    if (_pilotPoll) { clearInterval(_pilotPoll); _pilotPoll = null; }
 }
 
 async function renderPilotCircle() {
@@ -2566,24 +2443,23 @@ async function handleResearchClick(stop, button) {
         if (map) startStopSweepSequence([stop]);
 
         // Stream progress updates into the ticker
-        let progressES = null;
         if (resRes.session_id && researchTicker) {
-            progressES = API.streamProgress(resRes.session_id, (evt) => {
+            _stopProgressES = API.streamProgress(resRes.session_id, (evt) => {
                 researchTicker.push(evt.message);
             });
         }
 
         // Poll
-        const poll = setInterval(async () => {
+        _stopPoll = setInterval(async () => {
             try {
                 const b = await API.getBriefing(stop.id);
                 if (b) {
-                    clearInterval(poll);
-                    if (progressES) progressES.close();
+                    clearInterval(_stopPoll); _stopPoll = null;
+                    if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
                     clearStopSweeps();
                     if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
-                    showBriefing(b); // Updates the already-open modal with data
+                    showBriefing(b);
                     renderMapStops();
                 }
             } catch (ignore) { /* keep polling */ }
@@ -2591,6 +2467,8 @@ async function handleResearchClick(stop, button) {
 
     } catch (err) {
         console.error(err);
+        clearInterval(_stopPoll); _stopPoll = null;
+        if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
         clearStopSweeps();
         if (researchTicker) researchTicker.stop();
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
@@ -2598,40 +2476,50 @@ async function handleResearchClick(stop, button) {
     }
 }
 
-async function renderTideChart(canvasId, tideData, targetDateStr) {
-    if (!tideData || !tideData.events) return;
-
-    // Helper to parse strings as wall-clock time (browser local)
+/**
+ * parseTidePoints — shared helper for tide chart functions.
+ * Converts tide event data into Chart.js {x, y} points where x is hours
+ * relative to midnight of targetDateStr (wall-clock local time).
+ * @param {object} tideData - object with an `events` array
+ * @param {string} targetDateStr - "YYYY-MM-DD" or ISO string
+ * @param {number} [hourMin=-Infinity] - drop points before this hour offset
+ * @param {number} [hourMax=Infinity]  - drop points after this hour offset
+ */
+function parseTidePoints(tideData, targetDateStr, hourMin = -Infinity, hourMax = Infinity) {
     const parseLocal = (s) => {
         if (!s) return new Date(NaN);
-        // Strip 'Z' if present, replace space with 'T'
         const clean = s.replace('Z', '').replace(' ', 'T');
-        // If it's just a date (YYYY-MM-DD), append T00:00:00 to avoid UTC parsing
         const final = clean.length === 10 ? clean + 'T00:00:00' : clean;
         return new Date(final);
     };
 
-    // Target Date Midnight (Wall-clock)
     const targetStart = parseLocal(targetDateStr).getTime();
-
-    // Parse Events
     const points = [];
-    tideData.events.forEach(e => {
+
+    (tideData.events || []).forEach(e => {
         const d = parseLocal(e.time);
-        
         if (!isNaN(d.getTime())) {
-            const diffMs = d.getTime() - targetStart;
-            const floatHours = diffMs / (1000 * 60 * 60);
-            points.push({ x: floatHours, y: e.height_ft });
+            const floatHours = (d.getTime() - targetStart) / (1000 * 60 * 60);
+            if (floatHours >= hourMin && floatHours <= hourMax) {
+                points.push({ x: floatHours, y: e.height_ft });
+            }
         }
     });
 
     points.sort((a, b) => a.x - b.x);
+    return points;
+}
+
+async function renderTideChart(canvasId, tideData, targetDateStr) {
+    if (!tideData || !tideData.events) return;
+
+    const points = parseTidePoints(tideData, targetDateStr);
 
     const Chart = await loadChart();
+    if (chartInstances.has(canvasId)) { chartInstances.get(canvasId).destroy(); chartInstances.delete(canvasId); }
     const ctx = document.getElementById(canvasId).getContext('2d');
-    
-    new Chart(ctx, {
+
+    chartInstances.set(canvasId, new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [{
@@ -2699,7 +2587,7 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
                 }
             }
         }
-    });
+    }));
 }
 
 async function showBriefing(briefing) {
@@ -3174,35 +3062,10 @@ async function initMap() {
       const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
   
       // Reverse Geocoding
-      const geocoder = new Geocoder();
       let locationName = `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
       let preciseLocation = "";
-      
       try {
-          const response = await geocoder.geocode({ location: e.latLng });
-          if (response.results[0]) {
-              const r = response.results[0];
-              locationName = r.formatted_address;
-              
-              // Use Town/Region logic similar to Map Center
-              const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
-              const locality = getComp('locality') || getComp('sublocality'); 
-              const region = getComp('administrative_area_level_1');
-              const country = getComp('country');
-              
-              if (locality && country) {
-                  locationName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
-              } else if (region && country) {
-                  locationName = `${region}, ${country}`;
-              } else if (country) {
-                  locationName = country;
-              }
-
-              if (response.results[0].plus_code) {
-                  const pc = response.results[0].plus_code;
-                  preciseLocation = pc.compound_code || pc.global_code || "";
-              }
-          }
+          ({ locationName, preciseLocation } = await reverseGeocode(e.latLng));
       } catch (err) {
           console.error("Geocoding failed: " + err);
       }
@@ -3403,29 +3266,8 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
 
     if (!tideData || !tideData.events) return;
 
-    // Helper to parse strings as wall-clock time (browser local)
-    const parseLocal = (s) => {
-        if (!s) return new Date(NaN);
-        const clean = s.replace('Z', '').replace(' ', 'T');
-        const final = clean.length === 10 ? clean + 'T00:00:00' : clean;
-        return new Date(final);
-    };
-
-    const targetStart = parseLocal(targetDateStr).getTime();
-    
-    const points = [];
-    tideData.events.forEach(e => {
-        const d = parseLocal(e.time);
-        if (!isNaN(d.getTime())) {
-            const diffMs = d.getTime() - targetStart;
-            const floatHours = diffMs / (1000 * 60 * 60);
-            // Allow a buffer around the day so the line extends to edges
-            if (floatHours >= -6 && floatHours <= 30) {
-                 points.push({ x: floatHours, y: e.height_ft });
-            }
-        }
-    });
-    points.sort((a, b) => a.x - b.x);
+    // Allow a buffer around the day so the line extends to edges
+    const points = parseTidePoints(tideData, targetDateStr, -6, 30);
 
     const Chart = await loadChart();
     const tideLevels = {
@@ -3558,9 +3400,10 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   
   
   
+      if (chartInstances.has(canvasId)) { chartInstances.get(canvasId).destroy(); chartInstances.delete(canvasId); }
       const ctx = canvas.getContext('2d');
-  
-      new Chart(ctx, {
+
+      chartInstances.set(canvasId, new Chart(ctx, {
   
           type: 'line',
   
@@ -3615,9 +3458,9 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
           },
   
           plugins: [tideLevels]
-  
-      });
-  
+
+      }));
+
   }
 
 async function captureAndUploadMap(voyageId) {
@@ -3877,30 +3720,31 @@ async function handleGuideClick(voyage, button) {
         const guideRes = await API.triggerVoyageGuideResearch(voyage.id);
 
         // Stream progress updates into ticker
-        let guideProgressES = null;
         if (guideRes && guideRes.session_id && researchTicker) {
             researchTicker.start();
-            guideProgressES = API.streamProgress(guideRes.session_id, (evt) => {
+            _guideProgressES = API.streamProgress(guideRes.session_id, (evt) => {
                 researchTicker.push(evt.message);
             });
         }
 
         // Poll
-        const poll = setInterval(async () => {
+        _guidePoll = setInterval(async () => {
             try {
                 const resp = await API.getVoyageGuide(voyage.id);
                 if (resp && resp.guide && resp.guide.summary && resp.guide.summary.length > 0) {
-                    clearInterval(poll);
-                    if (guideProgressES) guideProgressES.close();
+                    clearInterval(_guidePoll); _guidePoll = null;
+                    if (_guideProgressES) { _guideProgressES.close(); _guideProgressES = null; }
                     if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
-                    showVoyageGuide(resp); // Updates the already-open modal with data
+                    showVoyageGuide(resp);
                 }
             } catch (ignore) { /* keep polling */ }
         }, 3000);
-        
+
     } catch (err) {
         console.error(err);
+        clearInterval(_guidePoll); _guidePoll = null;
+        if (_guideProgressES) { _guideProgressES.close(); _guideProgressES = null; }
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
         setTimeout(() => button.innerHTML = originalContent, 2000);
     }
@@ -4209,28 +4053,6 @@ async function renderDiscoveryLayer() {
     });
 }
 
-function calculateGeometryArea(geometry) {
-    if (!geometry) return 0;
-    if (geometry.type === 'Polygon') {
-        return calculatePolygonArea(geometry.coordinates);
-    } else if (geometry.type === 'MultiPolygon') {
-        return geometry.coordinates.reduce((sum, polygonCoords) => sum + calculatePolygonArea(polygonCoords), 0);
-    }
-    return 0;
-}
-
-function calculatePolygonArea(coordinates) {
-    let area = 0;
-    if (coordinates && coordinates.length > 0) {
-        // Outer ring is the first element
-        const ring = coordinates[0]; 
-        for (let i = 0; i < ring.length - 1; i++) {
-            area += ring[i][0] * ring[i+1][1] - ring[i+1][0] * ring[i][1];
-        }
-    }
-    return Math.abs(area / 2);
-}
-
 
 async function showRegionBriefing(props, month) {
     const modal = document.getElementById('modal-region-briefing');
@@ -4419,12 +4241,18 @@ async function handleShareClick(guide) {
     };
     
     shareModal.querySelector('#btn-copy-share').onclick = () => {
-        linkInput.select();
-        document.execCommand('copy');
         const btn = shareModal.querySelector('#btn-copy-share');
         const orig = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => btn.textContent = orig, 2000);
+        navigator.clipboard.writeText(linkInput.value).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = orig, 2000);
+        }).catch(() => {
+            // Fallback for browsers without clipboard API
+            linkInput.select();
+            document.execCommand('copy');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = orig, 2000);
+        });
     };
     
     shareModal.querySelector('#btn-close-share').onclick = () => {
