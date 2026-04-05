@@ -1641,95 +1641,123 @@ async function handlePilotSuggestionsClick() {
             API.generateRecommendations(currentVoyage.id),
             API.triggerVoyageGuideResearch(currentVoyage.id)
         ]);
-        
+
         // Start a ticker to show progress
         if (researchTicker) {
             researchTicker.start("The AI is researching resource hubs, anchorages, and moorings...");
         }
 
+        // Shared completion handler — called from either the done progress event or the poll.
+        let pilotDone = false;
+        const finishPilotResearch = async () => {
+            if (pilotDone) return;
+            pilotDone = true;
+            clearInterval(poll);
+            if (eventSource) eventSource.close();
+            if (pilotProgressES) pilotProgressES.close();
+
+            // Do a final fetch to ensure we have the full list
+            try {
+                const res = await API.getRecommendations(currentVoyage.id);
+                const recs = ensureRecommendationsArray(res);
+                if (recs && recs.length > 0) {
+                    voyageRecommendations = recs;
+                    renderRecommendations();
+                    renderItinerary();
+                }
+            } catch (e) { /* best effort */ }
+
+            isPilotResearching = false;
+            if (researchTicker) researchTicker.stop();
+            icon.classList.remove('spin');
+            btn.disabled = false;
+
+            if (voyageRecommendations.length > 0) {
+                showNotification("Research Complete", `We've identified ${voyageRecommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
+                if (map && voyageRecommendations.length > 0) {
+                    const { LatLngBounds } = await importLibrary("core");
+                    const bounds = new LatLngBounds();
+                    voyageRecommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
+                    if (pilotCircle) bounds.union(pilotCircle.getBounds());
+                    map.fitBounds(bounds, 100);
+                }
+            } else {
+                showNotification('Incomplete', "The AI research is taking longer than expected. Please try again or check back in a few minutes.");
+            }
+        };
+
+        // Stream progress events into the ticker; trigger completion on 'done'.
+        let pilotProgressES = null;
+        if (recRes.progress_session_id && researchTicker) {
+            pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
+                researchTicker.push(evt.message);
+                if (evt.stage === 'done') {
+                    console.log('[progress] done received — finishing pilot research');
+                    finishPilotResearch();
+                }
+            });
+        }
+
         const sessionID = recRes.session_id;
         let eventSource = null;
         if (sessionID) {
-            console.log("Connecting to recommendation stream...", sessionID);
+            console.log('[rec-stream] connecting', sessionID);
             eventSource = new EventSource(`${API_BASE}/voyages/${currentVoyage.id}/recommendations/stream?session_id=${sessionID}`);
-            
+
             eventSource.addEventListener('recommendation', (e) => {
                 try {
                     const rec = JSON.parse(e.data);
+                    console.log('[rec-stream] recommendation', rec.name, rec.type);
                     if (!voyageRecommendations.some(r => r.id === rec.id)) {
                         voyageRecommendations.push(rec);
                         renderRecommendations();
                         renderItinerary();
                     }
                 } catch (err) {
-                    console.error("Failed to parse streamed recommendation:", err);
+                    console.error('[rec-stream] parse error', err);
                 }
             });
 
             eventSource.onerror = (e) => {
-                console.warn("SSE stream closed or error:", e);
+                console.warn('[rec-stream] stream closed or error', e);
                 if (eventSource) eventSource.close();
             };
         }
 
-        // Poll for results (fallback or to detect completion)
+        // Poll as a fallback in case the progress stream is unavailable.
+        // Completes when the agent is clearly done (10+ results and count stable).
         let attempts = 0;
+        let lastCount = 0;
+        let stableRounds = 0;
         const maxAttempts = 30; // 5 minutes (10s interval)
-        
+
         const poll = setInterval(async () => {
             attempts++;
             try {
                 const res = await API.getRecommendations(currentVoyage.id);
                 const recs = ensureRecommendationsArray(res);
-                
-                // Update full list (in case streaming missed some or they arrived fast)
+
                 if (recs && recs.length > 0) {
                     voyageRecommendations = recs;
                     renderRecommendations();
                     renderItinerary();
                 }
 
-                // Stop polling if we have 25+ recommendations or hit max attempts
-                if (recs && recs.length >= 25) {
-                    clearInterval(poll);
-                    if (eventSource) eventSource.close();
-                    
-                    isPilotResearching = false;
-                    if (researchTicker) researchTicker.stop();
-                    icon.classList.remove('spin');
-                    btn.disabled = false;
-                    
-                    showNotification("Research Complete", `We've identified ${voyageRecommendations.length} resource hubs, anchorages, and moorings in your voyage area.`);
-
-                    // Zoom out to show recommendations and research area
-                    if (map && voyageRecommendations.length > 0) {
-                        const { LatLngBounds } = await importLibrary("core");
-                        const bounds = new LatLngBounds();
-                        voyageRecommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
-                        
-                        if (pilotCircle) {
-                            bounds.union(pilotCircle.getBounds());
-                        }
-                        
-                        map.fitBounds(bounds, 100);
+                // Stable count for 2 consecutive polls with at least 10 results means agent is done
+                if (recs && recs.length >= 10) {
+                    if (recs.length === lastCount) {
+                        stableRounds++;
+                        if (stableRounds >= 2) finishPilotResearch();
+                    } else {
+                        stableRounds = 0;
                     }
+                    lastCount = recs.length;
                 }
             } catch (e) {
                 console.error("Polling error:", e);
             }
 
-            if (attempts >= maxAttempts) {
-                clearInterval(poll);
-                if (eventSource) eventSource.close();
-                isPilotResearching = false;
-                renderItinerary();
-                if (researchTicker) researchTicker.stop();
-                icon.classList.remove('spin');
-                btn.disabled = false;
-                if (voyageRecommendations.length === 0) {
-                    showNotification('Incomplete', "The AI research is taking longer than expected. Please try again or check back in a few minutes.");
-                }
-            }
+            if (attempts >= maxAttempts) finishPilotResearch();
         }, 10000);
 
     } catch (err) {

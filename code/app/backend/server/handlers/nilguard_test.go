@@ -112,7 +112,7 @@ func TestPerformRecommendationGeneration_NilLatLng_DoesNotPanic(t *testing.T) {
 	}
 
 	// Must not panic, and /api/run must NOT be called since we have no coords.
-	h.performRecommendationGeneration(voyage, "test-session-20")
+	h.performRecommendationGeneration(voyage, "test-session-20", "")
 
 	if runCalled {
 		t.Error("expected /api/run to be skipped when voyage has no coordinates")
@@ -144,7 +144,7 @@ func TestPerformRecommendationGeneration_WithLatLng_CallsRun(t *testing.T) {
 		Longitude:        &lng,
 	}
 
-	h.performRecommendationGeneration(voyage, "test-session-21")
+	h.performRecommendationGeneration(voyage, "test-session-21", "")
 
 	if !runCalled {
 		t.Error("expected /api/run to be called when voyage has coordinates")

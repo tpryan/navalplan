@@ -173,7 +173,7 @@ func TestPerformRecommendation_SessionFailure_DoesNotCallRun(t *testing.T) {
 		SearchRadiusUnit: "nm",
 	}
 
-	h.performRecommendationGeneration(voyage, "test-session-99")
+	h.performRecommendationGeneration(voyage, "test-session-99", "")
 
 	if *runCalled {
 		t.Error("expected /api/run to be skipped after session creation failure")
