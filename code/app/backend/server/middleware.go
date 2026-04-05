@@ -14,6 +14,7 @@ import (
 )
 
 type rateLimitEntry struct {
+	mu       sync.Mutex
 	count    int
 	lastSeen time.Time
 }
@@ -37,25 +38,28 @@ func (s *Server) rateLimit(limit int, window time.Duration) func(http.Handler) h
 				key = fmt.Sprintf("ip:%s", r.RemoteAddr)
 			}
 
-			// Clean/Check
 			now := time.Now()
 
-			// Load or Store
 			val, loaded := rateLimits.LoadOrStore(key, &rateLimitEntry{count: 1, lastSeen: now})
 			entry := val.(*rateLimitEntry)
 
+			var count int
 			if loaded {
-				// Check window
+				entry.mu.Lock()
 				if now.Sub(entry.lastSeen) > window {
-					// Reset
 					entry.count = 1
 					entry.lastSeen = now
 				} else {
 					entry.count++
 				}
+				count = entry.count
+				entry.mu.Unlock()
+			} else {
+				// Freshly stored with count=1; no other goroutine holds this entry yet.
+				count = 1
 			}
 
-			if entry.count > limit {
+			if count > limit {
 				slog.WarnContext(r.Context(), "Rate limit exceeded", "key", key, "limit", limit)
 				http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
 				return
