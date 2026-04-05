@@ -18,7 +18,7 @@
   
   /* --- Surface (Glassmorphism) --- */
   --surface-bg: rgba(255, 255, 255, 0.8);
-  --surface-bg-dim: rgba(255, 255, 255, 0.8);
+  --surface-bg-dim: rgba(255, 255, 255, 0.6);
   --surface-bg-dim-light: rgba(255, 255, 255, 0.4);
 
   /* --- Dimensions & Effects --- */
