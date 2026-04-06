@@ -75,6 +75,7 @@ let pilotCenterMarker = null;
 let pilotRadiusMarker = null;
 let isPilotResearching = false;
 let radarSweep = null;
+let searchRing = null;
 // Module-level handles for pilot SSE streams and poll so clearRecommendations() can tear them down.
 let _pilotEventSource = null;
 let _pilotProgressES = null;
@@ -206,6 +207,132 @@ async function getRadarSweepClass() {
     return _RadarSweepClass;
 }
 
+// createSearchRingOverlay — animated ring that draws and erases itself at the voyage search radius.
+function createSearchRingOverlay(OverlayView) {
+    return class SearchRing extends OverlayView {
+        constructor(map, center, radiusMeters) {
+            super();
+            this._map = map;
+            this._center = center;
+            this._radiusMeters = radiusMeters;
+            this._canvas = null;
+            this._rafId = null;
+            this._active = false;
+            this.setMap(map);
+        }
+
+        onAdd() {
+            const canvas = document.createElement('canvas');
+            canvas.className = 'ticker-canvas';
+            this._canvas = canvas;
+            this.getPanes().overlayLayer.appendChild(canvas);
+            this._active = true;
+            this._draw();
+        }
+
+        draw() {
+            if (!this._canvas || !this._active) return;
+            const proj = this.getProjection();
+            if (!proj) return;
+
+            const latVal = typeof this._center.lat === 'function' ? this._center.lat() : this._center.lat;
+            const lngVal = typeof this._center.lng === 'function' ? this._center.lng() : this._center.lng;
+            const centerPx = proj.fromLatLngToDivPixel({ lat: latVal, lng: lngVal });
+
+            const metersPerPx = 156543.03392 * Math.cos(latVal * Math.PI / 180) / Math.pow(2, this._map.getZoom());
+            const radiusPx = this._radiusMeters / metersPerPx;
+
+            const size = Math.ceil(radiusPx * 2) + 20;
+            this._canvas.width = size;
+            this._canvas.height = size;
+            this._canvas.style.left = `${Math.round(centerPx.x - size / 2)}px`;
+            this._canvas.style.top  = `${Math.round(centerPx.y - size / 2)}px`;
+
+            this._radiusPx = radiusPx;
+            this._cx = size / 2;
+            this._cy = size / 2;
+        }
+
+        _draw() {
+            if (!this._active) return;
+            this._rafId = requestAnimationFrame(() => this._draw());
+            if (!this._canvas || !this._radiusPx) return;
+
+            const ctx = this._canvas.getContext('2d');
+            const cx = this._cx;
+            const cy = this._cy;
+            const r  = this._radiusPx;
+
+            ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+            // Cycle: 0.0–0.42 draw, 0.42–0.58 hold full ring, 0.58–1.0 erase
+            const period = 4000; // ms
+            const t = (performance.now() % period) / period;
+            const easeInOut = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+            const startAngle = -Math.PI / 2; // top of circle
+
+            let arcStart, arcEnd, dotAngle;
+            if (t < 0.42) {
+                const progress = easeInOut(t / 0.42);
+                arcStart = startAngle;
+                arcEnd   = startAngle + progress * Math.PI * 2;
+                dotAngle = arcEnd;
+            } else if (t < 0.58) {
+                arcStart = startAngle;
+                arcEnd   = startAngle + Math.PI * 2;
+                dotAngle = null;
+            } else {
+                const progress = easeInOut((t - 0.58) / 0.42);
+                arcStart = startAngle + progress * Math.PI * 2;
+                arcEnd   = startAngle + Math.PI * 2;
+                dotAngle = arcStart;
+            }
+
+            if (arcEnd > arcStart + 0.01) {
+                ctx.save();
+                ctx.shadowColor = 'rgba(26, 115, 232, 0.45)';
+                ctx.shadowBlur  = 8;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, arcStart, arcEnd);
+                ctx.strokeStyle = 'rgba(26, 115, 232, 0.7)';
+                ctx.lineWidth   = 2.5;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            if (dotAngle !== null) {
+                ctx.beginPath();
+                ctx.arc(
+                    cx + Math.cos(dotAngle) * r,
+                    cy + Math.sin(dotAngle) * r,
+                    4, 0, Math.PI * 2
+                );
+                ctx.fillStyle = 'rgba(26, 115, 232, 0.95)';
+                ctx.fill();
+            }
+        }
+
+        onRemove() {
+            this._active = false;
+            if (this._rafId) cancelAnimationFrame(this._rafId);
+            if (this._canvas && this._canvas.parentNode) {
+                this._canvas.parentNode.removeChild(this._canvas);
+            }
+            this._canvas = null;
+        }
+
+        stop() { this.setMap(null); }
+    };
+}
+
+let _SearchRingClass = null;
+async function getSearchRingClass() {
+    if (_SearchRingClass) return _SearchRingClass;
+    const { OverlayView } = await importLibrary("maps");
+    _SearchRingClass = createSearchRingOverlay(OverlayView);
+    return _SearchRingClass;
+}
+
 // Stop sweep sequencer state
 const STOP_SWEEP_RADIUS_M = 1852; // 1 nautical mile
 let stopSweepTimer = null;
@@ -213,6 +340,7 @@ let activeStopSweepInstance = null;
 let activeStopSweepStop = null; // stop object currently being swept
 let stopSweepQueue = []; // pending stop objects (not yet researched)
 let stopSweepCursor = 0;
+let _routeLineAnimInterval = null;
 
 
 async function advanceStopSweep() {
@@ -238,6 +366,34 @@ async function startStopSweepSequence(stops) {
     if (stops.length > 1) {
         stopSweepTimer = setInterval(advanceStopSweep, 3000);
     }
+
+    // Show the animated outer ring around the full voyage search area
+    if (map && currentVoyage && currentVoyage.latitude != null && currentVoyage.longitude != null) {
+        if (searchRing) { searchRing.stop(); searchRing = null; }
+        const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
+        const SearchRingClass = await getSearchRingClass();
+        searchRing = new SearchRingClass(
+            map,
+            { lat: currentVoyage.latitude, lng: currentVoyage.longitude },
+            radiusMeters
+        );
+    }
+
+    // Animate the route line (marching ants)
+    if (routePolyline) {
+        let iconOffset = 0;
+        if (_routeLineAnimInterval) clearInterval(_routeLineAnimInterval);
+        _routeLineAnimInterval = setInterval(() => {
+            iconOffset = (iconOffset + 1) % 20;
+            if (routePolyline) {
+                routePolyline.set('icons', [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+                    offset: iconOffset + 'px',
+                    repeat: '20px'
+                }]);
+            }
+        }, 50);
+    }
 }
 
 function removeStopFromSweepQueue(stopId) {
@@ -254,6 +410,19 @@ function removeStopFromSweepQueue(stopId) {
 function clearStopSweeps() {
     if (stopSweepTimer) { clearInterval(stopSweepTimer); stopSweepTimer = null; }
     if (activeStopSweepInstance) { activeStopSweepInstance.stop(); activeStopSweepInstance = null; }
+    if (searchRing) { searchRing.stop(); searchRing = null; }
+    if (_routeLineAnimInterval) {
+        clearInterval(_routeLineAnimInterval);
+        _routeLineAnimInterval = null;
+        // Reset line to static dashes
+        if (routePolyline) {
+            routePolyline.set('icons', [{
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+                offset: '0',
+                repeat: '20px'
+            }]);
+        }
+    }
     activeStopSweepStop = null;
     // Restore all stop markers
     markers.forEach(m => m.map = map);
@@ -1703,6 +1872,7 @@ async function handlePilotSuggestionsClick() {
             const RadarSweepClass = await getRadarSweepClass();
             radarSweep = new RadarSweepClass(map, pilotCircle.getCenter(), pilotCircle.getRadius());
         }
+
 
         // 3. Trigger both Local Pilot (Recommendations) and Voyage Guide research
         const [recRes] = await Promise.all([
