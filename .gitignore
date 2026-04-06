@@ -3,6 +3,14 @@
 temp/**
 .gemini/settings.json
 
+
+app/backend/vendor
+app/backend/static.min
+app/frontend/node_modules
+
+services/researcher/vendor
+services/researcher/.adk
+
 code/app/db/user.sql
 code/app/backend/vendor
 code/app/backend/static.min
