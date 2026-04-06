@@ -95,102 +95,55 @@ function createRadarSweepOverlay(OverlayView) {
         constructor(map, center, radiusMeters) {
             super();
             this._map = map;
-            this._center = center;       // google.maps.LatLng
+            this._center = center;
             this._radiusMeters = radiusMeters;
-            this._canvas = null;
-            this._angle = 0;
-            this._rafId = null;
+            this._element = null;
             this._active = false;
             this.setMap(map);
         }
 
         onAdd() {
-            const canvas = document.createElement('canvas');
-            canvas.className = 'ticker-canvas';
-            this._canvas = canvas;
+            const div = document.createElement('div');
+            div.className = 'radar-sweep-container';
+            
+            // Add internal structure
+            div.innerHTML = `
+                <div class="radar__circle radar__circle_outer"></div>
+                <div class="radar__circle radar__circle_inner"></div>
+                <div class="radar__beam"></div>
+            `;
+            
+            this._element = div;
             const panes = this.getPanes();
-            panes.overlayLayer.appendChild(canvas);
+            panes.overlayLayer.appendChild(div);
             this._active = true;
-            this._animate();
         }
 
         draw() {
-            if (!this._canvas || !this._active) return;
+            if (!this._element || !this._active) return;
             const proj = this.getProjection();
             if (!proj) return;
 
-            // Accept both google.maps.LatLng objects and {lat, lng} plain literals
             const latVal = typeof this._center.lat === 'function' ? this._center.lat() : this._center.lat;
             const lngVal = typeof this._center.lng === 'function' ? this._center.lng() : this._center.lng;
             const centerPx = proj.fromLatLngToDivPixel({ lat: latVal, lng: lngVal });
 
-            // Mercator meters-per-pixel at this latitude and zoom level
-            const lat = latVal;
-            const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, this._map.getZoom());
+            const metersPerPx = 156543.03392 * Math.cos(latVal * Math.PI / 180) / Math.pow(2, this._map.getZoom());
             const radiusPx = this._radiusMeters / metersPerPx;
+            const size = Math.ceil(radiusPx * 2);
 
-            const size = Math.ceil(radiusPx * 2) + 4;
-            this._canvas.width = size;
-            this._canvas.height = size;
-            this._canvas.style.left = `${Math.round(centerPx.x - size / 2)}px`;
-            this._canvas.style.top = `${Math.round(centerPx.y - size / 2)}px`;
-
-            this._radiusPx = radiusPx;
-            this._cx = size / 2;
-            this._cy = size / 2;
-        }
-
-        _animate() {
-            if (!this._active) return;
-            this._rafId = requestAnimationFrame(() => this._animate());
-            if (!this._canvas || !this._radiusPx) return;
-
-            const ctx = this._canvas.getContext('2d');
-            const cx = this._cx;
-            const cy = this._cy;
-            const r = this._radiusPx;
-
-            ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-
-            // Filled 60° sweep wedge fading from transparent to blue
-            const sweepAngle = Math.PI / 3;
-            const start = this._angle;
-            const end = this._angle + sweepAngle;
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, r, start, end);
-            ctx.closePath();
-            const grad = ctx.createLinearGradient(
-                cx + Math.cos(start) * r, cy + Math.sin(start) * r,
-                cx + Math.cos(end) * r,   cy + Math.sin(end) * r,
-            );
-            grad.addColorStop(0, 'rgba(26, 115, 232, 0)');
-            grad.addColorStop(1, 'rgba(26, 115, 232, 0.35)');
-            ctx.fillStyle = grad;
-            ctx.fill();
-
-            // Leading edge highlight
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(end) * r, cy + Math.sin(end) * r);
-            ctx.strokeStyle = 'rgba(26, 115, 232, 0.8)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.restore();
-
-            this._angle += 0.025;
-            if (this._angle > Math.PI * 2) this._angle -= Math.PI * 2;
+            this._element.style.width = `${size}px`;
+            this._element.style.height = `${size}px`;
+            this._element.style.left = `${Math.round(centerPx.x - size / 2)}px`;
+            this._element.style.top = `${Math.round(centerPx.y - size / 2)}px`;
         }
 
         onRemove() {
             this._active = false;
-            if (this._rafId) cancelAnimationFrame(this._rafId);
-            if (this._canvas && this._canvas.parentNode) {
-                this._canvas.parentNode.removeChild(this._canvas);
+            if (this._element && this._element.parentNode) {
+                this._element.parentNode.removeChild(this._element);
             }
-            this._canvas = null;
+            this._element = null;
         }
 
         stop() {
@@ -215,23 +168,26 @@ function createSearchRingOverlay(OverlayView) {
             this._map = map;
             this._center = center;
             this._radiusMeters = radiusMeters;
-            this._canvas = null;
-            this._rafId = null;
+            this._element = null;
             this._active = false;
             this.setMap(map);
         }
 
         onAdd() {
-            const canvas = document.createElement('canvas');
-            canvas.className = 'ticker-canvas';
-            this._canvas = canvas;
-            this.getPanes().overlayLayer.appendChild(canvas);
+            const div = document.createElement('div');
+            div.className = 'search-ring-container';
+            div.innerHTML = `
+                <div class="search-ring__pulse"></div>
+                <div class="search-ring__circle"></div>
+                <div class="search-ring__circle" style="inset: 25%"></div>
+            `;
+            this._element = div;
+            this.getPanes().overlayLayer.appendChild(div);
             this._active = true;
-            this._draw();
         }
 
         draw() {
-            if (!this._canvas || !this._active) return;
+            if (!this._element || !this._active) return;
             const proj = this.getProjection();
             if (!proj) return;
 
@@ -241,84 +197,20 @@ function createSearchRingOverlay(OverlayView) {
 
             const metersPerPx = 156543.03392 * Math.cos(latVal * Math.PI / 180) / Math.pow(2, this._map.getZoom());
             const radiusPx = this._radiusMeters / metersPerPx;
+            const size = Math.ceil(radiusPx * 2);
 
-            const size = Math.ceil(radiusPx * 2) + 20;
-            this._canvas.width = size;
-            this._canvas.height = size;
-            this._canvas.style.left = `${Math.round(centerPx.x - size / 2)}px`;
-            this._canvas.style.top  = `${Math.round(centerPx.y - size / 2)}px`;
-
-            this._radiusPx = radiusPx;
-            this._cx = size / 2;
-            this._cy = size / 2;
-        }
-
-        _draw() {
-            if (!this._active) return;
-            this._rafId = requestAnimationFrame(() => this._draw());
-            if (!this._canvas || !this._radiusPx) return;
-
-            const ctx = this._canvas.getContext('2d');
-            const cx = this._cx;
-            const cy = this._cy;
-            const r  = this._radiusPx;
-
-            ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-
-            // Cycle: 0.0–0.42 draw, 0.42–0.58 hold full ring, 0.58–1.0 erase
-            const period = 4000; // ms
-            const t = (performance.now() % period) / period;
-            const easeInOut = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
-            const startAngle = -Math.PI / 2; // top of circle
-
-            let arcStart, arcEnd, dotAngle;
-            if (t < 0.42) {
-                const progress = easeInOut(t / 0.42);
-                arcStart = startAngle;
-                arcEnd   = startAngle + progress * Math.PI * 2;
-                dotAngle = arcEnd;
-            } else if (t < 0.58) {
-                arcStart = startAngle;
-                arcEnd   = startAngle + Math.PI * 2;
-                dotAngle = null;
-            } else {
-                const progress = easeInOut((t - 0.58) / 0.42);
-                arcStart = startAngle + progress * Math.PI * 2;
-                arcEnd   = startAngle + Math.PI * 2;
-                dotAngle = arcStart;
-            }
-
-            if (arcEnd > arcStart + 0.01) {
-                ctx.save();
-                ctx.shadowColor = 'rgba(26, 115, 232, 0.45)';
-                ctx.shadowBlur  = 8;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r, arcStart, arcEnd);
-                ctx.strokeStyle = 'rgba(26, 115, 232, 0.7)';
-                ctx.lineWidth   = 2.5;
-                ctx.stroke();
-                ctx.restore();
-            }
-
-            if (dotAngle !== null) {
-                ctx.beginPath();
-                ctx.arc(
-                    cx + Math.cos(dotAngle) * r,
-                    cy + Math.sin(dotAngle) * r,
-                    4, 0, Math.PI * 2
-                );
-                ctx.fillStyle = 'rgba(26, 115, 232, 0.95)';
-                ctx.fill();
-            }
+            this._element.style.width = `${size}px`;
+            this._element.style.height = `${size}px`;
+            this._element.style.left = `${Math.round(centerPx.x - size / 2)}px`;
+            this._element.style.top  = `${Math.round(centerPx.y - size / 2)}px`;
         }
 
         onRemove() {
             this._active = false;
-            if (this._rafId) cancelAnimationFrame(this._rafId);
-            if (this._canvas && this._canvas.parentNode) {
-                this._canvas.parentNode.removeChild(this._canvas);
+            if (this._element && this._element.parentNode) {
+                this._element.parentNode.removeChild(this._element);
             }
-            this._canvas = null;
+            this._element = null;
         }
 
         stop() { this.setMap(null); }
