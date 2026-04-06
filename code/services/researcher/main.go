@@ -6,9 +6,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -212,10 +212,10 @@ func (s *Server) run(ctx context.Context) error {
 	// Validate embedded prompts before attempting agent creation so that an
 	// accidentally empty file fails fast with a clear message.
 	prompts := map[string]string{
-		"harbourmaster":    _harbourmasterPrompt,
-		"pilot":            _pilotPrompt,
-		"commodore":        _commodorePrompt,
-		"specialist":       _specialistPrompt,
+		"harbourmaster":     _harbourmasterPrompt,
+		"pilot":             _pilotPrompt,
+		"commodore":         _commodorePrompt,
+		"specialist":        _specialistPrompt,
 		"search_specialist": _searchSpecialistPrompt,
 	}
 	for name, p := range prompts {
@@ -267,18 +267,11 @@ func (s *Server) run(ctx context.Context) error {
 	// Start Custom Server
 	mux := http.NewServeMux()
 
-	// 1. Harbourmaster Agent (Default/Legacy path)
+	// Expose to a2a for eval purposes
 	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke", config.SessionService)
-	// Also expose harbourmaster explicitly
 	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke/harbourmaster", config.SessionService)
-
-	// 2. Pilot Agent
 	s.registerAgentA2A(mux, pilotAgent, "/invoke/pilot", config.SessionService)
-
-	// 3. Commodore Agent
 	s.registerAgentA2A(mux, commodoreAgent, "/invoke/commodore", config.SessionService)
-
-	// 4. Specialist Agent
 	s.registerAgentA2A(mux, specialistAgent, "/invoke/specialist", config.SessionService)
 
 	// Special case: The root Agent Card at .well-known usually points to the main agent.
