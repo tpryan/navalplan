@@ -408,7 +408,7 @@
     box-shadow: var(--shadow-main);
     text-decoration: none;
     position: relative;
-    top: 12px; /* Offset to keep it 20px from top (8px + 12px) */
+    top: 2px; /* Offset to keep it 10px from top (8px + 2px) */
     display: inline-flex;
     align-items: center;
     justify-content: center;
