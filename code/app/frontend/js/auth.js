@@ -85,6 +85,14 @@ function updateUIForLogin(person) {
         actions.appendChild(adminBtn);
     }
 
+    const helpLink = document.createElement('a');
+    helpLink.href = '/help.html';
+    helpLink.target = '_blank';
+    helpLink.className = 'btn-icon';
+    helpLink.title = 'User Guide';
+    helpLink.innerHTML = '<span class="material-symbols-outlined">help_outline</span>';
+
+    actions.appendChild(helpLink);
     actions.appendChild(logoutLink);
     menu.appendChild(img);
     menu.appendChild(actions);
@@ -106,9 +114,12 @@ function updateUIForLogout() {
     if (mapContainer) mapContainer.classList.remove('hidden');
     if (btnNewVoyage) btnNewVoyage.classList.add('hidden');
 
-    // Show simple floating login button
-    container.className = ''; 
+    // Show simple floating login button + help link
+    container.className = '';
     container.innerHTML = `
+        <a href="/help.html" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide">
+            <span class="material-symbols-outlined">help_outline</span>
+        </a>
         <a href="/auth/google/login" id="btn-login-floating" class="btn primary">
             Login
         </a>

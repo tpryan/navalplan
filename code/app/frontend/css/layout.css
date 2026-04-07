@@ -374,6 +374,9 @@
     top: 8px;
     right: 60px;
     z-index: 100;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 #user-floating-menu {
@@ -400,11 +403,28 @@
     gap: 10px;
 }
 
-#btn-login-floating {
+#btn-login-floating,
+#btn-help-floating {
     box-shadow: var(--shadow-main);
     text-decoration: none;
     position: relative;
     top: 12px; /* Offset to keep it 20px from top (8px + 12px) */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#btn-help-floating {
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+}
+
+#btn-help-floating .material-symbols-outlined {
+    font-size: 20px;
+    line-height: 1;
+    margin: 0;
 }
 
 
