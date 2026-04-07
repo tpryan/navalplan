@@ -436,6 +436,71 @@
             flex-shrink: 0;
         }
 
+        /* ── Screenshot Placeholders ── */
+        .screenshot {
+            margin: 1.25rem 0 0.25rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .screenshot img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .screenshot-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(149,104,45,0.03),
+                rgba(149,104,45,0.03) 10px,
+                rgba(255,255,255,0.5) 10px,
+                rgba(255,255,255,0.5) 20px
+            );
+            border: 2px dashed var(--brand-light);
+            border-radius: 8px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            margin: 1.25rem 0 0.25rem;
+        }
+
+        .screenshot-placeholder .material-symbols-outlined {
+            font-size: 36px;
+            color: var(--brand-light);
+        }
+
+        .screenshot-filename {
+            font-family: monospace;
+            font-size: 0.8rem;
+            background: rgba(88,61,27,0.08);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 8px;
+            color: var(--brand-dark);
+        }
+
+        .screenshot-desc {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            max-width: 480px;
+            line-height: 1.5;
+        }
+
+        .screenshot-caption {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            font-style: italic;
+            text-align: center;
+            margin-top: 0.4rem;
+        }
+
         /* ── Footer ── */
         .doc-footer {
             text-align: center;
@@ -589,6 +654,10 @@
             </div>
             <div class="section-body">
                 <p>NavalPlan uses Google sign-in for authentication. Access is invite-only — you must be invited by an administrator before you can log in.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/01-login.png" alt="NavalPlan on first load — map visible, Login button and help icon in the top-right corner">
+                </div>
+                <p class="screenshot-caption">The app before login — the map is explorable, and the Login button is in the top-right corner.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -626,6 +695,10 @@
             </div>
             <div class="section-body">
                 <p><strong>Discovery Mode</strong> is the starting point for most sailors. It lets you browse hundreds of curated sailing destinations worldwide before committing to a specific route — filter by season to find where the conditions are best for your planned travel window.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/02-discovery-map.png" alt="Discovery Mode — map covered in colored region dots with the month slider at the bottom">
+                </div>
+                <p class="screenshot-caption">Discovery Mode with colored region dots worldwide. Use the month slider to filter by sailing season.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -662,6 +735,10 @@
             </div>
             <div class="section-body">
                 <p>A <strong>voyage</strong> is the container for your trip. Once you've identified an area you want to sail — whether through Discovery Mode or by navigating the map directly — create a voyage to anchor your planning there.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/03-new-voyage-modal.png" alt="New Voyage modal with title, location, search radius, and date fields">
+                </div>
+                <p class="screenshot-caption">The New Voyage modal — use Map Center to capture your current map position as the voyage location.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -695,6 +772,10 @@
             </div>
             <div class="section-body">
                 <p>With your voyage created, use <strong>Pilot Suggestions</strong> to let the Virtual Harbourmaster scan the area and surface the best anchorages, marinas, moorings, and resource hubs. This is how you find out exactly where to stop — before you commit to a day-by-day itinerary.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/04-pilot-suggestions.png" alt="Pilot Suggestions — search radius circle with radar sweep animation and colored recommendation markers on the map">
+                </div>
+                <p class="screenshot-caption">Pilot Suggestions mid-research — the radar sweep scans the area while recommendation markers stream in. Filter buttons at the bottom control which types are shown.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -734,6 +815,10 @@
             </div>
             <div class="section-body">
                 <p>Stops are the individual destinations in your voyage. They appear in date order in the sidebar itinerary and as numbered pins on the map.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/05-itinerary-stops.png" alt="Itinerary with stops listed in the sidebar and numbered pins connected by a dashed route line on the map">
+                </div>
+                <p class="screenshot-caption">A voyage with stops in the sidebar itinerary and their corresponding numbered pins on the map.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -771,6 +856,10 @@
             </div>
             <div class="section-body">
                 <p>A <strong>stop briefing</strong> is a detailed AI-researched report for one location on a specific date. It includes everything a sailor needs to know before arriving.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/06-stop-briefing.png" alt="Stop briefing modal showing weather summary, tide chart, and facilities list">
+                </div>
+                <p class="screenshot-caption">A stop briefing — weather, the day's tide chart, and nearby facilities all in one place.</p>
                 <div class="feature-grid">
                     <div class="feature-card">
                         <span class="material-symbols-outlined">cloud</span>
@@ -824,6 +913,10 @@
             </div>
             <div class="section-body">
                 <p>Instead of researching stops one by one, use <strong>Full Voyage Research</strong> to kick off AI research for every stop and the overall voyage guide simultaneously.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/07-full-research.png" alt="Full voyage research in progress — radar sweeps on each stop, animated route line, outer search ring, and live research ticker">
+                </div>
+                <p class="screenshot-caption">Full research running — radar sweeps cycle through each stop while the research ticker shows live progress in the sidebar.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -857,6 +950,10 @@
             </div>
             <div class="section-body">
                 <p>The <strong>Voyage Guide</strong> is an AI-compiled narrative overview of your entire trip. It covers the overall route, each destination's character and highlights, passage notes, and planning considerations.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/08-voyage-guide.png" alt="Voyage Guide modal showing AI-written narrative with destination sections and passage notes">
+                </div>
+                <p class="screenshot-caption">The Voyage Guide — an AI-compiled narrative covering the route, each destination, and passage planning notes.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
@@ -882,6 +979,10 @@
             </div>
             <div class="section-body">
                 <p>The <strong>Voyage Report</strong> assembles all your research — the guide, every stop briefing, tide charts, and Pilot Suggestions — into a single shareable document.</p>
+                <div class="screenshot">
+                    <img src="/screenshots/09-voyage-report.png" alt="Voyage Report modal showing a map snapshot and overview grid of stop cards with tide charts">
+                </div>
+                <p class="screenshot-caption">The Voyage Report — map snapshot, stop overview cards, and full day-by-day briefings ready to copy and share.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
