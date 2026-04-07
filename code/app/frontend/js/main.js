@@ -3506,115 +3506,45 @@ async function captureAndUploadMap(voyageId) {
     const mapType = "roadmap";
     const key = GOOGLE_MAPS_API_KEY;
 
-    let markersParam = "";
     let pathParam = "";
-    let centerParam = "";
+    let markersParam = "";
 
-    const sortedStops = [...(currentStops || [])].sort((a, b) => 
+    const sortedStops = [...(currentStops || [])].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
 
     if (sortedStops.length > 0) {
         const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
-        // Draw markers in reverse order (N to 1) so that the first marker (1) is drawn last and appears on top of others
-        for (let i = stopsToDraw.length - 1; i >= 0; i--) {
-            const s = stopsToDraw[i];
-            markersParam += `&markers=color:orange%7Clabel:${i+1}%7C${s.latitude},${s.longitude}`;
-        }
 
-        pathParam = "&path=color:0x314c3bff|weight:4";
+        // Draw path first so stop markers render on top
+        pathParam = "&path=color:0x999999ff|weight:1";
         stopsToDraw.forEach(s => {
             pathParam += `|${s.latitude},${s.longitude}`;
         });
-    }
 
-    // Add search radius circle (approximate with a few points)
-    if (currentVoyage.latitude && currentVoyage.longitude && currentVoyage.search_radius) {
-        const radiusInKm = currentVoyage.search_radius * 1.852; // nm to km
-        const numPoints = 36; // More points for a smoother circle
-        let circlePoints = `&path=color:0x4285F4AA|weight:1|fillcolor:0x4285F411`;
-        for (let i = 0; i <= numPoints; i++) {
-            const angle = (i * 360 / numPoints) * Math.PI / 180;
-            const lat = currentVoyage.latitude + (radiusInKm / 111) * Math.cos(angle);
-            const lng = currentVoyage.longitude + (radiusInKm / (111 * Math.cos(currentVoyage.latitude * Math.PI / 180))) * Math.sin(angle);
-            circlePoints += `|${lat},${lng}`;
+        // If the last stop is very close to the first, omit it to avoid overlap
+        const first = stopsToDraw[0];
+        const last = stopsToDraw[stopsToDraw.length - 1];
+        const dlat = Math.abs(last.latitude - first.latitude);
+        const dlng = Math.abs(last.longitude - first.longitude);
+        const lastIsNearFirst = stopsToDraw.length > 1 && dlat < 0.05 && dlng < 0.05;
+
+        // Add stops 2..N first, then green (stop 1) last so it renders on top
+        // First stop = green, last stop = red (if not near first), others = blue
+        for (let i = 1; i < stopsToDraw.length; i++) {
+            if (i === stopsToDraw.length - 1 && lastIsNearFirst) continue;
+            const s = stopsToDraw[i];
+            const color = i === stopsToDraw.length - 1 ? 'red' : 'blue';
+            markersParam += `&markers=size:small%7Ccolor:${color}%7C${s.latitude},${s.longitude}`;
         }
-        pathParam += circlePoints;
-        
-        // Add a marker for the voyage center (hub)
-        markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
+        markersParam += `&markers=size:small%7Ccolor:green%7C${first.latitude},${first.longitude}`;
     } else if (currentVoyage.latitude && currentVoyage.longitude) {
-        // Fallback: at least show the center if no radius/stops
+        // No stops yet — show the voyage hub so the map isn't blank
         markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
     }
 
-    // Add recommendations as "blobs" (paths) if they exist
-    const res = await API.getRecommendations(voyageId).catch(() => ({ recommendations: [] }));
-    const recs = ensureRecommendationsArray(res);
-
-    if (recs && recs.length > 0) {
-        recs.slice(0, 20).forEach(rec => {
-            const type = (rec.type || '').toLowerCase();
-            let color = MARKER_COLORS.anchorage.slice(1); // green (anchorage default)
-            if (type.includes('hub'))    color = MARKER_COLORS.hub.slice(1);
-            else if (type.includes('moor')) color = MARKER_COLORS.mooring.slice(1);
-            else if (type.includes('marina')) color = MARKER_COLORS.marina.slice(1);
-
-            let path = `&path=color:0x${color}AA|weight:1|fillcolor:0x${color}44`;
-            let hasPath = false;
-
-            if (rec.geometry && rec.geometry.type === 'Polygon' && rec.geometry.coordinates) {
-                // Render the "Blob" as a filled path
-                // Format: color:0xRRGGBBAA|fillcolor:0xRRGGBBAA
-                const ring = rec.geometry.coordinates[0]; // Main ring
-                if (ring && ring.length > 0) {
-                    ring.forEach(coord => {
-                        // GeoJSON is [lng, lat], Static Map is [lat, lng]
-                        path += `|${coord[1]},${coord[0]}`;
-                    });
-                    // Close the path for proper filling
-                    const first = ring[0];
-                    path += `|${first[1]},${first[0]}`;
-                    hasPath = true;
-                }
-            } else if (rec.radius_miles > 0) {
-                // Approximate a circle with 12 points for static maps (to save URL length but keep blob feel)
-                const seed = hashString(rec.id || rec.name);
-                const circlePoints = getCirclePolygon({ lat: rec.latitude, lng: rec.longitude }, rec.radius_miles, 12, 0.2, seed);
-                
-                let pathStr = "";
-                circlePoints.forEach(p => {
-                    pathStr += `|${p[1]},${p[0]}`;
-                });
-                path += pathStr;
-                hasPath = true;
-            }
-
-            if (hasPath) {
-                pathParam += path;
-            }
-            
-            // Add a small center marker for each blob
-            markersParam += `&markers=color:0x${color}%7Csize:tiny%7C${rec.latitude},${rec.longitude}`;
-        });
-
-        // Top 5 labels for readability
-        let labeledRecs = "";
-        recs.slice(0, 5).forEach(rec => {
-            const type = (rec.type || '').toLowerCase();
-            let color = MARKER_COLORS.anchorage.slice(1);
-            if (type.includes('hub'))    color = MARKER_COLORS.hub.slice(1);
-            else if (type.includes('moor'))   color = MARKER_COLORS.mooring.slice(1);
-            else if (type.includes('marina')) color = MARKER_COLORS.marina.slice(1);
-            
-            const label = rec.name.charAt(0).toUpperCase();
-            labeledRecs += `&markers=color:0x${color}%7Csize:small%7Clabel:${label}%7C${rec.latitude},${rec.longitude}`;
-        });
-        markersParam += labeledRecs;
-    }
-
-    // Omit center and zoom to allow Google to auto-fit markers and paths
-    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${markersParam}${pathParam}&key=${key}`;
+    // Omit center and zoom to allow Google to auto-fit the route stops
+    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${pathParam}${markersParam}&key=${key}`;
 
     try {
         const response = await fetch(url);
@@ -4710,8 +4640,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                             <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-dark);">${weatherIcon}</span>
                             <div>
                                 <p class="m-0"><strong>Condition:</strong> ${w.condition}</p>
-                                <p class="m-0"><strong>Temperature:</strong> ${Math.round(w.temp_max_f)}°F / ${Math.round(w.temp_min_f)}°F</p>
-                                <p class="m-0"><strong>Precipitation:</strong> ${w.precip_prob}%</p>
+                                ${(w.temp_max_f != null && w.temp_min_f != null) ? `<p class="m-0"><strong>Temperature:</strong> ${Math.round(w.temp_max_f)}°F / ${Math.round(w.temp_min_f)}°F</p>` : ''}
+                                ${w.precip_prob != null ? `<p class="m-0"><strong>Precipitation:</strong> ${w.precip_prob}%</p>` : ''}
                             </div>
                         </div>
                     </div>
