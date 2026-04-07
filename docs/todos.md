@@ -5,3 +5,9 @@
 5.  Done. I think there are lot more possible anchorages than we are showing. Can we try and increase the number of anchorages without reducing the amounts of other points of interest.  
 6. Done. For interface labeled "<!-- Discovery Intro Modal -->." It has three buttons on it. Countinue, Cancel, and Close.  Cancel and Close are redundant to each other. Close should be removed. 
 7. Done. On the toolbar, the items seem unordered. The dated and undated should be grouped.  I'd like to see the dated ordered by descending by date, then by name alphabetically ascending.  Then I'd like to see the undated sorted by name ascending.    
+8. Tweak the Destination Guide -> Charter info to always try to include links to the chartering companies.
+9. Done. Change the Map Snapshot: 
+    * Markers obscure the actual stops on the map. Those markers should be smaller if possible. 
+    * The map is too zoomed out to be really that useful. It would be best if the zoom matched made it so the search radius was just contained.  
+10. Destination Guide -> Points of interest. Links would be super helpful here. 
+11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors. 
