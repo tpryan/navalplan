@@ -10,4 +10,5 @@
     * Markers obscure the actual stops on the map. Those markers should be smaller if possible. 
     * The map is too zoomed out to be really that useful. It would be best if the zoom matched made it so the search radius was just contained.  
 10. Destination Guide -> Points of interest. Links would be super helpful here. 
-11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors. 
+11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors.  
+12. Add a map with POI to the Voyage report for each stop.  
