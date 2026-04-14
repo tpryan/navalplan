@@ -432,20 +432,12 @@ func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.To
 }
 
 func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchAgent, err := s.createAgent(ctx, &agentConfig{
-		name:        "harbourmaster_search_specialist",
-		description: "Finds information on the web (facilities, reviews).",
-		instruction: _searchSpecialistPrompt,
-		tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		temperature: 0.4,
-	})
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "harbourmaster_search_specialist")
 	if err != nil {
-		return nil, fmt.Errorf("creating search agent: %w", err)
+		return nil, err
 	}
 
-	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
+	allTools := append(researcherTools, searchSpecialist)
 
 	return s.createAgent(ctx, &agentConfig{
 		name:        "harbourmaster",
@@ -490,20 +482,12 @@ func (s *Server) createSearchSpecialist(ctx context.Context, name string) (tool.
 }
 
 func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchAgent, err := s.createAgent(ctx, &agentConfig{
-		name:        "specialist_search_specialist",
-		description: "Finds navigation info on the web.",
-		instruction: _searchSpecialistPrompt,
-		tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		temperature: 0.4,
-	})
+	searchSpecialist, err := s.createSearchSpecialist(ctx, "specialist_search_specialist")
 	if err != nil {
-		return nil, fmt.Errorf("creating search agent: %w", err)
+		return nil, err
 	}
 
-	allTools := append(researcherTools, agenttool.New(searchAgent, nil))
+	allTools := append(researcherTools, searchSpecialist)
 
 	return s.createAgent(ctx, &agentConfig{
 		name:        "specialist",

@@ -12,3 +12,4 @@
 10. Destination Guide -> Points of interest. Links would be super helpful here. 
 11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors.  
 12. Add a map with POI to the Voyage report for each stop.  
+13. Sometimes I get distance: unknown for airports. That should be fixed. 
