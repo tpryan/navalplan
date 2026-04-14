@@ -234,7 +234,7 @@ func (s *Server) run(ctx context.Context) error {
 		return fmt.Errorf("setting up tools: %w", err)
 	}
 
-	pilotAgent, err := s.createPilotAgent(initCtx)
+	pilotAgent, err := s.createPilotAgent(initCtx, researcherTools)
 	if err != nil {
 		return fmt.Errorf("creating pilot agent: %w", err)
 	}
@@ -414,19 +414,19 @@ func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, error) {
 	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, nil
 }
 
-func (s *Server) createPilotAgent(ctx context.Context) (agent.Agent, error) {
+func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
 	searchSpecialist, err := s.createSearchSpecialist(ctx, "pilot_search_specialist")
 	if err != nil {
 		return nil, err
 	}
 
+	allTools := append(researcherTools, searchSpecialist)
+
 	return s.createAgent(ctx, &agentConfig{
 		name:        "pilot",
 		description: "A Local Knowledge Expert and Sailing Guide.",
 		instruction: _pilotPrompt,
-		tools: []tool.Tool{
-			searchSpecialist,
-		},
+		tools:       allTools,
 		temperature: 0.4,
 	})
 }

@@ -1,15 +1,64 @@
 export const API_BASE = '/api/v1';
 
+let error503Count = 0;
+let last503Time = 0;
+let on503Callback = null;
+
+export function set503Callback(cb) {
+  on503Callback = cb;
+}
+
 async function apiFetch(url, options = {}) {
   const headers = {
     'X-Requested-With': 'XMLHttpRequest',
     ...options.headers
   };
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    throw new Error('Unauthorized');
+
+  const maxRetries = 2;
+  let attempt = 0;
+
+  while (attempt <= maxRetries) {
+    try {
+      const res = await fetch(url, { ...options, headers });
+      
+      if (res.status === 401) {
+        throw new Error('Unauthorized');
+      }
+
+      if (res.status === 503 || (res.status === 500 && attempt < maxRetries)) {
+        // Check if it's a 503 or a 500 that might be a transient model error
+        // Note: The log showed 500 from agent, but the message was 503.
+        
+        error503Count++;
+        last503Time = Date.now();
+        
+        if (on503Callback) {
+            on503Callback(error503Count);
+        }
+
+        if (attempt < maxRetries) {
+            attempt++;
+            const delay = Math.pow(2, attempt) * 1000; // 2s, 4s backoff
+            console.warn(`API: 503/500 detected. Retrying in ${delay}ms... (Attempt ${attempt})`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+        }
+      }
+
+      // Reset count on success if enough time has passed
+      if (res.ok && Date.now() - last503Time > 30000) {
+        error503Count = 0;
+      }
+
+      return res;
+    } catch (err) {
+      if (err.message === 'Unauthorized') throw err;
+      if (attempt >= maxRetries) throw err;
+      
+      attempt++;
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
   }
-  return res;
 }
 
 export const API = {
@@ -278,5 +327,3 @@ export const API = {
         }
     }
   };
-
-  

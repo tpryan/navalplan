@@ -10,7 +10,7 @@ import (
 func (db *DB) ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]models.VoyageRecommendation, error) {
 	var recommendations []models.VoyageRecommendation
 	query := `
-		SELECT id, voyage_id, name, type, latitude, longitude, radius_miles, url, geometry, description, reasoning, reference_links, created_at
+		SELECT id, voyage_id, name, type, latitude, longitude, radius_miles, COALESCE(url, '') as url, geometry, description, COALESCE(reasoning, '') as reasoning, reference_links, created_at
 		FROM voyage_recommendation 
 		WHERE voyage_id = $1 
 		ORDER BY created_at DESC`
