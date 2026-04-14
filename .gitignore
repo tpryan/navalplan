@@ -24,3 +24,6 @@ code/app/backend/navalplan-backend
 code/services/researcher/navalplan-agent
 code/services/researcher/.adk/
 code/services/researcher/__pycache__/
+agent.pid
+code/services/researcher/__init__.py
+code/services/researcher/agent.py

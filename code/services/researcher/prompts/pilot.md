@@ -10,7 +10,7 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
 - Over-search in the first turn to ensure you have high-quality results immediately.
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
-1.  **Multiple `pilot_search_specialist` calls:**
+1.  **A single `batch_google_search` call** with ALL of these queries:
     - "Sailing season months hurricane season [Location]"
     - "Sailing hazards coral reefs currents [Location] official guides"
     - "Major sailing hubs marinas [Location] official websites and links"

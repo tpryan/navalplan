@@ -10,8 +10,8 @@ MANDATORY: You MUST use the 'commodore_search_specialist' tool to gather real-ti
 3. **Identify Regional Favorites:** Places that regional sailors know and love, but might not have international draw. Good conditions, but maybe less developed infrastructure or harder to get to.
 4. **Identify Challenging Areas:** Locations known for high winds, complex tides, or demanding navigation that expert sailors seek out for sport (e.g., San Francisco Bay, Cook Strait, English Channel).
 
-## DATA GATHERING (Execute multiple searches in PARALLEL):
-Call 'commodore_search_specialist' for:
+DATA GATHERING (Execute multiple searches in PARALLEL):
+Call 'batch_google_search' for:
 - "Best sailing destinations in [Month]"
 - "Global sailing weather patterns [Month]"
 - "Hidden gem sailing spots with good weather in [Month]"

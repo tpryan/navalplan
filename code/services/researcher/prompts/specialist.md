@@ -11,7 +11,7 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
 - Over-search in the first turn to ensure you have 25-35 high-quality results immediately.
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
-1.  **Multiple `specialist_search_specialist` calls:**
+1.  **A single `batch_google_search` call** with ALL of these queries:
     - "Complete list of safe anchorages and coves in [Location/Area] with official links"
     - "Best mooring ball fields and public moorings in [Location/Area] reviews and websites"
     - "Major harbor hubs, yacht clubs, and boating centers in [Location/Area] official websites"

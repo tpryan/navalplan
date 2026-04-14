@@ -9,7 +9,8 @@
 9. Done. Change the Map Snapshot: 
     * Markers obscure the actual stops on the map. Those markers should be smaller if possible. 
     * The map is too zoomed out to be really that useful. It would be best if the zoom matched made it so the search radius was just contained.  
-10. Destination Guide -> Points of interest. Links would be super helpful here. 
+10. Done. Destination Guide -> Points of interest. Links would be super helpful here. 
 11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors.  
 12. Add a map with POI to the Voyage report for each stop.  
 13. Sometimes I get distance: unknown for airports. That should be fixed. 
+14. After running local pilot search the #itinerary-list still reads: "Researching area..." instead of showing the list of resources. 
