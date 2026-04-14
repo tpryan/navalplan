@@ -1579,6 +1579,7 @@ async function executeResearchAll() {
                     if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                     clearStopSweeps();
                     isResearchAllRunning = false;
+                    await checkItineraryFullness();
                     renderItinerary();
                     if (researchTicker) researchTicker.stop();
                     btnResearchAll.innerHTML = originalContent;
@@ -1794,6 +1795,8 @@ async function handlePilotSuggestionsClick() {
             if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
             if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
 
+            isPilotResearching = false;
+
             // Do a final fetch to ensure we have the full list
             try {
                 const res = await API.getRecommendations(currentVoyage.id);
@@ -1801,11 +1804,11 @@ async function handlePilotSuggestionsClick() {
                 if (recs && recs.length > 0) {
                     voyageRecommendations = recs;
                     renderRecommendations();
-                    renderItinerary();
                 }
             } catch (e) { /* best effort */ }
 
-            isPilotResearching = false;
+            renderItinerary();
+
             if (radarSweep) { radarSweep.stop(); radarSweep = null; }
             if (pilotCenterMarker) pilotCenterMarker.map = map;
             if (pilotRadiusMarker) pilotRadiusMarker.map = map;
