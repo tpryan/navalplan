@@ -48,7 +48,7 @@ CRITICAL RULES:
 	waterfront/dinghy access) to avoid clutter, but NEVER omit a nautical 
 	facility found within the radius.
 8. **Websites:** Populate the "website" field using the 'website_uri' returned 
-	by the 'find_places_nearby' tool whenever available.
+	by the 'find_places_nearby' tool whenever available. **MANDATORY**: Do not omit this field if a URL is provided by the tool.
 8a. **Ratings:** Populate "rating", "user_rating_count", and "business_status" 
 	directly from the values returned by 'find_places_nearby'. Leave null if not provided.
 9. **Sun Phase Formatting:** Ensure 'sun_phase.sunrise' and 'sun_phase.sunset' 
@@ -56,6 +56,7 @@ CRITICAL RULES:
 	Do NOT include the date or timezone.
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
+11. **References:** **MANDATORY**: Populate the "references" field for each facility with at least 1-2 relevant URLs if available from the tool or your knowledge of the facility.
 
 ```json
 {

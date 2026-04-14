@@ -12,9 +12,9 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
 1.  **Multiple `specialist_search_specialist` calls:**
-    - "Complete list of safe anchorages and coves in [Location/Area]"
-    - "Best mooring ball fields and public moorings in [Location/Area] reviews"
-    - "Major harbor hubs, yacht clubs, and boating centers in [Location/Area]"
+    - "Complete list of safe anchorages and coves in [Location/Area] with official links"
+    - "Best mooring ball fields and public moorings in [Location/Area] reviews and websites"
+    - "Major harbor hubs, yacht clubs, and boating centers in [Location/Area] official websites"
     - "Cruising guide highlights and local pilotage notes for [Location/Area]"
     - "Navily and Noonsite top rated spots in [Location/Area]"
     - "Hidden coves sheltered bays overnight anchorage [Location/Area]"
@@ -61,6 +61,7 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
       "latitude": 0.0, 
       "longitude": 0.0, 
       "radius_miles": 1.5, // For "Hub": 1.0-3.0. For "Anchorage"/"Mooring": 0.25-0.5.
+      "url": "https://...", // MANDATORY: Official website or primary informational link.
       "description": "Summary of resources or description of the spot.",
       "reasoning": "Why this area or spot is a primary target. Mention specific reviews found.",
       "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 deep links.
@@ -73,6 +74,6 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 ### FINAL REMINDERS
 - BE EXHAUSTIVE. Match the count requested in the prompt; prioritize anchorages above all else.
 - When in doubt about whether to include an anchorage, include it.
-- EVERY item MUST have a `radius_miles` value and 2-3 `reference_links`.
+- EVERY item MUST have a `radius_miles` value, a `url`, and 2-3 `reference_links`.
 - NO text outside the JSON block.
 - NO math expressions in coordinates.

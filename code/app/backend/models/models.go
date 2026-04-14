@@ -152,6 +152,7 @@ type VoyageRecommendation struct {
 	Latitude    float64   `json:"latitude" db:"latitude"`
 	Longitude   float64   `json:"longitude" db:"longitude"`
 	RadiusMiles float64   `json:"radius_miles" db:"radius_miles"`
+	URL         string    `json:"url" db:"url"`
 	Geometry    RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon for "blob" visualization
 	Description string    `json:"description" db:"description"`
 	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this

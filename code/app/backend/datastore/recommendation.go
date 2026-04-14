@@ -10,7 +10,7 @@ import (
 func (db *DB) ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]models.VoyageRecommendation, error) {
 	var recommendations []models.VoyageRecommendation
 	query := `
-		SELECT id, voyage_id, name, type, latitude, longitude, geometry, description, reasoning, reference_links, created_at
+		SELECT id, voyage_id, name, type, latitude, longitude, radius_miles, url, geometry, description, reasoning, reference_links, created_at
 		FROM voyage_recommendation 
 		WHERE voyage_id = $1 
 		ORDER BY created_at DESC`
@@ -22,8 +22,8 @@ func (db *DB) ListVoyageRecommendations(ctx context.Context, voyageID int64) ([]
 // CreateVoyageRecommendation inserts a new recommendation into the database.
 func (db *DB) CreateVoyageRecommendation(ctx context.Context, r *models.VoyageRecommendation) error {
 	query := `
-		INSERT INTO voyage_recommendation (voyage_id, name, type, latitude, longitude, geometry, description, reasoning, reference_links)
-		VALUES (:voyage_id, :name, :type, :latitude, :longitude, :geometry, :description, :reasoning, :reference_links)
+		INSERT INTO voyage_recommendation (voyage_id, name, type, latitude, longitude, radius_miles, url, geometry, description, reasoning, reference_links)
+		VALUES (:voyage_id, :name, :type, :latitude, :longitude, :radius_miles, :url, :geometry, :description, :reasoning, :reference_links)
 		RETURNING id, created_at`
 
 	rows, err := db.NamedQueryContext(ctx, query, r)

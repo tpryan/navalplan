@@ -1972,18 +1972,28 @@ function showRecommendationInfoWindow(rec, anchor, style) {
 
     const { InfoWindow } = googleMapsLib;
     const references = rec.reference_links ? (typeof rec.reference_links === 'string' ? JSON.parse(rec.reference_links) : rec.reference_links) : [];
-    const refsHtml = references.length > 0 ? `
-        <div style="margin-bottom: 15px;">
-            <p style="margin: 0 0 5px 0; font-size: 0.8rem; font-weight: bold; color: #666; text-transform: uppercase;">Resources:</p>
-            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                ${references.map((url, i) => `
-                    <a href="${url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                        <span class="material-symbols-outlined" style="font-size: 14px;">link</span>
-                        Link ${i+1}
-                    </a>
-                `).join('')}
-            </div>
-        </div>` : '';
+    
+    let resourcesHtml = '';
+    if (rec.url || references.length > 0) {
+        resourcesHtml = `
+            <div style="margin-bottom: 15px;">
+                <p style="margin: 0 0 5px 0; font-size: 0.8rem; font-weight: bold; color: #666; text-transform: uppercase;">Resources:</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${rec.url ? `
+                        <a href="${rec.url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; font-weight: bold; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">language</span>
+                            Website
+                        </a>
+                    ` : ''}
+                    ${references.map((url, i) => `
+                        <a href="${url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">link</span>
+                            Link ${i+1}
+                        </a>
+                    `).join('')}
+                </div>
+            </div>`;
+    }
 
     const hasDates = currentVoyage && currentVoyage.start_date && currentVoyage.end_date;
     const addButton = hasDates ? `
@@ -2003,7 +2013,7 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             <div style="background: ${style.color}1A; padding: 10px; border-radius: 6px; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
                 <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
             </div>
-            ${refsHtml}
+            ${resourcesHtml}
             ${addButton}
         </div>`;
     
@@ -4435,8 +4445,9 @@ function generateGuideHTML(guide) {
     if (guide.points_of_interest && guide.points_of_interest.length > 0) {
         html += `<div class="briefing-section"><h3>Points of Interest</h3><ul class="facility-list">`;
         guide.points_of_interest.forEach(poi => {
+            const link = poi.url ? ` <a href="${poi.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
             html += `<li class="facility-item">
-                <h4>${poi.name}</h4>
+                <h4>${poi.name}${link}</h4>
                 <p>${poi.description}</p>
                 ${renderReferences(poi.references)}
             </li>`;
