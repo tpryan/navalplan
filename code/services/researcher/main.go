@@ -435,7 +435,7 @@ func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.To
 		description: "A Local Knowledge Expert and Sailing Guide.",
 		instruction: _pilotPrompt,
 		tools:       allTools,
-		temperature: 0.4,
+		temperature: 0.25,
 	})
 }
 
@@ -451,7 +451,7 @@ func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools [
 		description: "A Virtual Harbourmaster that researches sailing destinations.",
 		instruction: _harbourmasterPrompt,
 		tools:       allTools,
-		temperature: 0.4,
+		temperature: 0.25,
 	})
 }
 
@@ -466,7 +466,7 @@ func (s *Server) createCommodoreAgent(ctx context.Context) (agent.Agent, error) 
 		description: "The Commodore - Global Seasonal Discovery Expert.",
 		instruction: _commodorePrompt,
 		tools:       searchTools,
-		temperature: 0.2,
+		temperature: 0.25,
 	})
 }
 
@@ -478,7 +478,7 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 		tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
-		temperature: 0.4,
+		temperature: 0.25,
 	})
 	if err != nil {
 		return nil, err
@@ -534,7 +534,7 @@ func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []to
 		description: "A Local Pilot and Navigation Specialist.",
 		instruction: _specialistPrompt,
 		tools:       allTools,
-		temperature: 0.4,
+		temperature: 0.1,
 	})
 }
 
