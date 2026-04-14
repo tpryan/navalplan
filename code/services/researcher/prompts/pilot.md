@@ -26,6 +26,7 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
     - `query`: "harbor", `radius`: 50000
     - `query`: "attraction", `radius`: 50000
     - `query`: "park", `radius`: 50000
+    - `query`: "airport", `radius`: 100000
 
 Output: Produce a JSON object strictly following this schema:
 ```json
@@ -76,6 +77,7 @@ Output: Produce a JSON object strictly following this schema:
 ```
 
 Important: 
+- **CRITICAL**: For 'airports', use the `distance_meters` returned by the `find_places_nearby` tool (converted to KM) to ensure accuracy. If you must use a general search result, try to verify the distance accurately.
 - **CRITICAL**: For 'hubs', 'charter_info.companies', 'hazards', and 'points_of_interest', you MUST include valid 'url' and 'references'. These are the most important fields for the user to verify the information. 
 - For 'charter_info.companies', try to find as many reputable local and international companies as possible (at least 5-10 if available).
 - Limit "references" to a maximum of 2 URLs per section.

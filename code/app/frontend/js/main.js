@@ -4439,9 +4439,10 @@ function generateGuideHTML(guide) {
     if (guide.airports && guide.airports.length > 0) {
         html += `<div class="briefing-section"><h3>Nearest Airports</h3><ul class="facility-list">`;
         guide.airports.forEach(a => {
+            const formattedType = a.type ? a.type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Unknown';
             html += `<li class="facility-item">
                 <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
-                <p><strong>Type:</strong> ${a.type || 'Unknown'}</p>
+                <p><strong>Type:</strong> ${formattedType}</p>
                 <p><strong>Distance:</strong> ${a.distance_km ? a.distance_km + ' km' : 'Unknown'}</p>
                 ${renderReferences(a.references)}
             </li>`;

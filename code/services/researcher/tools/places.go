@@ -49,6 +49,7 @@ type PlaceResult struct {
 	Address         string   `json:"address"`
 	Latitude        float64  `json:"latitude"`
 	Longitude       float64  `json:"longitude"`
+	DistanceMeters  float64  `json:"distance_meters"`
 	Rating          float64  `json:"rating"`
 	UserRatingCount int32    `json:"user_rating_count"`
 	BusinessStatus  string   `json:"business_status"`
@@ -166,6 +167,14 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 			lng = pt.Location.Longitude
 		}
 
+		dist := 0.0
+		if lat != 0 && lng != 0 {
+			dist = haversineDistance(args.Latitude, args.Longitude, lat, lng)
+			if dist > radius {
+				continue
+			}
+		}
+
 		name := ""
 		if pt.DisplayName != nil {
 			name = pt.DisplayName.Text
@@ -176,6 +185,7 @@ func (p *PlacesProvider) FindPlaces(ctx tool.Context, args PlacesArgs) (PlacesRe
 			Address:         pt.FormattedAddress,
 			Latitude:        lat,
 			Longitude:       lng,
+			DistanceMeters:  dist,
 			Rating:          float64(pt.Rating),
 			UserRatingCount: pt.GetUserRatingCount(),
 			BusinessStatus:  pt.BusinessStatus.String(),
