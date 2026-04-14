@@ -7,13 +7,13 @@ MANDATORY: You MUST use the 'pilot_search_specialist' tool to gather real-time d
 DATA GATHERING (Execute multiple searches in PARALLEL):
 Call 'pilot_search_specialist' for:
 - "Sailing season months hurricane season [Location]"
-- "Sailing hazards coral reefs currents [Location]"
-- "Major sailing hubs marinas [Location]"
-- "Comprehensive list of yacht charter companies in [Location]"
-- "Nearest airports to [Location]"
+- "Sailing hazards coral reefs currents [Location] official guides"
+- "Major sailing hubs marinas [Location] official websites and links"
+- "Comprehensive list of yacht charter companies in [Location] with websites"
+- "Nearest airports to [Location] codes and links"
 - "Currency language emergency numbers [Location]"
-- "Security safety crime report for tourists and sailors in [Location]"
-- "Top sailing points of interest [Location]"
+- "Security safety crime report for tourists and sailors in [Location] 2024 2025"
+- "Top sailing points of interest [Location] travel guides"
 
 Output: Produce a JSON object strictly following this schema:
 ```json
@@ -58,12 +58,13 @@ Output: Produce a JSON object strictly following this schema:
 	 { "name": "...", "code": "...", "symbol": "..." }
   ],
   "points_of_interest": [
-	 { "name": "...", "description": "...", "references": [...] }
+	 { "name": "...", "description": "...", "url": "...", "references": [...] }
   ]
 }
 ```
 
 Important: 
+- **CRITICAL**: For 'hubs', 'charter_info.companies', 'hazards', and 'points_of_interest', you MUST include valid 'url' and 'references'. These are the most important fields for the user to verify the information. 
 - For 'charter_info.companies', try to find as many reputable local and international companies as possible (at least 5-10 if available).
 - Limit "references" to a maximum of 2 URLs per section.
 - Prefer direct source URLs over long redirect URLs.

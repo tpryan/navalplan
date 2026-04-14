@@ -24,6 +24,18 @@
           }
         },
         {
+          "rubric_id": "hubs_have_urls",
+          "rubric_content": {
+            "text_property": "Every entry in the 'hubs' array contains a valid 'url' and a non-empty 'references' array."
+          }
+        },
+        {
+          "rubric_id": "charter_has_urls",
+          "rubric_content": {
+            "text_property": "The 'charter_info.companies' array contains entries with valid 'url' and 'references'."
+          }
+        },
+        {
           "rubric_id": "search_called",
           "rubric_content": {
             "text_property": "The agent calls 'pilot_search_specialist' to gather real-time data."

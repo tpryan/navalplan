@@ -24,6 +24,12 @@
           }
         },
         {
+          "rubric_id": "recommendations_have_urls",
+          "rubric_content": {
+            "text_property": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
+          }
+        },
+        {
           "rubric_id": "find_places_called",
           "rubric_content": {
             "text_property": "The agent calls 'find_places_nearby' to locate anchorages or marinas."
