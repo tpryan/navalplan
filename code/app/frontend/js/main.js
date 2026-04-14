@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { API, API_BASE } from './api.js';
+import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
 import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
@@ -501,7 +501,15 @@ function chaikin(coords) {
     return newCoords;
 }
 
+let last503Alert = 0;
 document.addEventListener('DOMContentLoaded', () => {
+  set503Callback((count) => {
+    const now = Date.now();
+    if (count >= 2 && now - last503Alert > 30000) {
+      last503Alert = now;
+      showNotification('High Demand', 'Our AI models are currently experiencing high demand. Some research tasks may take longer or require a retry. We recommend waiting a few minutes if errors persist.');
+    }
+  });
   initApp();
 });
 

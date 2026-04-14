@@ -175,10 +175,9 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 
 	const appName = "harbourmaster"
 	const userID = "system"
-	// agentSessionID is stable per stop for ADK session management.
-	// sessionID is the progress stream key and must not be used for the ADK session
-	// because multiple stops may share the same progress sessionID in full-voyage research.
-	agentSessionID := fmt.Sprintf("stop_%d", stop.ID)
+	// agentSessionID was stable per stop for ADK session management, but we now use a timestamp
+	// to ensure a fresh session and avoid 500 errors if the session already exists.
+	agentSessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
 
 	// Check for nearby existing research to reuse facilities
 	nearbyBriefing, nearbyErr := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)

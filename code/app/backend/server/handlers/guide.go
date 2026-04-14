@@ -196,7 +196,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID str
 
 	const appName = "pilot"
 	const userID = "system"
-	agentSessionID := fmt.Sprintf("voyage_%d", voyage.ID)
+	agentSessionID := fmt.Sprintf("voyage_%d_%d", voyage.ID, time.Now().Unix())
 
 	// 1. Create Session
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
