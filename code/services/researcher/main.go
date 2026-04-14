@@ -478,7 +478,7 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 		tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
-		temperature: 0.25,
+		temperature: 0.4,
 	})
 	if err != nil {
 		return nil, err
@@ -505,16 +505,24 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 			var text string
 			for event, err := range resp {
 				if err != nil {
+					slog.Error("Search agent stream error", "query", query, "error", err)
 					continue
 				}
-				if event.Content != nil {
+				if event.Content != nil && event.Content.Role == "model" {
 					for _, part := range event.Content.Parts {
-						if part.Text != "" {
+						if part.Text != "" && !part.Thought {
 							text += part.Text
 						}
 					}
 				}
 			}
+
+			if text == "" {
+				slog.Warn("Search agent returned empty result", "query", query)
+			} else {
+				slog.Debug("Search agent result", "query", query, "text_len", len(text))
+			}
+
 			return text, nil
 		},
 	}
@@ -534,7 +542,7 @@ func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []to
 		description: "A Local Pilot and Navigation Specialist.",
 		instruction: _specialistPrompt,
 		tools:       allTools,
-		temperature: 0.1,
+		temperature: 0.25,
 	})
 }
 

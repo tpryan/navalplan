@@ -12,6 +12,7 @@
 10. Done. Destination Guide -> Points of interest. Links would be super helpful here. 
 11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors.  
 12. Add a map with POI to the Voyage report for each stop.  
-13. Sometimes I get distance: unknown for airports. That should be fixed. 
+13. Done. Sometimes I get distance: unknown for airports in the destination guide. That should be fixed. The BVI entry currently in the database has this problem. 
 14. After running local pilot search the #itinerary-list still reads: "Researching area..." instead of showing the list of resources. 
 15. After running the stop report this message appears: Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop. Be we did just run the full report, so this is unnecessary
+16. If we can figure out ahead of time that stop 1 and 4 are the same place, we can avoid making a model heavy call that's redundant by omitting the last stop. 
