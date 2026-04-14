@@ -24,8 +24,8 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
    - Query: "Moorings"
    - Query: "Waterfront restaurants"
    - Query: "Bars"
-5. Call 'harbourmaster_search_specialist' for local pilotage notes, 
-   official harbor regulations, and recent reviews/hazards for the location.
+5. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
+   and recent reviews/hazards for the location.
 
 OUTPUT:
 Combine all findings into this JSON structure. 

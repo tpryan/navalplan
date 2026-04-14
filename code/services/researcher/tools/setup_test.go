@@ -6,6 +6,7 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/memory"
 	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool/toolconfirmation"
 	"google.golang.org/genai"
 )
 
@@ -63,6 +64,14 @@ func (m mockToolContext) UserContent() *genai.Content {
 
 func (m mockToolContext) UserID() string {
 	return "test-user-id"
+}
+
+func (m mockToolContext) ToolConfirmation() *toolconfirmation.ToolConfirmation {
+	return nil
+}
+
+func (m mockToolContext) RequestConfirmation(hint string, payload any) error {
+	return nil
 }
 
 func int32Ptr(i int32) *int32 {

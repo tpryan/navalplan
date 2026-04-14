@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -284,8 +285,16 @@ func (s *Server) run(ctx context.Context) error {
 		w.Write([]byte("OK"))
 	})
 
-	// Create the ADK HTTP Handler
-	adkHandler := adkrest.NewHandler(config, 300*time.Second)
+	// Create the ADK HTTP Server
+	adkHandler, err := adkrest.NewServer(adkrest.ServerConfig{
+		AgentLoader:     config.AgentLoader,
+		SessionService:  config.SessionService,
+		SSEWriteTimeout: 300 * time.Second,
+		DebugConfig:     &adkrest.DebugTelemetryConfig{},
+	})
+	if err != nil {
+		log.Fatalf("Failed to create ADK server: %v", err)
+	}
 
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
@@ -415,12 +424,11 @@ func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, error) {
 }
 
 func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "pilot_search_specialist")
+	searchTools, err := s.createSearchTools(ctx, "pilot_search_specialist")
 	if err != nil {
 		return nil, err
 	}
-
-	allTools := append(researcherTools, searchSpecialist)
+	allTools := append(researcherTools, searchTools...)
 
 	return s.createAgent(ctx, &agentConfig{
 		name:        "pilot",
@@ -432,12 +440,11 @@ func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.To
 }
 
 func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "harbourmaster_search_specialist")
+	searchTools, err := s.createSearchTools(ctx, "harbourmaster_search_specialist")
 	if err != nil {
 		return nil, err
 	}
-
-	allTools := append(researcherTools, searchSpecialist)
+	allTools := append(researcherTools, searchTools...)
 
 	return s.createAgent(ctx, &agentConfig{
 		name:        "harbourmaster",
@@ -449,7 +456,7 @@ func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools [
 }
 
 func (s *Server) createCommodoreAgent(ctx context.Context) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "commodore_search_specialist")
+	searchTools, err := s.createSearchTools(ctx, "commodore_search_specialist")
 	if err != nil {
 		return nil, err
 	}
@@ -458,14 +465,12 @@ func (s *Server) createCommodoreAgent(ctx context.Context) (agent.Agent, error) 
 		name:        "commodore",
 		description: "The Commodore - Global Seasonal Discovery Expert.",
 		instruction: _commodorePrompt,
-		tools: []tool.Tool{
-			searchSpecialist,
-		},
+		tools:       searchTools,
 		temperature: 0.2,
 	})
 }
 
-func (s *Server) createSearchSpecialist(ctx context.Context, name string) (tool.Tool, error) {
+func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Tool, error) {
 	searchAgent, err := s.createAgent(ctx, &agentConfig{
 		name:        name,
 		description: "Finds information on the web using Google Search.",
@@ -478,16 +483,51 @@ func (s *Server) createSearchSpecialist(ctx context.Context, name string) (tool.
 	if err != nil {
 		return nil, err
 	}
-	return agenttool.New(searchAgent, nil), nil
+
+	individualTool := agenttool.New(searchAgent, nil)
+
+	// Create the batch tool that uses the search agent in parallel
+	batchTool := &tools.BatchSearchTool{
+		Searcher: func(ctx context.Context, query string) (string, error) {
+			// Create a runner for the search agent
+			r, err := runner.New(runner.Config{
+				AppName:        name,
+				Agent:          searchAgent,
+				SessionService: session.InMemoryService(), // Temporary session for the sub-search
+			})
+
+			if err != nil {
+				return "", err
+			}
+
+			resp := r.Run(ctx, "system", "batch_"+fmt.Sprint(time.Now().UnixNano()), genai.NewContentFromText(query, "user"), agent.RunConfig{})
+
+			var text string
+			for event, err := range resp {
+				if err != nil {
+					continue
+				}
+				if event.Content != nil {
+					for _, part := range event.Content.Parts {
+						if part.Text != "" {
+							text += part.Text
+						}
+					}
+				}
+			}
+			return text, nil
+		},
+	}
+
+	return []tool.Tool{individualTool, batchTool}, nil
 }
 
 func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchSpecialist, err := s.createSearchSpecialist(ctx, "specialist_search_specialist")
+	searchTools, err := s.createSearchTools(ctx, "specialist_search_specialist")
 	if err != nil {
 		return nil, err
 	}
-
-	allTools := append(researcherTools, searchSpecialist)
+	allTools := append(researcherTools, searchTools...)
 
 	return s.createAgent(ctx, &agentConfig{
 		name:        "specialist",
@@ -502,6 +542,9 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.timings[ctx.FunctionCallID()] = time.Now()
+
+	argBytes, _ := json.Marshal(args)
+	slog.Info("tool_start", "tool", t.Name(), "args", string(argBytes))
 
 	s.broadcast(TelemetryEvent{
 		SessionID: ctx.SessionID(),
@@ -524,7 +567,12 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 	if ok {
 		timesince := time.Since(startTime)
 		duration = timesince.String()
-		slog.Debug("tool execution", "tool", t.Name(), "duration", duration)
+
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		slog.Info("tool_end", "tool", t.Name(), "duration", duration, "status", status)
 	}
 
 	s.broadcast(TelemetryEvent{
