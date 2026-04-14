@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -15,6 +16,22 @@ import (
 	"google.golang.org/genproto/googleapis/type/latlng"
 	"google.golang.org/grpc/metadata"
 )
+
+// haversineDistance calculates the distance between two points in meters.
+func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
+	const R = 6371000 // Earth radius in meters
+	phi1 := lat1 * math.Pi / 180
+	phi2 := lat2 * math.Pi / 180
+	dphi := (lat2 - lat1) * math.Pi / 180
+	dlambda := (lon2 - lon1) * math.Pi / 180
+
+	a := math.Sin(dphi/2)*math.Sin(dphi/2) +
+		math.Cos(phi1)*math.Cos(phi2)*
+			math.Sin(dlambda/2)*math.Sin(dlambda/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return R * c
+}
 
 // PlacesArgs defines the arguments for the find_places_nearby tool.
 type PlacesArgs struct {

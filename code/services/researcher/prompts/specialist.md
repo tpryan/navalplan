@@ -49,6 +49,9 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 **STREAMING COMPATIBILITY:** Start outputting the JSON object and its recommendations as soon as you have finished your analysis. 
 
 **CRITICAL: COORDINATE ACCURACY**
+- Prioritize coordinates from `find_places_nearby` as they are more precise.
+- If a spot is found in `batch_google_search` but not in `find_places_nearby`, you MUST try to find its coordinates using its name and location in a separate tool call if needed, or exclude it if you cannot be certain of its location within 0.01 degrees.
+- NEVER guess coordinates based on a general area name.
 - Use the exact `latitude` and `longitude` returned by tools. 
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**
 

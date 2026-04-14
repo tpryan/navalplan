@@ -14,3 +14,4 @@
 12. Add a map with POI to the Voyage report for each stop.  
 13. Sometimes I get distance: unknown for airports. That should be fixed. 
 14. After running local pilot search the #itinerary-list still reads: "Researching area..." instead of showing the list of resources. 
+15. After running the stop report this message appears: Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop. Be we did just run the full report, so this is unnecessary
