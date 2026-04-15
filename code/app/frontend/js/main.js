@@ -535,31 +535,62 @@ function initApp() {
 
   // Back button handling
   window.addEventListener('popstate', async (e) => {
-      const p = window.location.pathname;
-      if (p === '/' || p === '/index.html') {
-          showVoyageList(false);
-      } else if (p.startsWith('/voyages/')) {
-          const id = parseInt(p.replace('/voyages/', ''));
-          if (!isNaN(id)) {
-              // Try to find in cache first
-              const v = voyages.find(v => v.id === id) || { id };
-              selectVoyage(v, false);
-          }
-      }
+      handleRoute(window.location.pathname, false);
   });
 
   // Load data and handle initial route
   loadVoyages().then(async () => {
-      if (path.startsWith('/voyages/')) {
-          const id = parseInt(path.replace('/voyages/', ''));
-          if (!isNaN(id)) {
-              const v = voyages.find(v => v.id === id) || { id };
-              await selectVoyage(v, false);
-          }
-      }
+      handleRoute(path, false);
   });
 
   startHealthCheck();
+}
+
+async function handleRoute(path, doPushState = true) {
+    if (path === '/' || path === '/index.html' || path === '') {
+        showVoyageList(doPushState);
+        return;
+    }
+
+    const parts = path.split('/').filter(p => p !== '');
+    // Expect: ['voyages', '{id}', ...]
+    if (parts[0] === 'voyages' && parts[1]) {
+        const id = parseInt(parts[1]);
+        if (isNaN(id)) return;
+
+        // Ensure voyage is selected
+        if (!currentVoyage || currentVoyage.id !== id) {
+            const v = voyages.find(v => v.id === id) || { id };
+            await selectVoyage(v, doPushState);
+        }
+
+        // Handle sub-views
+        if (parts[2] === 'guide') {
+            const btn = document.getElementById('btn-view-guide');
+            handleGuideClick(currentVoyage, btn, doPushState);
+        } else if (parts[2] === 'report') {
+            handleShowReport(doPushState);
+        } else if (parts[2] === 'stops' && parts[3]) {
+            const stopId = parseInt(parts[3]);
+            if (!isNaN(stopId)) {
+                // Fetch briefing and show
+                try {
+                    const b = await API.getBriefing(stopId);
+                    showBriefing(b, doPushState);
+                } catch (e) {
+                    console.error("Failed to load briefing for deep link", e);
+                }
+            }
+        } else {
+            // Just the voyage view, close any modals
+            closeAllModals();
+        }
+    }
+}
+
+function closeAllModals() {
+    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+    document.getElementById('modal-overlay').classList.add('hidden');
 }
 
 function startHealthCheck() {    const warning = document.getElementById('health-warning');
@@ -2684,12 +2715,25 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
     }));
 }
 
-async function showBriefing(briefing) {
+async function showBriefing(briefing, doPushState = true) {
+    if (doPushState && currentVoyage) {
+        window.history.pushState({}, '', `/voyages/${currentVoyage.id}/stops/${briefing.stop_id}`);
+    }
     const modal = document.getElementById('modal-briefing');
     const content = document.getElementById('briefing-content');
     const btnClose = document.getElementById('btn-close-briefing');
     const btnRedo = document.getElementById('btn-redo-briefing');
     const modalOverlay = document.getElementById('modal-overlay');
+
+    const closeBriefing = () => {
+        modal.classList.add('hidden');
+        modalOverlay.classList.add('hidden');
+        if (currentVoyage) {
+            window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
+        }
+    };
+    btnClose.onclick = closeBriefing;
+    modalOverlay.onclick = closeBriefing;
 
     const isInvalid = (v) => {
         if (!v) return true;
@@ -3612,8 +3656,11 @@ async function captureAndUploadMap(voyageId) {
     }
 }
 
-    async function handleShowReport() {
+    async function handleShowReport(doPushState = true) {
         if (!currentVoyage) return;
+        if (doPushState) {
+            window.history.pushState({}, '', `/voyages/${currentVoyage.id}/report`);
+        }
 
         const btn = document.getElementById("btn-export-voyage");
         const originalContent = btn.innerHTML;
@@ -3658,6 +3705,16 @@ async function captureAndUploadMap(voyageId) {
             const modal = document.getElementById("modal-report");
             const content = document.getElementById("report-content");
             const modalOverlay = document.getElementById("modal-overlay");
+
+            const closeReport = () => {
+                modal.classList.add('hidden');
+                modalOverlay.classList.add('hidden');
+                if (currentVoyage) {
+                    window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
+                }
+            };
+            document.getElementById('btn-close-report').onclick = closeReport;
+            modalOverlay.onclick = closeReport;
 
             content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
             modal.classList.remove("hidden");
@@ -3707,13 +3764,16 @@ function getIconForWeather(description) {
 }
 
 
-async function handleGuideClick(voyage, button) {
+async function handleGuideClick(voyage, button, doPushState = true) {
+    if (doPushState) {
+        window.history.pushState({}, '', `/voyages/${voyage.id}/guide`);
+    }
     const originalContent = button.innerHTML;
     
     try {
         const resp = await API.getVoyageGuide(voyage.id);
         if (resp && resp.guide && resp.guide.summary) {
-            showVoyageGuide(resp);
+            showVoyageGuide(resp, doPushState);
             return;
         }
 
@@ -3721,6 +3781,16 @@ async function handleGuideClick(voyage, button) {
         const modal = document.getElementById('modal-guide');
         const content = document.getElementById('guide-content');
         const modalOverlay = document.getElementById('modal-overlay');
+
+        const closeGuide = () => {
+            modal.classList.add('hidden');
+            modalOverlay.classList.add('hidden');
+            if (currentVoyage) {
+                window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
+            }
+        };
+        document.getElementById('btn-close-guide').onclick = closeGuide;
+        modalOverlay.onclick = closeGuide;
         
         content.innerHTML = `
             <div class="loading-state">
@@ -3767,7 +3837,7 @@ async function handleGuideClick(voyage, button) {
     }
 }
 
-function showVoyageGuide(resp) {
+function showVoyageGuide(resp, doPushState = true) {
     const guide = resp.guide;
     const mapURL = resp.map_url;
 
@@ -3775,6 +3845,16 @@ function showVoyageGuide(resp) {
     const content = document.getElementById('guide-content');
     const btnRedo = document.getElementById('btn-redo-guide');
     const modalOverlay = document.getElementById('modal-overlay');
+
+    const closeGuide = () => {
+        modal.classList.add('hidden');
+        modalOverlay.classList.add('hidden');
+        if (currentVoyage) {
+            window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
+        }
+    };
+    document.getElementById('btn-close-guide').onclick = closeGuide;
+    modalOverlay.onclick = closeGuide;
 
     // Inject Share/Snapshot controls if not present (create only once, update handler always)
     const headerControls = modal.querySelector('.modal-header-row .flex.gap-sm');
