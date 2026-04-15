@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavalPlan UI Gallery</title>
+    
+    <!-- Google Material Symbols -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- Consolidated CSS from App --- */
+        
+        /* base.css */
+        :root {
+          --brand-dark: rgb(88, 61, 27);
+          --brand-darker: rgb(55, 38, 17);
+          --brand-medium: rgb(149, 104, 45);
+          --brand-light: rgb(160, 144, 123);
+          --brand-lighter: rgb(227, 220, 211);
+          --brand-green-dark: #314c3b;
+          --brand-green-darker: #253b2e;
+          --color-background: #AADAFF;
+          --text-dark: #333333;
+          --text-light: #777777;
+          --text-subtle: rgba(153, 153, 153, 0.5);
+          --border-color: #cccccc;
+          --border-color-dark: #333333;
+          --surface-bg: rgba(255, 255, 255, 0.8);
+          --surface-bg-dim: rgba(255, 255, 255, 0.6);
+          --surface-bg-dim-light: rgba(255, 255, 255, 0.4);
+          --border-radius: 8px;
+          --shadow-main: 0 3px 10px rgb(0 0 0 / 0.4);
+          --font-primary: "Raleway", sans-serif;
+          --font-secondary: "Lato", sans-serif;
+        }
+
+        /* layout.css + main.css + buttons.css combined and adjusted for gallery */
+        
+        body {
+          padding: 2rem; margin: 0;
+          background-color: var(--color-background);
+          font-family: var(--font-secondary);
+          box-sizing: border-box;
+          overflow-y: auto;
+          height: auto;
+          min-height: 100vh;
+        }
+
+        *, *:before, *:after { box-sizing: inherit; }
+
+        .gallery-section {
+            margin-bottom: 4rem;
+            background: rgba(255,255,255,0.2);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px dashed rgba(0,0,0,0.1);
+        }
+
+        .gallery-section h2 {
+            font-family: var(--font-primary);
+            color: var(--brand-dark);
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--brand-medium);
+            padding-bottom: 0.5rem;
+            margin-top: 0;
+            margin-bottom: 2rem;
+        }
+
+        .component-container {
+            position: relative;
+            background-image: url('https://www.google.com/maps/vt/pb=!1m4!1m3!1i10!2i163!3i395!2m3!1e0!2sm!3i633051412!3m8!2sen!3sus!5e1105!12m4!1e68!2m2!1sset!2sRoadmap!4e0!5m1!5f2!23i1301875');
+            background-size: cover;
+            height: 600px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        /* App Layout Overrides for Gallery */
+        #sidebar {
+            position: absolute;
+            top: 10px; left: 10px; bottom: 10px;
+            width: 350px;
+            z-index: 10;
+            background-color: var(--surface-bg);
+            backdrop-filter: blur(10px);
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-main);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-mock {
+            position: relative;
+            height: 100%;
+        }
+
+        /* Buttons */
+        .btn {
+          font-family: var(--font-primary);
+          font-weight: 900;
+          text-transform: uppercase;
+          background-color: var(--surface-bg-dim);
+          backdrop-filter: blur(10px);
+          border: 1px solid grey;
+          border-radius: var(--border-radius);
+          box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+          cursor: pointer;
+          padding: 0.5rem 1rem;
+          transition: all 0.2s;
+          color: var(--brand-dark);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          font-size: 0.85rem;
+        }
+
+        .btn:hover {
+          background-color: rgba(255, 255, 255, 0.9);
+          transform: translateY(-1px);
+        }
+
+        .btn.primary {
+          background-color: var(--brand-medium);
+          color: white;
+          border-color: var(--brand-dark);
+        }
+
+        .btn.primary:hover { background-color: var(--brand-dark); }
+
+        .btn.secondary {
+          background-color: var(--surface-bg);
+          color: var(--brand-dark);
+        }
+
+        .btn.danger {
+          background-color: #ef4444;
+          color: white;
+          border-color: #dc2626;
+        }
+
+        /* Re-incorporating App Styles */
+        .brand { padding: 1rem; border-bottom: 1px solid var(--border-color); background-color: rgba(255, 255, 255, 0.3); }
+        .brand h1 { margin: 0; font-family: var(--font-primary); color: var(--brand-dark); font-size: 1.5rem; font-weight: 900; text-transform: uppercase; }
+        .sidebar-actions { padding: 1rem; border-bottom: 1px solid var(--border-color); display: flex; gap: 0.5rem; align-items: center; }
+        .sidebar-actions .btn { flex: 1; padding: 0; height: 44px; }
+        #voyage-list, #itinerary-list { flex: 1; overflow-y: auto; padding: 1rem; }
+        .voyage-item, .day-item { 
+            background-color: var(--surface-bg-dim-light); 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--border-radius); 
+            margin-bottom: 5px; 
+            padding: 0.75rem; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+        }
+        .voyage-item h3 { margin: 0 0 0.3rem 0; font-family: var(--font-primary); font-weight: 900; color: var(--brand-dark); font-size: 1.1rem; }
+        .voyage-item p { margin: 0; color: var(--text-light); font-size: 0.9rem; }
+        .btn-icon { background: none; border: none; cursor: pointer; padding: 0.2rem; color: var(--text-light); display: flex; align-items: center; }
+        .btn-icon .material-symbols-outlined { font-size: 20px; }
+        .btn-icon:hover { color: var(--brand-medium); transform: scale(1.1); }
+        
+        /* Auth Container */
+        #auth-container { position: absolute; top: 10px; right: 10px; z-index: 100; display: flex; gap: 8px; }
+        #user-floating-menu {
+            display: flex; align-items: center; gap: 10px; background-color: var(--surface-bg); backdrop-filter: blur(10px);
+            border: 2px solid var(--border-color); border-radius: 30px; padding: 5px 15px 5px 5px; box-shadow: var(--shadow-main);
+        }
+        #user-floating-menu .avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--brand-medium); }
+        
+        /* Ticker */
+        #research-ticker {
+            margin: 1rem; padding: 1rem 1.5rem; background: linear-gradient(135deg, var(--surface-bg-dim) 0%, var(--surface-bg) 100%);
+            border: 2px solid var(--brand-medium); border-radius: var(--border-radius); display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; overflow: hidden;
+        }
+        #ticker-text { margin: 0; font-family: var(--font-primary); font-weight: 700; color: var(--brand-dark); }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Controls */
+        #facility-controls, #pilot-controls, #discovery-controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background-color: var(--surface-bg); backdrop-filter: blur(10px); border: 2px solid var(--border-color);
+            border-radius: var(--border-radius); box-shadow: var(--shadow-main); padding: 0.75rem 1.25rem; z-index: 100;
+        }
+        #discovery-controls { min-width: 400px; display: flex; gap: 1rem; align-items: center; }
+        .pilot-legend { display: flex; gap: 0.5rem; }
+        .pilot-filter-btn {
+            display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; border: 2px solid var(--border-color);
+            border-radius: 20px; background: transparent; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+        }
+        .pilot-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        
+        /* Modals */
+        .modal-mock-overlay { background: rgba(0,0,0,0.3); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .modal {
+          background-color: var(--surface-bg); backdrop-filter: blur(10px); border: 2px solid var(--border-color);
+          border-radius: var(--border-radius); box-shadow: var(--shadow-main); padding: 2rem; width: 90%; max-width: 450px;
+        }
+        .modal h2 { margin-top: 0; font-family: var(--font-primary); font-weight: 900; color: var(--brand-dark); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-family: var(--font-primary); font-weight: 900; color: var(--brand-dark); font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; }
+        .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; }
+
+        /* Report */
+        .report-body { font-family: var(--font-secondary); padding: 1rem; }
+        .report-day-header { padding: 0.8rem; border-left: 5px solid var(--brand-medium); color: var(--brand-dark); font-family: var(--font-primary); margin-bottom: 0.5rem; }
+        .briefing-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 1rem; }
+        .briefing-th { text-align: left; font-weight: bold; padding: 4px 8px; background-color: var(--brand-lighter); }
+        .briefing-td { padding: 4px 8px; border-bottom: 1px solid #eee; }
+
+        /* Utility */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .justify-between { justify-content: space-between; }
+        .align-center { align-items: center; }
+        .gap-sm { gap: 0.5rem; }
+        .gap-md { gap: 1rem; }
+        .w-full { width: 100%; }
+        .hidden { display: none !important; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+        .badge-gem { background-color: #9c27b0; }
+        .badge-regional { background-color: #ff9800; }
+        .text-brand-medium { color: var(--brand-medium); }
+        .text-gray { color: #666; }
+        
+        #health-warning {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            background-color: #d32f2f; color: white; padding: 8px 16px; border-radius: 20px;
+            display: flex; align-items: center; gap: 10px; font-weight: bold;
+        }
+
+        /* --- Ticker Overlay Canvas --- */
+        .ticker-canvas { position: absolute; pointer-events: none; }
+
+        /* --- Map Marker Icons (AdvancedMarkerElement content divs) --- */
+        .map-marker-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            cursor: pointer;
+        }
+
+        .map-marker-icon--sm {
+            width: 28px;
+            height: 28px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .map-icon-glyph {
+            font-size: 18px;
+            color: #ffffff;
+        }
+
+        /* Gallery specific tweaks */
+        .component-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #555;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <header style="margin-bottom: 3rem; text-align: center;">
+        <h1 style="font-family: var(--font-primary); color: var(--brand-dark); font-size: 3rem; margin: 0;">UI GALLERY</h1>
+        <p style="color: var(--text-light);">NavalPlan Interface Components Inventory</p>
+    </header>
+
+    <div class="gallery-section">
+        <h2>Main Application Surface</h2>
+        <div class="component-container">
+            <div id="auth-container">
+                <div id="user-floating-menu">
+                    <img src="https://via.placeholder.com/32" class="avatar" alt="User">
+                    <span class="font-bold">Captain Nemo</span>
+                    <button class="btn-icon"><span class="material-symbols-outlined">logout</span></button>
+                </div>
+                <a href="#" id="btn-help-floating" class="btn secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0;">
+                    <span class="material-symbols-outlined">help</span>
+                </a>
+            </div>
+
+            <nav id="sidebar">
+                <div class="brand flex justify-between align-center">
+                  <h1>Plan</h1>
+                </div>
+
+                <div id="research-ticker">
+                    <span class="material-symbols-outlined spin">radar</span>
+                    <p id="ticker-text">Researching weather for Gulf Islands...</p>
+                </div>
+                
+                <div class="sidebar-actions">
+                   <button class="btn primary">+ New Voyage</button>
+                   <button class="btn secondary">
+                      <span class="material-symbols-outlined">explore</span>
+                      Discover
+                   </button>
+                </div>
+
+                <div id="voyage-list">
+                    <div class="voyage-item">
+                        <div class="voyage-info">
+                            <h3>Summer Cruise 2025</h3>
+                            <p>Gulf Islands • 7 Days</p>
+                        </div>
+                        <div class="voyage-actions">
+                            <button class="btn-icon"><span class="material-symbols-outlined">edit</span></button>
+                            <button class="btn-icon"><span class="material-symbols-outlined">delete</span></button>
+                        </div>
+                    </div>
+                    <div class="voyage-item">
+                        <div class="voyage-info">
+                            <h3>Weekend Getaway</h3>
+                            <p>Desolation Sound • 3 Days</p>
+                        </div>
+                        <div class="voyage-actions">
+                            <button class="btn-icon"><span class="material-symbols-outlined">edit</span></button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <div id="facility-controls">
+                <div class="pilot-legend-container">
+                  <span class="pilot-legend-title">Filter Facilities</span>
+                  <div class="pilot-legend">
+                    <button class="pilot-filter-btn active"><span class="pilot-dot" style="background-color: #388E3C;"></span>Anchorages</button>
+                    <button class="pilot-filter-btn active"><span class="pilot-dot" style="background-color: #E65100;"></span>Marinas</button>
+                    <button class="pilot-filter-btn"><span class="pilot-dot" style="background-color: #7B1FA2;"></span>Moorings</button>
+                  </div>
+                </div>
+            </div>
+
+            <div id="health-warning">
+                <span class="material-symbols-outlined">warning</span>
+                Backend Connection Lost
+            </div>
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Itinerary View</h2>
+        <div class="component-container" style="height: 500px;">
+            <nav id="sidebar">
+                <div class="brand flex justify-between align-center">
+                  <h1>Plan</h1>
+                </div>
+
+                <div id="itinerary-view">
+                  <div class="sidebar-actions">
+                    <button class="btn secondary">&larr; Back</button>
+                    <button class="btn secondary"><span class="material-symbols-outlined">map</span></button>
+                    <button class="btn secondary"><span class="material-symbols-outlined">travel_explore</span></button>
+                    <button class="btn secondary"><span class="material-symbols-outlined">description</span></button>
+                  </div>
+                  <div class="voyage-header">
+                    <div class="flex justify-between align-start">
+                      <h2 id="itinerary-title">Summer Cruise 2025</h2>
+                      <button class="btn-icon"><span class="material-symbols-outlined">edit</span></button>
+                    </div>
+                    <p id="itinerary-dates">Aug 12 - Aug 19, 2025</p>
+                  </div>
+                  <div id="itinerary-list">
+                    <div class="day-item">
+                        <span class="day-date">Tue, Aug 12</span>
+                        <span class="day-location">Departure: Vancouver</span>
+                    </div>
+                    <div class="day-item" style="border-color: var(--brand-medium); border-width: 2px; background-color: rgba(149, 104, 45, 0.1);">
+                        <span class="day-date">Wed, Aug 13</span>
+                        <span class="day-location" style="color: var(--brand-green-dark); font-weight: bold;">Montague Harbour</span>
+                        <button class="btn-icon"><span class="material-symbols-outlined">science</span></button>
+                    </div>
+                    <div class="day-item">
+                        <span class="day-date">Thu, Aug 14</span>
+                        <span class="day-location italic">No stop selected</span>
+                    </div>
+                  </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Commodore Mode Controls</h2>
+        <div class="component-container" style="height: 250px;">
+            <div id="discovery-controls">
+                <div class="month-slider-container">
+                  <label>Month: <span id="month-display" style="color: var(--brand-medium);">July</span></label>
+                  <input type="range" min="1" max="12" value="7" style="width: 100%;">
+                  <div class="discovery-legend" style="display: flex; gap: 1rem; font-size: 0.75rem; margin-top: 0.5rem;">
+                    <div class="flex align-center gap-sm"><span class="badge badge-standard" style="width:8px; height:8px; border-radius:50%; padding:0;"></span>Standard</div>
+                    <div class="flex align-center gap-sm"><span class="badge badge-regional" style="width:8px; height:8px; border-radius:50%; padding:0;"></span>Regional</div>
+                    <div class="flex align-center gap-sm"><span class="badge badge-gem" style="width:8px; height:8px; border-radius:50%; padding:0;"></span>Hidden Gem</div>
+                  </div>
+                </div>
+                <button class="btn-icon"><span class="material-symbols-outlined">close</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Modals & Forms</h2>
+        <div class="flex gap-md" style="flex-wrap: wrap;">
+            
+            <!-- New Voyage Modal Mock -->
+            <div class="modal" style="position: static; transform: none; max-width: 400px;">
+                <h2>Plan a New Voyage</h2>
+                <form>
+                  <div class="form-group">
+                    <label>Trip Title</label>
+                    <input type="text" value="Gulf Islands 2025" />
+                  </div>
+                  <div class="form-group">
+                    <label>Starting Location</label>
+                    <div class="flex gap-sm">
+                      <input type="text" placeholder="e.g. Seattle" />
+                      <button type="button" class="btn secondary">Map</button>
+                    </div>
+                  </div>
+                  <div class="form-row flex gap-md">
+                    <div class="form-group flex-1">
+                      <label>Start Date</label>
+                      <input type="date" />
+                    </div>
+                    <div class="form-group flex-1">
+                      <label>End Date</label>
+                      <input type="date" />
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" class="btn secondary">Cancel</button>
+                    <button type="submit" class="btn primary">Create Voyage</button>
+                  </div>
+                </form>
+            </div>
+
+            <!-- Notification Modal Mock -->
+            <div class="modal" style="position: static; transform: none; text-center; max-width: 300px; text-align: center;">
+                <h2 class="mb-md">Welcome!</h2>
+                <p class="text-dark">Your voyage has been created successfully. Start adding stops by clicking on the map.</p>
+                <div class="flex flex-col gap-sm mt-md">
+                    <button class="btn primary w-full">Got it!</button>
+                </div>
+            </div>
+
+            <!-- Empty Voyage Prompt -->
+            <div class="modal" style="position: static; transform: none; max-width: 350px;">
+                <div class="flex flex-col align-center text-center">
+                    <span class="material-symbols-outlined text-brand-medium" style="font-size: 64px; margin-bottom: 1rem;">explore</span>
+                    <h2>Your Voyage is Empty</h2>
+                    <p class="text-gray mb-lg">How would you like to start planning?</p>
+                    <div class="flex flex-col gap-md w-full">
+                      <button class="btn primary w-full">Research Hubs & Spots</button>
+                      <p class="font-xs text-gray uppercase m-0">or</p>
+                      <button class="btn secondary w-full">Select Stops Manually</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Content Components (Briefing/Report)</h2>
+        <div class="glass-panel" style="background: white; border-radius: 8px; padding: 2rem;">
+            <div class="report-body">
+                <h2 class="report-title" style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 0.5rem;">Voyage Report</h2>
+                <p style="text-align: center; font-style: italic;">Summer Cruise 2025 • Aug 12 - Aug 19</p>
+
+                <div class="report-section-wrapper" style="margin-top: 2rem;">
+                    <h3 class="report-day-header">Day 2: Montague Harbour</h3>
+                    <p class="text-gray">Wednesday, August 13, 2025</p>
+
+                    <table class="briefing-table">
+                        <thead>
+                            <tr>
+                                <th class="briefing-th">Feature</th>
+                                <th class="briefing-th">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="briefing-td font-bold">Weather</td>
+                                <td class="briefing-td">Sunny, Winds NW 10-15 kts, Temp 22°C</td>
+                            </tr>
+                            <tr>
+                                <td class="briefing-td font-bold">Tides</td>
+                                <td class="briefing-td">High: 14:20 (3.2m), Low: 08:45 (0.5m)</td>
+                            </tr>
+                            <tr>
+                                <td class="briefing-td font-bold">Anchorages</td>
+                                <td class="briefing-td">Excellent shelter in North end, mud bottom.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 style="margin-top: 1.5rem; color: var(--brand-medium);">Local Highlights</h4>
+                    <p>Montague Harbour is famous for its white shell beaches and the Montague Harbour Provincial Park. The "Hummingbird Pub" bus is a local tradition.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Map Markers</h2>
+        <div class="component-container" style="height: 300px; display: flex; align-items: center; justify-content: center; gap: 2rem;">
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #388E3C; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">anchor</span>
+                </div>
+                <span class="font-xs font-bold">Anchorage</span>
+            </div>
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #7B1FA2; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">crisis_alert</span>
+                </div>
+                <span class="font-xs font-bold">Mooring</span>
+            </div>
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #E65100; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">hub</span>
+                </div>
+                <span class="font-xs font-bold">Marina / Hub</span>
+            </div>
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #5D4037; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">restaurant</span>
+                </div>
+                <span class="font-xs font-bold">Restaurant</span>
+            </div>
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #F9A825; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">local_bar</span>
+                </div>
+                <span class="font-xs font-bold">Bar</span>
+            </div>
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon" style="background-color: #455A64; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph">location_on</span>
+                </div>
+                <span class="font-xs font-bold">Other / Default</span>
+            </div>
+            
+            <div style="width: 2px; height: 50px; background: rgba(0,0,0,0.2); margin: 0 1rem;"></div>
+            
+            <div class="flex flex-col align-center gap-sm">
+                <div class="map-marker-icon map-marker-icon--sm" style="background-color: #388E3C; position: static;">
+                    <span class="material-symbols-outlined map-icon-glyph" style="font-size: 14px;">anchor</span>
+                </div>
+                <span class="font-xs">Small (Filter)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="gallery-section">
+        <h2>Buttons & Icons</h2>
+        <div class="flex gap-md" style="flex-wrap: wrap; align-items: center;">
+            <button class="btn primary">Primary Button</button>
+            <button class="btn secondary">Secondary Button</button>
+            <button class="btn danger">Danger Button</button>
+            <button class="btn secondary" style="width: 44px; height: 44px; padding: 0;">
+                <span class="material-symbols-outlined">settings</span>
+            </button>
+            <button class="btn-icon"><span class="material-symbols-outlined">edit</span></button>
+            <button class="btn-icon" style="color: #d9534f;"><span class="material-symbols-outlined">delete</span></button>
+            
+            <div class="flex align-center gap-sm">
+                <span class="badge badge-gem">Hidden Gem</span>
+                <span class="badge badge-regional">Regional</span>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center; padding: 4rem; color: var(--brand-dark); font-family: var(--font-primary);">
+        <p>&copy; 2026 NavalPlan UI Laboratory</p>
+    </footer>
+
+</body>
+</html>
