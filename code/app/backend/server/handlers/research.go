@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -172,6 +173,41 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
 	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Starting research for %s", stop.LocationName))
+
+	// Item 16: Check if this is the last stop and identical to the first stop
+	stops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
+	if err == nil && len(stops) > 1 {
+		first := stops[0]
+		last := stops[len(stops)-1]
+
+		if stop.ID == last.ID {
+			// Compare coordinates
+			const threshold = 0.001 // Approx 111 meters
+			latDiff := math.Abs(first.Latitude - last.Latitude)
+			lngDiff := math.Abs(first.Longitude - last.Longitude)
+
+			if latDiff < threshold && lngDiff < threshold {
+				slog.InfoContext(ctx, "Redundant last stop detected, attempting to clone briefing from first stop", "stop_id", stop.ID, "first_stop_id", first.ID)
+
+				firstBriefing, err := h.DB.GetBriefing(ctx, first.ID)
+				if err == nil && firstBriefing != nil {
+					h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from first stop for %s", stop.LocationName))
+
+					newBriefing := &models.Briefing{
+						StopID:         stop.ID,
+						WeatherSummary: firstBriefing.WeatherSummary,
+						SunPhase:       firstBriefing.SunPhase,
+						Tides:          firstBriefing.Tides,
+						Facilities:     firstBriefing.Facilities,
+					}
+					if err := h.DB.CreateBriefing(ctx, newBriefing); err == nil {
+						h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", stop.LocationName))
+						return
+					}
+				}
+			}
+		}
+	}
 
 	const appName = "harbourmaster"
 	const userID = "system"
@@ -383,8 +419,24 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			h.performGuideResearch(voyage, sessionID)
 		}()
 
+		// Identify redundant last stop to avoid double AI calls in parallel runs
+		var redundantLastStop *models.Stop
+		var firstStopID int64
+		if len(stops) > 1 {
+			first := stops[0]
+			last := stops[len(stops)-1]
+			firstStopID = first.ID
+			const threshold = 0.001
+			if math.Abs(first.Latitude-last.Latitude) < threshold && math.Abs(first.Longitude-last.Longitude) < threshold {
+				redundantLastStop = &last
+			}
+		}
+
 		// 2. Research each stop (Parallel)
 		for _, stop := range stops {
+			if redundantLastStop != nil && stop.ID == redundantLastStop.ID {
+				continue // Skip the redundant last stop for now
+			}
 			wg.Add(1)
 			h.ResearchSem <- struct{}{} // Block until a slot is available
 			go func(s models.Stop) {
@@ -396,6 +448,31 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		}
 
 		wg.Wait()
+
+		// 3. Handle redundant last stop by cloning the first stop's briefing
+		if redundantLastStop != nil {
+			slog.InfoContext(ctx, "Cloning first stop briefing to redundant last stop", "voyage_id", voyageID, "last_stop_id", redundantLastStop.ID)
+			firstBriefing, err := h.DB.GetBriefing(ctx, firstStopID)
+			if err == nil && firstBriefing != nil {
+				newBriefing := &models.Briefing{
+					StopID:         redundantLastStop.ID,
+					WeatherSummary: firstBriefing.WeatherSummary,
+					SunPhase:       firstBriefing.SunPhase,
+					Tides:          firstBriefing.Tides,
+					Facilities:     firstBriefing.Facilities,
+				}
+				if err := h.DB.CreateBriefing(ctx, newBriefing); err != nil {
+					slog.ErrorContext(ctx, "Failed to clone briefing for redundant last stop", "error", err)
+				} else {
+					h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", redundantLastStop.LocationName))
+				}
+			} else {
+				// Fallback: If for some reason the first one failed or is missing, try researching it normally
+				slog.WarnContext(ctx, "First stop briefing missing for cloning, falling back to full research for last stop")
+				h.performStopResearchLogic(redundantLastStop, sessionID)
+			}
+		}
+
 		slog.InfoContext(ctx, fmt.Sprintf("Full research complete for voyage %d", voyageID))
 	}()
 }

@@ -578,7 +578,8 @@ func TestResearchBriefing(t *testing.T) {
 	// Trigger
 	mockStore.On("GetStop", stopID).Return(&models.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID}, nil)
-	// performStopResearchLogic (async) calls GetNearbyBriefing. We allow it.
+	// performStopResearchLogic (async) calls ListStops and GetNearbyBriefing. We allow them.
+	mockStore.On("ListStops", voyageID, 0, 0).Return([]models.Stop{}, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	// Agent at "http://test-agent" will fail → saveEmptyBriefing calls CreateBriefing.
 	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
@@ -646,6 +647,11 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 	}, nil)
 
 	// Async stops research
+	mockStore.On("ListStops", mock.Anything, 0, 0).Return([]models.Stop{
+		{ID: 10, LocationName: "Stop 1"},
+		{ID: 11, LocationName: "Stop 2"},
+	}, nil).Maybe()
+	mockStore.On("GetBriefing", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	// Agent at "http://test-agent" will fail → saveEmptyBriefing / saveEmptyGuide are called.
 	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
