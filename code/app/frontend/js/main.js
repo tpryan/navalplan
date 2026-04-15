@@ -515,10 +515,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
   console.log('NavalPlan: Initializing...');
-  
+
+  const path = window.location.pathname;
+
   // Shared/Public View Handler
-  if (window.location.pathname.startsWith('/shared/')) {
-      const token = window.location.pathname.replace('/shared/', '');
+  if (path.startsWith('/shared/')) {
+      const token = path.replace('/shared/', '');
       if (token) {
           initSharedMode(token);
           return;
@@ -530,12 +532,37 @@ function initApp() {
   initUI();
   initAdminUI();
   initOnboarding();
-  loadVoyages();
+
+  // Back button handling
+  window.addEventListener('popstate', async (e) => {
+      const p = window.location.pathname;
+      if (p === '/' || p === '/index.html') {
+          showVoyageList(false);
+      } else if (p.startsWith('/voyages/')) {
+          const id = parseInt(p.replace('/voyages/', ''));
+          if (!isNaN(id)) {
+              // Try to find in cache first
+              const v = voyages.find(v => v.id === id) || { id };
+              selectVoyage(v, false);
+          }
+      }
+  });
+
+  // Load data and handle initial route
+  loadVoyages().then(async () => {
+      if (path.startsWith('/voyages/')) {
+          const id = parseInt(path.replace('/voyages/', ''));
+          if (!isNaN(id)) {
+              const v = voyages.find(v => v.id === id) || { id };
+              await selectVoyage(v, false);
+          }
+      }
+  });
+
   startHealthCheck();
 }
 
-function startHealthCheck() {
-    const warning = document.getElementById('health-warning');
+function startHealthCheck() {    const warning = document.getElementById('health-warning');
     if (!warning) return;
 
     const check = async () => {
@@ -1281,7 +1308,10 @@ function openEditModal(voyage) {
     modalNewVoyage.classList.remove('hidden');
 }
 
-function showVoyageList() {
+function showVoyageList(doPushState = true) {
+    if (doPushState && window.location.pathname !== '/') {
+        window.history.pushState({}, '', '/');
+    }
     document.getElementById('voyage-list').classList.remove('hidden');
     document.getElementById('itinerary-view').classList.add('hidden');
     document.querySelector('.sidebar-actions').classList.remove('hidden');
@@ -1320,7 +1350,10 @@ function updateItineraryHeader(voyage) {
     }
 }
 
-async function selectVoyage(voyage) {
+async function selectVoyage(voyage, doPushState = true) {
+    if (doPushState) {
+        window.history.pushState({ voyageId: voyage.id }, '', `/voyages/${voyage.id}`);
+    }
     try {
         // Fetch full voyage details to ensure we have search_radius and other fields
         const fullVoyage = await API.getVoyage(voyage.id);
@@ -3978,9 +4011,9 @@ async function toggleDiscoveryMode(active) {
         }
         
         if (currentVoyage) {
-            selectVoyage(currentVoyage); // Restore voyage view
+            selectVoyage(currentVoyage, false); // Restore voyage view
         } else {
-            showVoyageList();
+            showVoyageList(false);
         }
     }
 }

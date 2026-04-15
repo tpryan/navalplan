@@ -11,8 +11,9 @@
     * The map is too zoomed out to be really that useful. It would be best if the zoom matched made it so the search radius was just contained.  
 10. Done. Destination Guide -> Points of interest. Links would be super helpful here. 
 11. Done. Voyage Report -> Day Report -> Weather Outlook -> Getting consistent Precipitation Undefined errors.  
-12. Add a map with POI to the Voyage report for each stop. It should be limited to the same search radius we use for the stops. It should also be a static map.  
+12. Done. Add a map with POI to the Voyage report for each stop. It should be limited to the same search radius we use for the stops. It should also be a static map.  
 13. Done. Sometimes I get distance: unknown for airports in the destination guide. That should be fixed. The BVI entry currently in the database has this problem. 
 14. Done. After running local pilot search the #itinerary-list still reads: "Researching area..." instead of showing the list of resources. 
 15. Done. After running the stop report this message appears: Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop. Be we did just run the full report, so this is unnecessary
 16. Done. If we can figure out ahead of time that stop 1 and 4 are the same place, we can avoid making a model heavy call that's redundant by omitting the last stop. 
+17. We should have better navigation on the front end.  I'd like to have deep linking to trips, and back button history rewriting so that we can navigate through the app's state using the browser. 
