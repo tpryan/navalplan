@@ -106,6 +106,11 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/discovery/mine", http.HandlerFunc(s.Handler.DiscoveryMining), 1},       // Protected
 		{http.MethodDelete, "/api/v1/discovery/regions/{regionID}/months/{month}", http.HandlerFunc(s.Handler.DeleteDiscoveryRegionSeasonality), 1},
 
+		// --- Static Pages ---
+		{http.MethodGet, "/help", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, filepath.Join(staticPath, "help.html"))
+		}), 0},
+
 		// --- Static Files Catch-All (Public) ---
 		{http.MethodGet, "/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))

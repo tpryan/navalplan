@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -262,9 +263,9 @@ func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request
 	// Respond immediately
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
-		"msg":                "Recommendation generation started",
-		"voyage_id":          idStr,
-		"session_id":         sessionID,
+		"msg":                 "Recommendation generation started",
+		"voyage_id":           idStr,
+		"session_id":          sessionID,
 		"progress_session_id": progressSessionID,
 	})
 
@@ -322,6 +323,9 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 	fullText, err := h.Agent.RunStreaming(ctx, appName, userID, sessionID, prompt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
+		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
+			h.broadcastProgress(progressSessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
+		}
 		return
 	}
 

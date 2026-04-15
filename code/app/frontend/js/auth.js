@@ -86,7 +86,7 @@ function updateUIForLogin(person) {
     }
 
     const helpLink = document.createElement('a');
-    helpLink.href = '/help.html';
+    helpLink.href = '/help';
     helpLink.target = '_blank';
     helpLink.className = 'btn-icon';
     helpLink.title = 'User Guide';
@@ -96,7 +96,7 @@ function updateUIForLogin(person) {
     actions.appendChild(logoutLink);
     menu.appendChild(img);
     menu.appendChild(actions);
-    
+
     container.appendChild(menu);
 }
 
@@ -106,7 +106,7 @@ function updateUIForLogout() {
     const sidebar = document.getElementById('sidebar');
     const mapContainer = document.getElementById('map-container');
     const btnNewVoyage = document.getElementById('btn-new-voyage');
-    
+
     if (!container) return;
 
     // Show App Content (allow exploration without login)
@@ -117,7 +117,7 @@ function updateUIForLogout() {
     // Show simple floating login button + help link
     container.className = '';
     container.innerHTML = `
-        <a href="/help.html" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide">
+        <a href="/help" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide">
             <span class="material-symbols-outlined">help_outline</span>
         </a>
         <a href="/auth/google/login" id="btn-login-floating" class="btn primary">
