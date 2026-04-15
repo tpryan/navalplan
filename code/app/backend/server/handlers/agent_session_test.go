@@ -28,6 +28,14 @@ type sessionTrackingStore struct {
 	guides     []*models.VoyageGuide
 }
 
+func (s *sessionTrackingStore) ListStops(_ context.Context, _ int64, _, _ int) ([]models.Stop, error) {
+	return nil, nil
+}
+
+func (s *sessionTrackingStore) GetBriefing(_ context.Context, _ int64) (*models.Briefing, error) {
+	return nil, nil
+}
+
 func (s *sessionTrackingStore) GetNearbyBriefing(_ context.Context, _, _ float64) (*models.Briefing, error) {
 	return nil, nil
 }
