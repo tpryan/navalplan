@@ -486,6 +486,8 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 
 	individualTool := agenttool.New(searchAgent, nil)
 
+	sessionSvc := &autoCreateSessionService{session.InMemoryService()}
+
 	// Create the batch tool that uses the search agent in parallel
 	batchTool := &tools.BatchSearchTool{
 		Searcher: func(ctx context.Context, query string) (string, error) {
@@ -493,7 +495,7 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 			r, err := runner.New(runner.Config{
 				AppName:        name,
 				Agent:          searchAgent,
-				SessionService: session.InMemoryService(), // Temporary session for the sub-search
+				SessionService: sessionSvc,
 			})
 
 			if err != nil {

@@ -1567,6 +1567,11 @@ async function executeResearchAll() {
         // Stream progress updates into ticker
         if (fullResRes && fullResRes.session_id && researchTicker) {
             _fullResProgressES = API.streamProgress(fullResRes.session_id, (evt) => {
+                if (evt.stage === 'error_503') {
+                    set503Callback((count) => {})(1); // Force a 503 check/notification
+                    showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
+                    return;
+                }
                 researchTicker.push(evt.message);
             });
         }
@@ -2570,6 +2575,11 @@ async function handleResearchClick(stop, button) {
         // Stream progress updates into the ticker
         if (resRes.session_id && researchTicker) {
             _stopProgressES = API.streamProgress(resRes.session_id, (evt) => {
+                if (evt.stage === 'error_503') {
+                    set503Callback((count) => {})(1); // Force a 503 check/notification
+                    showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
+                    return;
+                }
                 researchTicker.push(evt.message);
             });
         }
@@ -3021,7 +3031,12 @@ async function redoBriefing(oldBriefing, btn) {
         let redoProgressES = null;
         if (redoRes && redoRes.session_id && researchTicker) {
             researchTicker.start();
-            redoProgressES = API.streamProgress(redoRes.session_id, (evt) => {
+            _stopProgressES = API.streamProgress(redoRes.session_id, (evt) => {
+                if (evt.stage === 'error_503') {
+                    set503Callback((count) => {})(1); // Force a 503 check/notification
+                    showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
+                    return;
+                }
                 researchTicker.push(evt.message);
             });
         }
@@ -3810,6 +3825,11 @@ async function handleGuideClick(voyage, button, doPushState = true) {
         if (guideRes && guideRes.session_id && researchTicker) {
             researchTicker.start();
             _guideProgressES = API.streamProgress(guideRes.session_id, (evt) => {
+                if (evt.stage === 'error_503') {
+                    set503Callback((count) => {})(1); // Force a 503 check/notification
+                    showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
+                    return;
+                }
                 researchTicker.push(evt.message);
             });
         }

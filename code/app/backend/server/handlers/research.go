@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -249,6 +250,9 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
+		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
+			h.broadcastProgress(sessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
+		}
 		h.saveEmptyBriefing(ctx, stop)
 		return
 	}
