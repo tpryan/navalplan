@@ -16,4 +16,4 @@
 14. Done. After running local pilot search the #itinerary-list still reads: "Researching area..." instead of showing the list of resources. 
 15. Done. After running the stop report this message appears: Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop. Be we did just run the full report, so this is unnecessary
 16. Done. If we can figure out ahead of time that stop 1 and 4 are the same place, we can avoid making a model heavy call that's redundant by omitting the last stop. 
-17. We should have better navigation on the front end.  I'd like to have deep linking to trips, and back button history rewriting so that we can navigate through the app's state using the browser. 
+17. Done. We should have better navigation on the front end.  I'd like to have deep linking to trips, and back button history rewriting so that we can navigate through the app's state using the browser. 
