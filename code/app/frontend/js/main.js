@@ -3,7 +3,7 @@ import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
 import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
-import { loadTheme, cycleTheme } from './theme.js';
+import { loadTheme, cycleTheme, currentTheme } from './theme.js';
 
 const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
 setOptions({
@@ -678,7 +678,9 @@ function initThemeToggle() {
     container.addEventListener('click', (e) => {
         if (e.target.closest('#btn-theme-toggle')) {
             const next = cycleTheme();
-            showNotification('Theme', `Switched to ${next.label}`);
+            // colorScheme is immutable after Map construction — reload so
+            // initMap picks up the new theme with the correct colorScheme.
+            window.location.reload();
         }
     });
 }
@@ -3150,10 +3152,15 @@ async function initMap() {
   const { Map } = await loadGoogleMaps();
   const { Geocoder } = await importLibrary("geocoding");
 
+  const isMidnightMariner = currentTheme() === 'midnight-mariner';
+
+  console.log('NavalPlan: Map init — theme:', currentTheme(), '| colorScheme:', isMidnightMariner ? 'DARK' : 'LIGHT');
+
   map = new Map(document.getElementById("map-container"), {
     center: { lat: 20, lng: 0 },
     zoom: 3,
     mapId: __GOOGLE_MAPS_MAP_ID__,
+    colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
     clickableIcons: false
   });
@@ -3390,11 +3397,12 @@ async function initMap() {
 
     // Draw Line
     const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
-    
+    const routeLineColor = getComputedStyle(document.documentElement).getPropertyValue('--color-route-line').trim() || '#314c3b';
+
     routePolyline = new Polyline({
       path: coords,
       geodesic: true,
-      strokeColor: "#314c3b",
+      strokeColor: routeLineColor,
       strokeOpacity: 0,
       icons: [{
         icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },

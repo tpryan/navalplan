@@ -86,6 +86,9 @@
     --chart-grid-zero:        #333333;
     --chart-grid-default:     rgba(0, 0, 0, 0.1);
     --chart-axis-text:        #777777;
+
+    /* Map */
+    --color-route-line:       #314c3b;
 }
 
 /* ----------------------------------------
@@ -170,6 +173,9 @@
     --chart-grid-zero:        rgba(255, 255, 255, 0.3);
     --chart-grid-default:     rgba(255, 255, 255, 0.07);
     --chart-axis-text:        #94A3B8;
+
+    /* Map */
+    --color-route-line:       #00E5FF;
 }
 
 /* ----------------------------------------
