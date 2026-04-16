@@ -263,10 +263,10 @@
 }
 
 .overview-card {
-    border: 1px solid #ccc;
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 8px;
-    background: #fff;
+    background: var(--card-bg);
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
@@ -376,7 +376,7 @@
     left: 50%;
     transform: translateX(-50%);
     background-color: var(--surface-bg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--backdrop-filter);
     border: 2px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-main);
@@ -390,7 +390,7 @@
     left: 50%;
     transform: translateX(-50%);
     background-color: var(--surface-bg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--backdrop-filter);
     border: 2px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-main);
@@ -458,7 +458,7 @@
     left: 50%;
     transform: translateX(-50%);
     background-color: var(--surface-bg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--backdrop-filter);
     border: 2px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-main);
@@ -658,14 +658,14 @@
 }
 
 .pilot-radius-label {
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: var(--surface-bg, rgba(255, 255, 255, 0.9));
     padding: 2px 8px;
     border-radius: 4px;
-    border: 1px solid #1a73e8;
+    border: 1px solid var(--color-radar, #1a73e8);
     margin-top: 4px;
     white-space: nowrap;
     font-size: 12px;
-    color: #1a73e8;
+    color: var(--color-radar, #1a73e8);
     font-weight: bold;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     pointer-events: none;
@@ -743,4 +743,60 @@
 .group-header {
     font-family: var(--font-primary);
     font-weight: 900;
+}
+
+/* --- Recommendation Item Layout --- */
+.rec-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.rec-name {
+    font-weight: 700;
+    flex: 1;
+}
+
+.rec-badge {
+    font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+.rec-icon {
+    font-size: 20px;
+}
+
+.rec-description {
+    margin: 0 0 6px;
+    font-size: 0.82rem;
+    color: var(--text-dark);
+    line-height: 1.4;
+}
+
+/* --- Pilot's Reasoning Block --- */
+.pilot-reasoning {
+    padding: 7px 10px;
+    border-radius: 5px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 8px;
+}
+
+.pilot-reasoning p {
+    margin: 0;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-light);
+}
+
+.pilot-reasoning strong {
+    font-style: normal;
 }

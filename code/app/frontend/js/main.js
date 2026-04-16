@@ -3,6 +3,7 @@ import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
 import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { loadTheme, cycleTheme } from './theme.js';
 
 const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
 setOptions({
@@ -658,13 +659,28 @@ async function reverseGeocode(latLng) {
 }
 
 function initUI() {
+    loadTheme();
     researchTicker = new Ticker('research-ticker');
+    initThemeToggle();
     initPilotAndFilterListeners();
     initDiscoveryListeners();
     initMobileMenuListeners();
     initVoyageModalListeners();
     initNavigationListeners();
     initModalCloseListeners();
+}
+
+function initThemeToggle() {
+    // btn-theme-toggle is injected by auth.js after session check,
+    // so listen on the container with event delegation.
+    const container = document.getElementById('auth-container');
+    if (!container) return;
+    container.addEventListener('click', (e) => {
+        if (e.target.closest('#btn-theme-toggle')) {
+            const next = cycleTheme();
+            showNotification('Theme', `Switched to ${next.label}`);
+        }
+    });
 }
 
 function initPilotAndFilterListeners() {
@@ -2090,8 +2106,8 @@ function showRecommendationInfoWindow(rec, anchor, style) {
             </div>
             <span style="font-size: 0.85rem; color: ${style.color}; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">${style.label}</span><br>
             <p style="margin: 10px 0; font-size: 0.9rem; line-height: 1.5; color: #333;">${rec.description || ''}</p>
-            <div style="background: ${style.color}1A; padding: 10px; border-radius: 6px; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
-                <p style="margin: 0; font-size: 0.85rem; font-style: italic; color: #555;">"${rec.reasoning || ''}"</p>
+            <div class="pilot-reasoning" style="background: ${style.color}1A; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
+                <p>"${rec.reasoning || ''}"</p>
             </div>
             ${resourcesHtml}
             ${addButton}
@@ -2201,11 +2217,12 @@ async function renderPilotCircle() {
     const center = { lat: currentVoyage.latitude, lng: currentVoyage.longitude };
 
     // Add Pilot Range Circle
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-radar').trim() || '#f59e0b';
     pilotCircle = new Circle({
-        strokeColor: "#1a73e8",
+        strokeColor: accentColor,
         strokeOpacity: 0.5,
         strokeWeight: 2,
-        fillColor: "#1a73e8",
+        fillColor: accentColor,
         fillOpacity: 0.05,
         map: map,
         center: center,
@@ -2377,17 +2394,15 @@ function renderItinerary() {
                 const el = document.createElement('div');
                 el.className = 'day-item day-item--stacked';
                 el.innerHTML = DOMPurify.sanitize(`
-                    <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">
-                        <span class="material-symbols-outlined" style="color:${recColor};font-size:20px;">${recIcon}</span>
-                        <span style="font-weight:700;flex:1;">${displayLocationName(rec.name)}</span>
-                        <span style="font-size:0.7rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${recColor};padding:2px 7px;border-radius:20px;white-space:nowrap;">${rec.type || 'Spot'}</span>
+                    <div class="rec-header">
+                        <span class="material-symbols-outlined rec-icon" style="color:${recColor};">${recIcon}</span>
+                        <span class="rec-name">${displayLocationName(rec.name)}</span>
+                        <span class="rec-badge" style="background:${recColor};">${rec.type || 'Spot'}</span>
                     </div>
-                    ${rec.description ? `<p style="margin:0 0 6px;font-size:0.82rem;color:var(--text-color);line-height:1.4;">${rec.description}</p>` : ''}
+                    ${rec.description ? `<p class="rec-description">${rec.description}</p>` : ''}
                     ${rec.reasoning ? `
-                        <div style="background:${recColor}1A;padding:7px 10px;border-radius:5px;border-left:3px solid ${recColor};width:100%;box-sizing:border-box;">
-                            <p style="margin:0;font-size:0.78rem;font-style:italic;color:#555;">
-                                <strong style="font-style:normal;color:${recColor};">Pilot's Reasoning:</strong> "${rec.reasoning}"
-                            </p>
+                        <div class="pilot-reasoning" style="background:${recColor}1A;border-left:3px solid ${recColor};">
+                            <p><strong style="color:${recColor};">Pilot's Reasoning:</strong> "${rec.reasoning}"</p>
                         </div>` : ''}
                 `);
                 el.onclick = () => {
@@ -2654,14 +2669,21 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
     if (chartInstances.has(canvasId)) { chartInstances.get(canvasId).destroy(); chartInstances.delete(canvasId); }
     const ctx = document.getElementById(canvasId).getContext('2d');
 
+    const cs = getComputedStyle(document.documentElement);
+    const tideLine    = cs.getPropertyValue('--chart-tide-line').trim()    || '#0077be';
+    const tideFill    = cs.getPropertyValue('--chart-tide-fill').trim()    || 'rgba(0, 119, 190, 0.2)';
+    const gridZero    = cs.getPropertyValue('--chart-grid-zero').trim()    || '#333333';
+    const gridDefault = cs.getPropertyValue('--chart-grid-default').trim() || 'rgba(0, 0, 0, 0.1)';
+    const axisText    = cs.getPropertyValue('--chart-axis-text').trim()    || '#777777';
+
     chartInstances.set(canvasId, new Chart(ctx, {
         type: 'line',
         data: {
             datasets: [{
                 label: 'Tide Height (ft)',
                 data: points,
-                borderColor: '#0077be',
-                backgroundColor: 'rgba(0, 119, 190, 0.2)',
+                borderColor: tideLine,
+                backgroundColor: tideFill,
                 borderWidth: 2,
                 tension: 0.4, // Smooth Bezier
                 pointRadius: 4,
@@ -2694,8 +2716,9 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
                     type: 'linear',
                     min: 0,
                     max: 24,
-                    title: { display: true, text: 'Hour (Local Time)' },
+                    title: { display: true, text: 'Hour (Local Time)', color: axisText },
                     ticks: {
+                        color: axisText,
                         stepSize: 3,
                         callback: (v) => {
                             if (v < 0 || v > 24) return '';
@@ -2704,13 +2727,14 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
                     }
                 },
                 y: {
-                    title: { display: true, text: 'Feet' },
+                    title: { display: true, text: 'Feet', color: axisText },
+                    ticks: { color: axisText },
                     grid: {
                         color: (context) => {
                             if (context.tick.value === 0) {
-                                return '#333'; // Darker color for zero line
+                                return gridZero;
                             }
-                            return 'rgba(0, 0, 0, 0.1)'; // Default grid color
+                            return gridDefault;
                         },
                         lineWidth: (context) => {
                             if (context.tick.value === 0) {
@@ -3416,8 +3440,15 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const points = parseTidePoints(tideData, targetDateStr, -6, 30);
 
     const Chart = await loadChart();
+
+    const cs = getComputedStyle(document.documentElement);
+    const tideLine      = cs.getPropertyValue('--chart-tide-line').trim()       || '#0077be';
+    const tideFillMini  = cs.getPropertyValue('--chart-tide-fill-mini').trim()  || 'rgba(0, 119, 190, 0.1)';
+    const highLabel     = cs.getPropertyValue('--chart-tide-high-label').trim() || '#d9534f';
+    const lowLabel      = cs.getPropertyValue('--chart-tide-low-label').trim()  || '#314c3b';
+
     const tideLevels = {
-  
+
           id: 'tideLevels',
   
           afterDraw: (chart) => {
@@ -3533,12 +3564,12 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   
   
               // Draw High
-  
-              if (maxPt) drawLabel(maxPt, '#d9534f', 'bottom');
-  
+
+              if (maxPt) drawLabel(maxPt, highLabel, 'bottom');
+
               // Draw Low
-  
-              if (minPt) drawLabel(minPt, '#314c3b', 'top');
+
+              if (minPt) drawLabel(minPt, lowLabel, 'top');
   
           }
   
@@ -3556,12 +3587,12 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
           data: {
   
               datasets: [{
-  
+
                   data: points,
-  
-                  borderColor: '#0077be',
-  
-                  backgroundColor: 'rgba(0, 119, 190, 0.1)',
+
+                  borderColor: tideLine,
+
+                  backgroundColor: tideFillMini,
   
                   borderWidth: 2,
   
@@ -4747,13 +4778,11 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         <h4 class="m-0 mb-sm briefing-header-icon">
                             <span class="material-symbols-outlined icon-lg" style="color:${recColor};">${recIcon}</span>
                             ${DOMPurify.sanitize(rec.name)}
-                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${recColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${DOMPurify.sanitize(type)}</span>
+                            <span class="rec-badge" style="background:${recColor};margin-left:auto;">${DOMPurify.sanitize(type)}</span>
                         </h4>
                         <p class="mb-sm">${DOMPurify.sanitize(rec.description)}</p>
-                        <div style="background:${recColor}1A;padding:10px 12px;border-radius:6px;border-left:3px solid ${recColor};margin-top:8px;">
-                            <p style="margin:0;font-size:0.85rem;font-style:italic;color:#555;">
-                                <strong style="font-style:normal;color:${recColor};">Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"
-                            </p>
+                        <div class="pilot-reasoning" style="background:${recColor}1A;border-left:3px solid ${recColor};">
+                            <p><strong style="color:${recColor};">Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"</p>
                         </div>
                     </div>
                 `;

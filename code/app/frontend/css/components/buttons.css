@@ -1,44 +1,51 @@
 .btn {
-  font-family: var(--font-primary);
-  font-weight: 900; /* Heavy weight is key to the look */
-  text-transform: uppercase; /* Often used */
-  background-color: var(--surface-bg-dim);
-  backdrop-filter: blur(10px);
-  border: 1px solid grey;
-  border-radius: var(--border-radius);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
-  cursor: pointer;
-  padding: 0.5rem 1rem;
-  transition: all 0.2s;
-  color: var(--brand-dark);
+    font-family: var(--font-primary);
+    font-weight: 900;
+    text-transform: uppercase;
+    background-color: var(--surface-bg-dim);
+    backdrop-filter: var(--backdrop-filter);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s;
+    color: var(--btn-text);
 }
 
 .btn:hover {
-  background-color: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
+    background-color: var(--btn-hover-bg);
+    color: var(--btn-hover-text);
+    box-shadow: var(--btn-hover-shadow);
+    transform: var(--btn-hover-transform, none);
 }
 
 .btn.primary {
-  background-color: var(--brand-medium);
-  color: white;
-  border-color: var(--brand-dark);
+    background-color: var(--brand-medium);
+    color: white;
+    border-color: var(--brand-darker);
 }
 
 .btn.primary:hover {
-  background-color: var(--brand-dark);
+    background-color: var(--btn-primary-hover-bg);
+    filter: var(--btn-primary-hover-filter, none);
+    color: white;
 }
 
 .btn.secondary {
-  background-color: var(--surface-bg);
-  color: var(--brand-dark);
+    background-color: var(--surface-bg);
+    color: var(--btn-text);
 }
 
 .btn.danger {
-  background-color: #ef4444; /* Standard danger red */
-  color: white;
-  border-color: #dc2626;
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger-hover);
 }
 
 .btn.danger:hover {
-  background-color: #dc2626;
+    background-color: var(--color-danger-hover);
+    filter: none;
+    transform: none;
+    box-shadow: none;
 }

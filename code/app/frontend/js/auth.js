@@ -98,7 +98,9 @@ function updateUIForLogin(person) {
     menu.appendChild(actions);
 
     container.appendChild(menu);
+    container.appendChild(makeThemeButton());
 }
+
 
 function updateUIForLogout() {
     console.log('Auth: Updating UI for Logout');
@@ -124,4 +126,15 @@ function updateUIForLogout() {
             Login
         </a>
     `;
+    container.appendChild(makeThemeButton());
+}
+
+function makeThemeButton() {
+    const btn = document.createElement('button');
+    btn.id = 'btn-theme-toggle';
+    btn.className = 'btn secondary';
+    btn.title = 'Switch Theme';
+    btn.style.cssText = 'border-radius: 50%; width: 36px; height: 36px; padding: 0; flex-shrink: 0;';
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;line-height:1;margin:0;">palette</span>';
+    return btn;
 }

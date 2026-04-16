@@ -17,9 +17,9 @@
   bottom: 10px; /* Stretch to almost bottom */
   z-index: 10;
   
-  /* Glass Panel */
+  /* Panel */
   background-color: var(--surface-bg);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--backdrop-filter);
   border: 2px solid var(--border-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-main);
@@ -36,6 +36,7 @@
     left: 10px;
     z-index: 20; /* Above map, below sidebar when open */
     background-color: var(--surface-bg);
+    backdrop-filter: var(--backdrop-filter);
     border: 2px solid var(--border-color);
     border-radius: 50%;
     width: 48px;
@@ -54,7 +55,7 @@
 .brand {
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: var(--surface-header-bg);
 }
 
 .brand h1 {
@@ -156,7 +157,7 @@
 }
 
 .list-item:hover, .voyage-item:hover {
-  background-color: rgba(255, 255, 255, 0.6);
+  background-color: var(--item-hover-bg);
   border-color: var(--brand-medium);
 }
 
@@ -185,7 +186,7 @@
 
 .voyage-header {
   padding: 1rem;
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: var(--surface-header-bg);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -216,13 +217,13 @@
 }
 
 .day-item:hover {
-  background-color: rgba(255, 255, 255, 0.6);
+  background-color: var(--item-hover-bg);
 }
 
 .day-item.selected {
-  border-color: var(--brand-medium);
+  border-color: var(--item-selected-border);
   border-width: 2px;
-  background-color: rgba(149, 104, 45, 0.1);
+  background-color: var(--item-selected-bg);
 }
 
 .day-date {
@@ -265,9 +266,9 @@
   left: 50%;
   transform: translate(-50%, -50%);
   
-  /* Glass Style */
+  /* Panel */
   background-color: var(--surface-bg);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--backdrop-filter);
   border: 2px solid var(--border-color);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-main);
@@ -310,7 +311,7 @@
   box-sizing: border-box;
   font-family: var(--font-secondary);
   font-size: 1rem;
-  background-color: rgba(255,255,255,0.7);
+  background-color: var(--surface-input-bg);
 }
 
 .form-row {
@@ -347,7 +348,7 @@
 }
 
 .weather-box, .tide-box {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-inset-bg);
   padding: 1rem;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
@@ -360,7 +361,7 @@
 }
 
 .facility-item {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--surface-inset-bg);
   padding: 0.8rem;
   border-radius: var(--border-radius);
   border-left: 3px solid var(--brand-medium);
@@ -386,7 +387,7 @@
     background-color: var(--surface-bg);
     backdrop-filter: blur(10px);
     border: 2px solid var(--border-color);
-    border-radius: 30px;
+    border-radius: var(--border-radius);
     padding: 5px 15px 5px 5px;
     box-shadow: var(--shadow-main);
 }
@@ -589,8 +590,8 @@
   position: absolute;
   pointer-events: none;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(100, 160, 255, 0.08), rgba(30, 45, 70, 0.25));
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-radar) 8%, transparent), color-mix(in srgb, var(--color-radar) 20%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-radar) 20%, transparent);
   overflow: hidden;
   z-index: 5;
 }
@@ -599,7 +600,7 @@
   position: absolute;
   inset: 14%;
   border-radius: 50%;
-  border: 1px solid rgba(45, 100, 200, 0.4);
+  border: 1px solid color-mix(in srgb, var(--color-radar) 40%, transparent);
 }
 
 .radar__circle_inner {
@@ -609,7 +610,7 @@
 .radar__beam {
   position: absolute;
   inset: -20%;
-  background: conic-gradient(from 90deg, rgba(100, 160, 255, 0.15), transparent 60%);
+  background: conic-gradient(from 90deg, color-mix(in srgb, var(--color-radar) 20%, transparent), transparent 60%);
   animation: radarSpin 3s linear infinite;
 }
 
@@ -624,8 +625,8 @@
   position: absolute;
   pointer-events: none;
   border-radius: 50%;
-  border: 2px solid rgba(45, 100, 200, 0.6);
-  box-shadow: 0 0 20px rgba(45, 100, 200, 0.2);
+  border: 2px solid color-mix(in srgb, var(--color-radar) 60%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-radar) 20%, transparent);
   z-index: 4;
 }
 
@@ -633,7 +634,7 @@
   position: absolute;
   inset: -10px;
   border-radius: 50%;
-  border: 2px solid rgba(45, 100, 200, 0.5);
+  border: 2px solid color-mix(in srgb, var(--color-radar) 50%, transparent);
   animation: ringPulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
@@ -641,7 +642,7 @@
   position: absolute;
   inset: 10%;
   border-radius: 50%;
-  border: 1px solid rgba(45, 100, 200, 0.25);
+  border: 1px solid color-mix(in srgb, var(--color-radar) 25%, transparent);
 }
 
 @keyframes ringPulse {
