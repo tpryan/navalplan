@@ -1,0 +1,268 @@
+/* =====================================================
+   NavalPlan Theme Definitions
+   Set data-theme on <html> to activate a theme.
+   Available: "nautical" (default), "midnight-mariner"
+   ===================================================== */
+
+/* ----------------------------------------
+   Theme: Nautical (Default)
+   Earthy tones, gold accents, glassmorphism
+   ---------------------------------------- */
+[data-theme="nautical"] {
+    /* Brand Colors */
+    --brand-dark:         rgb(88, 61, 27);
+    --brand-darker:       rgb(55, 38, 17);
+    --brand-medium:       rgb(149, 104, 45);
+    --brand-light:        rgb(160, 144, 123);
+    --brand-lighter:      rgb(227, 220, 211);
+    --brand-green-dark:   #314c3b;
+    --brand-green-darker: #253b2e;
+
+    /* Canvas */
+    --color-background:   #AADAFF;
+
+    /* Text */
+    --text-dark:          #333333;
+    --text-light:         #777777;
+    --text-subtle:        rgba(153, 153, 153, 0.5);
+
+    /* Borders */
+    --border-color:       #cccccc;
+    --border-color-dark:  #333333;
+
+    /* Surfaces (Glassmorphism) */
+    --surface-bg:             rgba(255, 255, 255, 0.8);
+    --surface-bg-dim:         rgba(255, 255, 255, 0.6);
+    --surface-bg-dim-light:   rgba(255, 255, 255, 0.4);
+    --surface-header-bg:      rgba(255, 255, 255, 0.3);
+    --surface-inset-bg:       rgba(255, 255, 255, 0.5);
+    --surface-input-bg:       rgba(255, 255, 255, 0.7);
+
+    /* Effects */
+    --shadow-main:        0 3px 10px rgb(0 0 0 / 0.4);
+    --backdrop-filter:    blur(10px);
+
+    /* Typography */
+    --font-primary:       "Raleway", sans-serif;
+    --font-secondary:     "Lato", sans-serif;
+
+    /* Buttons */
+    --btn-text:                  var(--brand-dark);
+    --btn-hover-bg:              rgba(255, 255, 255, 0.9);
+    --btn-hover-text:            var(--brand-dark);
+    --btn-hover-shadow:          none;
+    --btn-hover-transform:       translateY(-1px);
+    --btn-primary-hover-bg:      var(--brand-dark);
+    --btn-primary-hover-filter:  none;
+
+    /* Interactive States */
+    --item-hover-bg:         rgba(255, 255, 255, 0.6);
+    --item-selected-bg:      rgba(149, 104, 45, 0.1);
+    --item-selected-border:  var(--brand-medium);
+
+    /* Status */
+    --color-danger:       #d9534f;
+    --color-danger-hover: #c9302c;
+    --color-error:        #d9534f;
+
+    /* Card / Report */
+    --card-bg:            #ffffff;
+    --card-border:        #cccccc;
+
+    /* Accent (radar, pilot circle, animations) */
+    --color-accent:       #f59e0b;
+    --color-radar:        #f59e0b;   /* pilot radius circle & radar sweep */
+
+    /* Links */
+    --color-link:         var(--brand-medium);
+    --color-link-hover:   var(--brand-dark);
+
+    /* Charts (tide graphs) */
+    --chart-tide-line:        #0077be;
+    --chart-tide-fill:        rgba(0, 119, 190, 0.2);
+    --chart-tide-fill-mini:   rgba(0, 119, 190, 0.1);
+    --chart-tide-high-label:  #d9534f;
+    --chart-tide-low-label:   #314c3b;
+    --chart-grid-zero:        #333333;
+    --chart-grid-default:     rgba(0, 0, 0, 0.1);
+    --chart-axis-text:        #777777;
+}
+
+/* ----------------------------------------
+   Theme: Midnight Mariner
+   Dark navy, electric cyan, opaque surfaces
+   ---------------------------------------- */
+[data-theme="midnight-mariner"] {
+    /* Brand Colors (mapped to MM palette) */
+    --brand-dark:         #00E5FF;                   /* Electric Cyan — primary accent */
+    --brand-darker:       #00B8D4;                   /* Deeper cyan */
+    --brand-medium:       #00E5FF;
+    --brand-light:        #94A3B8;                   /* Slate muted */
+    --brand-lighter:      rgba(0, 229, 255, 0.08);
+    --brand-green-dark:   #FFCA28;                   /* Amber — active/set states */
+    --brand-green-darker: #F9A825;
+
+    /* Canvas */
+    --color-background:   #0A111A;
+
+    /* Text */
+    --text-dark:          #E0E6ED;
+    --text-light:         #94A3B8;
+    --text-subtle:        rgba(148, 163, 184, 0.5);
+
+    /* Borders */
+    --border-color:       rgba(255, 255, 255, 0.1);
+    --border-color-dark:  rgba(255, 255, 255, 0.25);
+
+    /* Surfaces (Opaque, no glass) */
+    --surface-bg:             #141E2B;
+    --surface-bg-dim:         #1C2B3D;
+    --surface-bg-dim-light:   #1C2B3D;
+    --surface-header-bg:      #141E2B;
+    --surface-inset-bg:       rgba(255, 255, 255, 0.03);
+    --surface-input-bg:       #1C2B3D;
+
+    /* Effects */
+    --shadow-main:        0 8px 32px rgba(0, 0, 0, 0.5);
+    --backdrop-filter:    none;
+
+    /* Typography */
+    --font-primary:       "Space Grotesk", sans-serif;
+    --font-secondary:     "Manrope", sans-serif;
+
+    /* Buttons */
+    --btn-text:                  #E0E6ED;
+    --btn-hover-bg:              #00E5FF;
+    --btn-hover-text:            #0A111A;
+    --btn-hover-shadow:          0 0 15px rgba(0, 229, 255, 0.3);
+    --btn-hover-transform:       none;
+    --btn-primary-hover-bg:      #00E5FF;
+    --btn-primary-hover-filter:  brightness(1.1);
+
+    /* Interactive States */
+    --item-hover-bg:         rgba(0, 229, 255, 0.05);
+    --item-selected-bg:      rgba(0, 229, 255, 0.08);
+    --item-selected-border:  #00E5FF;
+
+    /* Status */
+    --color-danger:       #FF7043;
+    --color-danger-hover: #E64A19;
+    --color-error:        #FF7043;
+
+    /* Card / Report */
+    --card-bg:            #1C2B3D;
+    --card-border:        rgba(255, 255, 255, 0.1);
+
+    /* Accent (radar, pilot circle, animations) */
+    --color-accent:       #00E5FF;
+    --color-radar:        #FFCA28;   /* amber — distinct from primary cyan for contrast */
+
+    /* Links */
+    --color-link:         #00E5FF;
+    --color-link-hover:   #00B8D4;
+
+    /* Charts (tide graphs) */
+    --chart-tide-line:        #00E5FF;
+    --chart-tide-fill:        rgba(0, 229, 255, 0.15);
+    --chart-tide-fill-mini:   rgba(0, 229, 255, 0.08);
+    --chart-tide-high-label:  #FF7043;
+    --chart-tide-low-label:   #FFCA28;
+    --chart-grid-zero:        rgba(255, 255, 255, 0.3);
+    --chart-grid-default:     rgba(255, 255, 255, 0.07);
+    --chart-axis-text:        #94A3B8;
+}
+
+/* ----------------------------------------
+   Midnight Mariner: Component Overrides
+   For rules that can't be expressed as
+   simple variable substitutions.
+   ---------------------------------------- */
+
+/* Disable glassmorphism on all panels */
+[data-theme="midnight-mariner"] #sidebar,
+[data-theme="midnight-mariner"] .modal,
+[data-theme="midnight-mariner"] #user-floating-menu,
+[data-theme="midnight-mariner"] #facility-controls,
+[data-theme="midnight-mariner"] #pilot-controls,
+[data-theme="midnight-mariner"] #discovery-controls,
+[data-theme="midnight-mariner"] #btn-mobile-menu,
+[data-theme="midnight-mariner"] #btn-login-floating,
+[data-theme="midnight-mariner"] #btn-help-floating,
+[data-theme="midnight-mariner"] #btn-theme-toggle {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+/* Ticker: replace branded glow animation */
+[data-theme="midnight-mariner"] #research-ticker {
+    animation: ticker-glow-mm 2s infinite alternate;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 15px rgba(0, 229, 255, 0.1);
+}
+
+@keyframes ticker-glow-mm {
+    from {
+        border-color: #00E5FF;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 15px rgba(0, 229, 255, 0.1);
+        transform: scale(1);
+    }
+    to {
+        border-color: #00B8D4;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 229, 255, 0.25);
+        transform: scale(1.02);
+    }
+}
+
+/* Brand heading letter spacing */
+[data-theme="midnight-mariner"] .brand h1 {
+    letter-spacing: 0.1em;
+}
+
+/* Form inputs: ensure readable text colour on dark bg */
+[data-theme="midnight-mariner"] .form-group input {
+    color: var(--text-dark);
+}
+
+/* Overview cards (hardcoded #fff in base) */
+[data-theme="midnight-mariner"] .overview-card {
+    background: var(--card-bg);
+    border-color: var(--card-border);
+}
+
+/* Report title divider */
+[data-theme="midnight-mariner"] .report-title {
+    border-bottom-color: var(--border-color-dark);
+    color: var(--text-dark);
+}
+
+/* Report guide background */
+[data-theme="midnight-mariner"] .report-guide-bg {
+    background: rgba(0, 229, 255, 0.03);
+}
+
+/* Briefing table header row */
+[data-theme="midnight-mariner"] .briefing-th {
+    background-color: rgba(0, 229, 255, 0.05);
+    color: var(--brand-dark);
+}
+
+/* Loading / error text */
+[data-theme="midnight-mariner"] .loading-state {
+    color: var(--text-light);
+}
+[data-theme="midnight-mariner"] .error-state,
+[data-theme="midnight-mariner"] .loading-text.error,
+[data-theme="midnight-mariner"] .error-text {
+    color: var(--color-error);
+}
+
+
+/* Day-item selected state */
+[data-theme="midnight-mariner"] .day-item.selected {
+    border-color: var(--item-selected-border);
+    background-color: var(--item-selected-bg);
+}
+
+/* Modal h3 border (report sections) */
+[data-theme="midnight-mariner"] .report-body h3 {
+    border-bottom-color: var(--border-color);
+}
