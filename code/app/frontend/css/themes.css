@@ -70,9 +70,9 @@
     --card-bg:            #ffffff;
     --card-border:        #cccccc;
 
-    /* Accent (radar, pilot circle, animations) */
-    --color-accent:       #f59e0b;
-    --color-radar:        #f59e0b;   /* pilot radius circle & radar sweep */
+    /* Accent (radar, pilot circle, animations) — wired to Signal tokens */
+    --color-accent:       var(--teal);
+    --color-radar:        var(--teal);  /* radar sweep during research */
 
     /* Links */
     --color-link:         var(--brand-medium);
@@ -158,9 +158,9 @@
     --card-bg:            #1C2B3D;
     --card-border:        rgba(255, 255, 255, 0.1);
 
-    /* Accent (radar, pilot circle, animations) */
-    --color-accent:       #00E5FF;
-    --color-radar:        #FFCA28;   /* amber — distinct from primary cyan for contrast */
+    /* Accent (radar, pilot circle, animations) — wired to Signal tokens */
+    --color-accent:       var(--teal);
+    --color-radar:        var(--teal);  /* radar sweep during research */
 
     /* Links */
     --color-link:         #00E5FF;
