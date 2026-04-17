@@ -1,51 +1,49 @@
 .btn {
-    font-family: var(--font-primary);
-    font-weight: 900;
-    text-transform: uppercase;
-    background-color: var(--surface-bg-dim);
-    backdrop-filter: var(--backdrop-filter);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+    font-family: var(--font, var(--font-primary));
+    font-size: 15px;
+    font-weight: 700;
+    background: var(--chip, rgba(255,255,255,.8));
+    border: none;
+    border-radius: var(--radius-pill, 999px);
     cursor: pointer;
-    padding: 0.5rem 1rem;
-    transition: all 0.2s;
-    color: var(--btn-text);
+    padding: 0 20px;
+    min-height: 44px;
+    transition: opacity .15s;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    text-decoration: none;
+    box-shadow: none;
 }
 
-.btn:hover {
-    background-color: var(--btn-hover-bg);
-    color: var(--btn-hover-text);
-    box-shadow: var(--btn-hover-shadow);
-    transform: var(--btn-hover-transform, none);
+.btn:hover { opacity: .85; }
+
+.btn:focus-visible {
+    outline: 3px solid var(--focus, #1A5BCE);
+    outline-offset: 2px;
 }
 
 .btn.primary {
-    background-color: var(--brand-medium);
-    color: white;
-    border-color: var(--brand-darker);
+    background: var(--coral, #C23A1B);
+    color: #fff;
+    box-shadow: 0 4px 14px -4px color-mix(in oklab, var(--coral, #C23A1B) 80%, transparent);
 }
 
-.btn.primary:hover {
-    background-color: var(--btn-primary-hover-bg);
-    filter: var(--btn-primary-hover-filter, none);
-    color: white;
-}
+.btn.primary:hover { opacity: .85; filter: none; transform: none; }
 
 .btn.secondary {
-    background-color: var(--surface-bg);
-    color: var(--btn-text);
+    background: var(--chip, rgba(255,255,255,.8));
+    color: var(--ink);
+    border: none;
 }
 
 .btn.danger {
-    background-color: var(--color-danger);
-    color: white;
-    border-color: var(--color-danger-hover);
-}
-
-.btn.danger:hover {
-    background-color: var(--color-danger-hover);
-    filter: none;
-    transform: none;
+    background: var(--danger, #B42318);
+    color: #fff;
     box-shadow: none;
 }
+
+.btn.danger:hover { opacity: .85; filter: none; transform: none; }

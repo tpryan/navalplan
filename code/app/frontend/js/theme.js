@@ -1,12 +1,28 @@
-const THEMES = [
-    { id: 'nautical',         label: 'Nautical' },
-    { id: 'midnight-mariner', label: 'Midnight Mariner' },
-];
+const STORAGE_KEY = 'theme';
+const LEGACY_KEY = 'navalplan-theme';
 
-const STORAGE_KEY = 'navalplan-theme';
+const LEGACY_MAP = {
+    'nautical': 'light',
+    'midnight-mariner': 'dark',
+};
 
 function applyTheme(id) {
     document.documentElement.setAttribute('data-theme', id);
+}
+
+function resolveTheme() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return saved;
+
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+        const mapped = LEGACY_MAP[legacy] || 'light';
+        localStorage.setItem(STORAGE_KEY, mapped);
+        localStorage.removeItem(LEGACY_KEY);
+        return mapped;
+    }
+
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function setTheme(id) {
@@ -15,20 +31,19 @@ function setTheme(id) {
 }
 
 function loadTheme() {
-    const saved = localStorage.getItem(STORAGE_KEY) || 'nautical';
-    applyTheme(saved);
-    return saved;
+    const theme = resolveTheme();
+    applyTheme(theme);
+    return theme;
 }
 
 function currentTheme() {
-    return localStorage.getItem(STORAGE_KEY) || 'nautical';
+    return localStorage.getItem(STORAGE_KEY) || resolveTheme();
 }
 
-function cycleTheme() {
-    const idx = THEMES.findIndex(t => t.id === currentTheme());
-    const next = THEMES[(idx + 1) % THEMES.length];
-    setTheme(next.id);
+function toggleTheme() {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    setTheme(next);
     return next;
 }
 
-export { THEMES, setTheme, loadTheme, currentTheme, cycleTheme };
+export { setTheme, loadTheme, currentTheme, toggleTheme };

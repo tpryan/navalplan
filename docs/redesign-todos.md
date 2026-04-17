@@ -1,0 +1,1 @@
+* Make sure that map overlays like the login bar don't overlap google map controls.
