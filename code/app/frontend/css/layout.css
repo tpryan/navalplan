@@ -11,19 +11,16 @@
 /* Layer 1 (Floating Panels) */
 #sidebar {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 500px; /* Desktop */
-  bottom: 10px; /* Stretch to almost bottom */
+  top: 20px;
+  left: 20px;
+  width: 340px;
+  bottom: 20px;
   z-index: 10;
-  
-  /* Panel */
-  background-color: var(--surface-bg);
-  backdrop-filter: var(--backdrop-filter);
-  border: 2px solid var(--border-color);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-main);
-  
+
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+
   display: flex;
   flex-direction: column;
   transition: transform 0.3s ease-in-out;
@@ -32,20 +29,20 @@
 /* Mobile Menu Button */
 #btn-mobile-menu {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 20; /* Above map, below sidebar when open */
-    background-color: var(--surface-bg);
-    backdrop-filter: var(--backdrop-filter);
-    border: 2px solid var(--border-color);
+    top: 20px;
+    left: 20px;
+    z-index: 20;
+    background: var(--surface);
+    border: none;
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
-    display: none; /* Hidden on Desktop */
+    width: 44px;
+    height: 44px;
+    display: none;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow-main);
-    color: var(--brand-dark);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    cursor: pointer;
 }
 
 .mobile-only {
@@ -53,23 +50,23 @@
 }
 
 .brand {
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--surface-header-bg);
+  padding: 16px 20px;
+  border-bottom: 1.5px solid var(--hair);
 }
 
 .brand h1 {
   margin: 0;
-  font-family: var(--font-primary);
-  color: var(--brand-dark);
-  font-size: 1.5rem;
-  font-weight: 900;
+  font-family: var(--font, var(--font-primary));
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -.3px;
   text-transform: uppercase;
 }
 
 .sidebar-actions {
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
+  border-bottom: 1.5px solid var(--hair);
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -185,16 +182,16 @@
 }
 
 .voyage-header {
-  padding: 1rem;
-  background-color: var(--surface-header-bg);
-  border-bottom: 1px solid var(--border-color);
+  padding: 14px 20px;
+  border-bottom: 1.5px solid var(--hair);
 }
 
 .voyage-header h2 {
   margin: 0;
-  font-family: var(--font-primary);
-  color: var(--brand-dark);
-  font-size: 1.2rem;
+  font-family: var(--font, var(--font-primary));
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 #itinerary-list {
@@ -256,7 +253,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, .4);
   z-index: 100;
 }
 
@@ -265,14 +262,11 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  
-  /* Panel */
-  background-color: var(--surface-bg);
-  backdrop-filter: var(--backdrop-filter);
-  border: 2px solid var(--border-color);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-main);
-  
+
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+
   padding: 2rem;
   width: 90%;
   max-width: 400px;
@@ -285,9 +279,11 @@
 
 .modal h2 {
   margin-top: 0;
-  font-family: var(--font-primary);
-  font-weight: 900;
-  color: var(--brand-dark);
+  font-family: var(--font, var(--font-primary));
+  font-weight: 800;
+  color: var(--ink);
+  font-size: 1.2rem;
+  letter-spacing: -.3px;
 }
 
 .form-group {
@@ -297,21 +293,28 @@
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  font-family: var(--font-primary);
-  font-weight: 900;
-  color: var(--brand-dark);
+  font-family: var(--font, var(--font-primary));
+  font-weight: 700;
+  color: var(--ink2);
   font-size: 0.9rem;
 }
 
 .form-group input {
   width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--hair);
+  border-radius: var(--radius-input);
   box-sizing: border-box;
-  font-family: var(--font-secondary);
+  font-family: var(--font, var(--font-secondary));
   font-size: 1rem;
-  background-color: var(--surface-input-bg);
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.form-group input:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 20%, transparent);
 }
 
 .form-row {
@@ -371,54 +374,66 @@
 
 /* --- Authentication --- */
 #auth-container {
-    position: absolute;
-    top: 8px;
-    right: 60px;
-    z-index: 100;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 20;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 8px;
 }
 
 #user-floating-menu {
     display: flex;
     align-items: center;
-    gap: 10px;
-    background-color: var(--surface-bg);
-    backdrop-filter: blur(10px);
-    border: 2px solid var(--border-color);
-    border-radius: var(--border-radius);
-    padding: 5px 15px 5px 5px;
-    box-shadow: var(--shadow-main);
+    gap: 8px;
+    background: var(--surface);
+    border-radius: var(--radius-pill);
+    padding: 6px 14px 6px 6px;
+    box-shadow: var(--shadow-soft);
 }
 
 #user-floating-menu .avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    border: 1px solid var(--brand-medium);
+    border: 1.5px solid var(--hair);
 }
 
 .menu-actions {
     display: flex;
-    gap: 10px;
+    gap: 6px;
+    align-items: center;
 }
 
 #btn-login-floating,
 #btn-help-floating {
-    box-shadow: var(--shadow-main);
     text-decoration: none;
-    position: relative;
-    top: 2px; /* Offset to keep it 10px from top (8px + 2px) */
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    min-height: 44px;
+    padding: 0 20px;
+    border-radius: var(--radius-pill);
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--font, var(--font-primary));
+    box-shadow: var(--shadow-soft);
+}
+
+#btn-login-floating {
+    background: var(--coral);
+    color: #fff;
+    border: none;
 }
 
 #btn-help-floating {
+    background: var(--surface);
+    color: var(--ink);
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
     padding: 0;
-    width: 36px;
-    height: 36px;
     border-radius: 50%;
 }
 

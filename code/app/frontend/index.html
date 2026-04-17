@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="nautical">
+<html lang="en" data-theme="light">
 <head>
-    <!-- Apply saved theme immediately to avoid flash -->
-    <script>(function(){var t=localStorage.getItem('navalplan-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <!-- Apply saved theme immediately to avoid flash — checks new key then migrates legacy key -->
+    <script>(function(){var t=localStorage.getItem('theme');if(!t){var l=localStorage.getItem('navalplan-theme');if(l){t=l==='midnight-mariner'?'dark':'light';localStorage.setItem('theme',t);localStorage.removeItem('navalplan-theme');}}if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Plan your nautical voyages with ease. Research weather, tides, and local facilities for every stop on your journey." />
@@ -15,8 +15,9 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/themes.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/layout.css">
@@ -154,14 +155,19 @@
     <div id="modal-overlay" class="hidden"></div>
     
     <!-- Voyage Form Modal -->
-    <div id="modal-new-voyage" class="modal hidden">
-      <h2>Plan a New Voyage</h2>
+    <div id="modal-new-voyage" class="modal hidden" style="max-width:440px;padding:26px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--coral) 12%,var(--surface));color:var(--coral)">NEW VOYAGE</span>
+        <button type="button" id="btn-cancel-voyage" aria-label="Close"
+          style="width:32px;height:32px;border-radius:50%;border:none;background:var(--chip);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">✕</button>
+      </div>
+      <h2 style="font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--ink);margin:0 0 20px">Plan a New Voyage</h2>
       <form id="form-new-voyage">
         <div class="form-group">
           <label for="voyage-title">Trip Title</label>
           <input type="text" id="voyage-title" name="title" required placeholder="e.g. Gulf Islands 2025" />
         </div>
-        
+
         <div class="form-group">
           <label>Starting Location</label>
           <div class="flex gap-sm">
@@ -178,7 +184,7 @@
           <label for="voyage-radius">Search Radius (nm)</label>
           <input type="number" id="voyage-radius" name="search_radius" value="60" min="1" max="500" />
         </div>
-        
+
         <div id="voyage-date-fields" class="form-row">
           <div class="form-group">
             <label for="voyage-start">Start Date (Optional)</label>
@@ -190,9 +196,8 @@
           </div>
         </div>
 
-        <div class="form-actions">
-          <button type="button" id="btn-cancel-voyage" class="btn secondary">Cancel</button>
-          <button type="submit" class="btn primary">Create Voyage</button>
+        <div class="form-actions" style="margin-top:20px">
+          <button type="submit" class="btn primary" style="flex:1">Create Voyage</button>
         </div>
       </form>
     </div>
