@@ -370,83 +370,75 @@
 }
 
 /* --- Discovery (Commodore) Styles --- */
-#facility-controls {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: var(--surface-bg);
-    backdrop-filter: var(--backdrop-filter);
-    border: 2px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-main);
-    padding: 0.75rem 1.25rem;
-    z-index: 100;
-}
-
+#facility-controls,
 #pilot-controls {
     position: absolute;
-    bottom: 30px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
-    background-color: var(--surface-bg);
-    backdrop-filter: var(--backdrop-filter);
-    border: 2px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-main);
-    padding: 0.75rem 1.25rem;
-    z-index: 100;
+    background: var(--surface);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow);
+    padding: 10px 16px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .pilot-legend-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: contents;
 }
 
 .pilot-legend-title {
-    font-family: var(--font-primary);
-    font-weight: 900;
-    font-size: 0.85rem;
-    color: var(--brand-dark);
+    font-family: var(--font, var(--font-primary));
+    font-weight: 800;
+    font-size: 10px;
+    color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: .08em;
+    white-space: nowrap;
+    margin-right: 4px;
 }
 
 .pilot-legend {
-    display: flex;
-    gap: 0.5rem;
+    display: contents;
 }
 
 .pilot-filter-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.75rem;
-    border: 2px solid var(--border-color);
-    border-radius: 20px;
-    background: transparent;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-color);
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    border: none;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--font, var(--font-primary));
     cursor: pointer;
-    transition: opacity 0.2s, background 0.2s;
+    transition: opacity .15s, background .15s;
     white-space: nowrap;
+    background: var(--chip);
+    color: var(--ink);
 }
 
 .pilot-filter-btn.active {
-    background: var(--surface-bg);
     opacity: 1;
 }
 
 .pilot-filter-btn:not(.active) {
-    opacity: 0.4;
-    text-decoration: line-through;
+    opacity: 0.35;
+}
+
+.pilot-filter-btn:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
 }
 
 .pilot-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
@@ -454,43 +446,84 @@
 
 #discovery-controls {
     position: absolute;
-    bottom: 30px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
-    background-color: var(--surface-bg);
-    backdrop-filter: var(--backdrop-filter);
-    border: 2px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-main);
-    padding: 1rem 1.5rem;
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+    padding: 16px 20px;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    z-index: 100;
-    min-width: 350px;
+    gap: 20px;
+    z-index: 10;
+    min-width: min(340px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
 }
 
-.month-slider-container {
+/* ─── Discovery month squares ────────────────────────────────────────────── */
+.discovery-month-strip {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 6px;
 }
 
-.month-slider-container label {
-    font-family: var(--font-primary);
-    font-weight: 900;
-    font-size: 1.1rem;
-    color: var(--brand-dark);
+.discovery-month-strip > span {
+    font-family: var(--font, var(--font-primary));
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink);
 }
 
-#month-slider {
-    width: 100%;
+#month-squares {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.np-month-sq {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 6px;
+    border: 1.5px solid var(--hair);
+    background: var(--chip);
+    color: var(--ink2);
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font, var(--font-primary));
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
+.np-month-sq:hover {
+    border-color: var(--coral);
+    color: var(--coral);
+}
+
+.np-month-sq.active,
+.np-month-sq[aria-pressed="true"] {
+    background: var(--coral);
+    border-color: var(--coral);
+    color: #fff;
+    box-shadow: 0 2px 8px color-mix(in oklab, var(--coral) 40%, transparent);
+}
+
+.np-month-sq:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/* Legacy slider (hidden/removed) */
+#month-slider,
 #month-display {
-    color: var(--brand-medium);
+    display: none;
 }
 
 .discovery-legend {
@@ -658,16 +691,17 @@
 }
 
 .pilot-radius-label {
-    background-color: var(--surface-bg, rgba(255, 255, 255, 0.9));
+    background: var(--surface);
     padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--color-radar, #1a73e8);
-    margin-top: 4px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--sky);
+    margin-top: 6px;
     white-space: nowrap;
-    font-size: 12px;
-    color: var(--color-radar, #1a73e8);
-    font-weight: bold;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sky);
+    font-family: var(--font, var(--font-primary));
+    box-shadow: var(--shadow-soft);
     pointer-events: none;
 }
 
@@ -799,4 +833,18 @@
 
 .pilot-reasoning strong {
     font-style: normal;
+}
+
+/* ─── Google Maps overrides ──────────────────────────────────────────────── */
+/* Info window (gmp-info-window / InfoWindow) — reduce excessive top padding  */
+.gm-style .gm-style-iw-c {
+    padding-top: 4px !important;
+}
+.gm-style .gm-style-iw-d {
+    overflow: auto !important;
+    max-height: none !important;
+}
+/* Close button sits too high without this */
+.gm-style .gm-style-iw-t::after {
+    top: -1px !important;
 }
