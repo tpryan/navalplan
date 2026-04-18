@@ -1720,7 +1720,7 @@ async function loadStops() {
             }
 
             if (!bounds.isEmpty()) {
-                map.fitBounds(bounds, 50);
+                map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
             }
         }
     } catch (err) {
@@ -2077,7 +2077,7 @@ async function handlePilotSuggestionsClick() {
                     const bounds = new LatLngBounds();
                     voyageRecommendations.forEach(r => bounds.extend({ lat: r.latitude, lng: r.longitude }));
                     if (pilotCircle) bounds.union(pilotCircle.getBounds());
-                    map.fitBounds(bounds, 100);
+                    map.fitBounds(bounds, { padding: 100, maxZoom: 12 });
                 }
             } else {
                 showNotification('Incomplete', "The AI research is taking longer than expected. Please try again or check back in a few minutes.");
@@ -3516,6 +3516,7 @@ async function initMap() {
   map = new Map(document.getElementById("map-container"), {
     center: { lat: 20, lng: 0 },
     zoom: 3,
+    maxZoom: 18,
     mapId: isMidnightMariner ? __GOOGLE_MAPS_MAP_ID_MM__ : __GOOGLE_MAPS_MAP_ID__,
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
