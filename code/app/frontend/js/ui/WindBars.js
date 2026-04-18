@@ -28,9 +28,10 @@ export function WindBars({ bars = [], width = 200, height = 80 } = {}) {
   svg.setAttribute('aria-label', 'Wind speed chart');
   svg.style.display = 'block';
 
+  const gradId = `wind-grad-${crypto.randomUUID()}`;
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   defs.innerHTML = `
-    <linearGradient id="wind-grad" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="var(--sky)" stop-opacity="0.9"/>
       <stop offset="100%" stop-color="var(--teal)" stop-opacity="0.7"/>
     </linearGradient>`;
@@ -48,7 +49,7 @@ export function WindBars({ bars = [], width = 200, height = 80 } = {}) {
     rect.setAttribute('height', barH);
     rect.setAttribute('rx', Math.min(barW / 2, 6));
     rect.setAttribute('ry', Math.min(barW / 2, 6));
-    rect.setAttribute('fill', 'url(#wind-grad)');
+    rect.setAttribute('fill', `url(#${gradId})`);
     svg.appendChild(rect);
 
     const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
