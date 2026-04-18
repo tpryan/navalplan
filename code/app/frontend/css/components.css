@@ -73,6 +73,28 @@
     margin: 0;
 }
 
+/* ─── Report hero: header + stats left, overview right ───────────────────── */
+.np-report-hero {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 20px;
+    align-items: start;
+    margin-bottom: 28px;
+}
+.np-report-hero__left {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.np-report-hero .np-report-header {
+    margin-bottom: 14px;
+}
+.np-report-hero .np-destination-overview {
+    margin-bottom: 0;
+    height: 100%;
+    box-sizing: border-box;
+}
+
 /* ─── Metric tile grid (voyage stat totals) ──────────────────────────────── */
 .np-metric-grid {
     display: grid;
@@ -106,6 +128,9 @@
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 10px;
     margin-bottom: 28px;
+}
+.np-day-grid--fill {
+    grid-template-columns: repeat(var(--day-count), 1fr);
 }
 .np-day-tile {
     --accent: var(--sky);

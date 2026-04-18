@@ -296,3 +296,14 @@
 [data-theme="dark"] .report-body h3 {
     border-bottom-color: var(--border-color);
 }
+
+/* Shared report: slightly brighter page background */
+[data-theme="nautical"] body.shared-view,
+[data-theme="light"] body.shared-view,
+body.shared-view {
+    background-color: #C8EAFF;
+}
+[data-theme="midnight-mariner"] body.shared-view,
+[data-theme="dark"] body.shared-view {
+    background-color: #101D2C;
+}
