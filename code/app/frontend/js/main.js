@@ -1735,12 +1735,7 @@ async function executeResearchAll() {
     
     isResearchAllRunning = true;
     renderItinerary();
-    
-    const btnResearchAll = document.getElementById('btn-research-all');
-    const originalContent = btnResearchAll.innerHTML;
-    btnResearchAll.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
-    btnResearchAll.disabled = true;
-    
+
     // 1. Visual Indicators: Spin all icons
     const researchBtns = document.querySelectorAll('.day-actions .research');
     researchBtns.forEach(btn => {
@@ -1807,8 +1802,6 @@ async function executeResearchAll() {
                 clearInterval(_fullResPoll); _fullResPoll = null;
                 if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                 clearStopSweeps();
-                btnResearchAll.innerHTML = originalContent;
-                btnResearchAll.disabled = false;
 
                 // Revert stuck spinners
                 const stuckBtns = document.querySelectorAll('.day-actions .research:disabled');
@@ -1863,8 +1856,6 @@ async function executeResearchAll() {
                     isResearchAllRunning = false;
                     await checkItineraryFullness();
                     renderItinerary();
-                    btnResearchAll.innerHTML = originalContent;
-                    btnResearchAll.disabled = false;
 
                     renderMapStops();
                     showNotification('Research Complete', 'All research tasks have been completed successfully.');
@@ -1874,8 +1865,6 @@ async function executeResearchAll() {
                     clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
-                    btnResearchAll.innerHTML = originalContent;
-                    btnResearchAll.disabled = false;
                     showNotification('Research Failed', 'Connection to server lost. Please try again.');
                 } else {
                     consecutiveErrors = 0;
@@ -1892,8 +1881,6 @@ async function executeResearchAll() {
         clearInterval(_fullResPoll); _fullResPoll = null;
         if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
         clearStopSweeps();
-        btnResearchAll.innerHTML = originalContent;
-        btnResearchAll.disabled = false;
         // Revert spinners
         const researchBtns = document.querySelectorAll('.day-actions .research');
         researchBtns.forEach(btn => {
@@ -2787,26 +2774,27 @@ function renderItinerary() {
 
     if (currentStops.length > 0 || currentStopPage > 1) {
         list.appendChild(paginationControls);
-
-        // Show Full Research Prompt if Full but research missing
-        if (lastKnownItineraryFull && !lastKnownResearchDone && !isResearchAllRunning) {
-            const container = document.createElement('div');
-            container.className = 'p-md text-center border-t mt-md';
-            container.innerHTML = '<p class="text-gray mb-md"><b>Itinerary Complete!</b> Run full voyage research to get weather, tides, and pilot info for every stop.</p>';
-            list.appendChild(container);
-        }
     }
 
-    // Pilot re-run control — always visible at the bottom of the dated itinerary
-    const pilotRedoContainer = document.createElement('div');
-    pilotRedoContainer.className = 'p-md text-center border-t mt-md';
-    pilotRedoContainer.innerHTML = '<p class="text-gray mb-md">Want to refresh area hubs and spots? <b>Re-run Local Pilot Research</b> to update anchorages, marinas, and moorings.</p>';
-    const pilotRedoBtn = document.createElement('button');
-    pilotRedoBtn.className = 'btn secondary w-full';
-    pilotRedoBtn.innerHTML = '<span class="material-symbols-outlined icon-align">refresh</span> Re-run Local Pilot Research';
-    pilotRedoBtn.onclick = () => handlePilotSuggestionsClick();
-    pilotRedoContainer.appendChild(pilotRedoBtn);
-    list.appendChild(pilotRedoContainer);
+    // Research all stops control — always visible at the bottom of the dated itinerary
+    const researchAllContainer = document.createElement('div');
+    researchAllContainer.className = 'p-md text-center border-t mt-md';
+    const researchAllBtn = document.createElement('button');
+    researchAllBtn.className = 'btn secondary w-full';
+    researchAllBtn.onclick = () => handleResearchAll(true);
+    if (lastKnownResearchDone) {
+        researchAllContainer.innerHTML = '<p class="text-gray mb-md">Want fresher stop data? <b>Re-run Stop Research</b> to refresh weather, tides, and local charts for every stop.</p>';
+        researchAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Re-run Stop Research';
+    } else if (lastKnownItineraryFull) {
+        researchAllContainer.innerHTML = '<p class="text-gray mb-md"><b>Itinerary complete!</b> Run stop research to get weather, tides, and pilot info for every stop.</p>';
+        researchAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Run Stop Research';
+    } else {
+        researchAllContainer.innerHTML = '<p class="text-gray mb-md">Add stops for each day, then run stop research to fetch weather, tides, and local charts.</p>';
+        researchAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align">travel_explore</span> Run Stop Research';
+        researchAllBtn.disabled = true;
+    }
+    researchAllContainer.appendChild(researchAllBtn);
+    list.appendChild(researchAllContainer);
 
 }
 
