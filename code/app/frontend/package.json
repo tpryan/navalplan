@@ -12,7 +12,8 @@
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.0.2",
     "chart.js": "^4.5.1",
-    "dompurify": "^3.3.1"
+    "dompurify": "^3.3.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "jasmine": "^5.13.0",

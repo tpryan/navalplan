@@ -1553,3 +1553,17 @@
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ─── Share modal QR code ────────────────────────────────────────────────── */
+.np-qr-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: var(--radius-tile);
+    background: var(--surface);
+    border: 1px solid var(--hair);
+}
+.np-qr-wrap canvas {
+    border-radius: 4px;
+}
