@@ -4059,12 +4059,26 @@ async function captureAndUploadMap(voyageId) {
         }
         markersParam += `&markers=size:small%7Ccolor:green%7C${first.latitude},${first.longitude}`;
     } else if (currentVoyage.latitude && currentVoyage.longitude) {
-        // No stops yet — show the voyage hub so the map isn't blank
+        // No stops yet — show the voyage hub fitted to the search radius
         markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
     }
 
-    // Omit center and zoom to allow Google to auto-fit the route stops
-    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${pathParam}${markersParam}&key=${key}`;
+    // For voyages with stops, omit center/zoom so Google auto-fits the route.
+    // For undated voyages (hub only), compute zoom from search_radius so the
+    // map matches the search circle the user sees on the map.
+    let centerZoomParam = '';
+    if (sortedStops.length === 0 && currentVoyage.latitude && currentVoyage.longitude) {
+        const radiusNm = currentVoyage.search_radius || 60;
+        const radiusM  = radiusNm * 1852;
+        const lat      = currentVoyage.latitude;
+        // Google Static Maps: at zoom z the map width in metres is
+        // 600px * 156543.03 * cos(lat) / 2^z. We want the diameter to fit.
+        const z = Math.log2(600 * 156543.03 * Math.cos(lat * Math.PI / 180) / (radiusM * 2));
+        const zoom = Math.max(1, Math.min(14, Math.round(z) - 1)); // -1 for padding
+        centerZoomParam = `&center=${lat},${currentVoyage.longitude}&zoom=${zoom}`;
+    }
+
+    const url = `${baseUrl}?size=${size}&scale=${scale}&maptype=${mapType}${pathParam}${markersParam}${centerZoomParam}&key=${key}`;
 
     try {
         const response = await fetch(url);
@@ -5163,13 +5177,22 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Stat tiles ────────────────────────────────────────────────────────────
+    const isDated = !!(voyage.start_date && voyage.end_date);
     const researchedCount = briefings.filter(b => b !== null).length;
-    const dayCount = (voyage.start_date && voyage.end_date)
+    const dayCount = isDated
         ? Math.round((new Date(voyage.end_date) - new Date(voyage.start_date)) / 86400000) + 1 : '--';
     const avgWind = (() => {
         const speeds = briefings.filter(Boolean).map(b => parseFloat((b.weather_summary || {}).wind_speed_kt || 0)).filter(n => n > 0);
         return speeds.length ? Math.round(speeds.reduce((a,b) => a+b, 0) / speeds.length) + ' kt' : '--';
     })();
+
+    // For undated voyages, count facility types from recommendations instead
+    const recList = Array.isArray(recommendations) ? recommendations : [];
+    const countType = (keyword) => recList.filter(r => (r.type || '').toLowerCase().includes(keyword)).length;
+    const marinaCount    = countType('marina') + countType('yacht') + countType('hub') + countType('chandl') + countType('provision') + countType('repair') + countType('supply');
+    const mooringCount   = countType('moor');
+    const anchorageCount = countType('anchor');
+    const poiCount       = (guide && Array.isArray(guide.points_of_interest)) ? guide.points_of_interest.length : 0;
 
     const overviewCol = (guide && guide.summary) ? `
         <div class="np-destination-overview">
@@ -5188,6 +5211,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
                 </div>
                 <div class="np-metric-grid">
+                    ${isDated ? `
                     <div class="np-metric-tile" style="--accent:var(--sky)">
                         <div class="np-metric-tile__label">Stops</div>
                         <div class="np-metric-tile__value">${sortedStops.length}</div>
@@ -5203,7 +5227,23 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     <div class="np-metric-tile" style="--accent:var(--violet)">
                         <div class="np-metric-tile__label">Researched</div>
                         <div class="np-metric-tile__value">${researchedCount}/${sortedStops.length}</div>
+                    </div>` : `
+                    <div class="np-metric-tile" style="--accent:var(--amber)">
+                        <div class="np-metric-tile__label">Marinas & Hubs</div>
+                        <div class="np-metric-tile__value">${marinaCount || '—'}</div>
                     </div>
+                    <div class="np-metric-tile" style="--accent:var(--violet)">
+                        <div class="np-metric-tile__label">Moorings</div>
+                        <div class="np-metric-tile__value">${mooringCount || '—'}</div>
+                    </div>
+                    <div class="np-metric-tile" style="--accent:var(--teal)">
+                        <div class="np-metric-tile__label">Anchorages</div>
+                        <div class="np-metric-tile__value">${anchorageCount || '—'}</div>
+                    </div>
+                    <div class="np-metric-tile" style="--accent:var(--green)">
+                        <div class="np-metric-tile__label">Points of Interest</div>
+                        <div class="np-metric-tile__value">${poiCount || '—'}</div>
+                    </div>`}
                 </div>
             </div>
             ${overviewCol}
