@@ -6,96 +6,102 @@
     <title>NavalPlan – User Guide</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700;900&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     <style>
+        /* ── Tokens (mirrors tokens.css) ── */
         :root {
-            --brand-dark: rgb(88, 61, 27);
-            --brand-darker: rgb(55, 38, 17);
-            --brand-medium: rgb(149, 104, 45);
-            --brand-light: rgb(160, 144, 123);
-            --brand-lighter: rgb(227, 220, 211);
-            --brand-green-dark: #314c3b;
-            --color-background: #AADAFF;
-            --text-dark: #333333;
-            --text-light: #777777;
-            --border-color: #cccccc;
-            --surface-bg: rgba(255, 255, 255, 0.85);
-            --border-radius: 8px;
-            --shadow-main: 0 3px 10px rgba(0,0,0,0.15);
-            --font-primary: "Raleway", sans-serif;
-            --font-secondary: "Lato", sans-serif;
+            --bg:      #FAF9F6;
+            --surface: #FFFFFF;
+            --ink:     #0B1220;
+            --ink2:    #242E42;
+            --muted:   #566074;
+            --hair:    #E6E9EF;
+            --chip:    #F2F4F8;
+            --coral:   #C23A1B;
+            --teal:    #0B7A6F;
+            --amber:   #8A5200;
+            --violet:  #5B3BD4;
+            --sky:     #1A5BCE;
+            --green:   #116A3D;
+            --focus:   #1A5BCE;
+            --radius-pill: 999px;
+            --radius-card: 22px;
+            --radius-tile: 15px;
+            --shadow: 0 2px 8px rgba(15,23,42,.06), 0 20px 40px -20px rgba(15,23,42,.20);
+            --shadow-soft: 0 1px 2px rgba(15,23,42,.05);
+            --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
 
         body {
-            font-family: var(--font-secondary);
-            background-color: #f5f0e8;
-            color: var(--text-dark);
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--ink);
             line-height: 1.6;
+            font-size: 15px;
         }
 
-        /* ── Top Bar ── */
+        /* ── Topbar ── */
         .topbar {
             position: sticky;
             top: 0;
             z-index: 100;
-            background-color: var(--brand-darker);
-            color: white;
+            background: var(--surface);
+            border-bottom: 1px solid var(--hair);
+            box-shadow: var(--shadow-soft);
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 2rem;
             height: 56px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
         .topbar-brand {
-            font-family: var(--font-primary);
-            font-weight: 900;
-            font-size: 1.2rem;
+            font-weight: 800;
+            font-size: 0.9rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: white;
+            letter-spacing: 0.08em;
+            color: var(--ink);
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 8px;
         }
 
         .topbar-brand .material-symbols-outlined {
-            font-size: 22px;
-            color: var(--brand-medium);
+            font-size: 20px;
+            color: var(--sky);
         }
 
         .topbar-back {
-            font-family: var(--font-primary);
-            font-weight: 700;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--brand-lighter);
-            text-decoration: none;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
-            transition: color 0.2s;
+            gap: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--hair);
+            background: var(--chip);
+            transition: color 0.15s, border-color 0.15s;
         }
 
-        .topbar-back:hover { color: white; }
-
-        .topbar-back .material-symbols-outlined { font-size: 18px; }
+        .topbar-back:hover { color: var(--ink); border-color: var(--sky); }
+        .topbar-back .material-symbols-outlined { font-size: 16px; }
 
         /* ── Layout ── */
         .page-wrapper {
-            max-width: 1100px;
+            max-width: 1080px;
             margin: 0 auto;
-            padding: 2rem 1.5rem 4rem;
+            padding: 2rem 1.5rem 5rem;
             display: grid;
-            grid-template-columns: 220px 1fr;
-            gap: 2.5rem;
+            grid-template-columns: 210px 1fr;
+            gap: 2rem;
             align-items: start;
         }
 
@@ -103,60 +109,62 @@
         .doc-nav {
             position: sticky;
             top: 72px;
-            background: var(--surface-bg);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-main);
-            padding: 1.25rem 0;
-            backdrop-filter: blur(8px);
+            background: var(--surface);
+            border: 1px solid var(--hair);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow);
+            padding: 10px 0 14px;
         }
 
         .doc-nav-title {
-            font-family: var(--font-primary);
-            font-weight: 900;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--brand-medium);
-            padding: 0 1.25rem 0.75rem;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 0.5rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            padding: 8px 18px 10px;
+            border-bottom: 1px solid var(--hair);
+            margin-bottom: 6px;
         }
 
         .doc-nav a {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.45rem 1.25rem;
-            font-family: var(--font-secondary);
-            font-size: 0.875rem;
-            color: var(--text-dark);
+            gap: 8px;
+            padding: 7px 18px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--ink2);
             text-decoration: none;
+            border-left: 2px solid transparent;
             transition: all 0.15s;
-            border-left: 3px solid transparent;
         }
 
         .doc-nav a:hover {
-            background: rgba(149, 104, 45, 0.08);
-            border-left-color: var(--brand-medium);
-            color: var(--brand-dark);
+            background: color-mix(in oklab, var(--sky) 8%, var(--surface));
+            border-left-color: var(--sky);
+            color: var(--ink);
         }
 
         .doc-nav a .material-symbols-outlined {
-            font-size: 16px;
-            color: var(--brand-medium);
+            font-size: 15px;
+            color: var(--muted);
         }
+
+        .doc-nav a:hover .material-symbols-outlined { color: var(--sky); }
 
         /* ── Main Content ── */
         .doc-content { min-width: 0; }
 
         /* ── Hero ── */
         .hero {
-            background: linear-gradient(135deg, var(--brand-darker) 0%, var(--brand-dark) 60%, var(--brand-green-dark) 100%);
-            border-radius: 12px;
-            padding: 3rem 2.5rem;
-            color: white;
-            margin-bottom: 2.5rem;
+            background: linear-gradient(135deg,
+                color-mix(in oklab, var(--sky) 18%, var(--ink)),
+                color-mix(in oklab, var(--violet) 20%, var(--ink)));
+            border-radius: var(--radius-card);
+            padding: 2.75rem 2.5rem;
+            color: #fff;
+            margin-bottom: 1.75rem;
             position: relative;
             overflow: hidden;
         }
@@ -164,107 +172,101 @@
         .hero::before {
             content: '';
             position: absolute;
-            top: -40px; right: -40px;
-            width: 220px; height: 220px;
+            top: -50px; right: -50px;
+            width: 240px; height: 240px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.07);
         }
 
         .hero::after {
             content: '';
             position: absolute;
-            bottom: -60px; right: 40px;
-            width: 160px; height: 160px;
+            bottom: -60px; right: 60px;
+            width: 180px; height: 180px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.05);
+            border: 1.5px solid rgba(255,255,255,0.05);
         }
 
         .hero h1 {
-            font-family: var(--font-primary);
-            font-weight: 900;
-            font-size: 2.2rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.75rem;
+            font-weight: 800;
+            font-size: 2rem;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.6rem;
         }
 
-        .hero h1 span { color: var(--brand-medium); }
+        .hero h1 span { color: color-mix(in oklab, var(--sky) 70%, #fff); }
 
         .hero p {
-            font-size: 1.05rem;
-            color: rgba(255,255,255,0.82);
+            font-size: 1rem;
+            color: rgba(255,255,255,0.78);
             max-width: 560px;
             line-height: 1.7;
         }
 
         .hero-badges {
             display: flex;
-            gap: 0.75rem;
-            margin-top: 1.5rem;
+            gap: 8px;
+            margin-top: 1.4rem;
             flex-wrap: wrap;
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 20px;
-            padding: 0.3rem 0.8rem;
-            font-family: var(--font-primary);
-            font-size: 0.78rem;
+            gap: 5px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: var(--radius-pill);
+            padding: 5px 12px;
+            font-size: 0.75rem;
             font-weight: 700;
-            color: white;
+            color: #fff;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
         }
 
-        .badge .material-symbols-outlined { font-size: 14px; }
+        .badge .material-symbols-outlined { font-size: 13px; }
 
-        /* ── Sections ── */
+        /* ── Section cards ── */
         .doc-section {
-            background: var(--surface-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            box-shadow: var(--shadow-main);
-            margin-bottom: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--hair);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow);
+            margin-bottom: 1.5rem;
             overflow: hidden;
-            backdrop-filter: blur(8px);
         }
 
         .section-header {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            padding: 1.25rem 1.75rem;
-            background: linear-gradient(90deg, rgba(88,61,27,0.06), transparent);
-            border-bottom: 1px solid var(--border-color);
+            gap: 10px;
+            padding: 1.1rem 1.6rem;
+            border-bottom: 1px solid var(--hair);
+            background: color-mix(in oklab, var(--sky) 4%, var(--surface));
         }
 
         .section-header .material-symbols-outlined {
-            font-size: 24px;
-            color: var(--brand-medium);
-            background: rgba(149,104,45,0.1);
-            border-radius: 6px;
-            padding: 0.35rem;
+            font-size: 20px;
+            color: var(--sky);
+            background: color-mix(in oklab, var(--sky) 10%, var(--surface));
+            border-radius: var(--radius-tile);
+            padding: 5px;
         }
 
         .section-header h2 {
-            font-family: var(--font-primary);
-            font-weight: 900;
-            font-size: 1.15rem;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--brand-dark);
+            font-weight: 700;
+            font-size: 1rem;
+            letter-spacing: -0.01em;
+            color: var(--ink);
         }
 
         .section-body {
-            padding: 1.5rem 1.75rem;
+            padding: 1.4rem 1.6rem;
         }
 
         .section-body p {
-            color: var(--text-dark);
+            color: var(--ink2);
             margin-bottom: 1rem;
             font-size: 0.95rem;
         }
@@ -276,173 +278,170 @@
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
-            margin-top: 0.5rem;
+            gap: 12px;
+            margin-top: 6px;
         }
 
         .step {
             display: flex;
-            gap: 1rem;
+            gap: 12px;
             align-items: flex-start;
         }
 
         .step-num {
             flex-shrink: 0;
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
-            background: var(--brand-medium);
-            color: white;
-            font-family: var(--font-primary);
-            font-weight: 900;
-            font-size: 0.85rem;
+            background: var(--sky);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.8rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-top: 0.1rem;
+            margin-top: 1px;
         }
 
         .step-text {
-            font-size: 0.95rem;
-            color: var(--text-dark);
-            line-height: 1.6;
+            font-size: 0.93rem;
+            color: var(--ink2);
+            line-height: 1.65;
         }
 
-        .step-text strong {
-            color: var(--brand-dark);
-            font-weight: 700;
-        }
+        .step-text strong { color: var(--ink); font-weight: 600; }
 
-        /* ── Feature Grid ── */
+        /* ── Feature grid ── */
         .feature-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 0.5rem;
+            gap: 10px;
+            margin-top: 8px;
         }
 
         .feature-card {
-            background: rgba(255,255,255,0.6);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem 1.1rem;
+            background: var(--chip);
+            border: 1px solid var(--hair);
+            border-radius: var(--radius-tile);
+            padding: 14px;
             display: flex;
-            gap: 0.75rem;
+            gap: 10px;
             align-items: flex-start;
         }
 
         .feature-card .material-symbols-outlined {
-            font-size: 20px;
-            color: var(--brand-medium);
-            margin-top: 0.1rem;
+            font-size: 18px;
+            color: var(--sky);
             flex-shrink: 0;
+            margin-top: 1px;
         }
 
         .feature-card-text strong {
             display: block;
-            font-family: var(--font-primary);
             font-weight: 700;
             font-size: 0.88rem;
-            color: var(--brand-dark);
-            margin-bottom: 0.2rem;
+            color: var(--ink);
+            margin-bottom: 2px;
         }
 
         .feature-card-text span {
-            font-size: 0.85rem;
-            color: var(--text-light);
+            font-size: 0.84rem;
+            color: var(--muted);
             line-height: 1.5;
         }
 
-        /* ── Tips ── */
+        /* ── Tip ── */
         .tip {
             display: flex;
-            gap: 0.75rem;
+            gap: 10px;
             align-items: flex-start;
-            background: rgba(149, 104, 45, 0.07);
-            border: 1px solid rgba(149, 104, 45, 0.25);
-            border-left: 3px solid var(--brand-medium);
-            border-radius: var(--border-radius);
-            padding: 0.9rem 1rem;
-            margin-top: 1rem;
+            background: color-mix(in oklab, var(--amber) 8%, var(--surface));
+            border: 1px solid color-mix(in oklab, var(--amber) 25%, var(--hair));
+            border-left: 3px solid var(--amber);
+            border-radius: var(--radius-tile);
+            padding: 12px 14px;
+            margin-top: 14px;
             font-size: 0.9rem;
-            color: var(--text-dark);
+            color: var(--ink2);
             line-height: 1.6;
         }
 
         .tip .material-symbols-outlined {
-            font-size: 18px;
-            color: var(--brand-medium);
+            font-size: 17px;
+            color: var(--amber);
             flex-shrink: 0;
-            margin-top: 0.1rem;
+            margin-top: 1px;
         }
 
-        /* ── Inline icon in text ── */
+        /* ── Inline icon ── */
         .ui-icon {
             display: inline-flex;
             align-items: center;
             vertical-align: middle;
-            background: rgba(88,61,27,0.08);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 0 3px;
+            background: var(--chip);
+            border: 1px solid var(--hair);
+            border-radius: 6px;
+            padding: 1px 4px;
             margin: 0 2px;
-            font-size: 0.8em;
-            color: var(--brand-dark);
+            color: var(--ink2);
         }
 
-        .ui-icon .material-symbols-outlined { font-size: 16px; }
+        .ui-icon .material-symbols-outlined { font-size: 14px; }
 
         /* ── Button reference ── */
         .btn-ref {
             display: inline-block;
-            background: rgba(149,104,45,0.1);
-            border: 1px solid rgba(149,104,45,0.3);
-            border-radius: 4px;
-            padding: 1px 7px;
-            font-family: var(--font-primary);
-            font-weight: 700;
-            font-size: 0.8em;
-            color: var(--brand-dark);
+            background: color-mix(in oklab, var(--sky) 8%, var(--surface));
+            border: 1px solid color-mix(in oklab, var(--sky) 30%, var(--hair));
+            border-radius: 6px;
+            padding: 1px 8px;
+            font-weight: 600;
+            font-size: 0.85em;
+            color: var(--sky);
             white-space: nowrap;
         }
 
         /* ── Divider ── */
         .section-divider {
             border: none;
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid var(--hair);
             margin: 1.25rem 0;
         }
 
-        /* ── Color Legend ── */
+        /* ── Color legend ── */
         .color-legend {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.6rem;
-            margin-top: 0.75rem;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         .color-chip {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
-            font-size: 0.85rem;
-            color: var(--text-dark);
+            gap: 6px;
+            font-size: 0.84rem;
+            color: var(--ink2);
+            background: var(--chip);
+            border: 1px solid var(--hair);
+            border-radius: var(--radius-pill);
+            padding: 4px 10px;
         }
 
         .color-dot {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             flex-shrink: 0;
         }
 
-        /* ── Screenshot Placeholders ── */
+        /* ── Screenshot ── */
         .screenshot {
-            margin: 1.25rem 0 0.25rem;
-            border-radius: 8px;
+            margin: 1.1rem 0 0.3rem;
+            border-radius: var(--radius-tile);
             overflow: hidden;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid var(--hair);
+            box-shadow: var(--shadow-soft);
         }
 
         .screenshot img {
@@ -451,54 +450,12 @@
             height: auto;
         }
 
-        .screenshot-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.6rem;
-            background: repeating-linear-gradient(
-                45deg,
-                rgba(149,104,45,0.03),
-                rgba(149,104,45,0.03) 10px,
-                rgba(255,255,255,0.5) 10px,
-                rgba(255,255,255,0.5) 20px
-            );
-            border: 2px dashed var(--brand-light);
-            border-radius: 8px;
-            padding: 2rem 1.5rem;
-            text-align: center;
-            margin: 1.25rem 0 0.25rem;
-        }
-
-        .screenshot-placeholder .material-symbols-outlined {
-            font-size: 36px;
-            color: var(--brand-light);
-        }
-
-        .screenshot-filename {
-            font-family: monospace;
-            font-size: 0.8rem;
-            background: rgba(88,61,27,0.08);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 2px 8px;
-            color: var(--brand-dark);
-        }
-
-        .screenshot-desc {
-            font-size: 0.85rem;
-            color: var(--text-light);
-            max-width: 480px;
-            line-height: 1.5;
-        }
-
         .screenshot-caption {
             font-size: 0.8rem;
-            color: var(--text-light);
+            color: var(--muted);
             font-style: italic;
             text-align: center;
-            margin-top: 0.4rem;
+            margin: 6px 0 12px;
         }
 
         /* ── Footer ── */
@@ -506,54 +463,48 @@
             text-align: center;
             padding: 2rem;
             font-size: 0.85rem;
-            color: var(--text-light);
-            font-family: var(--font-secondary);
+            color: var(--muted);
         }
 
-        .doc-footer a {
-            color: var(--brand-medium);
-            text-decoration: none;
-        }
+        .doc-footer a { color: var(--sky); text-decoration: none; }
+        .doc-footer a:hover { text-decoration: underline; }
 
         /* ── Mobile ── */
         @media (max-width: 768px) {
             .page-wrapper {
                 grid-template-columns: 1fr;
                 padding: 1rem 1rem 3rem;
-                gap: 1.5rem;
+                gap: 1rem;
             }
 
             .doc-nav {
                 position: static;
                 display: flex;
                 flex-wrap: wrap;
-                padding: 0.75rem;
-                gap: 0.25rem;
+                padding: 8px;
+                gap: 4px;
             }
 
             .doc-nav-title { display: none; }
 
             .doc-nav a {
-                padding: 0.35rem 0.6rem;
-                border-radius: 20px;
+                padding: 5px 10px;
+                border-radius: var(--radius-pill);
                 border-left: none;
-                font-size: 0.8rem;
-                background: rgba(149,104,45,0.07);
+                font-size: 0.78rem;
+                background: var(--chip);
             }
 
             .doc-nav a:hover {
-                background: rgba(149,104,45,0.15);
+                background: color-mix(in oklab, var(--sky) 10%, var(--chip));
                 border-left: none;
             }
 
-            .hero { padding: 2rem 1.5rem; }
-            .hero h1 { font-size: 1.7rem; }
-
+            .hero { padding: 1.75rem 1.5rem; }
+            .hero h1 { font-size: 1.5rem; }
             .feature-grid { grid-template-columns: 1fr; }
-
-            .section-header { padding: 1rem 1.25rem; }
-            .section-body { padding: 1.25rem; }
-
+            .section-header { padding: 1rem 1.2rem; }
+            .section-body { padding: 1.1rem 1.2rem; }
             .topbar { padding: 0 1rem; }
         }
     </style>
@@ -573,27 +524,24 @@
 
 <div class="page-wrapper">
 
-    <!-- Nav -->
     <nav class="doc-nav" aria-label="Documentation sections">
         <div class="doc-nav-title">Contents</div>
         <a href="#overview"><span class="material-symbols-outlined">info</span>Overview</a>
         <a href="#getting-started"><span class="material-symbols-outlined">login</span>Getting Started</a>
         <a href="#discovery"><span class="material-symbols-outlined">explore</span>Discovery</a>
         <a href="#voyages"><span class="material-symbols-outlined">map</span>Voyages</a>
-        <a href="#pilot"><span class="material-symbols-outlined">auto_awesome</span>Pilot Suggestions</a>
+        <a href="#pilot"><span class="material-symbols-outlined">auto_awesome</span>Pilot Research</a>
         <a href="#stops"><span class="material-symbols-outlined">location_on</span>Stops</a>
         <a href="#briefings"><span class="material-symbols-outlined">article</span>Briefings</a>
-        <a href="#research-all"><span class="material-symbols-outlined">travel_explore</span>Full Research</a>
+        <a href="#research-all"><span class="material-symbols-outlined">travel_explore</span>Stop Research</a>
         <a href="#guide"><span class="material-symbols-outlined">menu_book</span>Voyage Guide</a>
         <a href="#report"><span class="material-symbols-outlined">description</span>Report</a>
         <a href="#sharing"><span class="material-symbols-outlined">share</span>Sharing</a>
         <a href="#mobile"><span class="material-symbols-outlined">smartphone</span>Mobile</a>
     </nav>
 
-    <!-- Content -->
     <main class="doc-content">
 
-        <!-- Hero -->
         <div class="hero">
             <h1>Welcome to <span>NavalPlan</span></h1>
             <p>Discover where to sail, find the best spots to stop, then build and research your itinerary — all in one place. NavalPlan guides you from inspiration to departure with AI-powered charts, tides, and local knowledge.</p>
@@ -612,7 +560,7 @@
                 <h2>Overview</h2>
             </div>
             <div class="section-body">
-                <p>NavalPlan is an invite-only sailing voyage planner that combines interactive maps with AI-driven research. The planning flow follows three natural stages — and the app is designed to move you through them in order.</p>
+                <p>NavalPlan is an invite-only sailing voyage planner that combines interactive maps with AI-driven research. The planning flow follows four natural stages — and the app is designed to move you through them in order.</p>
                 <div class="feature-grid">
                     <div class="feature-card">
                         <span class="material-symbols-outlined">explore</span>
@@ -624,7 +572,7 @@
                     <div class="feature-card">
                         <span class="material-symbols-outlined">auto_awesome</span>
                         <div class="feature-card-text">
-                            <strong>2 — Pilot Reports</strong>
+                            <strong>2 — Pilot Research</strong>
                             <span>Once you have an area in mind, use the Virtual Harbourmaster to surface the best anchorages, marinas, and resource hubs within it.</span>
                         </div>
                     </div>
@@ -673,7 +621,7 @@
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
-                        <div class="step-text"><strong>Run Pilot Suggestions</strong> — Use the Virtual Harbourmaster to scan your search area for the best anchorages, marinas, and hubs. This helps you decide exactly where to stop before building your day-by-day itinerary.</div>
+                        <div class="step-text"><strong>Run Local Pilot Research</strong> — Use the Virtual Harbourmaster to scan your search area for the best anchorages, marinas, and hubs. This helps you decide exactly where to stop before building your day-by-day itinerary.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">5</div>
@@ -702,27 +650,27 @@
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click <span class="btn-ref">Discover</span> <span class="ui-icon"><span class="material-symbols-outlined">explore</span></span> in the sidebar to enter Discovery Mode. The map fills with colored region dots.</div>
+                        <div class="step-text">Click <span class="btn-ref">Discover</span> in the sidebar to enter Discovery Mode. The map fills with colored region dots.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text">Use the <strong>month slider</strong> at the bottom of the map to filter destinations by the best sailing season for that month. The dots update to show only regions that are good for that time of year.</div>
+                        <div class="step-text">Use the <strong>month slider</strong> at the bottom of the map to filter destinations by sailing season. The dots update to show only regions that are good for that time of year.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">Click any dot on the map to read a regional briefing — cruising conditions, highlights, entry requirements, and seasonal notes.</div>
+                        <div class="step-text">Click any dot to read a regional briefing — cruising conditions, highlights, entry requirements, and seasonal notes.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
-                        <div class="step-text">When you find a region you like, click <span class="btn-ref">Discover</span> again to exit Discovery Mode and create a voyage in that area.</div>
+                        <div class="step-text">When you find a region you like, close the briefing and create a voyage in that area.</div>
                     </li>
                 </ol>
-                <p style="margin-top:1rem;">Region dots are color-coded by type:</p>
+                <p>Region dots are color-coded by destination tier:</p>
                 <div class="color-legend">
-                    <div class="color-chip"><div class="color-dot" style="background:#0077be"></div>Standard destination</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#ff9800"></div>Regional highlight</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#9c27b0"></div>Hidden gem</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#d32f2f"></div>Challenging waters</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#0B7A6F"></div>Standard</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#8A5200"></div>Regional Favorite</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#5B3BD4"></div>Hidden Gem</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#C23A1B"></div>Challenging</div>
                 </div>
             </div>
         </section>
@@ -734,7 +682,7 @@
                 <h2>Voyages</h2>
             </div>
             <div class="section-body">
-                <p>A <strong>voyage</strong> is the container for your trip. Once you've identified an area you want to sail — whether through Discovery Mode or by navigating the map directly — create a voyage to anchor your planning there.</p>
+                <p>A <strong>voyage</strong> is the container for your trip. Once you've identified an area — through Discovery Mode or by navigating the map directly — create a voyage to anchor your planning there.</p>
                 <div class="screenshot">
                     <img src="/screenshots/03-new-voyage-modal.png" alt="New Voyage modal with title, location, search radius, and date fields">
                 </div>
@@ -746,11 +694,11 @@
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text"><strong>Set a search radius</strong> — The default is 60 nm. This controls how wide an area the AI scans when you run Pilot Suggestions. You can adjust it after creation by dragging the circle on the map.</div>
+                        <div class="step-text"><strong>Set a search radius</strong> using the slider (1–150 nm). This controls how wide an area the AI scans when you run Local Pilot Research.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text"><strong>Add dates (optional)</strong> — Set a start and end date if you know your travel window. Dates are required before you can add stops and run the stop research agents, but you can add them at any time.</div>
+                        <div class="step-text"><strong>Add dates (optional)</strong> — Set a start and end date if you know your travel window. Dates are required to add stops and run stop research, but can be added at any time.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
@@ -759,7 +707,7 @@
                 </ol>
                 <div class="tip">
                     <span class="material-symbols-outlined">lightbulb</span>
-                    Don't worry about getting the location exact when you create the voyage — you can drag the search radius circle to fine-tune the area before running Pilot Suggestions.
+                    Don't worry about getting the location exact when you create the voyage — you can adjust the search radius slider or drag the circle on the map to fine-tune the area before running research.
                 </div>
             </div>
         </section>
@@ -768,41 +716,41 @@
         <section class="doc-section" id="pilot">
             <div class="section-header">
                 <span class="material-symbols-outlined">auto_awesome</span>
-                <h2>Pilot Suggestions</h2>
+                <h2>Local Pilot Research</h2>
             </div>
             <div class="section-body">
-                <p>With your voyage created, use <strong>Pilot Suggestions</strong> to let the Virtual Harbourmaster scan the area and surface the best anchorages, marinas, moorings, and resource hubs. This is how you find out exactly where to stop — before you commit to a day-by-day itinerary.</p>
+                <p>Use <strong>Local Pilot Research</strong> to let the Virtual Harbourmaster scan your voyage area and surface the best anchorages, marinas, moorings, and resource hubs. This is how you find exactly where to stop — before committing to a day-by-day itinerary.</p>
                 <div class="screenshot">
-                    <img src="/screenshots/04-pilot-suggestions.png" alt="Pilot Suggestions — search radius circle with radar sweep animation and colored recommendation markers on the map">
+                    <img src="/screenshots/04-pilot-suggestions.png" alt="Pilot Research — search radius circle with radar sweep animation and colored recommendation markers">
                 </div>
-                <p class="screenshot-caption">Pilot Suggestions mid-research — the radar sweep scans the area while recommendation markers stream in. Filter buttons at the bottom control which types are shown.</p>
+                <p class="screenshot-caption">Local Pilot Research mid-run — the radar sweep scans the area while recommendation markers stream onto the map.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click the <span class="ui-icon"><span class="material-symbols-outlined">auto_awesome</span></span> sparkle icon in the itinerary toolbar. The search radius circle appears on the map centered on your voyage.</div>
+                        <div class="step-text">Scroll to the bottom of the sidebar and click <span class="btn-ref">Run Local Pilot Research</span>. The search radius circle appears on the map.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text"><strong>Adjust the search area</strong> if needed — drag the center dot to reposition it, or drag the edge handle to resize the radius. The area saves automatically.</div>
+                        <div class="step-text"><strong>Adjust the search area</strong> if needed — drag the center dot to reposition, or drag the edge handle to resize the radius. The area saves automatically.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">Click <span class="btn-ref">Research Hubs &amp; Spots</span>. The AI scans the area and streams recommendations in real time — markers appear on the map as each one is found.</div>
+                        <div class="step-text">The AI scans the area and streams recommendations in real time — markers appear on the map as each one is found. Results are listed in the sidebar.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
                         <div class="step-text"><strong>Click any marker</strong> for details. If it looks like a good stop, click <span class="btn-ref">Add as Stop</span> to add it to your itinerary.</div>
                     </li>
                 </ol>
-                <p style="margin-top: 1rem;">Use the <strong>filter buttons</strong> at the bottom of the map to narrow by type:</p>
+                <p>Use the <strong>filter buttons</strong> at the bottom of the map to narrow by facility type:</p>
                 <div class="color-legend">
-                    <div class="color-chip"><div class="color-dot" style="background:#388E3C"></div>Anchorages</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#E65100"></div>Marinas &amp; Hubs</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#7B1FA2"></div>Moorings</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#0B7A6F"></div>Anchorages</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#8A5200"></div>Marinas &amp; Hubs</div>
+                    <div class="color-chip"><div class="color-dot" style="background:#5B3BD4"></div>Moorings</div>
                 </div>
                 <div class="tip">
                     <span class="material-symbols-outlined">lightbulb</span>
-                    Run Pilot Suggestions before locking in your stops — it surfaces local knowledge that isn't on standard charts. Use the results to decide <em>where</em> to go, then add those spots to your itinerary.
+                    Run Local Pilot Research before locking in your stops — it surfaces local knowledge that isn't on standard charts. Once research is complete, a <span class="btn-ref">Re-run Local Pilot Research</span> button appears at the bottom of the sidebar to refresh results.
                 </div>
             </div>
         </section>
@@ -816,17 +764,17 @@
             <div class="section-body">
                 <p>Stops are the individual destinations in your voyage. They appear in date order in the sidebar itinerary and as numbered pins on the map.</p>
                 <div class="screenshot">
-                    <img src="/screenshots/05-itinerary-stops.png" alt="Itinerary with stops listed in the sidebar and numbered pins connected by a dashed route line on the map">
+                    <img src="/screenshots/05-itinerary-stops.png" alt="Itinerary with stops listed in the sidebar and numbered pins on the map">
                 </div>
                 <p class="screenshot-caption">A voyage with stops in the sidebar itinerary and their corresponding numbered pins on the map.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text"><strong>Add a stop</strong> — With a voyage open, click anywhere on the map. The location is reverse-geocoded automatically. You can also click a <strong>Pilot Suggestion marker</strong> on the map to add that location as a stop.</div>
+                        <div class="step-text"><strong>Add a stop</strong> — With a voyage open, click anywhere on the map. The location is reverse-geocoded automatically. You can also click a <strong>Pilot Research marker</strong> to add that location as a stop.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text"><strong>Assign a date</strong> — Click a stop in the itinerary list. If dates were set on the voyage, the stop's date is assigned automatically based on its position in the list.</div>
+                        <div class="step-text"><strong>Assign a date</strong> — Click a date row in the itinerary. If dates were set on the voyage, the stop's date is assigned automatically based on its position in the list.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
@@ -843,7 +791,7 @@
                 </ol>
                 <div class="tip">
                     <span class="material-symbols-outlined">lightbulb</span>
-                    The route line between your stops is drawn automatically. It follows the order of stops by date, so adjusting dates will reorder the route.
+                    The route line between your stops is drawn automatically in date order. Adjusting dates will reorder the route.
                 </div>
             </div>
         </section>
@@ -872,7 +820,7 @@
                         <span class="material-symbols-outlined">waves</span>
                         <div class="feature-card-text">
                             <strong>Tides</strong>
-                            <span>A tide chart for the day with high/low times and heights. Helpful for planning entry into shallower anchorages.</span>
+                            <span>A tide chart for the day with high/low times and heights — helpful for planning entry into shallower anchorages.</span>
                         </div>
                     </div>
                     <div class="feature-card">
@@ -892,16 +840,6 @@
                 </div>
                 <hr class="section-divider">
                 <p>To <strong>re-research</strong> a stop (for example if your dates changed), open the briefing and click the <span class="btn-ref">Redo</span> button. The AI will fetch fresh data.</p>
-                <p>Facility pins from briefings appear on the map as colored markers:</p>
-                <div class="color-legend">
-                    <div class="color-chip"><div class="color-dot" style="background:#388E3C"></div>Anchorage</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#E65100"></div>Marina</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#7B1FA2"></div>Mooring</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#5D4037"></div>Restaurant</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#F9A825"></div>Bar</div>
-                    <div class="color-chip"><div class="color-dot" style="background:#455A64"></div>Other</div>
-                </div>
-                <p style="margin-top: 0.75rem;">Use the <strong>facility filter buttons</strong> at the bottom of the map to show or hide specific types.</p>
             </div>
         </section>
 
@@ -909,35 +847,35 @@
         <section class="doc-section" id="research-all">
             <div class="section-header">
                 <span class="material-symbols-outlined">travel_explore</span>
-                <h2>Full Voyage Research</h2>
+                <h2>Stop Research</h2>
             </div>
             <div class="section-body">
-                <p>Instead of researching stops one by one, use <strong>Full Voyage Research</strong> to kick off AI research for every stop and the overall voyage guide simultaneously.</p>
+                <p>Instead of researching stops one by one, use <strong>Run Stop Research</strong> to kick off AI research for every stop and the overall voyage guide simultaneously.</p>
                 <div class="screenshot">
-                    <img src="/screenshots/07-full-research.png" alt="Full voyage research in progress — radar sweeps on each stop, animated route line, outer search ring, and live research ticker">
+                    <img src="/screenshots/07-full-research.png" alt="Stop research in progress — radar sweeps on each stop and animated route line">
                 </div>
-                <p class="screenshot-caption">Full research running — radar sweeps cycle through each stop while the research ticker shows live progress in the sidebar.</p>
+                <p class="screenshot-caption">Stop research running — radar sweeps appear on every stop simultaneously while the sidebar shows a progress card.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click the <span class="ui-icon"><span class="material-symbols-outlined">travel_explore</span></span> globe icon in the itinerary toolbar to start research for the whole voyage.</div>
+                        <div class="step-text">Scroll to the bottom of the itinerary sidebar and click <span class="btn-ref">Run Stop Research</span>.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text">A <strong>radar sweep animation</strong> appears on the map, cycling through each stop while research is in progress. The research ticker in the sidebar shows live status updates.</div>
+                        <div class="step-text">A <strong>radar sweep animation</strong> appears simultaneously on every stop while research is in progress. A progress card in the sidebar shows the current stage.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">Each stop's icon in the itinerary turns to a <span class="ui-icon"><span class="material-symbols-outlined">check_circle</span></span> as its briefing completes. You can click to read briefings as they arrive.</div>
+                        <div class="step-text">Each stop's radar sweep disappears as its briefing completes. You can click to read briefings as they arrive.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
-                        <div class="step-text">When all stops and the voyage guide are complete, a notification confirms research is done.</div>
+                        <div class="step-text">When all stops and the voyage guide are complete, a <strong>Research complete</strong> banner appears at the top of the itinerary.</div>
                     </li>
                 </ol>
                 <div class="tip">
                     <span class="material-symbols-outlined">schedule</span>
-                    Full research can take a few minutes depending on the number of stops. The app polls in the background — you can keep browsing while it works.
+                    Full research can take a few minutes depending on the number of stops. The app polls in the background — you can keep browsing while it works. Once done, use <span class="btn-ref">Re-run Stop Research</span> at the bottom of the sidebar to refresh any time.
                 </div>
             </div>
         </section>
@@ -957,11 +895,11 @@
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click the <span class="ui-icon"><span class="material-symbols-outlined">map</span></span> map icon in the itinerary toolbar to open the guide.</div>
+                        <div class="step-text">Click the <span class="btn-ref">Guide</span> button in the itinerary toolbar to open the guide.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text">If no guide exists yet, a prompt to trigger research appears. The guide is also generated automatically when you run <strong>Full Voyage Research</strong>.</div>
+                        <div class="step-text">If no guide exists yet, a prompt to trigger research appears. The guide is also generated automatically when you run <strong>Stop Research</strong>.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
@@ -978,15 +916,15 @@
                 <h2>Voyage Report</h2>
             </div>
             <div class="section-body">
-                <p>The <strong>Voyage Report</strong> assembles all your research — the guide, every stop briefing, tide charts, and Pilot Suggestions — into a single shareable document.</p>
+                <p>The <strong>Voyage Report</strong> assembles all your research — the guide, every stop briefing, tide charts, and Pilot Research results — into a single shareable document.</p>
                 <div class="screenshot">
-                    <img src="/screenshots/09-voyage-report.png" alt="Voyage Report modal showing a map snapshot and overview grid of stop cards with tide charts">
+                    <img src="/screenshots/09-voyage-report.png" alt="Voyage Report modal showing a map snapshot and stop overview cards">
                 </div>
                 <p class="screenshot-caption">The Voyage Report — map snapshot, stop overview cards, and full day-by-day briefings ready to copy and share.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click the <span class="ui-icon"><span class="material-symbols-outlined">description</span></span> document icon in the itinerary toolbar to generate the report.</div>
+                        <div class="step-text">Click the <span class="btn-ref">Report</span> button in the itinerary toolbar to generate the report.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
@@ -999,7 +937,7 @@
                 </ol>
                 <div class="tip">
                     <span class="material-symbols-outlined">lightbulb</span>
-                    The report works best when all stops have been researched. Run Full Voyage Research first for a complete document.
+                    The report works best when all stops have been researched. Run Stop Research first for the most complete document.
                 </div>
             </div>
         </section>
@@ -1067,7 +1005,7 @@
                         <span class="material-symbols-outlined">offline_bolt</span>
                         <div class="feature-card-text">
                             <strong>Connection Warning</strong>
-                            <span>A banner appears at the top if the backend becomes unreachable. Research features require an active connection.</span>
+                            <span>A banner appears if the backend becomes unreachable. Research features require an active connection.</span>
                         </div>
                     </div>
                 </div>

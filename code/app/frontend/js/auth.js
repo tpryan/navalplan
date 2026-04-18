@@ -189,7 +189,7 @@ function makeThemeButton() {
     btn.className = 'np-fab';
     btn.setAttribute('aria-label', 'Toggle dark mode');
     btn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
-    btn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+    btn.innerHTML = `<span class="material-symbols-outlined">${currentTheme() === 'dark' ? 'light_mode' : 'dark_mode'}</span>`;
     btn.addEventListener('focus', () => { btn.style.outline = '3px solid var(--focus)'; btn.style.outlineOffset = '2px'; });
     btn.addEventListener('blur', () => { btn.style.outline = 'none'; });
     return btn;

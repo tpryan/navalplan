@@ -1284,6 +1284,169 @@
 .np-stepper__text--done   { color: var(--muted); }
 .np-stepper__text--active { font-weight: 600; }
 
+/* ─── Voyage list ────────────────────────────────────────────────────────── */
+.np-voyage-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+}
+.np-voyage-label--top { margin: 4px 0 8px; }
+.np-voyage-label--sep { margin: 12px 0 8px; }
+
+.voyage-item {
+    border-radius: 16px;
+    background: color-mix(in oklab, var(--accent, var(--sky)) 6%, var(--surface));
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--accent, var(--sky)) 25%, transparent);
+    margin-bottom: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: box-shadow .15s;
+    border: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.voyage-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.voyage-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.np-chip-row {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.np-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    font-size: 11px;
+}
+.np-chip--date {
+    font-weight: 700;
+    background: color-mix(in oklab, var(--accent, var(--chip)) 12%, var(--surface));
+    color: var(--ink);
+}
+.np-chip--nodates {
+    font-weight: 700;
+    background: var(--chip);
+    color: var(--muted);
+}
+.np-chip--loc {
+    font-weight: 600;
+    background: var(--chip);
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+/* Pilot / facility dot colors keyed to data-type */
+[data-type="anchorage"]  .pilot-dot { background: var(--teal); }
+[data-type="marina"]     .pilot-dot { background: var(--amber); }
+[data-type="mooring"]    .pilot-dot { background: var(--violet); }
+[data-type="restaurant"] .pilot-dot { background: var(--green); }
+[data-type="bar"]        .pilot-dot { background: var(--coral); }
+[data-type="other"]      .pilot-dot { background: var(--sky); }
+[data-type="hub"]        .pilot-dot { background: var(--amber); }
+
+/* ─── Voyage modal form ──────────────────────────────────────────────────── */
+#modal-new-voyage      { max-width: 440px; padding: 26px; }
+#modal-discovery-intro,
+#modal-first-trip      { max-width: 500px; }
+#modal-admin           { min-width: 600px; }
+
+.modal-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.modal-voyage-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 13px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: color-mix(in oklab, var(--coral) 12%, var(--surface));
+    color: var(--coral);
+}
+
+.modal-close-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--chip);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--muted);
+}
+
+.modal-form-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.4px;
+    color: var(--ink);
+    margin: 0 0 20px;
+}
+
+.modal-empty-icon {
+    font-size: 64px;
+    margin-bottom: 1rem;
+}
+
+.btn-flex-1 { flex: 1; }
+
+#btn-use-map-center {
+    padding: 0 16px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Admin table */
+#admin-users-table              { border-collapse: collapse; table-layout: fixed; }
+#admin-users-table thead tr     { background-color: rgba(0,0,0,.03); }
+#admin-users-table th:nth-child(1) { width: 50%; }
+#admin-users-table th:nth-child(2) { width: 30%; }
+#admin-users-table th:nth-child(3) { width: 20%; }
+
+/* Inline icon in onboarding text */
+.icon-inline-sm { font-size: 1.2em; vertical-align: bottom; }
+
+/* Ordered onboarding list */
+.discovery-intro-list--decimal { list-style-type: decimal; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Responsive overrides
    ═══════════════════════════════════════════════════════════════════════════ */
