@@ -29,6 +29,8 @@ type Store interface {
 	GetNearbyBriefing(ctx context.Context, lat, lng float64) (*models.Briefing, error)
 	ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error)
 	CreateBriefing(ctx context.Context, b *models.Briefing) error
+	ListAllFutureStops(ctx context.Context) ([]models.Stop, error)
+	UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error
 
 	// Voyage Guide
 	GetVoyageGuide(ctx context.Context, voyageID int64) (*models.VoyageGuide, error)

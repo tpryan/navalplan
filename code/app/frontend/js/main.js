@@ -2855,6 +2855,14 @@ async function showBriefing(briefing, doPushState = true) {
         weatherSec.appendChild(wxSum);
     }
 
+    if (briefing.weather_last_updated) {
+        const wxAge = document.createElement('p');
+        wxAge.style.cssText = 'margin-top:6px;font-size:11px;color:var(--muted);font-style:italic';
+        const updatedAt = new Date(briefing.weather_last_updated);
+        wxAge.textContent = `Forecast as of ${updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        weatherSec.appendChild(wxAge);
+    }
+
     // Wind forecast tiles — AM / Mid / PM / Eve estimated speeds
     if (weather.wind_speed_kt) {
         const speed = parseFloat(weather.wind_speed_kt) || 0;
@@ -4874,6 +4882,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
                     ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
                     ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">air</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    ${briefing.weather_last_updated ? `<div class="np-day-tile__meta" style="font-style:italic;opacity:0.7"><span class="material-symbols-outlined np-day-tile__icon">update</span>${new Date(briefing.weather_last_updated).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
                     <div class="np-day-tile__chart overview-chart">
                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                     </div>
@@ -4955,6 +4964,11 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 html += `</div>`;
+                if (b.weather_last_updated) {
+                    const updatedAt = new Date(b.weather_last_updated);
+                    const label = updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                    html += `<p style="margin:4px 0 8px;font-size:11px;color:var(--muted);font-style:italic">Forecast as of ${label}</p>`;
+                }
             }
 
             // Wind forecast tiles (AM / Mid / PM / Eve)

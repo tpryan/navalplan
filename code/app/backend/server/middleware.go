@@ -208,8 +208,13 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 // requireAdmin checks if the authenticated user is an admin.
 // It assumes requireAuth has already run and populated the context.
+// The system API key also bypasses this check, matching requireAuth behaviour.
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.SystemAPIKey != "" && r.Header.Get("Authorization") == "Bearer "+s.SystemAPIKey {
+			next.ServeHTTP(w, r)
+			return
+		}
 		person := appcontext.GetPersonFromContext(r.Context())
 		if person == nil || !person.IsAdmin {
 			http.Error(w, "Forbidden", http.StatusForbidden)

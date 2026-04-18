@@ -299,6 +299,19 @@ func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month i
 	return args.Error(0)
 }
 
+func (m *MockStore) ListAllFutureStops(ctx context.Context) ([]models.Stop, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Stop), args.Error(1)
+}
+
+func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error {
+	args := m.Called(stopID, weather)
+	return args.Error(0)
+}
+
 var _ datastore.Store = (*MockStore)(nil)
 
 // Helper to add person to context
