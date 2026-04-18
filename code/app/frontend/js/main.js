@@ -1,7 +1,6 @@
 import DOMPurify from 'dompurify';
 import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
-import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { loadTheme, toggleTheme, currentTheme } from './theme.js';
 import { MapPin } from './ui/MapPin.js';
@@ -119,7 +118,6 @@ function accentDot(accent, size = 28, iconKey = '') {
 }
 
 // State
-let researchTicker = null;
 let voyages = [];
 let currentVoyage = null;
 let currentStops = [];
@@ -723,7 +721,6 @@ async function reverseGeocode(latLng) {
 
 function initUI() {
     loadTheme();
-    researchTicker = new Ticker('research-ticker');
     initThemeToggle();
     initPilotAndFilterListeners();
     initDiscoveryListeners();
@@ -1779,22 +1776,20 @@ async function executeResearchAll() {
 
         const fullResRes = await API.triggerFullResearch(currentVoyage.id);
         showNotification('Research Started', 'Full voyage research has started. Individual stops will update as they complete.');
-        if (researchTicker) researchTicker.start();
 
         // Start radar sweep sequence cycling through all stops
         if (map && currentStops.length > 0) {
             startStopSweepSequence(currentStops);
         }
 
-        // Stream progress updates into ticker
-        if (fullResRes && fullResRes.session_id && researchTicker) {
+        // Stream progress updates
+        if (fullResRes && fullResRes.session_id) {
             _fullResProgressES = API.streamProgress(fullResRes.session_id, (evt) => {
                 if (evt.stage === 'error_503') {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
                 }
-                researchTicker.push(evt.message);
             });
         }
 
@@ -1812,7 +1807,6 @@ async function executeResearchAll() {
                 clearInterval(_fullResPoll); _fullResPoll = null;
                 if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
                 clearStopSweeps();
-                if (researchTicker) researchTicker.error('Research Timeout');
                 btnResearchAll.innerHTML = originalContent;
                 btnResearchAll.disabled = false;
 
@@ -1832,7 +1826,6 @@ async function executeResearchAll() {
                     const g = await API.getVoyageGuide(currentVoyage.id);
                     if (g && isNewData(g, 'guide')) {
                         guideComplete = true;
-                        if (researchTicker) researchTicker.push('Voyage guide complete');
                     }
                 }
 
@@ -1847,8 +1840,6 @@ async function executeResearchAll() {
                         if (b && isNewData(b, 'stop', stop.id)) {
                             pendingStops.splice(i, 1);
                             removeStopFromSweepQueue(stop.id);
-
-                            if (researchTicker) researchTicker.push(`Research complete for ${displayLocationName(stop.location_name)}`);
 
                             const btn = document.querySelector(`.research[data-stop-id="${stop.id}"]`);
                             if (btn) {
@@ -1872,7 +1863,6 @@ async function executeResearchAll() {
                     isResearchAllRunning = false;
                     await checkItineraryFullness();
                     renderItinerary();
-                    if (researchTicker) researchTicker.stop();
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
 
@@ -1884,7 +1874,6 @@ async function executeResearchAll() {
                     clearStopSweeps();
                     isResearchAllRunning = false;
                     renderItinerary();
-                    if (researchTicker) researchTicker.error('Research Failed');
                     btnResearchAll.innerHTML = originalContent;
                     btnResearchAll.disabled = false;
                     showNotification('Research Failed', 'Connection to server lost. Please try again.');
@@ -1903,7 +1892,6 @@ async function executeResearchAll() {
         clearInterval(_fullResPoll); _fullResPoll = null;
         if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
         clearStopSweeps();
-        if (researchTicker) researchTicker.stop();
         btnResearchAll.innerHTML = originalContent;
         btnResearchAll.disabled = false;
         // Revert spinners
@@ -2072,11 +2060,6 @@ async function handlePilotSuggestionsClick() {
             API.triggerVoyageGuideResearch(currentVoyage.id)
         ]);
 
-        // Start a ticker to show progress
-        if (researchTicker) {
-            researchTicker.start("The AI is researching resource hubs, anchorages, and moorings...");
-        }
-
         // Shared completion handler — called from either the done progress event or the poll.
         let pilotDone = false;
         const finishPilotResearch = async () => {
@@ -2103,7 +2086,6 @@ async function handlePilotSuggestionsClick() {
             if (radarSweep) { radarSweep.stop(); radarSweep = null; }
             if (pilotCenterMarker) pilotCenterMarker.map = map;
             if (pilotRadiusMarker) pilotRadiusMarker.map = map;
-            if (researchTicker) researchTicker.stop();
             icon.classList.remove('spin');
             btn.disabled = false;
 
@@ -2121,10 +2103,9 @@ async function handlePilotSuggestionsClick() {
             }
         };
 
-        // Stream progress events into the ticker; trigger completion on 'done'.
-        if (recRes.progress_session_id && researchTicker) {
+        // Stream progress events; trigger completion on 'done'.
+        if (recRes.progress_session_id) {
             _pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
-                researchTicker.push(evt.message);
                 if (evt.stage === 'done') {
                     console.log('[progress] done received — finishing pilot research');
                     finishPilotResearch();
@@ -2883,21 +2864,19 @@ async function handleResearchClick(stop, button) {
         button.innerHTML = '<span class="material-symbols-outlined spin">sync</span>';
 
         // Trigger
-        if (researchTicker) researchTicker.start();
         const resRes = await API.triggerResearch(stop.id);
 
         // Start radar sweep on this stop's position
         if (map) startStopSweepSequence([stop]);
 
-        // Stream progress updates into the ticker
-        if (resRes.session_id && researchTicker) {
+        // Stream progress updates
+        if (resRes.session_id) {
             _stopProgressES = API.streamProgress(resRes.session_id, (evt) => {
                 if (evt.stage === 'error_503') {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
                 }
-                researchTicker.push(evt.message);
             });
         }
 
@@ -2909,7 +2888,6 @@ async function handleResearchClick(stop, button) {
                     clearInterval(_stopPoll); _stopPoll = null;
                     if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
                     clearStopSweeps();
-                    if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showBriefing(b);
                     renderMapStops();
@@ -2922,7 +2900,6 @@ async function handleResearchClick(stop, button) {
         clearInterval(_stopPoll); _stopPoll = null;
         if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
         clearStopSweeps();
-        if (researchTicker) researchTicker.stop();
         button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
         setTimeout(() => button.innerHTML = originalContent, 2000);
     }
@@ -3433,15 +3410,13 @@ async function redoBriefing(oldBriefing, btn) {
         const redoRes = await API.triggerResearch(oldBriefing.stop_id);
 
         let redoProgressES = null;
-        if (redoRes && redoRes.session_id && researchTicker) {
-            researchTicker.start();
+        if (redoRes && redoRes.session_id) {
             _stopProgressES = API.streamProgress(redoRes.session_id, (evt) => {
                 if (evt.stage === 'error_503') {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
                 }
-                researchTicker.push(evt.message);
             });
         }
 
@@ -3454,7 +3429,6 @@ async function redoBriefing(oldBriefing, btn) {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
                 if (redoProgressES) redoProgressES.close();
-                if (researchTicker) researchTicker.stop();
                 content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
                 btn.disabled = false;
                 return;
@@ -3468,7 +3442,6 @@ async function redoBriefing(oldBriefing, btn) {
                     if (newTime > oldTime) {
                         clearInterval(poll);
                         if (redoProgressES) redoProgressES.close();
-                        if (researchTicker) researchTicker.stop();
                         btn.disabled = false;
                         showBriefing(b); // Re-render with new data
                         renderMapStops();
@@ -4272,16 +4245,14 @@ async function handleGuideClick(voyage, button, doPushState = true) {
         // Trigger
         const guideRes = await API.triggerVoyageGuideResearch(voyage.id);
 
-        // Stream progress updates into ticker
-        if (guideRes && guideRes.session_id && researchTicker) {
-            researchTicker.start();
+        // Stream progress updates
+        if (guideRes && guideRes.session_id) {
             _guideProgressES = API.streamProgress(guideRes.session_id, (evt) => {
                 if (evt.stage === 'error_503') {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
                 }
-                researchTicker.push(evt.message);
             });
         }
 
@@ -4292,7 +4263,6 @@ async function handleGuideClick(voyage, button, doPushState = true) {
                 if (resp && resp.guide && resp.guide.summary && resp.guide.summary.length > 0) {
                     clearInterval(_guidePoll); _guidePoll = null;
                     if (_guideProgressES) { _guideProgressES.close(); _guideProgressES = null; }
-                    if (researchTicker) researchTicker.stop();
                     button.innerHTML = originalContent;
                     showVoyageGuide(resp);
                 }
@@ -4427,11 +4397,8 @@ async function redoGuide(oldGuide, btn) {
         const redoGuideRes = await API.triggerVoyageGuideResearch(oldGuide.voyage_id);
 
         let redoGuideProgressES = null;
-        if (redoGuideRes && redoGuideRes.session_id && researchTicker) {
-            researchTicker.start();
-            redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, (evt) => {
-                researchTicker.push(evt.message);
-            });
+        if (redoGuideRes && redoGuideRes.session_id) {
+            redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, () => {});
         }
 
         const oldTime = new Date(oldGuide.created_at).getTime();
@@ -4442,7 +4409,6 @@ async function redoGuide(oldGuide, btn) {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
                 if (redoGuideProgressES) redoGuideProgressES.close();
-                if (researchTicker) researchTicker.stop();
                 content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p></div>';
                 btn.disabled = false;
                 return;
@@ -4454,7 +4420,6 @@ async function redoGuide(oldGuide, btn) {
                     if (newTime > oldTime) {
                         clearInterval(poll);
                         if (redoGuideProgressES) redoGuideProgressES.close();
-                        if (researchTicker) researchTicker.stop();
                         btn.disabled = false;
                         showVoyageGuide(g);
                     }

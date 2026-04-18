@@ -679,12 +679,6 @@ html:has(.shared-view) {
     100% { opacity: 1; }
 }
 
-/* --- Ticker Overlay Canvas --- */
-.ticker-canvas {
-    position: absolute;
-    pointer-events: none;
-}
-
 /* --- Map Marker Icons (AdvancedMarkerElement content divs) --- */
 .map-marker-icon {
     width: 32px;
