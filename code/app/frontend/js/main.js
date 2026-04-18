@@ -1,26 +1,26 @@
 import DOMPurify from 'dompurify';
 import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
-import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { loadTheme, toggleTheme, currentTheme } from './theme.js';
 import { MapPin } from './ui/MapPin.js';
 import { DataTile } from './ui/DataTile.js';
 import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
 
-const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
-setOptions({
-  key: GOOGLE_MAPS_API_KEY,
-  version: "weekly",
-});
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences } from './utils.js';
+import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather } from './tokens.js';
+import { hashString, smoothPolygon, chaikin, getCirclePolygon } from './geometry.js';
+import { getRadarSweepClass } from './animations/RadarSweep.js';
+import { getSearchRingClass } from './animations/SearchRing.js';
+import { showNotification } from './notifications.js';
+import { initAdminUI } from './admin.js';
 
-// Dynamic library loading
-let googleMapsLib = null;
-async function loadGoogleMaps() {
-    if (googleMapsLib) return googleMapsLib;
-    googleMapsLib = await importLibrary("maps");
-    return googleMapsLib;
-}
+const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
+setOptions({ key: GOOGLE_MAPS_API_KEY, version: 'weekly' });
+
+// Pre-warm large library bundles so they're ready when first needed.
+importLibrary('maps');
 
 let ChartLib = null;
 async function loadChart() {
@@ -28,96 +28,9 @@ async function loadChart() {
     ChartLib = (await import('chart.js/auto')).default;
     return ChartLib;
 }
-
-// Start loading large libraries immediately
-loadGoogleMaps();
 loadChart();
 
-// Configuration
-
-// Signal accent tokens per facility / recommendation type
-const MARKER_ACCENTS = {
-    anchorage:    'teal',
-    mooring:      'violet',
-    marina:       'amber',
-    hub:          'amber',
-    'yacht club': 'amber',
-    restaurant:   'green',
-    bar:          'coral',
-    default:      'sky',
-};
-
-function markerAccent(type) {
-    if (!type) return MARKER_ACCENTS.default;
-    const t = type.toLowerCase();
-    if (t.includes('anchor'))     return MARKER_ACCENTS.anchorage;
-    if (t.includes('moor'))       return MARKER_ACCENTS.mooring;
-    if (t.includes('marina'))     return MARKER_ACCENTS.marina;
-    if (t.includes('hub'))        return MARKER_ACCENTS.hub;
-    if (t.includes('yacht'))      return MARKER_ACCENTS['yacht club'];
-    if (t.includes('restaurant')) return MARKER_ACCENTS.restaurant;
-    if (t.includes('bar'))        return MARKER_ACCENTS.bar;
-    return MARKER_ACCENTS.default;
-}
-
-// Announce a message to screen readers via the #a11y-announcer live region
-function announce(msg) {
-    const el = document.getElementById('a11y-announcer');
-    if (!el) return;
-    el.textContent = '';
-    // Flush then set — ensures re-announcement even for same string
-    requestAnimationFrame(() => { el.textContent = msg; });
-}
-
-// Resolve a Signal token to its current hex value (for Maps APIs that need raw colors)
-function tokenColor(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
-}
-
-// Compat shim for legacy call sites still using markerColor(type)
-function markerColor(type) {
-    return tokenColor(markerAccent(type));
-}
-
-// Material Symbols icon names for each facility type
-const MARKER_ICONS = {
-    anchorage:  'anchor',
-    marina:     'directions_boat',
-    mooring:    'link',
-    restaurant: 'restaurant',
-    bar:        'local_bar',
-    hub:        'build',
-};
-
-// Build a round accent dot with a white Material Symbol icon
-function accentDot(accent, size = 28, iconKey = '') {
-    const dot = document.createElement('div');
-    dot.style.cssText = [
-        `width:${size}px`,
-        `height:${size}px`,
-        'border-radius:50%',
-        `background:var(--${accent})`,
-        'border:2.5px solid var(--surface)',
-        'box-shadow:0 2px 6px rgba(0,0,0,.3)',
-        'cursor:pointer',
-        'flex-shrink:0',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-    ].join(';');
-    const iconName = MARKER_ICONS[iconKey];
-    if (iconName) {
-        const span = document.createElement('span');
-        span.className = 'material-symbols-outlined';
-        span.style.cssText = `font-size:${Math.round(size * 0.52)}px;color:#fff;line-height:1;pointer-events:none;user-select:none`;
-        span.setAttribute('aria-hidden', 'true');
-        span.textContent = iconName;
-        dot.appendChild(span);
-    }
-    return dot;
-}
-
-// State
+// ─── Shared State ────────────────────────────────────────────────────────────
 let voyages = [];
 let currentVoyage = null;
 let currentStops = [];
@@ -148,144 +61,7 @@ let _guideProgressES = null;
 let _stopPoll = null;
 let _stopProgressES = null;
 
-// createRadarSweepOverlay — factory that returns a RadarSweep class once
-// google.maps.OverlayView is available (cannot extend it at parse time).
-function createRadarSweepOverlay(OverlayView) {
-    return class RadarSweep extends OverlayView {
-        constructor(map, center, radiusMeters) {
-            super();
-            this._map = map;
-            this._center = center;
-            this._radiusMeters = radiusMeters;
-            this._element = null;
-            this._active = false;
-            this.setMap(map);
-        }
-
-        onAdd() {
-            const div = document.createElement('div');
-            div.className = 'radar-sweep-container';
-            
-            // Add internal structure
-            div.innerHTML = `
-                <div class="radar__circle radar__circle_outer"></div>
-                <div class="radar__circle radar__circle_inner"></div>
-                <div class="radar__beam"></div>
-            `;
-            
-            this._element = div;
-            const panes = this.getPanes();
-            panes.overlayLayer.appendChild(div);
-            this._active = true;
-        }
-
-        draw() {
-            if (!this._element || !this._active) return;
-            const proj = this.getProjection();
-            if (!proj) return;
-
-            const latVal = typeof this._center.lat === 'function' ? this._center.lat() : this._center.lat;
-            const lngVal = typeof this._center.lng === 'function' ? this._center.lng() : this._center.lng;
-            const centerPx = proj.fromLatLngToDivPixel({ lat: latVal, lng: lngVal });
-
-            const metersPerPx = 156543.03392 * Math.cos(latVal * Math.PI / 180) / Math.pow(2, this._map.getZoom());
-            const radiusPx = this._radiusMeters / metersPerPx;
-            const size = Math.ceil(radiusPx * 2);
-
-            this._element.style.width = `${size}px`;
-            this._element.style.height = `${size}px`;
-            this._element.style.left = `${Math.round(centerPx.x - size / 2)}px`;
-            this._element.style.top = `${Math.round(centerPx.y - size / 2)}px`;
-        }
-
-        onRemove() {
-            this._active = false;
-            if (this._element && this._element.parentNode) {
-                this._element.parentNode.removeChild(this._element);
-            }
-            this._element = null;
-        }
-
-        stop() {
-            this.setMap(null);
-        }
-    };
-}
-// Cached RadarSweep class — resolved once after Maps library loads.
-let _RadarSweepClass = null;
-async function getRadarSweepClass() {
-    if (_RadarSweepClass) return _RadarSweepClass;
-    const { OverlayView } = await importLibrary("maps");
-    _RadarSweepClass = createRadarSweepOverlay(OverlayView);
-    return _RadarSweepClass;
-}
-
-// createSearchRingOverlay — animated ring that draws and erases itself at the voyage search radius.
-function createSearchRingOverlay(OverlayView) {
-    return class SearchRing extends OverlayView {
-        constructor(map, center, radiusMeters) {
-            super();
-            this._map = map;
-            this._center = center;
-            this._radiusMeters = radiusMeters;
-            this._element = null;
-            this._active = false;
-            this.setMap(map);
-        }
-
-        onAdd() {
-            const div = document.createElement('div');
-            div.className = 'search-ring-container';
-            div.innerHTML = `
-                <div class="search-ring__pulse"></div>
-                <div class="search-ring__circle"></div>
-                <div class="search-ring__circle" style="inset: 25%"></div>
-            `;
-            this._element = div;
-            this.getPanes().overlayLayer.appendChild(div);
-            this._active = true;
-        }
-
-        draw() {
-            if (!this._element || !this._active) return;
-            const proj = this.getProjection();
-            if (!proj) return;
-
-            const latVal = typeof this._center.lat === 'function' ? this._center.lat() : this._center.lat;
-            const lngVal = typeof this._center.lng === 'function' ? this._center.lng() : this._center.lng;
-            const centerPx = proj.fromLatLngToDivPixel({ lat: latVal, lng: lngVal });
-
-            const metersPerPx = 156543.03392 * Math.cos(latVal * Math.PI / 180) / Math.pow(2, this._map.getZoom());
-            const radiusPx = this._radiusMeters / metersPerPx;
-            const size = Math.ceil(radiusPx * 2);
-
-            this._element.style.width = `${size}px`;
-            this._element.style.height = `${size}px`;
-            this._element.style.left = `${Math.round(centerPx.x - size / 2)}px`;
-            this._element.style.top  = `${Math.round(centerPx.y - size / 2)}px`;
-        }
-
-        onRemove() {
-            this._active = false;
-            if (this._element && this._element.parentNode) {
-                this._element.parentNode.removeChild(this._element);
-            }
-            this._element = null;
-        }
-
-        stop() { this.setMap(null); }
-    };
-}
-
-let _SearchRingClass = null;
-async function getSearchRingClass() {
-    if (_SearchRingClass) return _SearchRingClass;
-    const { OverlayView } = await importLibrary("maps");
-    _SearchRingClass = createSearchRingOverlay(OverlayView);
-    return _SearchRingClass;
-}
-
-// Stop sweep sequencer state
+// ─── Sweep Manager ────────────────────────────────────────────────────────────
 const STOP_SWEEP_RADIUS_M = 9260; // 5 nautical miles
 const stopSweepInstances = new Map(); // stopId → RadarSweep instance
 let stopSweepQueue = [];
@@ -414,131 +190,14 @@ const syncToBackend = (force = false) => {
     });
 };
 
-// Pagination
+// ─── Pagination State ─────────────────────────────────────────────────────────
 let currentVoyagePage = 1;
 const VOYAGE_PAGE_LIMIT = 20;
 let currentStopPage = 1;
 const STOP_PAGE_LIMIT = 50;
 
-/**
- * Strips Plus Codes (e.g. "82GQ+6Q ") from location names for cleaner UI display
- */
-function displayLocationName(name) {
-    if (!name) return "";
-    // Regular expression to match Plus Codes at the start of the string
-    // Matches 4-8 alphanumeric chars + '+' + 2-3 alphanumeric chars followed by space
-    return name.replace(/^[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\s*/i, "").trim();
-}
 
-/**
- * Ensures the input is an array, handling the wrapped {"recommendations": [...]} format
- */
-function ensureRecommendationsArray(data) {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if (data.recommendations && Array.isArray(data.recommendations)) return data.recommendations;
-    return [];
-}
-
-/**
- * Smoothing algorithm for polygons (Chaikin's)
- */
-function smoothPolygon(coordinates, iterations = 2) {
-    if (!coordinates || coordinates.length < 3) return coordinates;
-    
-    let result = coordinates;
-    for (let i = 0; i < iterations; i++) {
-        result = chaikin(result);
-    }
-    return result;
-}
-
-/**
- * Generate a circular polygon from a center point and radius in miles
- * with organic jitter to make it look like a 'blob'.
- */
-function getCirclePolygon(center, radiusMiles, numPoints = 24, jitter = 0.3, seed = 0) {
-    const coords = [];
-    const R = 3958.8; // Earth's radius in miles
-    const lat1 = (center.lat * Math.PI) / 180;
-    const lon1 = (center.lng * Math.PI) / 180;
-
-    // Deterministic pseudo-random based on seed + index
-    const getJitter = (i) => {
-        const val = Math.sin(seed + i) * 10000;
-        return val - Math.floor(val);
-    };
-
-    for (let i = 0; i < numPoints; i++) {
-        const brng = (2 * Math.PI * i) / numPoints;
-        
-        // Random factor between (1-jitter) and (1+jitter)
-        const randomFactor = (1 - jitter) + (getJitter(i) * jitter * 2);
-        const d = (radiusMiles * randomFactor) / R;
-
-        const lat2 = Math.asin(
-            Math.sin(lat1) * Math.cos(d) +
-            Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
-        );
-        const lon2 =
-            lon1 +
-            Math.atan2(
-                Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
-                Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
-            );
-        coords.push([ (lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI ]);
-    }
-    // Close the loop
-    if (coords.length > 0) {
-        coords.push([coords[0][0], coords[0][1]]);
-    }
-    return coords;
-}
-
-function hashString(str) {
-    let hash = 0;
-    if (!str) return hash;
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash) + str.charCodeAt(i);
-        hash |= 0;
-    }
-    return hash;
-}
-
-function chaikin(coords) {
-    if (!coords || coords.length < 2) return coords;
-    const newCoords = [];
-    // Handle the closed loop: if last point == first point, we smooth across it
-    const isClosed = coords[0][0] === coords[coords.length-1][0] && coords[0][1] === coords[coords.length-1][1];
-    
-    for (let i = 0; i < coords.length - 1; i++) {
-        const p0 = coords[i];
-        const p1 = coords[i + 1];
-        
-        const q = [
-            0.75 * p0[0] + 0.25 * p1[0],
-            0.75 * p0[1] + 0.25 * p1[1]
-        ];
-        const r = [
-            0.25 * p0[0] + 0.75 * p1[0],
-            0.25 * p0[1] + 0.75 * p1[1]
-        ];
-        
-        newCoords.push(q);
-        newCoords.push(r);
-    }
-    
-    if (isClosed) {
-        // Explicitly close the loop with the exact first point
-        newCoords.push([newCoords[0][0], newCoords[0][1]]);
-    } else {
-        // If not closed, keep endpoints (less ideal for smoothing)
-        newCoords.unshift(coords[0]);
-        newCoords.push(coords[coords.length-1]);
-    }
-    
-    return newCoords;
-}
+// ─── App Init & Routing ───────────────────────────────────────────────────────
 
 let last503Alert = 0;
 document.addEventListener('DOMContentLoaded', () => {
@@ -705,6 +364,7 @@ function initUI() {
     initVoyageModalListeners();
     initNavigationListeners();
     initModalCloseListeners();
+    initAdminUI();
 }
 
 function initThemeToggle() {
@@ -1279,6 +939,8 @@ async function handleCopyReport() {
     }
 }
 
+// ─── Voyage Management ────────────────────────────────────────────────────────
+
 async function loadVoyages() {
   const listContainer = document.getElementById('voyage-list');
   listContainer.innerHTML = '<p class="loading-text">Loading voyages...</p>';
@@ -1599,6 +1261,8 @@ async function selectVoyage(voyage, doPushState = true) {
     currentStopPage = 1;
     loadStops();
 }
+
+// ─── Stop & Itinerary Management ──────────────────────────────────────────────
 
 async function loadStops() {
     const list = document.getElementById('itinerary-list');
@@ -3452,6 +3116,8 @@ function selectDate(dateStr) {
     }
 }
 
+// ─── Map ──────────────────────────────────────────────────────────────────────
+
 async function initMap() {
   if (!GOOGLE_MAPS_API_KEY) {
     console.error('Google Maps API key is missing. Please set NAVALPLAN_FRONTEND_MAPS_API_KEY environment variable during build.');
@@ -4131,16 +3797,8 @@ async function captureAndUploadMap(voyageId) {
         }
     }
 
-function getIconForWeather(description) {
-    const d = (description || '').toLowerCase();
-    if (d.includes('clear')) return 'clear_day';
-    if (d.includes('partly cloudy')) return 'partly_cloudy_day';
-    if (d.includes('overcast')) return 'cloud';
-    if (d.includes('drizzle')) return 'weather_mix';
-    if (d.includes('rain')) return 'rainy';
-    return 'cloud';
-}
 
+// ─── Voyage Guide ─────────────────────────────────────────────────────────────
 
 async function handleGuideClick(voyage, button, doPushState = true) {
     if (doPushState) {
@@ -4392,63 +4050,8 @@ async function redoGuide(oldGuide, btn) {
     }
 }
 
-function showNotification(title, message, actions = null) {
-    const modal = document.getElementById('modal-notification');
-    const modalOverlay = document.getElementById('modal-overlay');
-    const titleEl = document.getElementById('notification-title');
-    const msgEl = document.getElementById('notification-message');
-    const actionsContainer = document.getElementById('notification-actions');
-    const closeBtn = document.getElementById('btn-close-notification');
 
-    if (modal && titleEl && msgEl) {
-        titleEl.textContent = title;
-        msgEl.textContent = message;
-        announce(`${title}: ${message}`);
-
-        // Clear previous custom actions (keep close btn)
-        if (actionsContainer) {
-            const customBtns = actionsContainer.querySelectorAll('.custom-action');
-            customBtns.forEach(b => b.remove());
-
-            if (actions) {
-                // If it's a single action object, wrap it in an array
-                const actionList = Array.isArray(actions) ? actions : [actions];
-                
-                // Hide Close if any action is a cancel/dismiss type, or if hideClose is set
-                const hasCancelAction = actionList.some(a =>
-                    a.hideClose ||
-                    a.type === 'secondary' ||
-                    (a.label || '').toLowerCase() === 'cancel'
-                );
-                if (hasCancelAction) {
-                    closeBtn.classList.add('hidden');
-                } else {
-                    closeBtn.classList.remove('hidden');
-                }
-
-                actionList.forEach(action => {
-                    const actionBtn = document.createElement('button');
-                    actionBtn.className = `btn ${action.type || 'primary'} w-full custom-action`;
-                    actionBtn.textContent = action.label;
-                    actionBtn.onclick = () => {
-                        modal.classList.add('hidden');
-                        modalOverlay.classList.add('hidden');
-                        if (action.callback) action.callback();
-                    };
-                    
-                    actionsContainer.insertBefore(actionBtn, closeBtn);
-                });
-            } else {
-                closeBtn.classList.remove('hidden');
-            }
-        }
-
-        modal.classList.remove('hidden');
-        modalOverlay.classList.remove('hidden');
-    } else {
-        alert(`${title}\n\n${message}`);
-    }
-}
+// ─── Discovery Mode ───────────────────────────────────────────────────────────
 
 async function toggleDiscoveryMode(active) {
     currentMode = active ? 'discovery' : 'planner';
@@ -4851,77 +4454,7 @@ async function handleShareClick(guide) {
     };
 }
 
-// --- Geometry Smoothing (Chaikin's Algorithm) ---
-
-function smoothGeoJSON(geojson) {
-    if (!geojson || !geojson.features) return geojson;
-    
-    geojson.features.forEach(feature => {
-        if (!feature.geometry) return;
-        
-        const type = feature.geometry.type;
-        const coords = feature.geometry.coordinates;
-        
-        if (type === 'Polygon') {
-            feature.geometry.coordinates = coords.map(ring => smoothRing(ring));
-        } else if (type === 'MultiPolygon') {
-            feature.geometry.coordinates = coords.map(poly => poly.map(ring => smoothRing(ring)));
-        }
-    });
-    
-    return geojson;
-}
-
-function smoothRing(ring) {
-    // Chaikin's algorithm for closed paths (iterations=3 for a natural, softened look)
-    let currentRing = ring;
-    for (let i = 0; i < 3; i++) {
-        const nextRing = [];
-        const len = currentRing.length;
-        if (len < 3) return currentRing; // Cannot smooth line with < 3 points
-
-        // We assume the ring is closed (first point == last point)
-        // Process segments
-        for (let j = 0; j < len - 1; j++) {
-            const p0 = currentRing[j];
-            const p1 = currentRing[j + 1];
-            
-            // Q = 0.75*P0 + 0.25*P1
-            const q = [
-                0.75 * p0[0] + 0.25 * p1[0],
-                0.75 * p0[1] + 0.25 * p1[1]
-            ];
-            
-            // R = 0.25*P0 + 0.75*P1
-            const r = [
-                0.25 * p0[0] + 0.75 * p1[0],
-                0.25 * p0[1] + 0.75 * p1[1]
-            ];
-            
-            nextRing.push(q);
-            nextRing.push(r);
-        }
-        
-        // Close the ring
-        nextRing.push(nextRing[0]);
-        currentRing = nextRing;
-    }
-    return currentRing;
-}
-
-// --- Helpers ---
-
-// Plain-text HTML escape — use for data fields that must never render as markup
-function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function renderReferences(refs) {
-    if (!refs || refs.length === 0) return '';
-    return `<div class="ref-link">
-        <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}
-    </div>`;
-}
+// ─── Report & Guide HTML Generators ──────────────────────────────────────────
 
 function generateGuideHTML(guide) {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -5362,170 +4895,7 @@ function renderSharedReport(data, container) {
         });
     }, 100);
 }
-let currentAdminPage = 1;
-const ADMIN_PAGE_LIMIT = 20;
-
-function initAdminUI() {
-    // Listen for Admin Button (delegation)
-    document.addEventListener('click', async (e) => {
-        const btn = e.target.closest('#btn-open-admin');
-        if (btn) {
-            const modal = document.getElementById('modal-admin');
-            const overlay = document.getElementById('modal-overlay');
-            if (modal && overlay) {
-                modal.classList.remove('hidden');
-                overlay.classList.remove('hidden');
-                currentAdminPage = 1;
-                loadAdminUsers();
-            }
-        }
-    });
-
-    // Close Handler
-    const btnClose = document.getElementById('btn-close-admin');
-    if (btnClose) {
-        btnClose.addEventListener('click', () => {
-             document.getElementById('modal-admin').classList.add('hidden');
-             document.getElementById('modal-overlay').classList.add('hidden');
-        });
-    }
-
-    // Pagination Handlers
-    const btnPrev = document.getElementById('btn-admin-prev');
-    const btnNext = document.getElementById('btn-admin-next');
-    
-    if (btnPrev) {
-        btnPrev.addEventListener('click', () => {
-            if (currentAdminPage > 1) {
-                currentAdminPage--;
-                loadAdminUsers();
-            }
-        });
-    }
-
-    if (btnNext) {
-        btnNext.addEventListener('click', () => {
-            currentAdminPage++;
-            loadAdminUsers();
-        });
-    }
-
-    // Invite Form
-    const formInvite = document.getElementById('form-invite-user');
-    if (formInvite) {
-        formInvite.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('invite-email');
-            const email = input.value;
-            const btn = formInvite.querySelector('button');
-            const originalText = btn.textContent;
-            
-            btn.disabled = true;
-            btn.textContent = 'Inviting...';
-
-            try {
-                await API.inviteUser(email);
-                input.value = '';
-                loadAdminUsers();
-                showNotification('User Invited', `${email} has been added to the allowlist.`);
-            } catch (err) {
-                console.error(err);
-                showNotification('Error', 'Failed to invite user');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            }
-        });
-    }
-}
-
-async function loadAdminUsers() {
-    const tbody = document.getElementById('admin-users-list');
-    const btnPrev = document.getElementById('btn-admin-prev');
-    const btnNext = document.getElementById('btn-admin-next');
-    const pageDisplay = document.getElementById('admin-page-display');
-
-    tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">Loading...</td></tr>';
-    
-    try {
-        const data = await API.listAdminUsers(currentAdminPage, ADMIN_PAGE_LIMIT);
-        const users = data.users.data || [];
-        const total = data.users.total || 0;
-        const invites = data.invites || [];
-        
-        tbody.innerHTML = '';
-        
-        // Show Invites First (if on page 1)
-        if (currentAdminPage === 1 && invites.length > 0) {
-            invites.forEach(i => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b bg-gray-light';
-                const safeEmail = DOMPurify.sanitize(i.email);
-                tr.innerHTML = `
-                    <td class="p-sm">${safeEmail}</td>
-                    <td class="p-sm"><span class="badge badge-standard">Pending Invite</span></td>
-                    <td class="p-sm"><button class="btn-text btn-danger font-sm p-0" onclick="revokeInvite('${safeEmail}')">Revoke</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        if (users.length === 0 && invites.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No users found</td></tr>';
-        } else {
-            users.forEach(u => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b';
-                
-                let status = '<span class="badge badge-regional">Active User</span>';
-                if (u.is_admin) status += ' <span class="badge badge-gem">Admin</span>';
-                
-                const safeEmail = DOMPurify.sanitize(u.email);
-                tr.innerHTML = `
-                    <td class="p-sm truncate" title="${safeEmail}">${safeEmail}</td>
-                    <td class="p-sm">${status}</td>
-                    <td class="p-sm"><span class="text-gray font-sm">-</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // Update Pagination Controls
-        const totalPages = Math.ceil(total / ADMIN_PAGE_LIMIT);
-        pageDisplay.textContent = `Page ${currentAdminPage} of ${totalPages || 1}`;
-        
-        if (btnPrev) btnPrev.disabled = currentAdminPage === 1;
-        if (btnNext) btnNext.disabled = currentAdminPage >= totalPages;
-        
-    } catch (err) {
-        console.error(err);
-        tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center error-text">Failed to load users</td></tr>';
-    }
-}
-
-// Make global for onclick handler
-window.revokeInvite = async (email) => {
-    showNotification('Revoke Invitation', `Are you sure you want to revoke the invitation for ${email}?`, [
-        {
-            label: 'Revoke',
-            type: 'danger',
-            hideClose: true,
-            callback: async () => {
-                try {
-                    await API.revokeInvitation(email);
-                    loadAdminUsers();
-                } catch (err) {
-                    console.error(err);
-                    showNotification('Error', 'Failed to revoke invitation');
-                }
-            }
-        },
-        {
-            label: 'Cancel',
-            type: 'secondary'
-        }
-    ]);
-};
+// ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function initOnboarding() {
   const hasSeenFirstTrip = localStorage.getItem('seenFirstTrip');
