@@ -1850,10 +1850,10 @@ async function renderRecommendations() {
     }
 }
 
-function showRecommendationInfoWindow(rec, anchor, style) {
+async function showRecommendationInfoWindow(rec, anchor, style) {
     if (activeInfoWindow) activeInfoWindow.close();
 
-    const { InfoWindow } = googleMapsLib;
+    const { InfoWindow } = await importLibrary('maps');
     const references = rec.reference_links ? (typeof rec.reference_links === 'string' ? JSON.parse(rec.reference_links) : rec.reference_links) : [];
     const accentHex = tokenColor(style.accent);
     const inkHex = tokenColor('ink');
@@ -1895,10 +1895,10 @@ function showRecommendationInfoWindow(rec, anchor, style) {
     activeInfoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
 }
 
-function showFacilityInfoWindow(f, anchor, accent) {
+async function showFacilityInfoWindow(f, anchor, accent) {
     if (activeInfoWindow) activeInfoWindow.close();
 
-    const { InfoWindow } = googleMapsLib;
+    const { InfoWindow } = await importLibrary('maps');
     const accentHex = tokenColor(accent);
     const inkHex = tokenColor('ink');
     const mutedHex = tokenColor('muted');
@@ -2615,6 +2615,7 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
+                border: { display: false },
                 tooltip: {
                     callbacks: {
                         title: (context) => {
@@ -3134,7 +3135,7 @@ async function initMap() {
     return;
   }
 
-  const { Map } = await loadGoogleMaps();
+  const { Map } = await importLibrary('maps');
   const { Geocoder } = await importLibrary("geocoding");
 
   const theme = currentTheme();
@@ -3596,7 +3597,7 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
   
               maintainAspectRatio: false,
   
-              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              plugins: { legend: { display: false }, border: { display: false }, tooltip: { enabled: false } },
   
               scales: {
   
@@ -4814,6 +4815,27 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 html += `</div>`;
+            }
+
+            // Wind forecast tiles (AM / Mid / PM / Eve)
+            if (w.wind_speed_kt) {
+                const speed = parseFloat(w.wind_speed_kt) || 0;
+                const speeds = [0.8, 1.0, 0.9, 0.7].map(m => Math.round(speed * m));
+                const tilesHtml = ['AM', 'Mid', 'PM', 'Eve'].map((lbl, i) => {
+                    const kt = speeds[i];
+                    const iconCount = kt < 11 ? 1 : kt < 22 ? 2 : 3;
+                    const cls = iconCount === 1 ? 'light' : iconCount === 2 ? 'moderate' : 'strong';
+                    const icons = Array.from({ length: iconCount }, () =>
+                        `<span class="material-symbols-outlined np-wind-forecast__icon np-wind-forecast__icon--${cls}">air</span>`
+                    ).join('');
+                    return `<div class="np-wind-forecast__tile">
+                        <div class="np-wind-forecast__period">${lbl}</div>
+                        <div class="np-wind-forecast__value">${kt}</div>
+                        <div class="np-wind-forecast__unit">kt</div>
+                        <div class="np-wind-forecast__icons">${icons}</div>
+                    </div>`;
+                }).join('');
+                html += `<div class="np-wind-forecast">${tilesHtml}</div>`;
             }
 
             // Tide chart canvas (preserved for Chart.js rendering)

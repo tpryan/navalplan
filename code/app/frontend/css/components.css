@@ -778,7 +778,10 @@
     height: 200px;
     border-radius: var(--radius-tile);
     overflow: hidden;
+    margin-top:12px;
     margin-bottom: 12px;
+    border: 1px solid var(--hair);
+    padding: 5px;
 }
 
 /* ─── Guide two-column layout ────────────────────────────────────────────── */

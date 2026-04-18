@@ -6,8 +6,7 @@
     color: var(--text-dark);
 }
 
-.report-body img,
-.report-body canvas {
+.report-body img{
     border: 1px solid var(--border-color-dark);
 }
 
