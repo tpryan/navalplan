@@ -487,6 +487,7 @@
   .modal {
     width: 100% !important;
     max-width: none !important;
+    min-width: 0 !important;
     height: 100% !important;
     max-height: none !important;
     top: 0; left: 0;
@@ -497,6 +498,11 @@
     border: none;
     z-index: 1001;
     padding: 1rem;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
   }
   
   .briefing-body, .report-body, .modal-content-scroll {

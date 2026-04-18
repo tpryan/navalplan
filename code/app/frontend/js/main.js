@@ -4844,6 +4844,7 @@ async function showRegionBriefing(props, month) {
 
 async function initSharedMode(token) {
     document.body.classList.add('shared-view');
+    document.documentElement.classList.add('shared-view');
     const app = document.getElementById('app');
     // Clear existing UI
     app.innerHTML = "<div class=\"loading-state\"><span class=\"material-symbols-outlined spin loading-icon\">sync</span><p>Loading Captain's Report...</p></div>";
