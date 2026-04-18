@@ -1,0 +1,83 @@
+/* Signal design tokens — light/dark, WCAG 2.2 AAA */
+:root {
+  /* neutrals */
+  --bg: #FAF9F6;
+  --surface: #FFFFFF;
+  --ink: #0B1220;
+  --ink2: #242E42;
+  --muted: #566074;
+  --hair: #E6E9EF;
+  --chip: #F2F4F8;
+
+  /* accents — 7:1+ on --surface #fff */
+  --coral: #C23A1B;
+  --teal: #0B7A6F;
+  --amber: #8A5200;
+  --violet: #5B3BD4;
+  --sky: #1A5BCE;
+  --green: #116A3D;
+
+  /* focus + state */
+  --focus: #1A5BCE;
+  --danger: #B42318;
+
+  /* geometry */
+  --radius-pill: 999px;
+  --radius-card: 22px;
+  --radius-tile: 15px;
+  --radius-input: 12px;
+
+  /* elevation */
+  --shadow: 0 2px 8px rgba(15, 23, 42, .06), 0 20px 40px -20px rgba(15, 23, 42, .2);
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, .05);
+
+  /* typography */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-theme="dark"],
+[data-theme="midnight-mariner"] {
+  --bg: #0B1220;
+  --surface: #121A2C;
+  --ink: #F5F7FB;
+  --ink2: #C4CAD6;
+  --muted: #8A92A3;
+  --hair: #22304A;
+  --chip: #1A2338;
+
+  /* accents — 7:1+ on --surface #121A2C */
+  --coral: #FF9A7A;
+  --teal: #5FE3D2;
+  --amber: #FFC773;
+  --violet: #C2A9FF;
+  --sky: #8BB8FF;
+  --green: #7BE0A8;
+
+  --focus: #8BB8FF;
+  --danger: #FF9E9E;
+
+  --shadow: 0 2px 8px rgba(0, 0, 0, .2), 0 20px 40px -20px rgba(0, 0, 0, .5);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="nautical"]):not([data-theme="midnight-mariner"]) {
+    --bg: #0B1220;
+    --surface: #121A2C;
+    --ink: #F5F7FB;
+    --ink2: #C4CAD6;
+    --muted: #8A92A3;
+    --hair: #22304A;
+    --chip: #1A2338;
+    --coral: #FF9A7A;
+    --teal: #5FE3D2;
+    --amber: #FFC773;
+    --violet: #C2A9FF;
+    --sky: #8BB8FF;
+    --green: #7BE0A8;
+    --focus: #8BB8FF;
+    --danger: #FF9E9E;
+    --shadow: 0 2px 8px rgba(0, 0, 0, .2), 0 20px 40px -20px rgba(0, 0, 0, .5);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .15);
+  }
+}

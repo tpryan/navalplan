@@ -1,4 +1,5 @@
 import { API } from './api.js';
+import { currentTheme } from './theme.js';
 
 export let currentUser = null;
 
@@ -31,10 +32,13 @@ function updateUIForLogin(person) {
 
     if (!container) return;
 
+    const sidebarActions = document.querySelectorAll('.sidebar-actions');
+
     // Show App Content
     if (sidebar) sidebar.classList.remove('hidden');
     if (mapContainer) mapContainer.classList.remove('hidden');
     if (btnNewVoyage) btnNewVoyage.classList.remove('hidden');
+    sidebarActions.forEach(el => el.classList.remove('hidden'));
 
     // Reset Container Style (remove modal class)
     container.className = ''; 
@@ -108,33 +112,85 @@ function updateUIForLogout() {
     const sidebar = document.getElementById('sidebar');
     const mapContainer = document.getElementById('map-container');
     const btnNewVoyage = document.getElementById('btn-new-voyage');
+    const sidebarActions = document.querySelectorAll('.sidebar-actions');
+    const voyageList = document.getElementById('voyage-list');
 
     if (!container) return;
 
-    // Show App Content (allow exploration without login)
     if (sidebar) sidebar.classList.remove('hidden');
     if (mapContainer) mapContainer.classList.remove('hidden');
     if (btnNewVoyage) btnNewVoyage.classList.add('hidden');
+    sidebarActions.forEach(el => el.classList.add('hidden'));
 
-    // Show simple floating login button + help link
+    // Auth-container: help + login pill buttons
     container.className = '';
     container.innerHTML = `
         <a href="/help" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide">
             <span class="material-symbols-outlined">help_outline</span>
         </a>
-        <a href="/auth/google/login" id="btn-login-floating" class="btn primary">
-            Login
-        </a>
+        <a href="/auth/google/login" id="btn-login-floating" class="btn primary">Sign in</a>
     `;
     container.appendChild(makeThemeButton());
+
+    // Sidebar greeting (§5.1)
+    if (voyageList) {
+        voyageList.innerHTML = '';
+        const greeting = document.createElement('div');
+        greeting.className = 'np-auth-greeting';
+
+        const headline = document.createElement('p');
+        headline.className = 'np-auth-headline';
+        headline.innerHTML = 'Plan your perfect <span class="np-auth-headline__accent">voyage.</span>';
+        greeting.appendChild(headline);
+
+        const chips = document.createElement('div');
+        chips.className = 'np-auth-chips';
+        [
+            { label: 'Anchorages', emoji: '⚓', accent: 'teal' },
+            { label: 'Marinas',    emoji: '⛵', accent: 'amber' },
+            { label: 'Tides',      emoji: '🌊', accent: 'violet' },
+            { label: 'Winds',      emoji: '💨', accent: 'sky' },
+        ].forEach(({ label, emoji, accent }) => {
+            const chip = document.createElement('span');
+            chip.className = 'np-auth-chip';
+            chip.style.setProperty('--accent', `var(--${accent})`);
+            chip.textContent = `${emoji} ${label}`;
+            chips.appendChild(chip);
+        });
+        greeting.appendChild(chips);
+
+        const btnWrap = document.createElement('div');
+        btnWrap.className = 'np-auth-btn-wrap';
+
+        const signIn = document.createElement('a');
+        signIn.href = '/auth/google/login';
+        signIn.className = 'btn primary';
+        signIn.textContent = 'Sign in →';
+
+        const explore = document.createElement('button');
+        explore.type = 'button';
+        explore.className = 'btn secondary np-auth-explore-btn';
+        explore.textContent = 'Explore the map';
+        explore.addEventListener('click', () => {
+            if (sidebar) sidebar.classList.add('hidden');
+        });
+
+        btnWrap.appendChild(signIn);
+        btnWrap.appendChild(explore);
+        greeting.appendChild(btnWrap);
+        voyageList.appendChild(greeting);
+    }
 }
 
 function makeThemeButton() {
     const btn = document.createElement('button');
     btn.id = 'btn-theme-toggle';
-    btn.className = 'btn secondary';
-    btn.title = 'Switch Theme';
-    btn.style.cssText = 'border-radius: 50%; width: 36px; height: 36px; padding: 0; flex-shrink: 0;';
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;line-height:1;margin:0;">palette</span>';
+    btn.type = 'button';
+    btn.className = 'np-fab';
+    btn.setAttribute('aria-label', 'Toggle dark mode');
+    btn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
+    btn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+    btn.addEventListener('focus', () => { btn.style.outline = '3px solid var(--focus)'; btn.style.outlineOffset = '2px'; });
+    btn.addEventListener('blur', () => { btn.style.outline = 'none'; });
     return btn;
 }
