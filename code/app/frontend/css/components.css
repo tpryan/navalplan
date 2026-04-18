@@ -16,11 +16,12 @@
     display: block;
 }
 .np-eyebrow-accent {
-    font-size: 10px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: .08em;
     text-transform: uppercase;
     color: var(--accent, var(--sky));
+    margin-top: 16px;
     margin-bottom: 8px;
     display: block;
 }
@@ -40,7 +41,7 @@
     margin: 0 0 12px;
 }
 .np-caption {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--muted);
     line-height: 1.5;
     margin: 0 0 4px;
@@ -382,6 +383,9 @@
     background: color-mix(in oklab, var(--accent) 20%, var(--surface));
     flex: 1;
 }
+.np-facility-briefing-item__tiles .np-data-tile--compact {
+    flex: 0 0 25%;
+}
 .np-facility-briefing-item__status {
     font-size: 11px;
     font-weight: 700;
@@ -463,15 +467,15 @@
 }
 .np-season-month-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
     margin-bottom: 10px;
 }
 .np-season-month {
-    padding: 4px 2px;
+    padding: 5px 4px;
     border-radius: 6px;
     text-align: center;
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
 }
 .np-season-month--best  { background: var(--teal);  color: #fff; }
@@ -511,7 +515,7 @@
     margin-bottom: 4px;
 }
 .np-hub-card__desc {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
     margin: 0;
     line-height: 1.5;
@@ -627,22 +631,20 @@
 .np-wind-forecast__unit {
     font-size: 9px;
     color: var(--muted);
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
-.np-wind-forecast__bars {
+.np-wind-forecast__icons {
     display: flex;
-    gap: 2px;
+    justify-content: center;
+    gap: 1px;
 }
-.np-wind-forecast__bar {
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--hair);
+.np-wind-forecast__icon {
+    font-size: 28px;
+    line-height: 1;
 }
-/* Strength variants set via JS className */
-.np-wind-forecast__bar--light  { background: var(--teal); }
-.np-wind-forecast__bar--moderate { background: var(--amber); }
-.np-wind-forecast__bar--strong   { background: var(--coral); }
+.np-wind-forecast__icon--light    { color: var(--teal); }
+.np-wind-forecast__icon--moderate { color: var(--amber); }
+.np-wind-forecast__icon--strong   { color: var(--coral); }
 
 /* ─── Sun phase card (briefing) ──────────────────────────────────────────── */
 .np-sun-card {
@@ -785,7 +787,7 @@
     margin-bottom: 4px;
 }
 .np-hazard-card__desc {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
     margin: 0;
     line-height: 1.5;
@@ -793,7 +795,7 @@
 
 /* ─── Safety tips list ───────────────────────────────────────────────────── */
 .np-safety-tips {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
     padding-left: 16px;
     margin: 4px 0 12px;
@@ -810,7 +812,7 @@
     color: var(--ink);
 }
 .np-poi-item__desc {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
     margin: 2px 0 0;
     line-height: 1.5;

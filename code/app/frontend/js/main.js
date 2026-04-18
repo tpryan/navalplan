@@ -3186,11 +3186,10 @@ async function showBriefing(briefing, doPushState = true) {
         windForecast.className = 'np-wind-forecast';
         ['AM', 'Mid', 'PM', 'Eve'].forEach((lbl, i) => {
             const kt = speeds[i];
-            // Beaufort-style: 3 bars, filled count based on strength (1 = light <11kt, 2 = moderate <22kt, 3 = strong 22+kt)
-            const filled = kt < 11 ? 1 : kt < 22 ? 2 : 3;
-            const strengthClass = filled === 1 ? 'light' : filled === 2 ? 'moderate' : 'strong';
-            const bars = [1, 2, 3].map(n =>
-                `<div class="np-wind-forecast__bar${n <= filled ? ` np-wind-forecast__bar--${strengthClass}` : ''}"></div>`
+            const iconCount = kt < 11 ? 1 : kt < 22 ? 2 : 3;
+            const strengthClass = iconCount === 1 ? 'light' : iconCount === 2 ? 'moderate' : 'strong';
+            const icons = Array.from({ length: iconCount }, () =>
+                `<span class="material-symbols-outlined np-wind-forecast__icon np-wind-forecast__icon--${strengthClass}">air</span>`
             ).join('');
             const tile = document.createElement('div');
             tile.className = 'np-wind-forecast__tile';
@@ -3198,7 +3197,7 @@ async function showBriefing(briefing, doPushState = true) {
                 `<div class="np-wind-forecast__period">${lbl}</div>` +
                 `<div class="np-wind-forecast__value">${kt}</div>` +
                 `<div class="np-wind-forecast__unit">kt</div>` +
-                `<div class="np-wind-forecast__bars">${bars}</div>`;
+                `<div class="np-wind-forecast__icons">${icons}</div>`;
             windForecast.appendChild(tile);
         });
         weatherSec.appendChild(windForecast);
@@ -3368,7 +3367,7 @@ async function showBriefing(briefing, doPushState = true) {
                 tiles.className = 'np-facility-briefing-item__tiles';
 
                 if (f.rating) {
-                    tiles.appendChild(DataTile({ label: 'Rating', value: `${f.rating.toFixed(1)} ${starHtml(f.rating)}`, sub: f.user_rating_count ? `${f.user_rating_count.toLocaleString()} reviews` : '', accent, detail: true }));
+                    tiles.appendChild(DataTile({ label: 'Rating', value: `${f.rating.toFixed(1)} ${starHtml(f.rating)}`, sub: f.user_rating_count ? `${f.user_rating_count.toLocaleString()} reviews` : '', accent, detail: true, compact: true }));
                 }
                 if (f.business_status && f.business_status !== 'OPERATIONAL') {
                     const stat = document.createElement('span');
