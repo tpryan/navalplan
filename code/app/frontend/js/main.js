@@ -5209,15 +5209,6 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         dateDisplay = `${s} – ${e}`;
     }
 
-    // ── Header ────────────────────────────────────────────────────────────────
-    let html = `
-        <div class="np-report-header">
-            <span class="np-report-header__tag">Voyage Report</span>
-            <h1 class="np-report-header__title">${DOMPurify.sanitize(voyage.title)}</h1>
-            <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
-        </div>
-    `;
-
     // ── Stat tiles ────────────────────────────────────────────────────────────
     const researchedCount = briefings.filter(b => b !== null).length;
     const dayCount = (voyage.start_date && voyage.end_date)
@@ -5227,24 +5218,44 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         return speeds.length ? Math.round(speeds.reduce((a,b) => a+b, 0) / speeds.length) + ' kt' : '--';
     })();
 
-    html += `<div class="np-metric-grid">
-        <div class="np-metric-tile" style="--accent:var(--sky)">
-            <div class="np-metric-tile__label">Stops</div>
-            <div class="np-metric-tile__value">${sortedStops.length}</div>
+    const overviewCol = (guide && guide.summary) ? `
+        <div class="np-destination-overview">
+            <span class="np-destination-overview__eyebrow">Destination Overview</span>
+            <blockquote class="np-destination-overview__quote">${DOMPurify.sanitize(guide.summary)}</blockquote>
+            <span class="np-destination-overview__cta">↓ Full guide below</span>
+        </div>` : '';
+
+    // ── Hero: header + stats (left) / overview (right) ───────────────────────
+    let html = `
+        <div class="np-report-hero">
+            <div class="np-report-hero__left">
+                <div class="np-report-header">
+                    <span class="np-report-header__tag">Voyage Report</span>
+                    <h1 class="np-report-header__title">${DOMPurify.sanitize(voyage.title)}</h1>
+                    <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
+                </div>
+                <div class="np-metric-grid">
+                    <div class="np-metric-tile" style="--accent:var(--sky)">
+                        <div class="np-metric-tile__label">Stops</div>
+                        <div class="np-metric-tile__value">${sortedStops.length}</div>
+                    </div>
+                    <div class="np-metric-tile" style="--accent:var(--teal)">
+                        <div class="np-metric-tile__label">Days</div>
+                        <div class="np-metric-tile__value">${dayCount}</div>
+                    </div>
+                    <div class="np-metric-tile" style="--accent:var(--amber)">
+                        <div class="np-metric-tile__label">Avg Wind</div>
+                        <div class="np-metric-tile__value">${avgWind}</div>
+                    </div>
+                    <div class="np-metric-tile" style="--accent:var(--violet)">
+                        <div class="np-metric-tile__label">Researched</div>
+                        <div class="np-metric-tile__value">${researchedCount}/${sortedStops.length}</div>
+                    </div>
+                </div>
+            </div>
+            ${overviewCol}
         </div>
-        <div class="np-metric-tile" style="--accent:var(--teal)">
-            <div class="np-metric-tile__label">Days</div>
-            <div class="np-metric-tile__value">${dayCount}</div>
-        </div>
-        <div class="np-metric-tile" style="--accent:var(--amber)">
-            <div class="np-metric-tile__label">Avg Wind</div>
-            <div class="np-metric-tile__value">${avgWind}</div>
-        </div>
-        <div class="np-metric-tile" style="--accent:var(--violet)">
-            <div class="np-metric-tile__label">Researched</div>
-            <div class="np-metric-tile__value">${researchedCount}/${sortedStops.length}</div>
-        </div>
-    </div>`;
+    `;
 
     // ── Map Snapshot ──────────────────────────────────────────────────────────
     if (mapURL) {
@@ -5255,8 +5266,9 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
     // ── Day by day grid ───────────────────────────────────────────────────────
     if (hasBriefings) {
+        const dayGridClass = sortedStops.length < 5 ? 'np-day-grid np-day-grid--fill' : 'np-day-grid';
         html += `<span class="np-section-label">Day by Day</span>`;
-        html += `<div class="np-day-grid">`;
+        html += `<div class="${dayGridClass}" style="--day-count:${sortedStops.length}">`;
         sortedStops.forEach((stop, idx) => {
             const briefing = briefings.find(br => br && br.stop_id === stop.id) || {};
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
@@ -5276,17 +5288,6 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 </div>`;
         });
         html += `</div>`;
-    }
-
-    // ── Destination Guide summary card — pull quote ───────────────────────────
-    if (guide && guide.summary) {
-        html += `
-            <div class="np-destination-overview">
-                <span class="np-destination-overview__eyebrow">Destination Overview</span>
-                <blockquote class="np-destination-overview__quote">${DOMPurify.sanitize(guide.summary)}</blockquote>
-                <span class="np-destination-overview__cta">↓ Full guide below</span>
-            </div>
-        `;
     }
 
     // ── Full Destination Guide ────────────────────────────────────────────────
