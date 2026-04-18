@@ -866,6 +866,13 @@
     background: color-mix(in oklab, var(--accent) 10%, var(--surface));
     min-width: 80px;
 }
+.np-data-tile__icon {
+    font-size: 18px;
+    line-height: 1;
+    margin-bottom: 2px;
+    color: var(--accent, var(--sky));
+}
+
 .np-data-tile__emoji {
     font-size: 16px;
     line-height: 1;
@@ -915,6 +922,258 @@
     font-size: 11px;
     color: var(--muted);
     padding: 16px;
+}
+
+/* ─── Region Briefing ────────────────────────────────────────────────────── */
+.np-region-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 14px;
+}
+
+.np-region-header__left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.np-region-header__right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.np-region-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: var(--radius-pill);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: color-mix(in oklab, var(--accent, var(--sky)) 12%, var(--surface));
+    color: var(--accent, var(--sky));
+}
+
+.np-region-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.np-region-score__label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.np-region-summary {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.np-region-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.np-region-deep-cut {
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent, var(--sky)) 8%, var(--surface));
+    margin-bottom: 14px;
+}
+
+.np-region-deep-cut__label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    margin-bottom: 4px;
+}
+
+.np-region-deep-cut__text {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.np-region-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.np-region-actions .btn {
+    flex: 1;
+    min-height: 44px;
+}
+
+.np-region-admin {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.np-region-admin .btn {
+    font-size: 12px;
+    color: var(--color-danger);
+    min-height: 36px;
+}
+
+.np-region-admin .btn .material-symbols-outlined {
+    font-size: 14px;
+}
+
+/* ─── Stop Card ──────────────────────────────────────────────────────────── */
+.np-stop-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background .15s;
+    background: var(--chip);
+}
+
+.np-stop-card--selected {
+    background: color-mix(in oklab, var(--accent, var(--sky)) 10%, var(--surface));
+    box-shadow: 0 0 0 2px var(--accent, var(--sky));
+}
+
+.np-stop-card__num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent, var(--sky));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.np-stop-card__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.np-stop-card__date {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    line-height: 1;
+    margin: 1px 0;
+}
+
+.np-stop-card__loc {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.np-stop-card__loc--empty {
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.np-stop-card__actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.np-stop-card__chips {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.np-stop-card__chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in oklab, var(--accent, var(--sky)) 12%, var(--surface));
+    color: var(--ink);
+}
+
+/* ─── Research-complete banner ───────────────────────────────────────────── */
+.np-research-banner {
+    padding: 14px 16px;
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--teal) 10%, var(--surface));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.np-research-banner__top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.np-research-banner__icon {
+    font-size: 20px;
+    color: var(--teal);
+}
+
+.np-research-banner__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.np-research-banner__title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+.np-research-banner__actions {
+    display: flex;
+    gap: 6px;
+}
+
+.np-research-banner__btn {
+    flex: 1;
+    font-size: 13px;
+    min-height: 36px;
+}
+
+.np-research-banner__btn .material-symbols-outlined {
+    font-size: 16px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

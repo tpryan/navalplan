@@ -941,14 +941,19 @@ function initVoyageModalListeners() {
     const displayCoords = document.getElementById('voyage-coords-display');
     const inputLat = document.getElementById('voyage-lat');
     const inputLng = document.getElementById('voyage-lng');
+    const inputRadius = document.getElementById('voyage-radius');
+    const radiusDisplay = document.getElementById('voyage-radius-display');
     const modalTitle = modalNewVoyage.querySelector('h2');
     const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
+
+    inputRadius.addEventListener('input', () => { radiusDisplay.textContent = inputRadius.value; });
 
     // Open Modal (Create Mode)
     btnNewVoyage.addEventListener('click', () => {
         editingVoyageId = null;
         modalTitle.textContent = 'Plan a New Voyage';
         submitBtn.textContent = 'Create Voyage';
+        document.getElementById('modal-voyage-pill').textContent = 'NEW VOYAGE';
         modalOverlay.classList.remove('hidden');
         modalNewVoyage.classList.remove('hidden');
         // Hide date fields for initial creation (Discovery First)
@@ -958,6 +963,7 @@ function initVoyageModalListeners() {
         document.getElementById('voyage-title').value = '';
         document.getElementById('voyage-location-name').value = '';
         document.getElementById('voyage-radius').value = 60;
+        document.getElementById('voyage-radius-display').textContent = 60;
         displayCoords.textContent = '';
         inputLat.value = '';
         inputLng.value = '';
@@ -1003,9 +1009,12 @@ function initVoyageModalListeners() {
 
             // At zoom 10, ~20nm is good coverage. Higher zoom = smaller radius.
             let radius = Math.round(20 * Math.pow(2, 10 - zoom));
-            radius = Math.max(5, Math.min(200, radius));
+            radius = Math.max(1, Math.min(150, radius));
             const inputRadius = document.getElementById('voyage-radius');
-            if (inputRadius) inputRadius.value = radius;
+            if (inputRadius) {
+                inputRadius.value = radius;
+                document.getElementById('voyage-radius-display').textContent = radius;
+            }
 
             try {
                 const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
@@ -1521,6 +1530,7 @@ function openEditModal(voyage) {
 
     modalTitle.textContent = 'Edit Voyage';
     submitBtn.textContent = 'Update Voyage';
+    document.getElementById('modal-voyage-pill').textContent = 'EDIT VOYAGE';
     
     // Show date fields in edit mode
     document.getElementById('voyage-date-fields').classList.remove('hidden');
@@ -1530,6 +1540,7 @@ function openEditModal(voyage) {
     document.getElementById('voyage-end').value = voyage.end_date ? voyage.end_date.split('T')[0] : '';
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
     document.getElementById('voyage-radius').value = voyage.search_radius || 60;
+    document.getElementById('voyage-radius-display').textContent = voyage.search_radius || 60;
     document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
@@ -2624,49 +2635,23 @@ function renderItinerary() {
     // §5.7 — Research complete success banner
     if (lastKnownResearchDone) {
         const banner = document.createElement('div');
-        banner.style.cssText = [
-            'padding:14px 16px',
-            'border-radius:var(--radius-card)',
-            'background:color-mix(in oklab,var(--teal) 10%,var(--surface))',
-            'display:flex',
-            'flex-direction:column',
-            'gap:10px',
-        ].join(';');
+        banner.className = 'np-research-banner';
 
         const bannerTop = document.createElement('div');
-        bannerTop.style.cssText = 'display:flex;align-items:center;gap:10px';
+        bannerTop.className = 'np-research-banner__top';
         const checkIcon = document.createElement('span');
-        checkIcon.className = 'material-symbols-outlined';
-        checkIcon.style.cssText = 'font-size:20px;color:var(--teal)';
+        checkIcon.className = 'material-symbols-outlined np-research-banner__icon';
         checkIcon.textContent = 'check_circle';
         const bannerText = document.createElement('div');
-        bannerText.style.cssText = 'display:flex;flex-direction:column;gap:1px';
+        bannerText.className = 'np-research-banner__text';
         const bannerTitle = document.createElement('span');
-        bannerTitle.style.cssText = 'font-size:14px;font-weight:800;color:var(--ink)';
+        bannerTitle.className = 'np-research-banner__title';
         bannerTitle.textContent = 'Research complete';
         bannerText.appendChild(bannerTitle);
         bannerTop.appendChild(checkIcon);
         bannerTop.appendChild(bannerText);
         banner.appendChild(bannerTop);
 
-        const bannerActions = document.createElement('div');
-        bannerActions.style.cssText = 'display:flex;gap:6px';
-        const reportBtn = document.createElement('button');
-        reportBtn.className = 'btn secondary';
-        reportBtn.style.cssText = 'flex:1;font-size:13px;min-height:36px';
-        reportBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">description</span> Report';
-        reportBtn.addEventListener('click', () => handleShowReport());
-        const guideBtn = document.createElement('button');
-        guideBtn.className = 'btn secondary';
-        guideBtn.style.cssText = 'flex:1;font-size:13px;min-height:36px';
-        guideBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">map</span> Guide';
-        guideBtn.addEventListener('click', () => {
-            const btn = document.getElementById('btn-view-guide');
-            if (currentVoyage) handleGuideClick(currentVoyage, btn || guideBtn);
-        });
-        bannerActions.appendChild(reportBtn);
-        bannerActions.appendChild(guideBtn);
-        banner.appendChild(bannerActions);
         list.appendChild(banner);
     }
 
@@ -2683,58 +2668,35 @@ function renderItinerary() {
         const dateLabel = currentDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
         const el = document.createElement('div');
-        el.className = 'np-stop-card';
-        el.style.cssText = [
-            'display:flex',
-            'align-items:center',
-            'gap:10px',
-            'padding:10px 12px',
-            'border-radius:16px',
-            'cursor:pointer',
-            'transition:background .15s',
-            isSelected
-                ? `background:color-mix(in oklab,var(--${accent}) 10%,var(--surface));box-shadow:0 0 0 2px var(--${accent})`
-                : 'background:var(--chip)',
-        ].join(';');
+        el.className = ['np-stop-card', isSelected && 'np-stop-card--selected'].filter(Boolean).join(' ');
+        el.style.setProperty('--accent', `var(--${accent})`);
 
         // Numbered accent circle
         const num = document.createElement('div');
+        num.className = 'np-stop-card__num';
         num.setAttribute('aria-hidden', 'true');
-        num.style.cssText = [
-            'flex-shrink:0',
-            'width:36px',
-            'height:36px',
-            'border-radius:50%',
-            `background:var(--${accent})`,
-            'display:flex',
-            'align-items:center',
-            'justify-content:center',
-            'font-size:14px',
-            'font-weight:800',
-            'color:#fff',
-        ].join(';');
         num.textContent = dayNum;
         el.appendChild(num);
 
         // Middle: date chip + location
         const mid = document.createElement('div');
-        mid.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px';
+        mid.className = 'np-stop-card__info';
 
         const dateChip = document.createElement('span');
-        dateChip.style.cssText = `display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--${accent});`;
+        dateChip.className = 'np-stop-card__date';
         dateChip.textContent = dateLabel;
         mid.appendChild(dateChip);
 
         const loc = document.createElement('span');
-        loc.style.cssText = `font-size:14px;font-weight:${stop ? '700' : '400'};color:${stop ? 'var(--ink)' : 'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
-        loc.textContent = stop ? displayLocationName(stop.location_name) : 'No destination';
+        loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty'].filter(Boolean).join(' ');
+        loc.textContent = stop ? displayLocationName(stop.location_name).split(',')[0].trim() : 'No destination';
         mid.appendChild(loc);
         el.appendChild(mid);
 
         // Action buttons (only for stops)
         if (stop) {
             const actions = document.createElement('div');
-            actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0';
+            actions.className = 'np-stop-card__actions';
 
             const btnResearch = document.createElement('button');
             btnResearch.className = 'btn-icon research';
@@ -2787,22 +2749,22 @@ function renderItinerary() {
             if (cached) {
                 const w = cached.weather_summary || {};
                 const chips = document.createElement('div');
-                chips.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;grid-column:2;width:100%';
+                chips.className = 'np-stop-card__chips';
                 if (w.condition && w.condition !== 'N/A') {
                     const wChip = document.createElement('span');
-                    wChip.style.cssText = `font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--radius-pill);background:color-mix(in oklab,var(--sky) 12%,var(--surface));color:var(--ink)`;
-                    wChip.textContent = `${w.condition}`;
+                    wChip.className = 'np-stop-card__chip';
+                    wChip.style.setProperty('--accent', 'var(--sky)');
+                    wChip.textContent = w.condition;
                     chips.appendChild(wChip);
                 }
                 if (w.wind_speed_kt) {
                     const windChip = document.createElement('span');
-                    windChip.style.cssText = `font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--radius-pill);background:color-mix(in oklab,var(--teal) 12%,var(--surface));color:var(--ink)`;
+                    windChip.className = 'np-stop-card__chip';
+                    windChip.style.setProperty('--accent', 'var(--teal)');
                     windChip.textContent = `💨 ${w.wind_speed_kt}kt`;
                     chips.appendChild(windChip);
                 }
                 if (chips.children.length > 0) {
-                    // Re-layout mid to accommodate chips below
-                    mid.style.gridColumn = '2';
                     mid.appendChild(chips);
                 }
             }
@@ -3579,6 +3541,9 @@ async function initMap() {
     mapId: isMidnightMariner ? __GOOGLE_MAPS_MAP_ID_MM__ : __GOOGLE_MAPS_MAP_ID__,
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
     clickableIcons: false
   });
 
@@ -3595,27 +3560,19 @@ async function initMap() {
       if (feature.getGeometry().getType() === 'Point') {
           return { visible: false };
       }
-      // 2. Discovery Regions
+      // 2. Discovery Regions — colors match tier chip accent tokens
       const tier = feature.getProperty('tier');
       if (tier) {
-          let color = '#0077be'; // Standard Blue
-          let strokeColor = '#005fa3';
+          let token = 'teal';
+          if (tier === 'Hidden Gem' || tier === 'Deep Cut') token = 'violet';
+          else if (tier === 'Regional Favorite')            token = 'amber';
+          else if (tier === 'Challenging')                  token = 'coral';
 
-          if (tier === 'Hidden Gem') {
-              color = '#9c27b0'; // Purple
-              strokeColor = '#6a1b9a';
-          } else if (tier === 'Regional Favorite') {
-              color = '#ff9800'; // Orange
-              strokeColor = '#ef6c00';
-          } else if (tier === 'Challenging') {
-              color = '#d32f2f'; // Red
-              strokeColor = '#b71c1c';
-          }
-
+          const color = tokenColor(token);
           return {
               fillColor: color,
-              fillOpacity: 0.6,
-              strokeColor: strokeColor,
+              fillOpacity: 0.5,
+              strokeColor: color,
               strokeWeight: 2,
               zIndex: 10
           };
@@ -4674,12 +4631,10 @@ async function showRegionBriefing(props, month) {
 
     // Tier → accent + label
     const tierAccent = (tier) => {
-        if (!tier) return 'sky';
-        const t = tier.toLowerCase();
-        if (t.includes('gem'))        return 'violet';
-        if (t.includes('regional'))   return 'amber';
-        if (t.includes('challenge') || t.includes('tough')) return 'coral';
-        return 'sky';
+        if (tier === 'Hidden Gem' || tier === 'Deep Cut') return 'violet';
+        if (tier === 'Regional Favorite')                 return 'amber';
+        if (tier === 'Challenging')                       return 'coral';
+        return 'teal';
     };
     const accent = tierAccent(props.tier);
     const tierLabel = props.tier || (props.is_hidden_gem ? 'Hidden Gem' : 'Standard');
@@ -4687,38 +4642,46 @@ async function showRegionBriefing(props, month) {
     titleEl.textContent = props.name;
     content.innerHTML = '';
 
-    // ── Header row: tier chip + ScoreRing ─────────────────────────────────
+    // ── Two-column header: summary left, chip + score right ───────────────
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px';
+    header.className = 'np-region-header';
+
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'np-region-header__left';
+
+    if (props.summary) {
+        const summary = document.createElement('p');
+        summary.className = 'np-region-summary';
+        summary.textContent = props.summary;
+        headerLeft.appendChild(summary);
+    }
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'np-region-header__right';
 
     const chip = document.createElement('span');
-    chip.style.cssText = `display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:var(--radius-pill);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--${accent}) 12%,var(--surface));color:var(--${accent})`;
+    chip.className = 'np-region-chip';
+    chip.style.setProperty('--accent', `var(--${accent})`);
     chip.textContent = tierLabel;
+    headerRight.appendChild(chip);
 
     const scoreRing = ScoreRing({ score: props.suitability_score || 0, accent, size: 56 });
     const scoreWrap = document.createElement('div');
-    scoreWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px';
+    scoreWrap.className = 'np-region-score';
     const scoreLabel = document.createElement('span');
-    scoreLabel.style.cssText = 'font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)';
+    scoreLabel.className = 'np-region-score__label';
     scoreLabel.textContent = 'Suitability';
     scoreWrap.appendChild(scoreRing);
     scoreWrap.appendChild(scoreLabel);
+    headerRight.appendChild(scoreWrap);
 
-    header.appendChild(chip);
-    header.appendChild(scoreWrap);
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
     content.appendChild(header);
-
-    // ── Summary ───────────────────────────────────────────────────────────
-    if (props.summary) {
-        const summary = document.createElement('p');
-        summary.style.cssText = 'font-size:14px;color:var(--ink);line-height:1.6;margin:0 0 14px';
-        summary.textContent = props.summary;
-        content.appendChild(summary);
-    }
 
     // ── DataTile row: Wind / Temp / Tide ──────────────────────────────────
     const tiles = document.createElement('div');
-    tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px';
+    tiles.className = 'np-region-tiles';
 
     const windKt = region?.avg_wind_speed_knots;
     const tempC  = region?.avg_temp_c;
@@ -4727,20 +4690,20 @@ async function showRegionBriefing(props, month) {
     tiles.appendChild(DataTile({
         label: 'Wind',
         value: windKt != null ? `${windKt} kt` : '—',
-        emoji: '💨',
+        icon: 'air',
         accent: 'sky',
     }));
     tiles.appendChild(DataTile({
         label: 'Avg Temp',
         value: tempF != null ? `${tempF}°F` : '—',
         sub: tempC != null ? `${tempC}°C` : '',
-        emoji: '🌡',
+        icon: 'thermometer',
         accent: 'amber',
     }));
     tiles.appendChild(DataTile({
         label: 'Tides',
         value: 'Varies',
-        emoji: '🌊',
+        icon: 'water',
         accent: 'teal',
     }));
     content.appendChild(tiles);
@@ -4748,25 +4711,25 @@ async function showRegionBriefing(props, month) {
     // ── Deep cut reasoning ────────────────────────────────────────────────
     if (region?.deep_cut_reasoning) {
         const dcCard = document.createElement('div');
-        dcCard.style.cssText = `padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${accent}) 8%,var(--surface));margin-bottom:14px`;
+        dcCard.className = 'np-region-deep-cut';
+        dcCard.style.setProperty('--accent', `var(--${accent})`);
         const dcLabel = document.createElement('div');
-        dcLabel.style.cssText = `font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--${accent});margin-bottom:4px`;
+        dcLabel.className = 'np-region-deep-cut__label';
         dcLabel.textContent = 'The Deep Cut Factor';
         const dcText = document.createElement('p');
-        dcText.style.cssText = 'font-size:13px;color:var(--muted);margin:0;line-height:1.5';
+        dcText.className = 'np-region-deep-cut__text';
         dcText.textContent = region.deep_cut_reasoning;
         dcCard.appendChild(dcLabel);
         dcCard.appendChild(dcText);
         content.appendChild(dcCard);
     }
 
-    // ── Action buttons: Start here + Wishlist ─────────────────────────────
+    // ── Action buttons ────────────────────────────────────────────────────
     const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:8px;margin-top:4px';
+    actions.className = 'np-region-actions';
 
     const btnStart = document.createElement('button');
     btnStart.className = 'btn primary';
-    btnStart.style.cssText = 'flex:1;min-height:44px';
     btnStart.textContent = 'Start here →';
     btnStart.addEventListener('click', () => {
         hide();
@@ -4784,27 +4747,16 @@ async function showRegionBriefing(props, month) {
         }, 100);
     });
 
-    const btnWishlist = document.createElement('button');
-    btnWishlist.className = 'btn secondary';
-    btnWishlist.style.cssText = 'min-height:44px;padding:0 16px';
-    btnWishlist.innerHTML = '♥ Wishlist';
-    btnWishlist.title = 'Save to wishlist (coming soon)';
-    btnWishlist.addEventListener('click', () => {
-        showNotification('Wishlist', 'Wishlist feature coming soon.');
-    });
-
     actions.appendChild(btnStart);
-    actions.appendChild(btnWishlist);
     content.appendChild(actions);
 
     // ── Admin: delete seasonality ─────────────────────────────────────────
     if (currentUser?.is_admin) {
         const adminRow = document.createElement('div');
-        adminRow.style.cssText = 'margin-top:16px;display:flex;justify-content:flex-end';
+        adminRow.className = 'np-region-admin';
         const btnDel = document.createElement('button');
         btnDel.className = 'btn secondary';
-        btnDel.style.cssText = 'font-size:12px;color:var(--danger);min-height:36px';
-        btnDel.innerHTML = `<span class="material-symbols-outlined" style="font-size:14px" aria-hidden="true">delete</span> Remove for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}`;
+        btnDel.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">delete</span> Remove for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}`;
         btnDel.addEventListener('click', () => {
             showNotification('Remove Seasonality',
                 `Remove ${props.name} from discovery for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`,

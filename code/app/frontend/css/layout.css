@@ -13,8 +13,8 @@
   position: absolute;
   top: 20px;
   left: 20px;
-  width: 340px;
-  bottom: 20px;
+  width: 380px;
+  max-height: calc(100vh - 40px);
   z-index: 10;
 
   background: var(--surface);
@@ -50,7 +50,7 @@
 }
 
 .brand {
-  padding: 16px 20px;
+  padding: 20px 24px;
   border-bottom: 1.5px solid var(--hair);
 }
 
@@ -65,7 +65,7 @@
 }
 
 .sidebar-actions {
-  padding: 12px 16px;
+  padding: 14px 24px;
   border-bottom: 1.5px solid var(--hair);
   display: flex;
   gap: 0.5rem;
@@ -90,7 +90,7 @@
 #voyage-list {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1.25rem;
 }
 
 /* Voyage List Items */
@@ -183,8 +183,19 @@
 }
 
 .voyage-header {
+  position: relative;
   padding: 14px 20px;
   border-bottom: 1.5px solid var(--hair);
+}
+
+.voyage-header__text {
+  padding-right: 32px;
+}
+
+.voyage-header__edit {
+  position: absolute;
+  top: 12px;
+  right: 16px;
 }
 
 .voyage-header h2 {
@@ -195,10 +206,19 @@
   font-weight: 700;
 }
 
+#itinerary-dates {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 #itinerary-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 4px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -319,6 +339,20 @@
 .form-group input:focus {
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 20%, transparent);
+}
+
+.form-group input[type="range"] {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  accent-color: var(--coral);
+  height: 20px;
+  cursor: pointer;
+}
+
+.form-group input[type="range"]:focus {
+  box-shadow: none;
 }
 
 .form-row {

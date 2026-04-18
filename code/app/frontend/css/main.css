@@ -550,10 +550,10 @@
     display: inline-block;
 }
 
-.dot-standard { background-color: #0077be; }
-.dot-regional { background-color: #ff9800; }
-.dot-gem { background-color: #9c27b0; }
-.dot-challenging { background-color: #d32f2f; }
+.dot-standard { background-color: var(--teal); }
+.dot-regional { background-color: var(--amber); }
+.dot-gem { background-color: var(--violet); }
+.dot-challenging { background-color: var(--coral); }
 
 .badge {
     display: inline-block;
