@@ -718,7 +718,7 @@ function initThemeToggle() {
             // Update button state without reload for fast feedback
             const btn = document.getElementById('btn-theme-toggle');
             if (btn) {
-                btn.textContent = next === 'dark' ? '☀️' : '🌙';
+                btn.innerHTML = `<span class="material-symbols-outlined">${next === 'dark' ? 'light_mode' : 'dark_mode'}</span>`;
                 btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
             }
             // colorScheme is immutable after Map construction — reload so
@@ -1330,14 +1330,14 @@ function renderVoyageList() {
   sorted.forEach(voyage => {
     if (voyage === 'DATED_HEADER') {
       const hdr = document.createElement('p');
-      hdr.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:4px 0 8px';
+      hdr.className = 'np-voyage-label np-voyage-label--top';
       hdr.textContent = 'Upcoming & Recent';
       listContainer.appendChild(hdr);
       return;
     }
     if (voyage === 'SEPARATOR') {
       const sep = document.createElement('p');
-      sep.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:12px 0 8px';
+      sep.className = 'np-voyage-label np-voyage-label--sep';
       sep.textContent = 'Undated';
       listContainer.appendChild(sep);
       return;
@@ -1348,20 +1348,7 @@ function renderVoyageList() {
 
     const el = document.createElement('div');
     el.className = 'voyage-item';
-    el.style.cssText = [
-      'border-radius:16px',
-      `background:color-mix(in oklab,var(--${accent}) 6%,var(--surface))`,
-      `box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--${accent}) 25%,transparent)`,
-      'margin-bottom:8px',
-      'padding:14px 16px',
-      'cursor:pointer',
-      'transition:box-shadow .15s',
-      'border:none',
-      'display:flex',
-      'justify-content:space-between',
-      'align-items:flex-start',
-      'gap:8px',
-    ].join(';');
+    el.style.setProperty('--accent', `var(--${accent})`);
 
     const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
     const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
@@ -1369,32 +1356,31 @@ function renderVoyageList() {
     // Build info column
     const info = document.createElement('div');
     info.className = 'voyage-info';
-    info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:6px';
 
     const titleEl = document.createElement('h2');
-    titleEl.style.cssText = 'margin:0;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    titleEl.className = 'voyage-title';
     titleEl.textContent = voyage.title;
     info.appendChild(titleEl);
 
     // Chip row
     const chipRow = document.createElement('div');
-    chipRow.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap';
+    chipRow.className = 'np-chip-row';
 
     if (startDate) {
       const dateChip = document.createElement('span');
-      dateChip.style.cssText = `display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:700;background:color-mix(in oklab,var(--${accent}) 12%,var(--surface));color:var(--ink)`;
+      dateChip.className = 'np-chip np-chip--date';
       dateChip.textContent = endDate ? `${startDate} – ${endDate}` : startDate;
       chipRow.appendChild(dateChip);
     } else {
       const dateChip = document.createElement('span');
-      dateChip.style.cssText = 'display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:700;background:var(--chip);color:var(--muted)';
+      dateChip.className = 'np-chip np-chip--nodates';
       dateChip.textContent = 'No dates set';
       chipRow.appendChild(dateChip);
     }
 
     if (voyage.location_name) {
       const locChip = document.createElement('span');
-      locChip.style.cssText = 'display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:var(--chip);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px';
+      locChip.className = 'np-chip np-chip--loc';
       locChip.textContent = `📍 ${displayLocationName(voyage.location_name)}`;
       chipRow.appendChild(locChip);
     }

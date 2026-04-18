@@ -97,34 +97,34 @@
       <div id="facility-controls" class="hidden">
         <span class="pilot-legend-title">Facilities</span>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="anchorage">
-          <span class="pilot-dot" style="background:var(--teal)"></span>Anchorages
+          <span class="pilot-dot"></span>Anchorages
         </button>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="marina">
-          <span class="pilot-dot" style="background:var(--amber)"></span>Marinas
+          <span class="pilot-dot"></span>Marinas
         </button>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="mooring">
-          <span class="pilot-dot" style="background:var(--violet)"></span>Moorings
+          <span class="pilot-dot"></span>Moorings
         </button>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="restaurant">
-          <span class="pilot-dot" style="background:var(--green)"></span>Restaurants
+          <span class="pilot-dot"></span>Restaurants
         </button>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="bar">
-          <span class="pilot-dot" style="background:var(--coral)"></span>Bars
+          <span class="pilot-dot"></span>Bars
         </button>
         <button class="facility-filter-btn pilot-filter-btn active" data-type="other">
-          <span class="pilot-dot" style="background:var(--sky)"></span>Other
+          <span class="pilot-dot"></span>Other
         </button>
       </div>
       <div id="pilot-controls" class="hidden">
         <span class="pilot-legend-title">Filter Spots</span>
         <button class="pilot-filter-btn active" data-type="anchorage">
-          <span class="pilot-dot" style="background:var(--teal)"></span>Anchorages
+          <span class="pilot-dot"></span>Anchorages
         </button>
         <button class="pilot-filter-btn active" data-type="mooring">
-          <span class="pilot-dot" style="background:var(--violet)"></span>Moorings
+          <span class="pilot-dot"></span>Moorings
         </button>
         <button class="pilot-filter-btn active" data-type="hub">
-          <span class="pilot-dot" style="background:var(--amber)"></span>Hubs
+          <span class="pilot-dot"></span>Hubs
         </button>
       </div>
       <div id="discovery-controls" class="hidden">
@@ -147,13 +147,12 @@
     <div id="modal-overlay" class="hidden"></div>
     
     <!-- Voyage Form Modal -->
-    <div id="modal-new-voyage" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-voyage-title" style="max-width:440px;padding:26px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <span id="modal-voyage-pill" style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--coral) 12%,var(--surface));color:var(--coral)">NEW VOYAGE</span>
-        <button type="button" id="btn-cancel-voyage" aria-label="Close"
-          style="width:32px;height:32px;border-radius:50%;border:none;background:var(--chip);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">✕</button>
+    <div id="modal-new-voyage" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-voyage-title">
+      <div class="modal-form-header">
+        <span id="modal-voyage-pill" class="modal-voyage-pill">NEW VOYAGE</span>
+        <button type="button" id="btn-cancel-voyage" class="modal-close-circle" aria-label="Close">✕</button>
       </div>
-      <h2 id="modal-new-voyage-title" style="font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--ink);margin:0 0 20px">Plan a New Voyage</h2>
+      <h2 id="modal-new-voyage-title" class="modal-form-title">Plan a New Voyage</h2>
       <form id="form-new-voyage">
         <div class="form-group">
           <label for="voyage-title">Trip Title</label>
@@ -164,7 +163,7 @@
           <label>Starting Location</label>
           <div class="flex gap-sm">
             <input type="text" id="voyage-location-name" name="location_name" placeholder="e.g. Seattle" />
-            <button type="button" id="btn-use-map-center" class="btn secondary" style="padding: 0 16px; white-space: nowrap; flex-shrink: 0;">Use Map Center</button>
+            <button type="button" id="btn-use-map-center" class="btn secondary">Use Map Center</button>
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />
           <input type="hidden" id="voyage-lng" name="longitude" />
@@ -188,8 +187,8 @@
           </div>
         </div>
 
-        <div class="form-actions" style="margin-top:20px">
-          <button type="submit" class="btn primary" style="flex:1">Create Voyage</button>
+        <div class="form-actions">
+          <button type="submit" class="btn primary btn-flex-1">Create Voyage</button>
         </div>
       </form>
     </div>
@@ -197,7 +196,7 @@
     <!-- Empty Voyage Prompt Modal -->
     <div id="modal-empty-voyage" class="modal hidden">
       <div class="flex flex-col align-center text-center p-md">
-        <span class="material-symbols-outlined text-brand-medium" style="font-size: 64px; margin-bottom: 1rem;">explore</span>
+        <span class="material-symbols-outlined text-brand-medium modal-empty-icon">explore</span>
         <h2>Your Voyage is Empty</h2>
         <p class="text-gray mb-lg">How would you like to start planning?</p>
         
@@ -275,7 +274,7 @@
     </div>
 
     <!-- Discovery Intro Modal -->
-    <div id="modal-discovery-intro" class="modal hidden text-center" style="max-width: 500px;">
+    <div id="modal-discovery-intro" class="modal hidden text-center">
         <h2 class="mb-md brand-blue">Welcome to Commodore Mode</h2>
         <p class="mb-md text-dark">
             Explore sailing destinations around the world! 
@@ -289,21 +288,21 @@
     </div>
 
     <!-- First Trip Onboarding Modal -->
-    <div id="modal-first-trip" class="modal hidden text-center" style="max-width: 500px;">
+    <div id="modal-first-trip" class="modal hidden text-center">
         <h2 class="mb-md brand-blue">Welcome to NavalPlan!</h2>
         <div class="text-dark mb-lg text-left">
             <p class="mb-md">Plan your perfect nautical journey in 3 easy steps:</p>
-            <ol class="discovery-intro-list" style="list-style-type: decimal;">
+            <ol class="discovery-intro-list discovery-intro-list--decimal">
                 <li class="mb-sm"><strong>Create a Voyage:</strong> Navigate to somewhere on the map and then click "+ New Voyage" to define your trip dates and general location.</li>
                 <li class="mb-sm"><strong>Add Stops:</strong> Click anywhere on the map to add destinations to your itinerary.</li>
-                <li class="mb-sm"><strong>Get Briefings:</strong> Use the <span class="material-symbols-outlined" style="font-size: 1.2em; vertical-align: bottom;">science</span> research button on each stop to get weather, tides, and local knowledge.</li>
+                <li class="mb-sm"><strong>Get Briefings:</strong> Use the <span class="material-symbols-outlined icon-inline-sm">science</span> research button on each stop to get weather, tides, and local knowledge.</li>
             </ol>
         </div>
         <button id="btn-close-first-trip" class="btn primary w-full">Start Planning</button>
     </div>
 
     <!-- Admin Modal -->
-    <div id="modal-admin" class="modal hidden modal-scrollable" style="min-width: 600px;">
+    <div id="modal-admin" class="modal hidden modal-scrollable">
       <div class="modal-header-row flex justify-between align-center">
         <h2 class="m-0">Admin Console</h2>
         <button id="btn-close-admin" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
@@ -316,12 +315,12 @@
         </form>
         
         <h3>Users & Invites</h3>
-        <table id="admin-users-table" class="w-full text-left mt-md" style="border-collapse: collapse; table-layout: fixed;">
+        <table id="admin-users-table" class="w-full text-left mt-md">
             <thead>
-                <tr class="border-b" style="background-color: rgba(0,0,0,0.03);">
-                    <th class="p-sm text-left" style="width: 50%;">Email</th>
-                    <th class="p-sm text-left" style="width: 30%;">Status</th>
-                    <th class="p-sm text-left" style="width: 20%;">Action</th>
+                <tr class="border-b">
+                    <th class="p-sm text-left">Email</th>
+                    <th class="p-sm text-left">Status</th>
+                    <th class="p-sm text-left">Action</th>
                 </tr>
             </thead>
             <tbody id="admin-users-list">
