@@ -4469,9 +4469,9 @@ function generateGuideHTML(guide) {
         `<div class="np-eyebrow-accent" style="--accent:var(--${accent})">${label}</div>`;
 
     // Helper: tinted hazard card
-    const hazardCard = (title, desc, refs, accent = 'amber', emoji = '⚠️') => `
+    const hazardCard = (title, desc, refs, accent = 'amber', icon = 'warning') => `
         <div class="np-hazard-card" style="--accent:var(--${accent})">
-            <div class="np-hazard-card__title">${emoji} ${title}</div>
+            <div class="np-hazard-card__title"><span class="material-symbols-outlined np-hazard-card__icon">${icon}</span>${title}</div>
             <p class="np-hazard-card__desc">${desc}</p>
             ${refs && refs.length ? renderReferences(refs) : ''}
         </div>`;
@@ -4484,9 +4484,9 @@ function generateGuideHTML(guide) {
         leftCol += sectionChip('Regional Hazards', 'amber');
         guide.hazards.forEach(h => {
             const t = (h.title || '').toLowerCase();
-            const emoji = t.includes('reef') ? '🪸' : t.includes('current') ? '🌀' : t.includes('storm') ? '⛈️' : t.includes('shoal') ? '⚓' : '⚠️';
+            const icon = t.includes('reef') ? 'water' : t.includes('current') ? 'cyclone' : t.includes('storm') ? 'thunderstorm' : t.includes('shoal') ? 'anchor' : 'warning';
             const accent = t.includes('current') || t.includes('wind') ? 'sky' : 'amber';
-            leftCol += hazardCard(h.title + (h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky)">(Info)</a>` : ''), h.description, h.references, accent, emoji);
+            leftCol += hazardCard(h.title + (h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky)">(Info)</a>` : ''), h.description, h.references, accent, icon);
         });
     }
 
@@ -4499,7 +4499,7 @@ function generateGuideHTML(guide) {
             s.summary || '',
             s.references,
             riskAccent,
-            '🔒'
+            'lock'
         );
         if (s.safety_tips && s.safety_tips.length > 0) {
             leftCol += `<ul class="np-safety-tips">` +
@@ -4736,8 +4736,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 <div class="np-day-tile" style="--accent:var(--${accent})">
                     <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
                     <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
-                    ${temp ? `<div class="np-day-tile__meta">🌡 ${temp}</div>` : ''}
-                    ${w.wind_speed_kt ? `<div class="np-day-tile__meta">💨 ${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
+                    ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">air</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
                     <div class="np-day-tile__chart overview-chart">
                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                     </div>
