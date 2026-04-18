@@ -3,7 +3,11 @@ import { API, API_BASE, set503Callback } from './api.js';
 import { checkSession, currentUser } from './auth.js';
 import { Ticker } from './ticker.js';
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
-import { loadTheme, cycleTheme, currentTheme } from './theme.js';
+import { loadTheme, toggleTheme, currentTheme } from './theme.js';
+import { MapPin } from './ui/MapPin.js';
+import { DataTile } from './ui/DataTile.js';
+import { Stepper } from './ui/Stepper.js';
+import { ScoreRing } from './ui/ScoreRing.js';
 
 const GOOGLE_MAPS_API_KEY = __GOOGLE_MAPS_API_KEY__;
 setOptions({
@@ -32,29 +36,86 @@ loadChart();
 
 // Configuration
 
-// Consistent marker colors across all map views
-const MARKER_COLORS = {
-    anchorage:   '#388E3C', // green
-    mooring:     '#7B1FA2', // purple
-    marina:      '#E65100', // orange
-    hub:         '#E65100', // orange (resource hubs treated same as marina)
-    'yacht club':'#E65100', // orange
-    bar:         '#F9A825', // yellow
-    restaurant:  '#5D4037', // brown
-    default:     '#455A64', // blue-gray
+// Signal accent tokens per facility / recommendation type
+const MARKER_ACCENTS = {
+    anchorage:    'teal',
+    mooring:      'violet',
+    marina:       'amber',
+    hub:          'amber',
+    'yacht club': 'amber',
+    restaurant:   'green',
+    bar:          'coral',
+    default:      'sky',
 };
 
-function markerColor(type) {
-    if (!type) return MARKER_COLORS.default;
+function markerAccent(type) {
+    if (!type) return MARKER_ACCENTS.default;
     const t = type.toLowerCase();
-    if (t.includes('anchor'))    return MARKER_COLORS.anchorage;
-    if (t.includes('moor'))      return MARKER_COLORS.mooring;
-    if (t.includes('marina'))    return MARKER_COLORS.marina;
-    if (t.includes('hub'))       return MARKER_COLORS.hub;
-    if (t.includes('yacht'))     return MARKER_COLORS['yacht club'];
-    if (t.includes('restaurant'))return MARKER_COLORS.restaurant;
-    if (t.includes('bar'))       return MARKER_COLORS.bar;
-    return MARKER_COLORS.default;
+    if (t.includes('anchor'))     return MARKER_ACCENTS.anchorage;
+    if (t.includes('moor'))       return MARKER_ACCENTS.mooring;
+    if (t.includes('marina'))     return MARKER_ACCENTS.marina;
+    if (t.includes('hub'))        return MARKER_ACCENTS.hub;
+    if (t.includes('yacht'))      return MARKER_ACCENTS['yacht club'];
+    if (t.includes('restaurant')) return MARKER_ACCENTS.restaurant;
+    if (t.includes('bar'))        return MARKER_ACCENTS.bar;
+    return MARKER_ACCENTS.default;
+}
+
+// Announce a message to screen readers via the #a11y-announcer live region
+function announce(msg) {
+    const el = document.getElementById('a11y-announcer');
+    if (!el) return;
+    el.textContent = '';
+    // Flush then set — ensures re-announcement even for same string
+    requestAnimationFrame(() => { el.textContent = msg; });
+}
+
+// Resolve a Signal token to its current hex value (for Maps APIs that need raw colors)
+function tokenColor(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
+}
+
+// Compat shim for legacy call sites still using markerColor(type)
+function markerColor(type) {
+    return tokenColor(markerAccent(type));
+}
+
+// Material Symbols icon names for each facility type
+const MARKER_ICONS = {
+    anchorage:  'anchor',
+    marina:     'directions_boat',
+    mooring:    'link',
+    restaurant: 'restaurant',
+    bar:        'local_bar',
+    hub:        'build',
+};
+
+// Build a round accent dot with a white Material Symbol icon
+function accentDot(accent, size = 28, iconKey = '') {
+    const dot = document.createElement('div');
+    dot.style.cssText = [
+        `width:${size}px`,
+        `height:${size}px`,
+        'border-radius:50%',
+        `background:var(--${accent})`,
+        'border:2.5px solid var(--surface)',
+        'box-shadow:0 2px 6px rgba(0,0,0,.3)',
+        'cursor:pointer',
+        'flex-shrink:0',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+    ].join(';');
+    const iconName = MARKER_ICONS[iconKey];
+    if (iconName) {
+        const span = document.createElement('span');
+        span.className = 'material-symbols-outlined';
+        span.style.cssText = `font-size:${Math.round(size * 0.52)}px;color:#fff;line-height:1;pointer-events:none;user-select:none`;
+        span.setAttribute('aria-hidden', 'true');
+        span.textContent = iconName;
+        dot.appendChild(span);
+    }
+    return dot;
 }
 
 // State
@@ -327,6 +388,8 @@ let isResearchAllRunning = false;
 let activeInfoWindow = null;
 let lastKnownItineraryFull = false;
 let lastKnownResearchDone = false;
+// Briefing cache keyed by stop_id — populated on demand, cleared on stop delete
+const briefingCache = new Map();
 let healthCheckInterval = null;
 // Chart.js instance registry — keyed by canvas ID so we can destroy before re-render.
 const chartInstances = new Map();
@@ -677,7 +740,13 @@ function initThemeToggle() {
     if (!container) return;
     container.addEventListener('click', (e) => {
         if (e.target.closest('#btn-theme-toggle')) {
-            const next = cycleTheme();
+            const next = toggleTheme();
+            // Update button state without reload for fast feedback
+            const btn = document.getElementById('btn-theme-toggle');
+            if (btn) {
+                btn.textContent = next === 'dark' ? '☀️' : '🌙';
+                btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+            }
             // colorScheme is immutable after Map construction — reload so
             // initMap picks up the new theme with the correct colorScheme.
             window.location.reload();
@@ -756,10 +825,12 @@ function initPilotAndFilterListeners() {
     }
 }
 
+// Track selected discovery month (1-based)
+let currentDiscoveryMonth = new Date().getMonth() + 1;
+
 function initDiscoveryListeners() {
     const btnDiscover = document.getElementById('btn-discover');
     const btnCloseDiscovery = document.getElementById('btn-close-discovery');
-    const monthSlider = document.getElementById('month-slider');
 
     if (btnDiscover) btnDiscover.addEventListener('click', () => toggleDiscoveryMode(true));
     if (btnCloseDiscovery) btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
@@ -772,15 +843,30 @@ function initDiscoveryListeners() {
         });
     }
 
-    if (monthSlider) {
-        const months = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
-        ];
-        monthSlider.addEventListener('input', (e) => {
-            const month = parseInt(e.target.value);
-            document.getElementById('month-display').textContent = months[month - 1];
-            loadDiscoveryRegions(month);
+    // Build 12-square month picker
+    const squaresContainer = document.getElementById('month-squares');
+    if (squaresContainer) {
+        const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        MONTH_ABBR.forEach((abbr, i) => {
+            const num = i + 1;
+            const sq = document.createElement('button');
+            sq.type = 'button';
+            sq.className = 'np-month-sq';
+            sq.dataset.month = num;
+            sq.setAttribute('aria-label', abbr);
+            sq.setAttribute('aria-pressed', String(num === currentDiscoveryMonth));
+            sq.textContent = abbr;
+            if (num === currentDiscoveryMonth) sq.classList.add('active');
+            sq.addEventListener('click', () => {
+                currentDiscoveryMonth = num;
+                squaresContainer.querySelectorAll('.np-month-sq').forEach(b => {
+                    const active = parseInt(b.dataset.month) === num;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-pressed', String(active));
+                });
+                loadDiscoveryRegions(num);
+            });
+            squaresContainer.appendChild(sq);
         });
     }
 }
@@ -792,6 +878,57 @@ function initMobileMenuListeners() {
 
     if (btnMobileMenu) btnMobileMenu.addEventListener('click', () => appContainer.classList.add('menu-open'));
     if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', () => appContainer.classList.remove('menu-open'));
+
+    // Bottom tab bar
+    const tabBar = document.getElementById('mobile-tab-bar');
+    if (!tabBar) return;
+
+    function setActiveTab(name) {
+        tabBar.querySelectorAll('.np-tab').forEach(t => {
+            const isActive = t.dataset.tab === name;
+            t.setAttribute('aria-pressed', String(isActive));
+            t.classList.toggle('active', isActive);
+        });
+    }
+
+    document.getElementById('tab-map')?.addEventListener('click', () => {
+        appContainer.classList.remove('menu-open');
+        setActiveTab('map');
+    });
+
+    document.getElementById('tab-plan')?.addEventListener('click', () => {
+        appContainer.classList.add('menu-open');
+        setActiveTab('plan');
+    });
+
+    document.getElementById('tab-guide')?.addEventListener('click', () => {
+        appContainer.classList.remove('menu-open');
+        setActiveTab('guide');
+        if (currentVoyage) {
+            const btn = document.getElementById('btn-view-guide');
+            handleGuideClick(currentVoyage, btn || document.getElementById('tab-guide'));
+        }
+    });
+
+    document.getElementById('tab-profile')?.addEventListener('click', () => {
+        appContainer.classList.remove('menu-open');
+        setActiveTab('profile');
+        // Show auth container info — toggle a small popover
+        const authContainer = document.getElementById('auth-container');
+        if (authContainer) authContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    // Sync active tab when sidebar opens/closes via other means
+    const observer = new MutationObserver(() => {
+        const isOpen = appContainer.classList.contains('menu-open');
+        if (isOpen) setActiveTab('plan');
+        else {
+            // Only reset if no modal is open
+            const anyModal = document.querySelector('.modal:not(.hidden)');
+            if (!anyModal) setActiveTab('map');
+        }
+    });
+    observer.observe(appContainer, { attributes: true, attributeFilter: ['class'] });
 }
 
 function initVoyageModalListeners() {
@@ -804,14 +941,19 @@ function initVoyageModalListeners() {
     const displayCoords = document.getElementById('voyage-coords-display');
     const inputLat = document.getElementById('voyage-lat');
     const inputLng = document.getElementById('voyage-lng');
+    const inputRadius = document.getElementById('voyage-radius');
+    const radiusDisplay = document.getElementById('voyage-radius-display');
     const modalTitle = modalNewVoyage.querySelector('h2');
     const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
+
+    inputRadius.addEventListener('input', () => { radiusDisplay.textContent = inputRadius.value; });
 
     // Open Modal (Create Mode)
     btnNewVoyage.addEventListener('click', () => {
         editingVoyageId = null;
         modalTitle.textContent = 'Plan a New Voyage';
         submitBtn.textContent = 'Create Voyage';
+        document.getElementById('modal-voyage-pill').textContent = 'NEW VOYAGE';
         modalOverlay.classList.remove('hidden');
         modalNewVoyage.classList.remove('hidden');
         // Hide date fields for initial creation (Discovery First)
@@ -821,6 +963,7 @@ function initVoyageModalListeners() {
         document.getElementById('voyage-title').value = '';
         document.getElementById('voyage-location-name').value = '';
         document.getElementById('voyage-radius').value = 60;
+        document.getElementById('voyage-radius-display').textContent = 60;
         displayCoords.textContent = '';
         inputLat.value = '';
         inputLng.value = '';
@@ -866,9 +1009,12 @@ function initVoyageModalListeners() {
 
             // At zoom 10, ~20nm is good coverage. Higher zoom = smaller radius.
             let radius = Math.round(20 * Math.pow(2, 10 - zoom));
-            radius = Math.max(5, Math.min(200, radius));
+            radius = Math.max(1, Math.min(150, radius));
             const inputRadius = document.getElementById('voyage-radius');
-            if (inputRadius) inputRadius.value = radius;
+            if (inputRadius) {
+                inputRadius.value = radius;
+                document.getElementById('voyage-radius-display').textContent = radius;
+            }
 
             try {
                 const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
@@ -1176,12 +1322,14 @@ async function loadVoyages() {
   }
 }
 
+const VOYAGE_ACCENTS = ['coral', 'teal', 'violet', 'amber', 'sky'];
+
 function renderVoyageList() {
   const listContainer = document.getElementById('voyage-list');
   listContainer.innerHTML = '';
 
   if ((!voyages || voyages.length === 0) && currentVoyagePage === 1) {
-    listContainer.innerHTML = '<p class="loading-text">No voyages yet. Plan your first trip!</p>';
+    listContainer.innerHTML = '<p class="np-empty-state">No voyages yet. Plan your first trip!</p>';
     return;
   }
 
@@ -1203,45 +1351,95 @@ function renderVoyageList() {
     sorted.splice(0, 0, 'DATED_HEADER');
   }
 
+  let voyageCardIndex = 0;
+
   sorted.forEach(voyage => {
     if (voyage === 'DATED_HEADER') {
       const hdr = document.createElement('p');
-      hdr.className = 'font-xs text-gray uppercase tracking-wider p-xs mb-xs';
+      hdr.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:4px 0 8px';
       hdr.textContent = 'Upcoming & Recent';
       listContainer.appendChild(hdr);
       return;
     }
     if (voyage === 'SEPARATOR') {
       const sep = document.createElement('p');
-      sep.className = 'font-xs text-gray uppercase tracking-wider p-xs mt-sm mb-xs voyage-list-separator';
+      sep.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:12px 0 8px';
       sep.textContent = 'Undated';
       listContainer.appendChild(sep);
       return;
     }
+
+    const accent = VOYAGE_ACCENTS[voyageCardIndex % VOYAGE_ACCENTS.length];
+    voyageCardIndex++;
+
     const el = document.createElement('div');
     el.className = 'voyage-item';
-    
-    const locationHtml = voyage.location_name ? `<p class="font-sm text-gray">📍 ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>` : '';
-    
-    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : 'No dates set';
-    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : '';
-    const dateRange = endDate ? `${startDate} - ${endDate}` : startDate;
-    
-    el.innerHTML = DOMPurify.sanitize(`
-      <div class="voyage-info">
-        <h2>${voyage.title}</h2>
-        <p>${dateRange}</p>
-        ${locationHtml}
-      </div>
-      <div class="voyage-actions">
-        <button class="btn-icon edit" title="Edit">
-          <span class="material-symbols-outlined">edit</span>
-        </button>
-        <button class="btn-icon delete" title="Delete">
-          <span class="material-symbols-outlined">delete</span>
-        </button>
-      </div>
-    `);
+    el.style.cssText = [
+      'border-radius:16px',
+      `background:color-mix(in oklab,var(--${accent}) 6%,var(--surface))`,
+      `box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--${accent}) 25%,transparent)`,
+      'margin-bottom:8px',
+      'padding:14px 16px',
+      'cursor:pointer',
+      'transition:box-shadow .15s',
+      'border:none',
+      'display:flex',
+      'justify-content:space-between',
+      'align-items:flex-start',
+      'gap:8px',
+    ].join(';');
+
+    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+
+    // Build info column
+    const info = document.createElement('div');
+    info.className = 'voyage-info';
+    info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:6px';
+
+    const titleEl = document.createElement('h2');
+    titleEl.style.cssText = 'margin:0;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    titleEl.textContent = voyage.title;
+    info.appendChild(titleEl);
+
+    // Chip row
+    const chipRow = document.createElement('div');
+    chipRow.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap';
+
+    if (startDate) {
+      const dateChip = document.createElement('span');
+      dateChip.style.cssText = `display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:700;background:color-mix(in oklab,var(--${accent}) 12%,var(--surface));color:var(--ink)`;
+      dateChip.textContent = endDate ? `${startDate} – ${endDate}` : startDate;
+      chipRow.appendChild(dateChip);
+    } else {
+      const dateChip = document.createElement('span');
+      dateChip.style.cssText = 'display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:700;background:var(--chip);color:var(--muted)';
+      dateChip.textContent = 'No dates set';
+      chipRow.appendChild(dateChip);
+    }
+
+    if (voyage.location_name) {
+      const locChip = document.createElement('span');
+      locChip.style.cssText = 'display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:var(--chip);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px';
+      locChip.textContent = `📍 ${displayLocationName(voyage.location_name)}`;
+      chipRow.appendChild(locChip);
+    }
+
+    info.appendChild(chipRow);
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'voyage-actions';
+    actions.innerHTML = `
+      <button class="btn-icon edit" title="Edit">
+        <span class="material-symbols-outlined">edit</span>
+      </button>
+      <button class="btn-icon delete" title="Delete">
+        <span class="material-symbols-outlined">delete</span>
+      </button>`;
+
+    el.appendChild(info);
+    el.appendChild(actions);
     
     // Select Voyage
     el.querySelector('.voyage-info').addEventListener('click', () => selectVoyage(voyage));
@@ -1332,6 +1530,7 @@ function openEditModal(voyage) {
 
     modalTitle.textContent = 'Edit Voyage';
     submitBtn.textContent = 'Update Voyage';
+    document.getElementById('modal-voyage-pill').textContent = 'EDIT VOYAGE';
     
     // Show date fields in edit mode
     document.getElementById('voyage-date-fields').classList.remove('hidden');
@@ -1341,6 +1540,7 @@ function openEditModal(voyage) {
     document.getElementById('voyage-end').value = voyage.end_date ? voyage.end_date.split('T')[0] : '';
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
     document.getElementById('voyage-radius').value = voyage.search_radius || 60;
+    document.getElementById('voyage-radius-display').textContent = voyage.search_radius || 60;
     document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
@@ -1364,6 +1564,8 @@ function showVoyageList(doPushState = true) {
     document.getElementById('voyage-list').classList.remove('hidden');
     document.getElementById('itinerary-view').classList.add('hidden');
     document.querySelector('.sidebar-actions').classList.remove('hidden');
+    // On mobile keep sidebar open on voyage list view
+    document.querySelectorAll('#mobile-tab-bar .np-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'plan'));
 
     currentVoyage = null;
     selectedDate = null;
@@ -1416,8 +1618,10 @@ async function selectVoyage(voyage, doPushState = true) {
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
     
-    // For mobile
-    document.getElementById('app').classList.remove('menu-open');
+    // For mobile — show sidebar (itinerary), activate Plan tab
+    document.getElementById('app').classList.add('menu-open');
+    document.getElementById('tab-plan')?.setAttribute('aria-pressed', 'true');
+    document.querySelectorAll('#mobile-tab-bar .np-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'plan'));
 
     lastKnownItineraryFull = false;
     clearRecommendations();
@@ -2021,37 +2225,29 @@ async function renderRecommendations() {
 
         const { AdvancedMarkerElement } = await importLibrary("marker");
 
-        const styles = {
-            hub:       { color: MARKER_COLORS.hub,       icon: 'hub',          label: 'Resource Hub' },
-            anchorage: { color: MARKER_COLORS.anchorage, icon: 'anchor',       label: 'Anchorage' },
-            mooring:   { color: MARKER_COLORS.mooring,   icon: 'crisis_alert', label: 'Mooring' },
+        const recLabels = {
+            hub: 'Resource Hub', anchorage: 'Anchorage', mooring: 'Mooring',
         };
 
         voyageRecommendations.forEach((rec) => {
             const type = (rec.type || '').toLowerCase();
-            let style = styles.hub;
-            if (type.includes('anchor')) style = styles.anchorage;
-            else if (type.includes('moor')) style = styles.mooring;
-
-            const iconDiv = document.createElement('div');
-            iconDiv.className = 'map-marker-icon';
-            iconDiv.style.backgroundColor = style.color;
-            iconDiv.innerHTML = `<span class="material-symbols-outlined map-icon-glyph">${style.icon}</span>`;
+            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : 'hub';
+            const accent = markerAccent(rec.type);
+            const dot = accentDot(accent, 28, filterKey);
 
             const marker = new AdvancedMarkerElement({
                 map,
                 position: { lat: rec.latitude, lng: rec.longitude },
-                content: iconDiv,
+                content: dot,
                 title: rec.name,
                 zIndex: 20,
             });
 
-            marker.addListener('gmp-click', () => {
-                showRecommendationInfoWindow(rec, marker, style);
-            });
-
-            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : 'hub';
             if (!activeFilters.has(filterKey)) marker.map = null;
+
+            marker.addListener('gmp-click', () => {
+                showRecommendationInfoWindow(rec, marker, { accent, label: recLabels[filterKey] || 'Spot' });
+            });
 
             recommendationMarkers.push({ marker, type: filterKey });
         });
@@ -2070,47 +2266,35 @@ function showRecommendationInfoWindow(rec, anchor, style) {
 
     const { InfoWindow } = googleMapsLib;
     const references = rec.reference_links ? (typeof rec.reference_links === 'string' ? JSON.parse(rec.reference_links) : rec.reference_links) : [];
-    
+    const accentHex = tokenColor(style.accent);
+    const inkHex = tokenColor('ink');
+    const mutedHex = tokenColor('muted');
+    const surfaceHex = tokenColor('surface');
+
     let resourcesHtml = '';
     if (rec.url || references.length > 0) {
         resourcesHtml = `
-            <div style="margin-bottom: 15px;">
-                <p style="margin: 0 0 5px 0; font-size: 0.8rem; font-weight: bold; color: #666; text-transform: uppercase;">Resources:</p>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    ${rec.url ? `
-                        <a href="${rec.url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; font-weight: bold; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                            <span class="material-symbols-outlined" style="font-size: 14px;">language</span>
-                            Website
-                        </a>
-                    ` : ''}
-                    ${references.map((url, i) => `
-                        <a href="${url}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-                            <span class="material-symbols-outlined" style="font-size: 14px;">link</span>
-                            Link ${i+1}
-                        </a>
-                    `).join('')}
+            <div style="margin-bottom:12px">
+                <p style="margin:0 0 5px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${mutedHex}">Resources</p>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    ${rec.url ? `<a href="${rec.url}" target="_blank" style="font-size:13px;color:${accentHex};font-weight:700;text-decoration:none">Website ↗</a>` : ''}
+                    ${references.map((url, i) => `<a href="${url}" target="_blank" style="font-size:13px;color:${accentHex};text-decoration:none">Link ${i+1} ↗</a>`).join('')}
                 </div>
             </div>`;
     }
 
     const hasDates = currentVoyage && currentVoyage.start_date && currentVoyage.end_date;
     const addButton = hasDates ? `
-            <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')">
-                <span class="material-symbols-outlined icon-align" style="font-size: 18px; margin-right: 5px;">add_location_alt</span>
-                Add to Itinerary
-            </button>` : '';
+        <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')" style="width:100%;margin-top:8px">
+            Add to Itinerary
+        </button>` : '';
 
     const content = `
-        <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span class="material-symbols-outlined" style="color: ${style.color};">${style.icon}</span>
-                <b style="font-size: 1.2rem; color: #1a73e8;">${rec.name}</b>
-            </div>
-            <span style="font-size: 0.85rem; color: ${style.color}; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">${style.label}</span><br>
-            <p style="margin: 10px 0; font-size: 0.9rem; line-height: 1.5; color: #333;">${rec.description || ''}</p>
-            <div class="pilot-reasoning" style="background: ${style.color}1A; border-left: 3px solid ${style.color}; margin-bottom: 15px;">
-                <p>"${rec.reasoning || ''}"</p>
-            </div>
+        <div style="color:${inkHex};background:${surfaceHex};max-width:280px;font-family:system-ui,sans-serif;padding:4px">
+            <b style="font-size:15px;font-weight:700;display:block;margin-bottom:4px">${rec.name}</b>
+            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${accentHex}">${style.label}</span>
+            <p style="margin:8px 0;font-size:13px;line-height:1.5;color:${mutedHex}">${rec.description || ''}</p>
+            <div style="background:${accentHex}18;border-left:3px solid ${accentHex};padding:8px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:13px;color:${inkHex};font-style:italic">"${rec.reasoning || ''}"</div>
             ${resourcesHtml}
             ${addButton}
         </div>`;
@@ -2122,14 +2306,19 @@ function showRecommendationInfoWindow(rec, anchor, style) {
     activeInfoWindow.open(map, anchor instanceof google.maps.marker.AdvancedMarkerElement ? anchor : null);
 }
 
-function showFacilityInfoWindow(f, anchor, color) {
+function showFacilityInfoWindow(f, anchor, accent) {
     if (activeInfoWindow) activeInfoWindow.close();
 
     const { InfoWindow } = googleMapsLib;
+    const accentHex = tokenColor(accent);
+    const inkHex = tokenColor('ink');
+    const mutedHex = tokenColor('muted');
+    const surfaceHex = tokenColor('surface');
+    const dangerHex = tokenColor('danger');
+    const amberHex = tokenColor('amber');
 
     const addressHtml = f.address
-        ? `<p style="margin: 4px 0 8px; font-size: 0.85rem; color: #666;">${f.address}</p>`
-        : '';
+        ? `<p style="margin:4px 0 8px;font-size:12px;color:${mutedHex}">${f.address}</p>` : '';
 
     let ratingHtml = '';
     if (f.rating) {
@@ -2137,46 +2326,35 @@ function showFacilityInfoWindow(f, anchor, color) {
         const filled = '★'.repeat(stars);
         const empty = '☆'.repeat(5 - stars);
         const count = f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()})` : '';
-        ratingHtml = `<p style="margin: 4px 0; font-size: 0.9rem; color: #555;">
-            <span style="color: #F9A825;">${filled}${empty}</span>
-            <span style="margin-left: 4px;">${f.rating.toFixed(1)}${count}</span>
+        ratingHtml = `<p style="margin:4px 0;font-size:13px;color:${mutedHex}">
+            <span style="color:${amberHex}">${filled}${empty}</span>
+            <span style="margin-left:4px">${f.rating.toFixed(1)}${count}</span>
         </p>`;
     }
 
     let statusHtml = '';
     if (f.business_status && f.business_status !== 'OPERATIONAL') {
-        const label = f.business_status.replace(/_/g, ' ');
-        statusHtml = `<p style="margin: 4px 0; font-size: 0.8rem; color: #C62828; font-weight: 700;">${label}</p>`;
+        statusHtml = `<p style="margin:4px 0;font-size:11px;font-weight:700;color:${dangerHex}">${f.business_status.replace(/_/g, ' ')}</p>`;
     }
 
     const descriptionHtml = f.details?.description
-        ? `<p style="margin: 10px 0; font-size: 0.9rem; line-height: 1.5; color: #333;">${f.details.description}</p>`
-        : '';
+        ? `<p style="margin:8px 0;font-size:13px;line-height:1.5;color:${mutedHex}">${f.details.description}</p>` : '';
 
     const detailRows = f.details
         ? Object.entries(f.details)
             .filter(([k, v]) => k !== 'description' && v && String(v).toLowerCase() !== 'n/a')
-            .map(([k, v]) => `<p style="margin: 3px 0; font-size: 0.85rem; color: #444;"><strong>${k}:</strong> ${v}</p>`)
-            .join('')
-        : '';
+            .map(([k, v]) => `<p style="margin:3px 0;font-size:12px;color:${mutedHex}"><strong style="color:${inkHex}">${k}:</strong> ${v}</p>`)
+            .join('') : '';
 
-    const websiteHtml = f.website ? `
-        <a href="${f.website}" target="_blank" style="font-size: 0.85rem; color: #1a73e8; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-            <span class="material-symbols-outlined" style="font-size: 14px;">public</span>Visit Website
-        </a>` : '';
+    const websiteHtml = f.website
+        ? `<a href="${f.website}" target="_blank" style="font-size:13px;color:${accentHex};font-weight:700;text-decoration:none;display:block;margin-top:8px">Visit Website ↗</a>` : '';
 
     const content = `
-        <div style="color: black; max-width: 280px; font-family: 'Lato', sans-serif; padding: 5px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                <span class="material-symbols-outlined" style="color: ${color};">location_on</span>
-                <b style="font-size: 1.2rem; color: #1a73e8;">${f.name}</b>
-            </div>
-            <span style="font-size: 0.85rem; color: ${color}; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">${f.type || 'Facility'}</span>
-            ${addressHtml}
-            ${ratingHtml}
-            ${statusHtml}
-            ${descriptionHtml}
-            ${detailRows ? `<div style="background: ${color}1A; padding: 8px; border-radius: 6px; border-left: 3px solid ${color}; margin: 10px 0;">${detailRows}</div>` : ''}
+        <div style="color:${inkHex};background:${surfaceHex};max-width:280px;font-family:system-ui,sans-serif;padding:4px">
+            <b style="font-size:15px;font-weight:700;display:block;margin-bottom:2px">${f.name}</b>
+            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${accentHex}">${f.type || 'Facility'}</span>
+            ${addressHtml}${ratingHtml}${statusHtml}${descriptionHtml}
+            ${detailRows ? `<div style="background:${accentHex}18;padding:8px;border-radius:0 8px 8px 0;border-left:3px solid ${accentHex};margin:8px 0">${detailRows}</div>` : ''}
             ${websiteHtml}
         </div>`;
 
@@ -2218,20 +2396,20 @@ async function renderPilotCircle() {
     const radiusMeters = currentVoyage.search_radius ? currentVoyage.search_radius * 1852 : 111120;
     const center = { lat: currentVoyage.latitude, lng: currentVoyage.longitude };
 
-    // Add Pilot Range Circle
-    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-radar').trim() || '#f59e0b';
+    // Add Pilot Range Circle — sky-tinted ring
+    const skyColor = tokenColor('sky') || '#1A5BCE';
     pilotCircle = new Circle({
-        strokeColor: accentColor,
-        strokeOpacity: 0.5,
-        strokeWeight: 2,
-        fillColor: accentColor,
-        fillOpacity: 0.05,
+        strokeColor: skyColor,
+        strokeOpacity: 0.6,
+        strokeWeight: 2.5,
+        fillColor: skyColor,
+        fillOpacity: 0.06,
         map: map,
         center: center,
         radius: radiusMeters,
         clickable: false,
         draggable: false,
-        editable: false, 
+        editable: false,
         zIndex: 5
     });
 
@@ -2239,13 +2417,9 @@ async function renderPilotCircle() {
     const centerContainer = document.createElement('div');
     centerContainer.className = 'pilot-center-container';
 
-    const centerPin = new PinElement({
-        scale: 0.6,
-        background: "#1a73e8",
-        borderColor: "white",
-        glyph: ""
-    });
-    centerContainer.appendChild(centerPin);
+    const centerDot = document.createElement('div');
+    centerDot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:var(--sky);border:2.5px solid var(--surface);box-shadow:0 2px 6px rgba(0,0,0,.3)';
+    centerContainer.appendChild(centerDot);
 
     const label = document.createElement('div');
     label.className = 'pilot-radius-label';
@@ -2261,18 +2435,14 @@ async function renderPilotCircle() {
     });
 
     // Add Radius Handle (on the East edge)
-    const radiusHandlePin = new PinElement({
-        scale: 0.4,
-        background: "white",
-        borderColor: "#1a73e8",
-        glyph: ""
-    });
+    const radiusHandleDot = document.createElement('div');
+    radiusHandleDot.style.cssText = 'width:12px;height:12px;border-radius:50%;background:var(--surface);border:2.5px solid var(--sky);box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:ew-resize';
 
     const edgePos = spherical.computeOffset(center, radiusMeters, 90);
     pilotRadiusMarker = new AdvancedMarkerElement({
         map: map,
         position: edgePos,
-        content: radiusHandlePin,
+        content: radiusHandleDot,
         title: "Resize Research Area",
         gmpDraggable: true,
         zIndex: 11
@@ -2374,7 +2544,36 @@ function renderItinerary() {
     
     if (!currentVoyage.start_date || !currentVoyage.end_date) {
         if (isPilotResearching) {
-            list.innerHTML = '<div class="p-md text-center"><p class="text-gray">Researching area...</p></div>';
+            const card = document.createElement('div');
+            card.style.cssText = [
+                'margin:12px 0',
+                'padding:18px 16px',
+                'border-radius:var(--radius-card)',
+                'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
+                'display:flex',
+                'flex-direction:column',
+                'gap:14px',
+            ].join(';');
+
+            const top = document.createElement('div');
+            top.style.cssText = 'display:flex;align-items:center;gap:10px';
+            const spinner = document.createElement('span');
+            spinner.className = 'material-symbols-outlined spin';
+            spinner.style.cssText = 'font-size:20px;color:var(--sky)';
+            spinner.textContent = 'explore';
+            const lbl = document.createElement('span');
+            lbl.style.cssText = 'font-size:14px;font-weight:700;color:var(--ink)';
+            lbl.textContent = 'Researching area…';
+            top.appendChild(spinner);
+            top.appendChild(lbl);
+            card.appendChild(top);
+
+            card.appendChild(Stepper({ steps: [
+                { label: 'Scanning anchorages', state: 'done' },
+                { label: 'Checking pilot charts', state: 'active' },
+                { label: 'Sourcing recommendations', state: 'queued' },
+            ]}));
+            list.appendChild(card);
             return;
         }
 
@@ -2386,7 +2585,7 @@ function renderItinerary() {
             list.appendChild(header);
 
             voyageRecommendations.forEach(rec => {
-                const recColor = markerColor(rec.type);
+                const accent = markerAccent(rec.type);
                 const tl = (rec.type || '').toLowerCase();
                 let recIcon = 'location_on';
                 if (tl.includes('anchor')) recIcon = 'anchor';
@@ -2395,16 +2594,17 @@ function renderItinerary() {
 
                 const el = document.createElement('div');
                 el.className = 'day-item day-item--stacked';
+                el.style.setProperty('--accent', `var(--${accent})`);
                 el.innerHTML = DOMPurify.sanitize(`
                     <div class="rec-header">
-                        <span class="material-symbols-outlined rec-icon" style="color:${recColor};">${recIcon}</span>
+                        <span class="material-symbols-outlined rec-icon">${recIcon}</span>
                         <span class="rec-name">${displayLocationName(rec.name)}</span>
-                        <span class="rec-badge" style="background:${recColor};">${rec.type || 'Spot'}</span>
+                        <span class="rec-badge">${rec.type || 'Spot'}</span>
                     </div>
                     ${rec.description ? `<p class="rec-description">${rec.description}</p>` : ''}
                     ${rec.reasoning ? `
-                        <div class="pilot-reasoning" style="background:${recColor}1A;border-left:3px solid ${recColor};">
-                            <p><strong style="color:${recColor};">Pilot's Reasoning:</strong> "${rec.reasoning}"</p>
+                        <div class="pilot-reasoning">
+                            <p><strong>Pilot's Reasoning:</strong> "${rec.reasoning}"</p>
                         </div>` : ''}
                 `);
                 el.onclick = () => {
@@ -2432,51 +2632,86 @@ function renderItinerary() {
         return;
     }
 
+    // §5.7 — Research complete success banner
+    if (lastKnownResearchDone) {
+        const banner = document.createElement('div');
+        banner.className = 'np-research-banner';
+
+        const bannerTop = document.createElement('div');
+        bannerTop.className = 'np-research-banner__top';
+        const checkIcon = document.createElement('span');
+        checkIcon.className = 'material-symbols-outlined np-research-banner__icon';
+        checkIcon.textContent = 'check_circle';
+        const bannerText = document.createElement('div');
+        bannerText.className = 'np-research-banner__text';
+        const bannerTitle = document.createElement('span');
+        bannerTitle.className = 'np-research-banner__title';
+        bannerTitle.textContent = 'Research complete';
+        bannerText.appendChild(bannerTitle);
+        bannerTop.appendChild(checkIcon);
+        bannerTop.appendChild(bannerText);
+        banner.appendChild(bannerTop);
+
+        list.appendChild(banner);
+    }
+
     let currentDate = new Date(currentVoyage.start_date);
     const endDate = new Date(currentVoyage.end_date);
+    let dayIndex = 0;
 
     while (currentDate <= endDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         const stop = currentStops.find(s => s.target_date.startsWith(dateStr));
-        
+        const isSelected = selectedDate === dateStr;
+        const accent = VOYAGE_ACCENTS[dayIndex % VOYAGE_ACCENTS.length];
+        const dayNum = dayIndex + 1;
+        const dateLabel = currentDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
         const el = document.createElement('div');
-        el.className = `day-item ${selectedDate === dateStr ? 'selected' : ''}`;
-        
-        // Day Info
-        let html = `
-            <div class="day-info flex-1">
-                <span class="day-date">${currentDate.toLocaleDateString(undefined, {month:'short', day:'numeric', timeZone: 'UTC'})}</span>
-                <span class="day-location ${stop ? 'set' : ''}">${stop ? displayLocationName(stop.location_name) : 'No destination'}</span>
-            </div>
-        `;
-        
-        // Research Action
+        el.className = ['np-stop-card', isSelected && 'np-stop-card--selected'].filter(Boolean).join(' ');
+        el.style.setProperty('--accent', `var(--${accent})`);
+
+        // Numbered accent circle
+        const num = document.createElement('div');
+        num.className = 'np-stop-card__num';
+        num.setAttribute('aria-hidden', 'true');
+        num.textContent = dayNum;
+        el.appendChild(num);
+
+        // Middle: date chip + location
+        const mid = document.createElement('div');
+        mid.className = 'np-stop-card__info';
+
+        const dateChip = document.createElement('span');
+        dateChip.className = 'np-stop-card__date';
+        dateChip.textContent = dateLabel;
+        mid.appendChild(dateChip);
+
+        const loc = document.createElement('span');
+        loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty'].filter(Boolean).join(' ');
+        loc.textContent = stop ? displayLocationName(stop.location_name).split(',')[0].trim() : 'No destination';
+        mid.appendChild(loc);
+        el.appendChild(mid);
+
+        // Action buttons (only for stops)
         if (stop) {
-            html += `
-                <div class="day-actions">
-                    <button class="btn-icon research" title="Research" data-stop-id="${stop.id}">
-                        <span class="material-symbols-outlined">science</span>
-                    </button>
-                    <button class="btn-icon delete-stop" title="Delete Stop">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                </div>
-            `;
-        }
-        
-        el.innerHTML = DOMPurify.sanitize(html);
-        
-        // Handlers
-        el.addEventListener('click', () => selectDate(dateStr));
-        
-        if (stop) {
-            const btnResearch = el.querySelector('.research');
+            const actions = document.createElement('div');
+            actions.className = 'np-stop-card__actions';
+
+            const btnResearch = document.createElement('button');
+            btnResearch.className = 'btn-icon research';
+            btnResearch.title = 'Research';
+            btnResearch.dataset.stopId = stop.id;
+            btnResearch.innerHTML = '<span class="material-symbols-outlined">science</span>';
             btnResearch.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleResearchClick(stop, btnResearch);
             });
 
-            const btnDelete = el.querySelector('.delete-stop');
+            const btnDelete = document.createElement('button');
+            btnDelete.className = 'btn-icon delete-stop';
+            btnDelete.title = 'Delete Stop';
+            btnDelete.innerHTML = '<span class="material-symbols-outlined">delete</span>';
             btnDelete.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 showNotification('Delete Stop', `Remove stop at ${displayLocationName(stop.location_name)}?`, [
@@ -2488,6 +2723,7 @@ function renderItinerary() {
                             try {
                                 await API.deleteStop(stop.id);
                                 currentStops = currentStops.filter(s => s.id !== stop.id);
+                                briefingCache.delete(stop.id);
                                 renderItinerary();
                                 renderMapStops();
                                 await checkItineraryFullness(true);
@@ -2503,9 +2739,40 @@ function renderItinerary() {
                     }
                 ]);
             });
+
+            actions.appendChild(btnResearch);
+            actions.appendChild(btnDelete);
+            el.appendChild(actions);
+
+            // Weather + tide chips if briefing is cached
+            const cached = briefingCache.get(stop.id);
+            if (cached) {
+                const w = cached.weather_summary || {};
+                const chips = document.createElement('div');
+                chips.className = 'np-stop-card__chips';
+                if (w.condition && w.condition !== 'N/A') {
+                    const wChip = document.createElement('span');
+                    wChip.className = 'np-stop-card__chip';
+                    wChip.style.setProperty('--accent', 'var(--sky)');
+                    wChip.textContent = w.condition;
+                    chips.appendChild(wChip);
+                }
+                if (w.wind_speed_kt) {
+                    const windChip = document.createElement('span');
+                    windChip.className = 'np-stop-card__chip';
+                    windChip.style.setProperty('--accent', 'var(--teal)');
+                    windChip.textContent = `💨 ${w.wind_speed_kt}kt`;
+                    chips.appendChild(windChip);
+                }
+                if (chips.children.length > 0) {
+                    mid.appendChild(chips);
+                }
+            }
         }
 
+        el.addEventListener('click', () => selectDate(dateStr));
         list.appendChild(el);
+        dayIndex++;
         
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
@@ -2570,13 +2837,46 @@ async function handleResearchClick(stop, button) {
         const modal = document.getElementById('modal-briefing');
         const content = document.getElementById('briefing-content');
         const modalOverlay = document.getElementById('modal-overlay');
-        
-        content.innerHTML = `
-            <div class="loading-state">
-                <span class="material-symbols-outlined spin loading-icon">sync</span>
-                <p class="font-xs">Checking weather, tides, and local charts.</p>
-            </div>
-        `;
+
+        content.innerHTML = '';
+        const loadCard = document.createElement('div');
+        loadCard.style.cssText = [
+            'padding:24px 20px',
+            'border-radius:var(--radius-card)',
+            'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
+            'display:flex',
+            'flex-direction:column',
+            'gap:16px',
+        ].join(';');
+
+        const loadTop = document.createElement('div');
+        loadTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+        const loadSpinner = document.createElement('span');
+        loadSpinner.className = 'material-symbols-outlined spin';
+        loadSpinner.style.cssText = 'font-size:24px;color:var(--sky)';
+        loadSpinner.textContent = 'explore';
+        const loadLbl = document.createElement('div');
+        loadLbl.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+        const loadTitle = document.createElement('span');
+        loadTitle.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+        loadTitle.textContent = 'Researching stop…';
+        const loadSub = document.createElement('span');
+        loadSub.style.cssText = 'font-size:12px;color:var(--muted)';
+        loadSub.textContent = 'Checking weather, tides, and local charts';
+        loadLbl.appendChild(loadTitle);
+        loadLbl.appendChild(loadSub);
+        loadTop.appendChild(loadSpinner);
+        loadTop.appendChild(loadLbl);
+        loadCard.appendChild(loadTop);
+
+        loadCard.appendChild(Stepper({ steps: [
+            { label: 'Fetching weather forecast', state: 'active' },
+            { label: 'Reading tide tables', state: 'queued' },
+            { label: 'Locating nearby facilities', state: 'queued' },
+            { label: 'Computing sun phase', state: 'queued' },
+        ]}));
+        content.appendChild(loadCard);
+
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
 
@@ -2752,6 +3052,9 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
 }
 
 async function showBriefing(briefing, doPushState = true) {
+    // Cache so itinerary cards can show weather chips
+    if (briefing && briefing.stop_id) briefingCache.set(briefing.stop_id, briefing);
+
     if (doPushState && currentVoyage) {
         window.history.pushState({}, '', `/voyages/${currentVoyage.id}/stops/${briefing.stop_id}`);
     }
@@ -2789,234 +3092,292 @@ async function showBriefing(briefing, doPushState = true) {
     const targetDateFull = stop ? stop.target_date : new Date().toISOString();
     const targetDateYMD = targetDateFull.split('T')[0]; // "YYYY-MM-DD"
 
-    // Weather
+    const formatTime = (t) => {
+        if (!t) return 'N/A';
+        try {
+            const d = new Date(t);
+            if (isNaN(d.getTime())) return t;
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return t; }
+    };
+
+    // §5.6 Signal briefing sections — built as DOM nodes
+    const sections = document.createDocumentFragment();
+
+    // ── Weather ──────────────────────────────────────────────────────────────
     const weather = briefing.weather_summary || {};
-    const weatherHtml = `
-        <div class="briefing-section">
-            <h3 class="briefing-header-icon">
-                <span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span>
-                Weather
-            </h3>
-            <div class="weather-box">
-                <table class="briefing-table">
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Summary</th>
-                        <td class="briefing-td">${isInvalid(weather.summary) ? 'N/A' : weather.summary}</td>
-                    </tr>
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Conditions</th>
-                        <td class="briefing-td briefing-td-icon">
-                            <span class="material-symbols-outlined icon-lg">${getIconForWeather(weather.condition)}</span>
-                            ${isInvalid(weather.condition) ? 'N/A' : weather.condition}
-                        </td>
-                    </tr>
-                    ${(weather.temp_max_f || weather.temp_min_f) ? `
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Temp</th>
-                        <td class="briefing-td">High: ${Math.round(weather.temp_max_f)}°F &nbsp;|&nbsp; Low: ${Math.round(weather.temp_min_f)}°F</td>
-                    </tr>
-                    ` : ''}
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Wind</th>
-                        <td class="briefing-td">${isInvalid(weather.wind_direction) ? 'N/A' : weather.wind_direction} ${weather.wind_speed_kt || '0'} kt</td>
-                    </tr>
-                    ${weather.wave_height_ft > 0 ? `
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Waves</th>
-                        <td class="briefing-td">${weather.wave_height_ft} ft</td>
-                    </tr>
-                    ` : ''}
-                </table>
-            </div>
-        </div>
-    `;
+    const weatherSec = document.createElement('div');
+    weatherSec.className = 'briefing-section';
 
-    // Sun Phase
-    const sun = briefing.sun_phase || {};
-    let sunHtml = '';
-    if (sun.sunrise || sun.sunset) {
-        // Format times to be more readable if they are full date strings
-        const formatTime = (t) => {
-            if (!t) return 'N/A';
-            try {
-                const d = new Date(t);
-                if (isNaN(d.getTime())) return t;
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } catch (e) {
-                return t;
-            }
-        };
+    const wxHeader = document.createElement('h3');
+    wxHeader.className = 'briefing-header-icon';
+    wxHeader.innerHTML = `<span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span> Weather`;
+    weatherSec.appendChild(wxHeader);
 
-        sunHtml = `
-        <div class="briefing-section">
-            <h3 class="briefing-header-icon">
-                <span class="material-symbols-outlined">wb_twilight</span>
-                Sun Phase
-            </h3>
-            <div class="weather-box"> <!-- Reuse weather box style -->
-                <table class="briefing-table">
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Sunrise</th>
-                        <td class="briefing-td">${formatTime(sun.sunrise)}</td>
-                    </tr>
-                    <tr>
-                        <th class="briefing-th briefing-table-label-width">Sunset</th>
-                        <td class="briefing-td">${formatTime(sun.sunset)}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        `;
+    const wxTiles = document.createElement('div');
+    wxTiles.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:8px';
+
+    if (!isInvalid(weather.condition)) {
+        wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, emoji: getIconForWeather(weather.condition) === 'wb_sunny' ? '☀️' : '🌤', accent: 'sky' }));
+    }
+    if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
+        wxTiles.appendChild(DataTile({ label: 'Wind', value: `${weather.wind_speed_kt || 0} kt`, sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction, emoji: '💨', accent: 'sky' }));
+    }
+    if (weather.temp_max_f || weather.temp_min_f) {
+        wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, emoji: '🌡', accent: 'amber' }));
+    }
+    if (weather.wave_height_ft > 0) {
+        wxTiles.appendChild(DataTile({ label: 'Waves', value: `${weather.wave_height_ft} ft`, emoji: '🌊', accent: 'teal' }));
+    }
+    weatherSec.appendChild(wxTiles);
+
+    if (!isInvalid(weather.summary)) {
+        const wxSum = document.createElement('p');
+        wxSum.style.cssText = 'margin-top:8px;font-size:13px;color:var(--muted);line-height:1.5';
+        wxSum.textContent = weather.summary;
+        weatherSec.appendChild(wxSum);
     }
 
-    // Tides
-    // Filter events to only show the target date in the LIST
+    // Wind forecast tiles — AM / Mid / PM / Eve estimated speeds
+    if (weather.wind_speed_kt) {
+        const speed = parseFloat(weather.wind_speed_kt) || 0;
+        const multipliers = [0.8, 1.0, 0.9, 0.7];
+        const speeds = multipliers.map(m => Math.round(speed * m));
+        const maxKt = Math.max(...speeds);
+        const windForecast = document.createElement('div');
+        windForecast.className = 'np-wind-forecast';
+        ['AM', 'Mid', 'PM', 'Eve'].forEach((lbl, i) => {
+            const kt = speeds[i];
+            const iconCount = kt < 11 ? 1 : kt < 22 ? 2 : 3;
+            const strengthClass = iconCount === 1 ? 'light' : iconCount === 2 ? 'moderate' : 'strong';
+            const icons = Array.from({ length: iconCount }, () =>
+                `<span class="material-symbols-outlined np-wind-forecast__icon np-wind-forecast__icon--${strengthClass}">air</span>`
+            ).join('');
+            const tile = document.createElement('div');
+            tile.className = 'np-wind-forecast__tile';
+            tile.innerHTML =
+                `<div class="np-wind-forecast__period">${lbl}</div>` +
+                `<div class="np-wind-forecast__value">${kt}</div>` +
+                `<div class="np-wind-forecast__unit">kt</div>` +
+                `<div class="np-wind-forecast__icons">${icons}</div>`;
+            windForecast.appendChild(tile);
+        });
+        weatherSec.appendChild(windForecast);
+    }
+    sections.appendChild(weatherSec);
+
+    // ── Sun Phase ─────────────────────────────────────────────────────────────
+    const sun = briefing.sun_phase || {};
+    if (sun.sunrise || sun.sunset) {
+        const sunSec = document.createElement('div');
+        sunSec.className = 'briefing-section';
+
+        const sunHeader = document.createElement('h3');
+        sunHeader.className = 'briefing-header-icon';
+        sunHeader.innerHTML = '<span class="material-symbols-outlined">wb_twilight</span> Sun Phase';
+        sunSec.appendChild(sunHeader);
+
+        const sunCard = document.createElement('div');
+        sunCard.style.cssText = [
+            'display:flex',
+            'gap:8px',
+            'margin-top:8px',
+            'padding:14px',
+            'border-radius:var(--radius-tile)',
+            'background:linear-gradient(120deg,color-mix(in oklab,var(--amber) 10%,var(--surface)),color-mix(in oklab,var(--violet) 8%,var(--surface)))',
+        ].join(';');
+
+        if (sun.sunrise) sunCard.appendChild(DataTile({ label: 'Sunrise', value: formatTime(sun.sunrise), accent: 'amber' }));
+        if (sun.sunset)  sunCard.appendChild(DataTile({ label: 'Sunset',  value: formatTime(sun.sunset),  accent: 'violet' }));
+        sunSec.appendChild(sunCard);
+        sections.appendChild(sunSec);
+    }
+
+    // ── Tides ─────────────────────────────────────────────────────────────────
     const tides = briefing.tides || {};
     const allEvents = tides.events || [];
     const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
-    
-    // Fix: Define displayDateHeader
     const [y, m, d] = targetDateYMD.split('-');
     const displayDateHeader = `${m}/${d}/${y}`;
 
-    const tideEventsHtml = displayEvents.map(e => {
-        let timeStr = e.time;
-        try {
-            const d = new Date(e.time.replace(' ', 'T'));
-            if (!isNaN(d.getTime())) {
-                let hours = d.getHours();
-                const minutes = String(d.getMinutes()).padStart(2, '0');
-                const ampm = hours >= 12 ? 'pm' : 'am';
-                hours = hours % 12;
-                hours = hours ? hours : 12;
-                timeStr = `${hours}:${minutes} ${ampm}`;
-            }
-        } catch (ignore) {}
+    const tidesSec = document.createElement('div');
+    tidesSec.className = 'briefing-section';
 
-        return `<tr>
-            <td class="briefing-td">${timeStr}</td>
-            <td class="briefing-td">${e.type}</td>
-            <td class="briefing-td">${e.height_ft} ft</td>
-        </tr>`;
-    }).join('');
-    
-    const tidesHtml = `
-        <div class="briefing-section">
-            <h3 class="briefing-header-icon">
-                <span class="material-symbols-outlined">waves</span>
-                Tides (${tides.station_name || 'Unknown Station'}) - ${displayDateHeader}
-            </h3>
-            <div class="tide-box mb-md">
-                <div class="tide-chart-container">
-                    <canvas id="tideChartModal"></canvas>
-                </div>
-                <table class="briefing-table">
-                    <thead>
-                        <tr>
-                            <th class="briefing-th">Time</th>
-                            <th class="briefing-th">Type</th>
-                            <th class="briefing-th">Height</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tideEventsHtml || '<tr><td colspan="3" class="briefing-no-data">No tide data for this date</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
+    const tidesHeader = document.createElement('h3');
+    tidesHeader.className = 'briefing-header-icon';
+    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span class="np-tides-meta">${displayDateHeader}</span>`;
+    tidesSec.appendChild(tidesHeader);
 
-    // Facilities
+    // Chart.js tide chart — same renderer used in the Voyage Report
+    const tideCanvasId = `briefingTideChart_${stop.id}`;
+    const tideWrap = document.createElement('div');
+    tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
+    const tideCanvas = document.createElement('canvas');
+    tideCanvas.id = tideCanvasId;
+    tideWrap.appendChild(tideCanvas);
+    tidesSec.appendChild(tideWrap);
+    // Render after element is in DOM
+    requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
+
+    // Tide events table
+    if (displayEvents.length > 0) {
+        const tbl = document.createElement('table');
+        tbl.className = 'briefing-table';
+        tbl.style.marginTop = '10px';
+        tbl.innerHTML = `<thead><tr>
+            <th class="briefing-th">Time</th>
+            <th class="briefing-th">Type</th>
+            <th class="briefing-th">Height</th>
+        </tr></thead>`;
+        const tbody = document.createElement('tbody');
+        displayEvents.forEach(e => {
+            let timeStr = e.time;
+            try {
+                const dt = new Date(e.time.replace(' ', 'T'));
+                if (!isNaN(dt.getTime())) {
+                    let h = dt.getHours(), min = String(dt.getMinutes()).padStart(2,'0');
+                    const ap = h >= 12 ? 'pm' : 'am';
+                    h = h % 12 || 12;
+                    timeStr = `${h}:${min} ${ap}`;
+                }
+            } catch (_) {}
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="briefing-td">${timeStr}</td><td class="briefing-td">${e.type}</td><td class="briefing-td">${e.height_ft} ft</td>`;
+            tbody.appendChild(tr);
+        });
+        tbl.appendChild(tbody);
+        tidesSec.appendChild(tbl);
+    } else {
+        const noData = document.createElement('p');
+        noData.className = 'briefing-no-data';
+        noData.textContent = 'No tide events for this date';
+        tidesSec.appendChild(noData);
+    }
+    sections.appendChild(tidesSec);
+
+    // ── Facilities ────────────────────────────────────────────────────────────
     const facilities = briefing.facilities || [];
-    const facilHtml = `
-        <div class="briefing-section">
-            <h3 class="briefing-header-icon">
-                <span class="material-symbols-outlined">warehouse</span>
-                Facilities
-            </h3>
-            <ul class="facility-list">
-                ${facilities.map(f => {
-                    // Icon Mapping
-                    let icon = 'place';
-                    const typeLower = (f.type || '').toLowerCase();
-                    if (typeLower.includes('anchorage')) icon = 'anchor';
-                    else if (typeLower.includes('marina')) icon = 'storefront';
-                    else if (typeLower.includes('mooring')) icon = 'crisis_alert';
-                    else if (typeLower.includes('bar')) icon = 'local_bar';
-                    else if (typeLower.includes('restaurant')) icon = 'restaurant';
+    if (facilities.length > 0) {
+        const facilSec = document.createElement('div');
+        facilSec.className = 'briefing-section';
 
-                    let detailsHtml = '';
-                    if (typeof f.details === 'string') {
-                        detailsHtml = `<p><strong>Type:</strong> ${f.type}</p><p>${f.details}</p>`;
-                    } else if (f.details && typeof f.details === 'object') {
-                        // Table format for details
-                        const starHtml = (rating) => {
-                            const stars = Math.round(rating);
-                            return '★'.repeat(stars) + '☆'.repeat(5 - stars);
-                        };
+        const facilHeader = document.createElement('h3');
+        facilHeader.className = 'briefing-header-icon';
+        facilHeader.innerHTML = '<span class="material-symbols-outlined">warehouse</span> Facilities';
+        facilSec.appendChild(facilHeader);
 
-                        let rows = `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9; width: 120px;">Type</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.type}</td>
-                            </tr>
-                        `;
-                        if (f.address) rows += `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Address</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${f.address}</td>
-                            </tr>`;
-                        if (f.rating) rows += `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Rating</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; color: #F9A825;">${starHtml(f.rating)} <span style="color: #333;">${f.rating.toFixed(1)}${f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()} reviews)` : ''}</span></td>
-                            </tr>`;
-                        if (f.business_status && f.business_status !== 'OPERATIONAL') rows += `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Status</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top; color: #C62828; font-weight: 700;">${f.business_status.replace(/_/g, ' ')}</td>
-                            </tr>`;
-                        if (f.website) rows += `
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <th class="briefing-th briefing-table-label-width" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">Website</th>
-                                <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;"><a href="${f.website}" target="_blank">${f.website}</a></td>
-                            </tr>`;
+        const facilList = document.createElement('ul');
+        facilList.className = 'facility-list';
 
-                        rows += Object.entries(f.details)
-                            .filter(([_, v]) => {
-                                if (!v) return false;
-                                const sv = String(v).toLowerCase().trim();
-                                return sv !== 'n/a' && sv !== '' && sv !== 'unknown' && sv !== 'not specified';
-                            })
-                            .map(([k, v]) => `
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <th class="briefing-th briefing-table-label-width capitalize" style="border: 1px solid #ddd; padding: 8px; text-align: left; background-color: #f9f9f9;">${k.replace(/_/g, ' ')}</th>
-                                    <td class="briefing-td" style="border: 1px solid #ddd; padding: 8px; vertical-align: top;">${v}</td>
-                                </tr>
-                            `).join('');
-                        
-                        detailsHtml = `<table class="briefing-table mt-0" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; font-family: "Lato", sans-serif; font-size: 0.9em; margin-top: 0.5rem;">${rows}</table>`;
-                    }
+        facilities.forEach(f => {
+            const accent = markerAccent(f.type);
+            const tl = (f.type || '').toLowerCase();
+            let icon = 'place';
+            if (tl.includes('anchor'))      icon = 'anchor';
+            else if (tl.includes('marina')) icon = 'storefront';
+            else if (tl.includes('moor'))   icon = 'link';
+            else if (tl.includes('bar'))    icon = 'local_bar';
+            else if (tl.includes('restaurant')) icon = 'restaurant';
 
-                    const typeColor = markerColor(f.type);
-                    return `
-                        <li class="facility-item">
-                            <h4 class="briefing-header-icon" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                <span class="material-symbols-outlined icon-lg" style="color:${typeColor};">${icon}</span>
-                                ${f.name}
-                                <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${f.type || 'Facility'}</span>
-                            </h4>
-                            ${detailsHtml}
-                            ${renderReferences(f.references)}
-                        </li>
-                    `;
-                }).join('') || '<li>No facilities found</li>'}
-            </ul>
-        </div>
-    `;
+            const li = document.createElement('li');
+            li.className = 'facility-item np-facility-briefing-item';
+            li.style.setProperty('--accent', `var(--${accent})`);
 
-    content.innerHTML = DOMPurify.sanitize(weatherHtml + sunHtml + tidesHtml + facilHtml);
-    
+            // ── Row 1: icon + name + type badge ──────────────────────────────
+            const header = document.createElement('div');
+            header.className = 'np-facility-briefing-item__header';
+
+            const iconEl = document.createElement('span');
+            iconEl.className = 'material-symbols-outlined np-facility-briefing-item__icon';
+            iconEl.setAttribute('aria-hidden', 'true');
+            iconEl.textContent = icon;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'np-facility-briefing-item__name';
+            nameSpan.textContent = f.name;
+
+            const badge = document.createElement('span');
+            badge.className = 'np-facility-briefing-item__badge';
+            badge.textContent = f.type || 'Facility';
+
+            header.appendChild(iconEl);
+            header.appendChild(nameSpan);
+            header.appendChild(badge);
+            li.appendChild(header);
+
+            // ── Row 2: address ────────────────────────────────────────────────
+            const address = f.address || (f.details && typeof f.details === 'object' && f.details.address);
+            if (address) {
+                const addr = document.createElement('p');
+                addr.className = 'np-facility-briefing-item__address';
+                addr.textContent = address;
+                li.appendChild(addr);
+            }
+
+            // ── Row 3: description / string details ───────────────────────────
+            if (typeof f.details === 'string') {
+                const desc = document.createElement('p');
+                desc.className = 'np-facility-briefing-item__desc';
+                desc.textContent = f.details;
+                li.appendChild(desc);
+            }
+
+            // ── Row 4: rating + website + other tiles ─────────────────────────
+            if (f.details && typeof f.details === 'object') {
+                const starHtml = (r) => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
+                const tiles = document.createElement('div');
+                tiles.className = 'np-facility-briefing-item__tiles';
+
+                if (f.rating) {
+                    tiles.appendChild(DataTile({ label: 'Rating', value: `${f.rating.toFixed(1)} ${starHtml(f.rating)}`, sub: f.user_rating_count ? `${f.user_rating_count.toLocaleString()} reviews` : '', accent, detail: true, compact: true }));
+                }
+                if (f.business_status && f.business_status !== 'OPERATIONAL') {
+                    const stat = document.createElement('span');
+                    stat.className = 'np-facility-briefing-item__status';
+                    stat.textContent = f.business_status.replace(/_/g, ' ');
+                    tiles.appendChild(stat);
+                }
+                // Remaining structured detail tiles (skip address — already shown above)
+                Object.entries(f.details).forEach(([k, v]) => {
+                    if (k === 'address' || !v) return;
+                    const sv = String(v).toLowerCase().trim();
+                    if (['n/a','','unknown','not specified'].includes(sv)) return;
+                    tiles.appendChild(DataTile({ label: k.replace(/_/g,' '), value: String(v), accent, detail: true }));
+                });
+                if (tiles.children.length > 0) li.appendChild(tiles);
+            }
+
+            // ── Website link ──────────────────────────────────────────────────
+            const website = f.website || (f.details && typeof f.details === 'object' && f.details.website);
+            if (website) {
+                const link = document.createElement('a');
+                link.href = website;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.className = 'np-facility-briefing-item__website';
+                link.textContent = website;
+                li.appendChild(link);
+            }
+
+            // ── References ────────────────────────────────────────────────────
+            if (f.references && f.references.length > 0) {
+                const refs = document.createElement('div');
+                refs.className = 'ref-link';
+                refs.innerHTML = `<strong>Refs:</strong> ${f.references.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}`;
+                li.appendChild(refs);
+            }
+
+            facilList.appendChild(li);
+        });
+
+        facilSec.appendChild(facilList);
+        sections.appendChild(facilSec);
+    }
+
+    // ── Render into modal ─────────────────────────────────────────────────────
+    content.innerHTML = '';
+    content.appendChild(sections);
+
     // Redo Handler
     if (btnRedo) {
         btnRedo.onclick = () => redoBriefing(briefing, btnRedo);
@@ -3025,12 +3386,6 @@ async function showBriefing(briefing, doPushState = true) {
     // Show Modal
     modal.classList.remove('hidden');
     modalOverlay.classList.remove('hidden');
-
-    // Render Chart (must happen after modal is visible for size calc)
-    // Pass ALL events to chart for smooth interpolation
-    if (allEvents.length > 0) {
-        await renderTideChart('tideChartModal', tides, targetDateFull);
-    }
 
     const hide = () => {
         modal.classList.add('hidden');
@@ -3043,12 +3398,35 @@ async function showBriefing(briefing, doPushState = true) {
 
 async function redoBriefing(oldBriefing, btn) {
     const content = document.getElementById('briefing-content');
-    content.innerHTML = `
-        <div class="loading-state">
-            <span class="material-symbols-outlined spin loading-icon">sync</span>
-            <p class="font-xs">Checking weather, tides, and local charts.</p>
-        </div>
-    `;
+    content.innerHTML = '';
+    const redoCard = document.createElement('div');
+    redoCard.style.cssText = [
+        'padding:24px 20px',
+        'border-radius:var(--radius-card)',
+        'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
+        'display:flex',
+        'flex-direction:column',
+        'gap:16px',
+    ].join(';');
+    const redoTop = document.createElement('div');
+    redoTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+    const redoSpinner = document.createElement('span');
+    redoSpinner.className = 'material-symbols-outlined spin';
+    redoSpinner.style.cssText = 'font-size:24px;color:var(--sky)';
+    redoSpinner.textContent = 'explore';
+    const redoLbl = document.createElement('span');
+    redoLbl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+    redoLbl.textContent = 'Re-researching stop…';
+    redoTop.appendChild(redoSpinner);
+    redoTop.appendChild(redoLbl);
+    redoCard.appendChild(redoTop);
+    redoCard.appendChild(Stepper({ steps: [
+        { label: 'Fetching weather forecast', state: 'active' },
+        { label: 'Reading tide tables', state: 'queued' },
+        { label: 'Locating nearby facilities', state: 'queued' },
+        { label: 'Computing sun phase', state: 'queued' },
+    ]}));
+    content.appendChild(redoCard);
     btn.disabled = true;
 
     try {
@@ -3152,18 +3530,27 @@ async function initMap() {
   const { Map } = await loadGoogleMaps();
   const { Geocoder } = await importLibrary("geocoding");
 
-  const isMidnightMariner = currentTheme() === 'midnight-mariner';
+  const theme = currentTheme();
+  const isMidnightMariner = theme === 'midnight-mariner' || theme === 'dark';
 
-  console.log('NavalPlan: Map init — theme:', currentTheme(), '| colorScheme:', isMidnightMariner ? 'DARK' : 'LIGHT');
+  console.log('NavalPlan: Map init — theme:', theme, '| colorScheme:', isMidnightMariner ? 'DARK' : 'LIGHT');
 
   map = new Map(document.getElementById("map-container"), {
     center: { lat: 20, lng: 0 },
     zoom: 3,
-    mapId: __GOOGLE_MAPS_MAP_ID__,
+    mapId: isMidnightMariner ? __GOOGLE_MAPS_MAP_ID_MM__ : __GOOGLE_MAPS_MAP_ID__,
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
     clickableIcons: false
   });
+
+  // Spacer pushes Google's top-right controls (map type, fullscreen) below the auth bar
+  const mapCtrlSpacer = document.createElement('div');
+  mapCtrlSpacer.style.cssText = 'height:72px;width:1px;pointer-events:none';
+  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(mapCtrlSpacer);
 
   // Global Data Layer Styling
   map.data.setStyle((feature) => {
@@ -3173,27 +3560,19 @@ async function initMap() {
       if (feature.getGeometry().getType() === 'Point') {
           return { visible: false };
       }
-      // 2. Discovery Regions
+      // 2. Discovery Regions — colors match tier chip accent tokens
       const tier = feature.getProperty('tier');
       if (tier) {
-          let color = '#0077be'; // Standard Blue
-          let strokeColor = '#005fa3';
+          let token = 'teal';
+          if (tier === 'Hidden Gem' || tier === 'Deep Cut') token = 'violet';
+          else if (tier === 'Regional Favorite')            token = 'amber';
+          else if (tier === 'Challenging')                  token = 'coral';
 
-          if (tier === 'Hidden Gem') {
-              color = '#9c27b0'; // Purple
-              strokeColor = '#6a1b9a';
-          } else if (tier === 'Regional Favorite') {
-              color = '#ff9800'; // Orange
-              strokeColor = '#ef6c00';
-          } else if (tier === 'Challenging') {
-              color = '#d32f2f'; // Red
-              strokeColor = '#b71c1c';
-          }
-
+          const color = tokenColor(token);
           return {
               fillColor: color,
-              fillOpacity: 0.6,
-              strokeColor: strokeColor,
+              fillOpacity: 0.5,
+              strokeColor: color,
               strokeWeight: 2,
               zIndex: 10
           };
@@ -3222,8 +3601,7 @@ async function initMap() {
               avg_temp_c: event.feature.getProperty('avg_temp_c'),
               deep_cut_reasoning: event.feature.getProperty('deep_cut_reasoning')
           };
-          const month = document.getElementById('month-slider').value;
-          showRegionBriefing(props, month);
+          showRegionBriefing(props, currentDiscoveryMonth);
       }
   });
 
@@ -3316,29 +3694,27 @@ async function initMap() {
         new Date(a.target_date) - new Date(b.target_date)
     );
 
-    // Add Markers
+    // Add Markers — Signal numbered teardrop pins with rotating accents
     sortedStops.forEach((stop, index) => {
-        const pin = new PinElement({
-            glyphText: `${index + 1}`,
-            glyphColor: "white",
-            background: "#EA4335", // Google Maps Red
-            borderColor: "#B31412",
-        });
+        const accent = VOYAGE_ACCENTS[index % VOYAGE_ACCENTS.length];
+        const pinEl = MapPin({ accent, n: index + 1, label: `Stop ${index + 1}: ${displayLocationName(stop.location_name)}` });
 
         const marker = new AdvancedMarkerElement({
             map: map,
             position: { lat: stop.latitude, lng: stop.longitude },
-            content: pin,
+            content: pinEl,
             title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`,
             zIndex: 100
         });
-        
+
         marker.addListener('gmp-click', () => {
-             if (activeInfoWindow) activeInfoWindow.close();
-             activeInfoWindow = new InfoWindow({
-                content: `<div style="color: black;"><b>${displayLocationName(stop.location_name)}</b><br>Day ${index + 1}</div>`
-             });
-             activeInfoWindow.open(map, marker);
+            if (activeInfoWindow) activeInfoWindow.close();
+            const ink = tokenColor('ink');
+            const surface = tokenColor('surface');
+            activeInfoWindow = new InfoWindow({
+                content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>${displayLocationName(stop.location_name)}</b><br><span style="color:${tokenColor('muted')}">Stop ${index + 1}</span></div>`
+            });
+            activeInfoWindow.open(map, marker);
         });
 
         markers.push(marker);
@@ -3353,12 +3729,6 @@ async function initMap() {
                     b.facilities.forEach(f => {
                          if (f.latitude && f.longitude) {
                              const type = (f.type || '').toLowerCase();
-                             let iconName = 'location_on';
-                             if (type.includes('anchorage')) iconName = 'anchor';
-                             else if (type.includes('marina')) iconName = 'directions_boat';
-                             else if (type.includes('bar')) iconName = 'local_bar';
-                             else if (type.includes('restaurant')) iconName = 'restaurant';
-
                              const filterKey = type.includes('anchor') ? 'anchorage'
                                  : type.includes('marina') ? 'marina'
                                  : type.includes('moor') ? 'mooring'
@@ -3366,21 +3736,19 @@ async function initMap() {
                                  : type.includes('bar') ? 'bar'
                                  : 'other';
 
-                             const iconDiv = document.createElement('div');
-                             iconDiv.className = 'map-marker-icon map-marker-icon--sm';
-                             iconDiv.style.backgroundColor = markerColor(f.type);
-                             iconDiv.innerHTML = `<span class="material-symbols-outlined map-icon-glyph">${iconName}</span>`;
+                             const accent = markerAccent(f.type);
+                             const dot = accentDot(accent, 24, filterKey);
 
                              const fMarker = new AdvancedMarkerElement({
                                  map: activeFacilityFilters.has(filterKey) ? map : null,
                                  position: { lat: f.latitude, lng: f.longitude },
-                                 content: iconDiv,
+                                 content: dot,
                                  title: f.name,
                                  zIndex: 1
                              });
 
                              fMarker.addListener('gmp-click', () => {
-                                 showFacilityInfoWindow(f, fMarker, markerColor(f.type));
+                                 showFacilityInfoWindow(f, fMarker, accent);
                              });
                              facilityMarkers.push({ marker: fMarker, type: filterKey });
                          }
@@ -3395,9 +3763,9 @@ async function initMap() {
         }
     })();
 
-    // Draw Line
+    // Draw route — dashed marching-ants polyline in --ink color
     const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
-    const routeLineColor = getComputedStyle(document.documentElement).getPropertyValue('--color-route-line').trim() || '#314c3b';
+    const routeLineColor = tokenColor('ink') || '#0B1220';
 
     routePolyline = new Polyline({
       path: coords,
@@ -3405,9 +3773,9 @@ async function initMap() {
       strokeColor: routeLineColor,
       strokeOpacity: 0,
       icons: [{
-        icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+        icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
         offset: '0',
-        repeat: '20px'
+        repeat: '14px'
       }],
       map: map
     });
@@ -3846,12 +4214,42 @@ async function handleGuideClick(voyage, button, doPushState = true) {
         document.getElementById('btn-close-guide').onclick = closeGuide;
         modalOverlay.onclick = closeGuide;
         
-        content.innerHTML = `
-            <div class="loading-state">
-                <span class="material-symbols-outlined spin loading-icon">sync</span>
-                <p class="font-xs">Gathering local knowledge, seasonal data, and regional hazards.</p>
-            </div>
-        `;
+        content.innerHTML = '';
+        const guideLoadCard = document.createElement('div');
+        guideLoadCard.style.cssText = [
+            'padding:24px 20px',
+            'border-radius:var(--radius-card)',
+            'background:linear-gradient(135deg,color-mix(in oklab,var(--teal) 12%,var(--surface)),color-mix(in oklab,var(--sky) 10%,var(--surface)))',
+            'display:flex',
+            'flex-direction:column',
+            'gap:16px',
+        ].join(';');
+        const guideLoadTop = document.createElement('div');
+        guideLoadTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+        const guideSpinner = document.createElement('span');
+        guideSpinner.className = 'material-symbols-outlined spin';
+        guideSpinner.style.cssText = 'font-size:24px;color:var(--teal)';
+        guideSpinner.textContent = 'travel_explore';
+        const guideLbl = document.createElement('div');
+        guideLbl.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+        const guideTitleEl = document.createElement('span');
+        guideTitleEl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+        guideTitleEl.textContent = 'Building destination guide…';
+        const guideSubEl = document.createElement('span');
+        guideSubEl.style.cssText = 'font-size:12px;color:var(--muted)';
+        guideSubEl.textContent = 'Gathering local knowledge, seasonal data, and regional hazards';
+        guideLbl.appendChild(guideTitleEl);
+        guideLbl.appendChild(guideSubEl);
+        guideLoadTop.appendChild(guideSpinner);
+        guideLoadTop.appendChild(guideLbl);
+        guideLoadCard.appendChild(guideLoadTop);
+        guideLoadCard.appendChild(Stepper({ steps: [
+            { label: 'Researching seasonal conditions', state: 'active' },
+            { label: 'Mapping regional hazards', state: 'queued' },
+            { label: 'Finding hubs & charter info', state: 'queued' },
+            { label: 'Compiling country & culture', state: 'queued' },
+        ]}));
+        content.appendChild(guideLoadCard);
         modal.classList.remove('hidden');
         modalOverlay.classList.remove('hidden');
 
@@ -3970,11 +4368,7 @@ function showVoyageGuide(resp, doPushState = true) {
     if (mapURL) {
         const sep = mapURL.includes('?') ? '&' : '?';
         const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `
-            <div class="briefing-section">
-                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 1rem;" />
-            </div>
-        `;
+        html += `<img src="${url}" alt="Voyage Map" class="np-report-map" />`;
     }
 
     html += generateGuideHTML(guide);
@@ -3992,12 +4386,27 @@ function showVoyageGuide(resp, doPushState = true) {
 
 async function redoGuide(oldGuide, btn) {
     const content = document.getElementById('guide-content');
-    content.innerHTML = `
-        <div class="loading-state">
-            <span class="material-symbols-outlined spin loading-icon">sync</span>
-            <p><strong>Agent is researching...</strong></p>
-        </div>
-    `;
+    content.innerHTML = '';
+    const redoGuideCard = document.createElement('div');
+    redoGuideCard.style.cssText = 'padding:24px 20px;border-radius:var(--radius-card);background:linear-gradient(135deg,color-mix(in oklab,var(--teal) 12%,var(--surface)),color-mix(in oklab,var(--sky) 10%,var(--surface)));display:flex;flex-direction:column;gap:16px';
+    const rt = document.createElement('div');
+    rt.style.cssText = 'display:flex;align-items:center;gap:12px';
+    const rs = document.createElement('span');
+    rs.className = 'material-symbols-outlined spin';
+    rs.style.cssText = 'font-size:24px;color:var(--teal)';
+    rs.textContent = 'travel_explore';
+    const rl = document.createElement('span');
+    rl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+    rl.textContent = 'Re-researching guide…';
+    rt.appendChild(rs); rt.appendChild(rl);
+    redoGuideCard.appendChild(rt);
+    redoGuideCard.appendChild(Stepper({ steps: [
+        { label: 'Researching seasonal conditions', state: 'active' },
+        { label: 'Mapping regional hazards', state: 'queued' },
+        { label: 'Finding hubs & charter info', state: 'queued' },
+        { label: 'Compiling country & culture', state: 'queued' },
+    ]}));
+    content.appendChild(redoGuideCard);
     btn.disabled = true;
 
     try {
@@ -4055,7 +4464,8 @@ function showNotification(title, message, actions = null) {
     if (modal && titleEl && msgEl) {
         titleEl.textContent = title;
         msgEl.textContent = message;
-        
+        announce(`${title}: ${message}`);
+
         // Clear previous custom actions (keep close btn)
         if (actionsContainer) {
             const customBtns = actionsContainer.querySelectorAll('.custom-action');
@@ -4109,18 +4519,19 @@ async function toggleDiscoveryMode(active) {
     if (active) {
         discoveryControls.classList.remove('hidden');
         sidebar.classList.add('hidden');
-        const currentMonth = new Date().getMonth() + 1;
-        document.getElementById('month-slider').value = currentMonth;
-        const months = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
-        ];
-        document.getElementById('month-display').textContent = months[currentMonth - 1];
-        
+
+        // Sync month squares to current month
+        currentDiscoveryMonth = new Date().getMonth() + 1;
+        document.querySelectorAll('#month-squares .np-month-sq').forEach(b => {
+            const active = parseInt(b.dataset.month) === currentDiscoveryMonth;
+            b.classList.toggle('active', active);
+            b.setAttribute('aria-pressed', String(active));
+        });
+
         clearRecommendations();
         clearPilotCircle();
         clearMap(); // Clear existing markers/routes
-        loadDiscoveryRegions(currentMonth);
+        loadDiscoveryRegions(currentDiscoveryMonth);
         
         // Zoom out to world view
         if (map) {
@@ -4212,56 +4623,164 @@ async function renderDiscoveryLayer() {
 
 async function showRegionBriefing(props, month) {
     const modal = document.getElementById('modal-region-briefing');
-    const title = document.getElementById('region-title');
+    const titleEl = document.getElementById('region-title');
     const content = document.getElementById('region-briefing-content');
     const overlay = document.getElementById('modal-overlay');
 
-    // For now, use the data we already have from the list
-    // In a full implementation, we might fetch detailed stats
     const region = discoveryRegions.find(r => r.id === props.id);
-    
-    title.textContent = props.name;
-    
-    content.innerHTML = DOMPurify.sanitize(`
-        <div class="briefing-section">
-            <div class="flex justify-between align-center mb-md">
-                <span class="badge ${props.tier === 'Hidden Gem' ? 'badge-gem' : props.tier === 'Regional Favorite' ? 'badge-regional' : props.tier === 'Challenging' ? 'badge-challenging' : 'badge-standard'}">
-                    ${props.tier || (props.is_hidden_gem ? 'Hidden Gem' : 'Standard Destination')}
-                </span>
-                <span class="font-sm text-gray">Suitability: <strong>${props.suitability_score}/100</strong></span>
-            </div>
-            
-            <p class="mb-lg"><strong>Summary:</strong> ${props.summary}</p>
-            
-            ${region && region.deep_cut_reasoning ? `
-                <div class="report-guide-bg p-md border-radius">
-                    <h4 class="mt-0">The Deep Cut Factor</h4>
-                    <p class="mb-0">${region.deep_cut_reasoning}</p>
-                </div>
-            ` : ''}
 
-            <div class="weather-box mt-lg">
-                <table class="briefing-table">
-                    <tr>
-                        <th class="briefing-th">Typical Wind</th>
-                        <td class="briefing-td">${region?.avg_wind_speed_knots || '??'} knots</td>
-                    </tr>
-                    <tr>
-                        <th class="briefing-th">Avg Temp</th>
-                        <td class="briefing-td">${region?.avg_temp_c || '??'}°C (${Math.round((region?.avg_temp_c || 0) * 9/5 + 32)}°F)</td>
-                    </tr>
-                </table>
-            </div>
+    // Tier → accent + label
+    const tierAccent = (tier) => {
+        if (tier === 'Hidden Gem' || tier === 'Deep Cut') return 'violet';
+        if (tier === 'Regional Favorite')                 return 'amber';
+        if (tier === 'Challenging')                       return 'coral';
+        return 'teal';
+    };
+    const accent = tierAccent(props.tier);
+    const tierLabel = props.tier || (props.is_hidden_gem ? 'Hidden Gem' : 'Standard');
 
-            ${(currentUser && currentUser.is_admin) ? `
-            <div class="mt-xl flex justify-end">
-                <button id="btn-delete-region-seasonality" class="btn-text btn-danger font-sm">
-                    <span class="material-symbols-outlined font-md">delete</span>
-                    Remove for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}
-                </button>
-            </div>` : ''}
-        </div>
-    `);
+    titleEl.textContent = props.name;
+    content.innerHTML = '';
+
+    // ── Two-column header: summary left, chip + score right ───────────────
+    const header = document.createElement('div');
+    header.className = 'np-region-header';
+
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'np-region-header__left';
+
+    if (props.summary) {
+        const summary = document.createElement('p');
+        summary.className = 'np-region-summary';
+        summary.textContent = props.summary;
+        headerLeft.appendChild(summary);
+    }
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'np-region-header__right';
+
+    const chip = document.createElement('span');
+    chip.className = 'np-region-chip';
+    chip.style.setProperty('--accent', `var(--${accent})`);
+    chip.textContent = tierLabel;
+    headerRight.appendChild(chip);
+
+    const scoreRing = ScoreRing({ score: props.suitability_score || 0, accent, size: 56 });
+    const scoreWrap = document.createElement('div');
+    scoreWrap.className = 'np-region-score';
+    const scoreLabel = document.createElement('span');
+    scoreLabel.className = 'np-region-score__label';
+    scoreLabel.textContent = 'Suitability';
+    scoreWrap.appendChild(scoreRing);
+    scoreWrap.appendChild(scoreLabel);
+    headerRight.appendChild(scoreWrap);
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    content.appendChild(header);
+
+    // ── DataTile row: Wind / Temp / Tide ──────────────────────────────────
+    const tiles = document.createElement('div');
+    tiles.className = 'np-region-tiles';
+
+    const windKt = region?.avg_wind_speed_knots;
+    const tempC  = region?.avg_temp_c;
+    const tempF  = tempC != null ? Math.round(tempC * 9/5 + 32) : null;
+
+    tiles.appendChild(DataTile({
+        label: 'Wind',
+        value: windKt != null ? `${windKt} kt` : '—',
+        icon: 'air',
+        accent: 'sky',
+    }));
+    tiles.appendChild(DataTile({
+        label: 'Avg Temp',
+        value: tempF != null ? `${tempF}°F` : '—',
+        sub: tempC != null ? `${tempC}°C` : '',
+        icon: 'thermometer',
+        accent: 'amber',
+    }));
+    tiles.appendChild(DataTile({
+        label: 'Tides',
+        value: 'Varies',
+        icon: 'water',
+        accent: 'teal',
+    }));
+    content.appendChild(tiles);
+
+    // ── Deep cut reasoning ────────────────────────────────────────────────
+    if (region?.deep_cut_reasoning) {
+        const dcCard = document.createElement('div');
+        dcCard.className = 'np-region-deep-cut';
+        dcCard.style.setProperty('--accent', `var(--${accent})`);
+        const dcLabel = document.createElement('div');
+        dcLabel.className = 'np-region-deep-cut__label';
+        dcLabel.textContent = 'The Deep Cut Factor';
+        const dcText = document.createElement('p');
+        dcText.className = 'np-region-deep-cut__text';
+        dcText.textContent = region.deep_cut_reasoning;
+        dcCard.appendChild(dcLabel);
+        dcCard.appendChild(dcText);
+        content.appendChild(dcCard);
+    }
+
+    // ── Action buttons ────────────────────────────────────────────────────
+    const actions = document.createElement('div');
+    actions.className = 'np-region-actions';
+
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn primary';
+    btnStart.textContent = 'Start here →';
+    btnStart.addEventListener('click', () => {
+        hide();
+        toggleDiscoveryMode(false);
+        // Open new voyage modal pre-filled with this region
+        const btnNew = document.getElementById('btn-new-voyage');
+        if (btnNew) btnNew.click();
+        // Pre-fill location
+        setTimeout(() => {
+            const locInput = document.getElementById('voyage-location-name');
+            if (locInput) {
+                locInput.value = props.name;
+                locInput.dispatchEvent(new Event('input'));
+            }
+        }, 100);
+    });
+
+    actions.appendChild(btnStart);
+    content.appendChild(actions);
+
+    // ── Admin: delete seasonality ─────────────────────────────────────────
+    if (currentUser?.is_admin) {
+        const adminRow = document.createElement('div');
+        adminRow.className = 'np-region-admin';
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn secondary';
+        btnDel.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">delete</span> Remove for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}`;
+        btnDel.addEventListener('click', () => {
+            showNotification('Remove Seasonality',
+                `Remove ${props.name} from discovery for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`,
+                [
+                    {
+                        label: 'Remove', type: 'danger', hideClose: true,
+                        callback: async () => {
+                            try {
+                                await API.deleteDiscoverySeasonality(props.id, month);
+                                hide();
+                                loadDiscoveryRegions(month);
+                            } catch (err) {
+                                console.error(err);
+                                showNotification('Error', 'Failed to remove region.');
+                            }
+                        }
+                    },
+                    { label: 'Cancel', type: 'secondary' }
+                ]
+            );
+        });
+        adminRow.appendChild(btnDel);
+        content.appendChild(adminRow);
+    }
 
     modal.classList.remove('hidden');
     overlay.classList.remove('hidden');
@@ -4273,38 +4792,11 @@ async function showRegionBriefing(props, month) {
 
     document.getElementById('btn-close-region-briefing').onclick = hide;
     overlay.onclick = hide;
-
-    const btnDelete = document.getElementById('btn-delete-region-seasonality');
-    if (btnDelete) {
-        btnDelete.onclick = async () => {
-            showNotification('Remove Seasonality', `Are you sure you want to remove ${props.name} from the discovery list for ${new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}?`, [
-                {
-                    label: 'Remove',
-                    type: 'danger',
-                    hideClose: true,
-                    callback: async () => {
-                        try {
-                            await API.deleteDiscoverySeasonality(props.id, month);
-                            hide();
-                            // Refresh discovery regions
-                            loadDiscoveryRegions(month);
-                        } catch (err) {
-                            console.error('Failed to delete region seasonality:', err);
-                            showNotification('Error', 'Failed to remove region. Please try again.');
-                        }
-                    }
-                },
-                {
-                    label: 'Cancel',
-                    type: 'secondary'
-                }
-            ]);
-        };
-    }
 }
 
 async function initSharedMode(token) {
     document.body.classList.add('shared-view');
+    document.documentElement.classList.add('shared-view');
     const app = document.getElementById('app');
     // Clear existing UI
     app.innerHTML = "<div class=\"loading-state\"><span class=\"material-symbols-outlined spin loading-icon\">sync</span><p>Loading Captain's Report...</p></div>";
@@ -4480,6 +4972,11 @@ function smoothRing(ring) {
 
 // --- Helpers ---
 
+// Plain-text HTML escape — use for data fields that must never render as markup
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function renderReferences(refs) {
     if (!refs || refs.length === 0) return '';
     return `<div class="ref-link">
@@ -4488,273 +4985,282 @@ function renderReferences(refs) {
 }
 
 function generateGuideHTML(guide) {
-    let html = '';
-    
-    html += `
-        <div class="briefing-section">
-            <h3>Overview</h3>
-            <p>${guide.summary || 'No summary available.'}</p>
-        </div>
-    `;
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-    // Sailing Season
-    if (guide.sailing_season) {
-        const s = guide.sailing_season;
-        html += `
-            <div class="briefing-section">
-                <h3>Sailing Season</h3>
-                <table class="briefing-table">
-                    <tr><th class="briefing-th">Best Months</th><td class="briefing-td">${(s.primary_season_months || []).join(', ') || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Storm Season</th><td class="briefing-td">${(s.storm_season_months || []).join(', ') || 'N/A'} (${s.storm_risk_level || 'Unknown Risk'})</td></tr>
-                    <tr><th class="briefing-th">Notes</th><td class="briefing-td">${s.notes || ''} ${renderReferences(s.references)}</td></tr>
-                </table>
-            </div>
-        `;
-    }
+    // Helper: Signal section label chip
+    const sectionChip = (label, accent = 'coral') =>
+        `<div class="np-eyebrow-accent" style="--accent:var(--${accent})">${label}</div>`;
 
-    // Hazards
+    // Helper: tinted hazard card
+    const hazardCard = (title, desc, refs, accent = 'amber', emoji = '⚠️') => `
+        <div class="np-hazard-card" style="--accent:var(--${accent})">
+            <div class="np-hazard-card__title">${emoji} ${title}</div>
+            <p class="np-hazard-card__desc">${desc}</p>
+            ${refs && refs.length ? renderReferences(refs) : ''}
+        </div>`;
+
+    // Overview + Hazards (left col)
+    let leftCol = sectionChip('Overview', 'coral');
+    leftCol += `<p class="np-overview-summary">${guide.summary || 'No summary available.'}</p>`;
+
     if (guide.hazards && guide.hazards.length > 0) {
-        html += `<div class="briefing-section"><h3>Regional Hazards</h3><ul class="facility-list">`;
+        leftCol += sectionChip('Regional Hazards', 'amber');
         guide.hazards.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Info)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${h.title}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
+            const t = (h.title || '').toLowerCase();
+            const emoji = t.includes('reef') ? '🪸' : t.includes('current') ? '🌀' : t.includes('storm') ? '⛈️' : t.includes('shoal') ? '⚓' : '⚠️';
+            const accent = t.includes('current') || t.includes('wind') ? 'sky' : 'amber';
+            leftCol += hazardCard(h.title + (h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky)">(Info)</a>` : ''), h.description, h.references, accent, emoji);
         });
-        html += `</ul></div>`;
     }
 
-    // Security & Safety
     if (guide.security_safety && (guide.security_safety.summary || guide.security_safety.crime_report)) {
         const s = guide.security_safety;
-        let tipsHtml = '';
+        const riskAccent = (s.risk_level || '').toLowerCase() === 'high' ? 'coral' : (s.risk_level || '').toLowerCase() === 'medium' ? 'amber' : 'teal';
+        leftCol += sectionChip('Security & Safety', riskAccent);
+        leftCol += hazardCard(
+            `Risk: ${s.risk_level || 'Low'}`,
+            s.summary || '',
+            s.references,
+            riskAccent,
+            '🔒'
+        );
         if (s.safety_tips && s.safety_tips.length > 0) {
-            tipsHtml = `<div class="mt-sm"><strong>Safety Tips:</strong> <ul class="font-sm">${s.safety_tips.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+            leftCol += `<ul class="np-safety-tips">` +
+                s.safety_tips.map(t => `<li>${t}</li>`).join('') + `</ul>`;
         }
-        
-        const riskClass = (s.risk_level || '').toLowerCase() === 'high' ? 'text-red' : (s.risk_level || '').toLowerCase() === 'medium' ? 'text-orange' : 'text-green';
-
-        html += `
-            <div class="briefing-section">
-                <h3>Security & Safety</h3>
-                <p><strong>Risk Level:</strong> <span class="${riskClass} font-bold">${s.risk_level || 'Low'}</span></p>
-                <p class="mt-xs">${s.summary || ''}</p>
-                ${s.crime_report ? `<div class="mt-sm"><strong>Crime Report:</strong> <p class="font-sm">${s.crime_report}</p></div>` : ''}
-                ${tipsHtml}
-                ${renderReferences(s.references)}
-            </div>
-        `;
     }
 
-    // Hubs
+    // Major Hubs moved to full-width section below the 2-col grid
+    let hubsSection = '';
     if (guide.hubs && guide.hubs.length > 0) {
-        html += `<div class="briefing-section"><h3>Major Hubs</h3><ul class="facility-list">`;
+        hubsSection += sectionChip('Major Hubs', 'amber');
+        hubsSection += `<div class="np-hub-grid">`;
         guide.hubs.forEach(h => {
-            const link = h.url ? ` <a href="${h.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${h.name}${link}</h4>
-                <p>${h.description}</p>
-                ${renderReferences(h.references)}
-            </li>`;
+            hubsSection += `<div class="np-hub-card">
+                <div class="np-hub-card__name">${h.name}${h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
+                <p class="np-hub-card__desc">${h.description}</p>
+                ${h.references && h.references.length ? renderReferences(h.references) : ''}
+            </div>`;
         });
-        html += `</ul></div>`;
+        hubsSection += `</div>`;
     }
-    
-    // Charter Info
+
+    if (guide.points_of_interest && guide.points_of_interest.length > 0) {
+        leftCol += sectionChip('Points of Interest', 'violet');
+        guide.points_of_interest.forEach(poi => {
+            leftCol += `<div class="np-poi-item">
+                <div class="np-poi-item__name">${poi.name}${poi.url ? ` <a href="${poi.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
+                <p class="np-poi-item__desc">${poi.description}</p>
+                ${poi.references && poi.references.length ? renderReferences(poi.references) : ''}
+            </div>`;
+        });
+    }
+
+    // Sailing Season + At a Glance (right col)
+    let rightCol = '';
+
+    if (guide.sailing_season) {
+        const s = guide.sailing_season;
+        const bestMonths = s.primary_season_months || [];
+        const stormMonths = s.storm_season_months || [];
+        rightCol += sectionChip('Sailing Season', 'teal');
+        rightCol += `<div class="np-season-card">`;
+        rightCol += `<div class="np-season-month-grid">`;
+        MONTHS.forEach((mo, i) => {
+            const num = i + 1;
+            const isBest = bestMonths.includes(num) || bestMonths.includes(mo) || bestMonths.some(m => String(m).startsWith(mo));
+            const isStorm = stormMonths.includes(num) || stormMonths.includes(mo) || stormMonths.some(m => String(m).startsWith(mo));
+            const mod = isBest ? 'best' : isStorm ? 'storm' : 'off';
+            rightCol += `<div class="np-season-month np-season-month--${mod}">${mo}</div>`;
+        });
+        rightCol += `</div>`;
+        rightCol += `<div class="np-season-legend">
+            <span><span class="np-season-legend__dot np-season-legend__dot--best"></span>Best</span>
+            <span><span class="np-season-legend__dot np-season-legend__dot--storm"></span>Storm</span>
+        </div>`;
+        if (s.notes) {
+            rightCol += `<p class="np-caption" style="margin-top:8px">${s.notes}</p>`;
+        }
+        rightCol += `${s.references && s.references.length ? renderReferences(s.references) : ''}</div>`;
+    }
+
+    // At a glance data tiles
+    const glanceTiles = [];
+    if (guide.country_info) {
+        const c = guide.country_info;
+        if (c.name)     glanceTiles.push({ label: 'Country', value: c.name, accent: 'sky' });
+        if (c.timezone) glanceTiles.push({ label: 'Timezone', value: c.timezone, accent: 'violet' });
+        if (c.languages && c.languages.length) glanceTiles.push({ label: 'Language', value: c.languages[0], accent: 'teal' });
+    }
+    if (guide.currencies && guide.currencies.length > 0) {
+        const cur = guide.currencies[0];
+        glanceTiles.push({ label: 'Currency', value: `${cur.symbol || ''} ${cur.code}`.trim(), accent: 'amber' });
+    }
+    if (glanceTiles.length > 0) {
+        rightCol += sectionChip('At a Glance', 'sky');
+        rightCol += `<div class="np-glance-grid">`;
+        glanceTiles.forEach(({ label, value, accent }) => {
+            rightCol += `<div class="np-glance-tile" style="--accent:var(--${accent})">
+                <div class="np-glance-tile__label">${label}</div>
+                <div class="np-glance-tile__value">${value}</div>
+            </div>`;
+        });
+        rightCol += `</div>`;
+    }
+
     if (guide.charter_info) {
         const c = guide.charter_info;
-        
-        let companiesHtml = 'None listed';
+        rightCol += sectionChip('Charter Info', 'amber');
+        rightCol += `<div class="np-charter-card">
+            <div>Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
         if (c.companies && c.companies.length > 0) {
-             companiesHtml = '<ul class="charter-list">' + 
-             c.companies.map(comp => {
-                if (typeof comp === 'string') return `<li>${comp}</li>`;
-                const nameLink = comp.url ? `<a href="${comp.url}" target="_blank">${comp.name}</a>` : comp.name;
-                return `<li>${nameLink} ${renderReferences(comp.references)}</li>`;
-             }).join('') + 
-             '</ul>';
+            rightCol += `<ul class="np-charter-list">` +
+                c.companies.map(comp => {
+                    if (typeof comp === 'string') return `<li>${comp}</li>`;
+                    return `<li>${comp.url ? `<a href="${comp.url}" target="_blank" style="color:var(--sky)">${comp.name}</a>` : comp.name}${comp.references && comp.references.length ? renderReferences(comp.references) : ''}</li>`;
+                }).join('') + `</ul>`;
         }
-
-        html += `
-            <div class="briefing-section">
-                <h3>Charter Info</h3>
-                <p><strong>Available:</strong> ${c.is_charter_destination ? 'Yes' : 'No'}</p>
-                <div class="mt-sm"><strong>Companies:</strong> ${companiesHtml}</div>
-            </div>
-        `;
+        rightCol += `</div>`;
     }
 
-    // Country Info & Currency
-    if (guide.country_info || guide.currencies) {
-        const c = guide.country_info || {};
-        const curs = guide.currencies || [];
-        
-        let currencyHtml = 'N/A';
-        if (curs.length > 0) {
-            currencyHtml = curs.map(cur => `${cur.name} (${cur.code}) - ${cur.symbol || ''}`).join(', ');
-        }
-
-        html += `
-            <div class="briefing-section">
-                <h3>Country & Culture</h3>
-                <table class="briefing-table">
-                    <tr><th class="briefing-th">Country</th><td class="briefing-td">${c.name || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Language</th><td class="briefing-td">${c.languages ? c.languages.join(', ') : 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Timezone</th><td class="briefing-td">${c.timezone || 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Emergency</th><td class="briefing-td">${c.emergency_numbers ? Object.entries(c.emergency_numbers).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A'}</td></tr>
-                    <tr><th class="briefing-th">Currency</th><td class="briefing-td">${currencyHtml}</td></tr>
-                </table>
-            </div>
-        `;
-    }
-
-    // Airports
     if (guide.airports && guide.airports.length > 0) {
-        html += `<div class="briefing-section"><h3>Nearest Airports</h3><ul class="facility-list">`;
+        rightCol += sectionChip('Nearest Airports', 'sky');
         guide.airports.forEach(a => {
-            const formattedType = a.type ? a.type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Unknown';
-            html += `<li class="facility-item">
-                <h4>${a.name} (${a.iata_code || 'N/A'})</h4>
-                <p><strong>Type:</strong> ${formattedType}</p>
-                <p><strong>Distance:</strong> ${a.distance_km ? a.distance_km + ' km' : 'Unknown'}</p>
-                ${renderReferences(a.references)}
-            </li>`;
+            const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+            rightCol += `<div class="np-airport-row">
+                <span class="np-airport-row__icon">✈️</span>
+                <div>
+                    <div><span class="np-airport-row__name">${a.name}</span> <span class="np-airport-row__code">(${a.iata_code || 'N/A'})</span></div>
+                    <div class="np-airport-row__meta">${type}${a.distance_km ? ` · ${a.distance_km} km` : ''}</div>
+                </div>
+            </div>`;
         });
-        html += `</ul></div>`;
     }
 
-    // Points of Interest
-    if (guide.points_of_interest && guide.points_of_interest.length > 0) {
-        html += `<div class="briefing-section"><h3>Points of Interest</h3><ul class="facility-list">`;
-        guide.points_of_interest.forEach(poi => {
-            const link = poi.url ? ` <a href="${poi.url}" target="_blank" class="font-sm ml-sm">(Website)</a>` : '';
-            html += `<li class="facility-item">
-                <h4>${poi.name}${link}</h4>
-                <p>${poi.description}</p>
-                ${renderReferences(poi.references)}
-            </li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    return html;
+    return `
+        <div class="np-guide-grid">
+            <div>${leftCol}</div>
+            <div>${rightCol}</div>
+        </div>
+        ${hubsSection}
+    `;
 }
 
 function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL) {
     const sortedStops = [...stops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
+    const isInvalidVal = (v) => {
+        if (!v) return true;
+        return ['n/a','unknown','not specified'].includes(String(v).toLowerCase().trim());
+    };
 
     let dateDisplay = 'Dates Pending';
     if (voyage.start_date && voyage.end_date) {
-        dateDisplay = `${new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'})} - ${new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'})}`;
+        const s = new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric'});
+        const e = new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
+        dateDisplay = `${s} – ${e}`;
     }
 
+    // ── Stat tiles ────────────────────────────────────────────────────────────
+    const researchedCount = briefings.filter(b => b !== null).length;
+    const dayCount = (voyage.start_date && voyage.end_date)
+        ? Math.round((new Date(voyage.end_date) - new Date(voyage.start_date)) / 86400000) + 1 : '--';
+    const avgWind = (() => {
+        const speeds = briefings.filter(Boolean).map(b => parseFloat((b.weather_summary || {}).wind_speed_kt || 0)).filter(n => n > 0);
+        return speeds.length ? Math.round(speeds.reduce((a,b) => a+b, 0) / speeds.length) + ' kt' : '--';
+    })();
+
+    const overviewCol = (guide && guide.summary) ? `
+        <div class="np-destination-overview">
+            <span class="np-destination-overview__eyebrow">Destination Overview</span>
+            <blockquote class="np-destination-overview__quote">${DOMPurify.sanitize(guide.summary)}</blockquote>
+            <span class="np-destination-overview__cta">↓ Full guide below</span>
+        </div>` : '';
+
+    // ── Hero: header + stats (left) / overview (right) ───────────────────────
     let html = `
-        <h1 class="report-title">${DOMPurify.sanitize(voyage.title)}</h1>
-        <p class="report-dates text-center mb-lg">${dateDisplay}</p>
-        <p class="report-location text-center mb-lg"><strong>Area:</strong> ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
-        <hr />
-    `;
-
-    // Map Snapshot (Show if present, even if no guide)
-    if (mapURL) {
-        // Cache bust
-        const sep = mapURL.includes('?') ? '&' : '?';
-        const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `
-            <div class="report-section-wrapper">
-                 <img src="${url}" alt="Voyage Map" class="report-map-img" style="width:100%; border-radius: 4px; border: 1px solid #ccc; display: block; margin-bottom: 2rem;" />
-            </div>
-            <hr />
-        `;
-    }
-
-    // --- Voyage Overview (Consolidated View) ---
-    if (hasBriefings) {
-        const gridCols = Math.min(sortedStops.length, 4);
-        html += `<div class="report-section-wrapper">
-            <h2 class="report-day-header brand-blue">Voyage Overview</h2>
-            <div class="overview-grid grid-cols-${gridCols}">
-        `;
-
-        sortedStops.forEach((stop, idx) => {
-            const briefing = briefings.find(br => br.stop_id === stop.id) || {};
-            const date = new Date(stop.target_date);
-            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-
-            // Weather
-            const w = briefing.weather_summary || {};
-            const weatherIcon = getIconForWeather(w.condition);
-            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '--';
-
-            // Sun
-            const sun = briefing.sun_phase || {};
-            const formatSunTime = (t) => {
-                if (!t) return '--:--';
-                const d = new Date(t);
-                return isNaN(d.getTime()) ? t : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            };
-            const sunrise = formatSunTime(sun.sunrise);
-            const sunset = formatSunTime(sun.sunset);
-
-            const canvasId = `reportMiniTideChart_${idx}`;
-
-            html += `
-                <div class="overview-card">
-                    <div class="overview-date">
-                        ${dateStr}
+        <div class="np-report-hero">
+            <div class="np-report-hero__left">
+                <div class="np-report-header">
+                    <span class="np-report-header__tag">Voyage Report</span>
+                    <h1 class="np-report-header__title">${DOMPurify.sanitize(voyage.title)}</h1>
+                    <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
+                </div>
+                <div class="np-metric-grid">
+                    <div class="np-metric-tile" style="--accent:var(--sky)">
+                        <div class="np-metric-tile__label">Stops</div>
+                        <div class="np-metric-tile__value">${sortedStops.length}</div>
                     </div>
-                    <div class="overview-location" title="${DOMPurify.sanitize(stop.location_name)}">
-                        ${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}
+                    <div class="np-metric-tile" style="--accent:var(--teal)">
+                        <div class="np-metric-tile__label">Days</div>
+                        <div class="np-metric-tile__value">${dayCount}</div>
                     </div>
-
-                    <div class="overview-weather">
-                        <span class="material-symbols-outlined" style="font-size: 20px; color: #555;">${weatherIcon}</span>
-                        <span class="overview-temp">${temp}</span>
+                    <div class="np-metric-tile" style="--accent:var(--amber)">
+                        <div class="np-metric-tile__label">Avg Wind</div>
+                        <div class="np-metric-tile__value">${avgWind}</div>
                     </div>
-
-                    <div class="overview-sun">
-                        <div title="Sunrise"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">wb_twilight</span> ${sunrise}</div>
-                        <div title="Sunset"><span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">bedtime</span> ${sunset}</div>
-                    </div>
-
-                    <div class="overview-chart">
-                        <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                    <div class="np-metric-tile" style="--accent:var(--violet)">
+                        <div class="np-metric-tile__label">Researched</div>
+                        <div class="np-metric-tile__value">${researchedCount}/${sortedStops.length}</div>
                     </div>
                 </div>
-            `;
-        });
-        html += `</div></div><hr />`;
+            </div>
+            ${overviewCol}
+        </div>
+    `;
+
+    // ── Map Snapshot ──────────────────────────────────────────────────────────
+    if (mapURL) {
+        const sep = mapURL.includes('?') ? '&' : '?';
+        const url = `${mapURL}${sep}t=${Date.now()}`;
+        html += `<img src="${url}" alt="Voyage Map" class="np-report-map" />`;
     }
 
-    // --- Destination Guide ---
+    // ── Day by day grid ───────────────────────────────────────────────────────
+    if (hasBriefings) {
+        const dayGridClass = sortedStops.length < 5 ? 'np-day-grid np-day-grid--fill' : 'np-day-grid';
+        html += `<span class="np-section-label">Day by Day</span>`;
+        html += `<div class="${dayGridClass}" style="--day-count:${sortedStops.length}">`;
+        sortedStops.forEach((stop, idx) => {
+            const briefing = briefings.find(br => br && br.stop_id === stop.id) || {};
+            const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
+            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+            const w = briefing.weather_summary || {};
+            const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '';
+            const canvasId = `reportMiniTideChart_${idx}`;
+            html += `
+                <div class="np-day-tile" style="--accent:var(--${accent})">
+                    <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
+                    <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
+                    ${temp ? `<div class="np-day-tile__meta">🌡 ${temp}</div>` : ''}
+                    ${w.wind_speed_kt ? `<div class="np-day-tile__meta">💨 ${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    <div class="np-day-tile__chart overview-chart">
+                        <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
+                    </div>
+                </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // ── Full Destination Guide ────────────────────────────────────────────────
     if (guide) {
         html += `
-            <div class="report-section-wrapper report-guide-bg">
-                <h2 class="report-day-header brand-green">Destination Guide</h2>
+            <div class="np-guide-section">
+                <span class="np-guide-section__eyebrow">Destination Guide</span>
                 ${generateGuideHTML(guide)}
             </div>
-            <hr />
         `;
     }
 
-    // --- Recommendations ---
-    // Only show if we don't have specific stop briefings (Discovery Mode vs Planning Mode)
+    // ── Recommendations (discovery mode) ─────────────────────────────────────
     if (!hasBriefings && recommendations && recommendations.length > 0) {
-        html += `<div class="report-section-wrapper">
-                    <h2 class="report-day-header brand-blue">Resource Hubs & Recommended Spots</h2>`;
-
-        // Group by normalized type
         const groups = {
-            marina: { title: 'Resource Hubs & Marinas', items: [] },
-            anchorage: { title: 'Recommended Anchorages', items: [] },
-            mooring: { title: 'Mooring Fields', items: [] },
-            other: { title: 'Other Recommendations', items: [] }
+            marina:    { title: 'Resource Hubs & Marinas', accent: 'amber', items: [] },
+            anchorage: { title: 'Recommended Anchorages', accent: 'teal',  items: [] },
+            mooring:   { title: 'Mooring Fields',          accent: 'violet',items: [] },
+            other:     { title: 'Other Recommendations',   accent: 'sky',   items: [] },
         };
-
         recommendations.forEach(rec => {
             const t = (rec.type || '').toLowerCase();
             if (t.includes('marina') || t.includes('hub')) groups.marina.items.push(rec);
@@ -4762,103 +5268,67 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             else if (t.includes('mooring')) groups.mooring.items.push(rec);
             else groups.other.items.push(rec);
         });
-
-        // Render in specific order
-        ['marina', 'anchorage', 'mooring', 'other'].forEach(key => {
-            const group = groups[key];
-            if (group.items.length === 0) return;
-
-            html += `<div class="recommendation-group mb-xl">
-                        <h3 class="group-header border-b pb-xs mb-md text-brand-medium">${group.title}</h3>
-                        <div class="recommendations-list">`;
-
-            group.items.forEach(rec => {
-                const type = rec.type || 'Spot';
-                const recColor = markerColor(type);
-                const tl = type.toLowerCase();
-                let recIcon = 'location_on';
-                if (tl.includes('anchor')) recIcon = 'anchor';
-                else if (tl.includes('moor')) recIcon = 'crisis_alert';
-                else if (tl.includes('hub') || tl.includes('marina')) recIcon = 'hub';
-
+        ['marina','anchorage','mooring','other'].forEach(key => {
+            const { title, accent, items } = groups[key];
+            if (!items.length) return;
+            html += `<div class="np-rec-section">
+                <span class="np-eyebrow-accent" style="--accent:var(--${accent})">${title}</span>`;
+            items.forEach(rec => {
+                const ra = markerAccent(rec.type);
                 html += `
-                    <div class="recommendation-item mb-lg p-md border-radius border">
-                        <h4 class="m-0 mb-sm briefing-header-icon">
-                            <span class="material-symbols-outlined icon-lg" style="color:${recColor};">${recIcon}</span>
+                    <div class="np-rec-item" style="--accent:var(--${ra})">
+                        <div class="np-rec-item__header">
                             ${DOMPurify.sanitize(rec.name)}
-                            <span class="rec-badge" style="background:${recColor};margin-left:auto;">${DOMPurify.sanitize(type)}</span>
-                        </h4>
-                        <p class="mb-sm">${DOMPurify.sanitize(rec.description)}</p>
-                        <div class="pilot-reasoning" style="background:${recColor}1A;border-left:3px solid ${recColor};">
-                            <p><strong style="color:${recColor};">Pilot's Reasoning:</strong> "${DOMPurify.sanitize(rec.reasoning)}"</p>
+                            <span class="np-rec-item__type">${DOMPurify.sanitize(rec.type || 'Spot')}</span>
                         </div>
-                    </div>
-                `;
+                        <p class="np-rec-item__desc">${DOMPurify.sanitize(rec.description)}</p>
+                        ${rec.reasoning ? `<p class="np-rec-item__reasoning">"${DOMPurify.sanitize(rec.reasoning)}"</p>` : ''}
+                    </div>`;
             });
-
-            html += `</div></div>`;
+            html += `</div>`;
         });
-
-        html += `</div><hr />`;
     }
 
-    // --- Daily Itinerary ---
+    // ── Daily Itinerary sections ──────────────────────────────────────────────
     if (hasBriefings) {
         sortedStops.forEach((stop, idx) => {
-            const b = briefings.find(br => br.stop_id === stop.id);
+            const b = briefings.find(br => br && br.stop_id === stop.id);
             if (!b) return;
-
-            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric'});
+            const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
+            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'});
+            const w = b.weather_summary || {};
 
             html += `
-                <div class="report-daily-wrapper">
-                    <h2 class="report-day-header">Day ${idx + 1}: ${DOMPurify.sanitize(displayLocationName(stop.location_name))}</h2>
-                    <p class="report-day-date"><strong>Date:</strong> ${dateStr}</p>
+                <div class="np-report-stop" style="--accent:var(--${accent})">
+                    <div class="np-report-stop__header">
+                        <div class="np-report-stop__number">${idx+1}</div>
+                        <div>
+                            <div class="np-report-stop__title">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
+                            <div class="np-report-stop__date">${dateStr}</div>
+                        </div>
+                    </div>
             `;
 
-            const isInvalid = (v) => {
-                if (!v) return true;
-                const sv = String(v).toLowerCase().trim();
-                return sv === 'n/a' || sv === 'unknown' || sv === 'not specified';
-            };
-
-            // Weather
-            const w = b.weather_summary || {};
-            if (w && !isInvalid(w.condition)) {
-                const weatherIcon = getIconForWeather(w.condition);
-                html += `
-                    <div class="briefing-section">
-                        <h3>Weather Outlook</h3>
-                        <div class="flex align-center gap-md">
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-dark);">${weatherIcon}</span>
-                            <div>
-                                <p class="m-0"><strong>Condition:</strong> ${w.condition}</p>
-                                ${(w.temp_max_f != null && w.temp_min_f != null) ? `<p class="m-0"><strong>Temperature:</strong> ${Math.round(w.temp_max_f)}°F / ${Math.round(w.temp_min_f)}°F</p>` : ''}
-                                ${w.precip_prob != null ? `<p class="m-0"><strong>Precipitation:</strong> ${w.precip_prob}%</p>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
+            // Weather tiles
+            if (!isInvalidVal(w.condition)) {
+                html += `<div class="np-weather-grid">`;
+                if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
+                if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
+                if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
+                html += `</div>`;
             }
 
-            // Tides
+            // Tide chart canvas (preserved for Chart.js rendering)
             if (b.tides && b.tides.events) {
-                html += `
-                    <div class="briefing-section">
-                        <h3>Tides & Currents</h3>
-                        <div style="height: 300px; margin-bottom: 1rem;">
-                            <canvas id="reportTideChart_${idx}"></canvas>
-                        </div>
-                    </div>
-                `;
+                html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
             }
 
-            // Facilities — skip for the last stop if it's within 1 NM of the first stop (return voyage)
+            // Facilities
             const firstStop = sortedStops[0];
             const isLastStop = idx === sortedStops.length - 1 && sortedStops.length > 1;
             const isReturnStop = isLastStop && (() => {
                 const toRad = d => d * Math.PI / 180;
-                const R = 3440.065; // nautical miles
+                const R = 3440.065;
                 const dLat = toRad(stop.latitude - firstStop.latitude);
                 const dLon = toRad(stop.longitude - firstStop.longitude);
                 const a = Math.sin(dLat/2)**2 + Math.cos(toRad(firstStop.latitude)) * Math.cos(toRad(stop.latitude)) * Math.sin(dLon/2)**2;
@@ -4866,79 +5336,32 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             })();
 
             if (isReturnStop) {
-                html += `<div class="briefing-section"><p class="text-gray italic">Local facilities omitted — this stop returns to the voyage's starting area.</p></div>`;
+                html += `<p class="np-caption" style="font-style:italic">Facilities omitted — return to starting area.</p>`;
             } else if (b.facilities && b.facilities.length > 0) {
-                html += `<div class="briefing-section"><h3>Local Facilities</h3><ul class="facility-list">`;
+                html += `<span class="np-facilities-header">Facilities</span>`;
                 b.facilities.forEach(f => {
-                    const name = DOMPurify.sanitize(f.name);
-
-                    const isInvalid = v => !v || ['n/a', '', 'unknown', 'not specified'].includes(String(v).toLowerCase().trim());
-
-                    let metaRows = '';
-                    if (f.address) metaRows += `
-                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Address</th>
-                        <td class="briefing-td">${DOMPurify.sanitize(f.address)}</td></tr>`;
-                    if (f.rating) {
-                        const stars = '★'.repeat(Math.round(f.rating)) + '☆'.repeat(5 - Math.round(f.rating));
-                        const count = f.user_rating_count ? ` (${f.user_rating_count.toLocaleString()} reviews)` : '';
-                        metaRows += `
-                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Rating</th>
-                        <td class="briefing-td"><span style="color:#F9A825;">${stars}</span> ${f.rating.toFixed(1)}${count}</td></tr>`;
-                    }
-                    if (f.business_status && f.business_status !== 'OPERATIONAL') metaRows += `
-                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Status</th>
-                        <td class="briefing-td" style="color:#C62828;font-weight:700;">${f.business_status.replace(/_/g, ' ')}</td></tr>`;
-                    if (f.website) metaRows += `
-                        <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">Website</th>
-                        <td class="briefing-td"><a href="${f.website}" target="_blank">${DOMPurify.sanitize(f.website)}</a></td></tr>`;
-
-                    let detailRows = '';
-                    if (f.details && typeof f.details === 'object') {
-                        detailRows = Object.entries(f.details)
-                            .filter(([_, v]) => !isInvalid(v))
-                            .map(([k, v]) => `
-                                <tr><th class="briefing-th capitalize" style="text-align:left;background:#f9f9f9;width:120px;">${k.replace(/_/g, ' ')}</th>
-                                <td class="briefing-td">${DOMPurify.sanitize(String(v))}</td></tr>
-                            `).join('');
-                    }
-
-                    const allRows = metaRows + detailRows;
-                    const detailsHtml = allRows
-                        ? `<table class="briefing-table mt-sm" style="width:100%;font-size:0.85em;">${allRows}</table>`
-                        : '';
-
-                    const typeColor = markerColor(f.type);
-                    const typeLowerR = (f.type || '').toLowerCase();
-                    let iconR = 'place';
-                    if (typeLowerR.includes('anchorage')) iconR = 'anchor';
-                    else if (typeLowerR.includes('marina')) iconR = 'storefront';
-                    else if (typeLowerR.includes('mooring')) iconR = 'crisis_alert';
-                    else if (typeLowerR.includes('bar')) iconR = 'local_bar';
-                    else if (typeLowerR.includes('restaurant')) iconR = 'restaurant';
-
-                    html += `<li class="facility-item mb-xl">
-                        <h4 class="mb-xs briefing-header-icon">
-                            <span class="material-symbols-outlined icon-lg" style="color:${typeColor};">${iconR}</span>
-                            ${name}
-                            <span style="font-size:0.75rem;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${typeColor};padding:2px 8px;border-radius:20px;margin-left:auto;">${DOMPurify.sanitize(f.type || 'Facility')}</span>
-                        </h4>
-                        ${detailsHtml}
+                    const fa = markerAccent(f.type);
+                    const desc = typeof f.details === 'string' ? f.details : (f.details?.description || '');
+                    const address = f.address || (typeof f.details === 'object' && f.details?.address) || '';
+                    html += `<div class="np-facility-report-card" style="--accent:var(--${fa})">
+                        <div class="np-facility-report-card__header">
+                            <span class="np-facility-report-card__name">${esc(f.name)}</span>
+                            <span class="np-facility-report-card__badge">${esc(f.type || 'Facility')}</span>
+                        </div>
+                        ${address ? `<p class="np-facility-report-card__address">${esc(address)}</p>` : ''}
+                        ${desc ? `<p class="np-facility-report-card__desc">${esc(desc)}</p>` : ''}
+                        ${f.rating ? `<p class="np-facility-report-card__rating">${'★'.repeat(Math.round(f.rating))}${'☆'.repeat(5-Math.round(f.rating))} ${f.rating.toFixed(1)}</p>` : ''}
+                        ${f.website ? `<a href="${f.website}" target="_blank" class="np-facility-report-card__website">${esc(f.website)}</a>` : ''}
                         ${renderReferences(f.references)}
-                    </li>`;
+                    </div>`;
                 });
-                html += `</ul></div>`;
             }
 
-            html += `</div><hr />`;
+            html += `</div>`;
         });
     }
 
-    html += `
-        <footer class="mt-xl text-center text-gray font-sm p-lg">
-            <p>Generated by NavalPlan</p>
-        </footer>
-    `;
-
+    html += `<footer class="np-report-footer"><p>Generated by NavalPlan</p></footer>`;
     return html;
 }
 

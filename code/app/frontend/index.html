@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="nautical">
+<html lang="en">
 <head>
-    <!-- Apply saved theme immediately to avoid flash -->
-    <script>(function(){var t=localStorage.getItem('navalplan-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <!-- Apply saved theme immediately to avoid flash — checks new key, migrates legacy key, falls back to OS preference -->
+    <script>(function(){var t=localStorage.getItem('theme');if(!t){var l=localStorage.getItem('navalplan-theme');if(l){t=l==='midnight-mariner'?'dark':'light';localStorage.setItem('theme',t);localStorage.removeItem('navalplan-theme');}}if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);})();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Plan your nautical voyages with ease. Research weather, tides, and local facilities for every stop on your journey." />
@@ -15,15 +15,24 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/themes.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/components/buttons.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/a11y.css">
 </head>
 <body>
+    <!-- Skip link — visible on keyboard focus -->
+    <a href="#map-container" class="skip-link">Skip to map</a>
+
+    <!-- ARIA live region for dynamic announcements -->
+    <div id="a11y-announcer" aria-live="polite" aria-atomic="true"></div>
+
     <div id="app">
       <button id="btn-mobile-menu" class="btn-icon" title="Open Menu">
          <span class="material-symbols-outlined">menu</span>
@@ -44,11 +53,11 @@
         </div>
         
         <div class="sidebar-actions">
-           <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
            <button id="btn-discover" class="btn secondary">
               <span class="material-symbols-outlined icon-align">explore</span>
               Discover
            </button>
+           <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
         </div>
 
         <div id="voyage-list">
@@ -58,27 +67,27 @@
         <div id="itinerary-view" class="hidden">
           <div class="sidebar-actions">
             <button id="btn-back-voyages" class="btn secondary">&larr; Back</button>
-            <button id="btn-view-guide" class="btn secondary" title="Destination Guide">
-               <span class="material-symbols-outlined icon-lg icon-align">map</span>
+            <button id="btn-view-guide" class="btn secondary" title="Destination Guide" aria-label="Open destination guide">
+               <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">map</span>
             </button>
-            <button id="btn-research-all" class="btn secondary" title="Research All">
-               <span class="material-symbols-outlined icon-lg icon-align">travel_explore</span>
+            <button id="btn-research-all" class="btn secondary" title="Research All" aria-label="Research all stops">
+               <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">travel_explore</span>
             </button>
-            <button id="btn-pilot-suggestions" class="btn secondary" title="Research Hubs & Spots">
-               <span class="material-symbols-outlined icon-lg icon-align">auto_awesome</span>
+            <button id="btn-pilot-suggestions" class="btn secondary" title="Research Hubs &amp; Spots" aria-label="Research hubs and spots">
+               <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">auto_awesome</span>
             </button>
-            <button id="btn-export-voyage" class="btn secondary" title="View Voyage Report">
-               <span class="material-symbols-outlined icon-lg icon-align">description</span>
+            <button id="btn-export-voyage" class="btn secondary" title="View Voyage Report" aria-label="View voyage report">
+               <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">description</span>
             </button>
           </div>
           <div class="voyage-header">
-            <div class="flex justify-between align-start">
+            <div class="voyage-header__text">
               <h2 id="itinerary-title">Voyage Title</h2>
-              <button id="btn-edit-voyage" class="btn-icon" title="Edit Voyage">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
+              <p id="itinerary-dates">Dates</p>
             </div>
-            <p id="itinerary-dates">Dates</p>
+            <button id="btn-edit-voyage" class="btn-icon voyage-header__edit" title="Edit Voyage" aria-label="Edit voyage">
+              <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+            </button>
             <button id="btn-set-dates" class="btn primary w-full mt-sm hidden">Set Voyage Dates</button>
           </div>
           <div id="itinerary-list">
@@ -87,65 +96,56 @@
         </div>
       </nav>
 
-      <main id="map-container"></main>
+      <main id="map-container" role="main" aria-label="Voyage map" tabindex="-1"></main>
       <div id="health-warning" class="hidden">
         <span class="material-symbols-outlined">warning</span>
         Backend Connection Lost
       </div>
       <div id="facility-controls" class="hidden">
-        <div class="pilot-legend-container">
-          <span class="pilot-legend-title">Filter Facilities</span>
-          <div class="pilot-legend">
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="anchorage">
-              <span class="pilot-dot" style="background-color: #388E3C;"></span>Anchorages
-            </button>
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="marina">
-              <span class="pilot-dot" style="background-color: #E65100;"></span>Marinas
-            </button>
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="mooring">
-              <span class="pilot-dot" style="background-color: #7B1FA2;"></span>Moorings
-            </button>
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="restaurant">
-              <span class="pilot-dot" style="background-color: #5D4037;"></span>Restaurants
-            </button>
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="bar">
-              <span class="pilot-dot" style="background-color: #F9A825;"></span>Bars
-            </button>
-            <button class="facility-filter-btn pilot-filter-btn active" data-type="other">
-              <span class="pilot-dot" style="background-color: #455A64;"></span>Other
-            </button>
-          </div>
-        </div>
+        <span class="pilot-legend-title">Facilities</span>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="anchorage">
+          <span class="pilot-dot" style="background:var(--teal)"></span>Anchorages
+        </button>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="marina">
+          <span class="pilot-dot" style="background:var(--amber)"></span>Marinas
+        </button>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="mooring">
+          <span class="pilot-dot" style="background:var(--violet)"></span>Moorings
+        </button>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="restaurant">
+          <span class="pilot-dot" style="background:var(--green)"></span>Restaurants
+        </button>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="bar">
+          <span class="pilot-dot" style="background:var(--coral)"></span>Bars
+        </button>
+        <button class="facility-filter-btn pilot-filter-btn active" data-type="other">
+          <span class="pilot-dot" style="background:var(--sky)"></span>Other
+        </button>
       </div>
       <div id="pilot-controls" class="hidden">
-        <div class="pilot-legend-container">
-          <span class="pilot-legend-title">Filter Spots</span>
-          <div class="pilot-legend">
-            <button class="pilot-filter-btn active" data-type="anchorage">
-              <span class="pilot-dot" style="background-color: #388E3C;"></span>Anchorages
-            </button>
-            <button class="pilot-filter-btn active" data-type="mooring">
-              <span class="pilot-dot" style="background-color: #7B1FA2;"></span>Moorings
-            </button>
-            <button class="pilot-filter-btn active" data-type="hub">
-              <span class="pilot-dot" style="background-color: #E65100;"></span>Hubs
-            </button>
-          </div>
-        </div>
+        <span class="pilot-legend-title">Filter Spots</span>
+        <button class="pilot-filter-btn active" data-type="anchorage">
+          <span class="pilot-dot" style="background:var(--teal)"></span>Anchorages
+        </button>
+        <button class="pilot-filter-btn active" data-type="mooring">
+          <span class="pilot-dot" style="background:var(--violet)"></span>Moorings
+        </button>
+        <button class="pilot-filter-btn active" data-type="hub">
+          <span class="pilot-dot" style="background:var(--amber)"></span>Hubs
+        </button>
       </div>
       <div id="discovery-controls" class="hidden">
-        <div class="month-slider-container">
-          <label for="month-slider">Month: <span id="month-display">January</span></label>
-          <input type="range" id="month-slider" min="1" max="12" value="1" />
+        <div class="discovery-month-strip">
+          <div id="month-squares" role="group" aria-label="Select month"></div>
           <div class="discovery-legend">
-            <div class="legend-item"><span class="legend-dot dot-standard"></span>Standard</div>
-            <div class="legend-item"><span class="legend-dot dot-regional"></span>Regional</div>
-            <div class="legend-item"><span class="legend-dot dot-gem"></span>Hidden Gem</div>
-            <div class="legend-item"><span class="legend-dot dot-challenging"></span>Challenging</div>
+            <span class="legend-item"><span class="legend-dot dot-gem"></span>Hidden Gem</span>
+            <span class="legend-item"><span class="legend-dot dot-regional"></span>Regional</span>
+            <span class="legend-item"><span class="legend-dot dot-standard"></span>Standard</span>
+            <span class="legend-item"><span class="legend-dot dot-challenging"></span>Challenging</span>
           </div>
         </div>
-        <button id="btn-close-discovery" class="btn-icon" title="Close Discovery">
-          <span class="material-symbols-outlined">close</span>
+        <button id="btn-close-discovery" class="btn-icon" aria-label="Close discovery mode" title="Close Discovery">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
     </div>
@@ -154,19 +154,24 @@
     <div id="modal-overlay" class="hidden"></div>
     
     <!-- Voyage Form Modal -->
-    <div id="modal-new-voyage" class="modal hidden">
-      <h2>Plan a New Voyage</h2>
+    <div id="modal-new-voyage" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-voyage-title" style="max-width:440px;padding:26px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span id="modal-voyage-pill" style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--coral) 12%,var(--surface));color:var(--coral)">NEW VOYAGE</span>
+        <button type="button" id="btn-cancel-voyage" aria-label="Close"
+          style="width:32px;height:32px;border-radius:50%;border:none;background:var(--chip);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">✕</button>
+      </div>
+      <h2 id="modal-new-voyage-title" style="font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--ink);margin:0 0 20px">Plan a New Voyage</h2>
       <form id="form-new-voyage">
         <div class="form-group">
           <label for="voyage-title">Trip Title</label>
           <input type="text" id="voyage-title" name="title" required placeholder="e.g. Gulf Islands 2025" />
         </div>
-        
+
         <div class="form-group">
           <label>Starting Location</label>
           <div class="flex gap-sm">
             <input type="text" id="voyage-location-name" name="location_name" placeholder="e.g. Seattle" />
-            <button type="button" id="btn-use-map-center" class="btn secondary p-sm w-auto">Use Map Center</button>
+            <button type="button" id="btn-use-map-center" class="btn secondary" style="padding: 0 16px; white-space: nowrap; flex-shrink: 0;">Use Map Center</button>
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />
           <input type="hidden" id="voyage-lng" name="longitude" />
@@ -175,10 +180,10 @@
         </div>
 
         <div class="form-group">
-          <label for="voyage-radius">Search Radius (nm)</label>
-          <input type="number" id="voyage-radius" name="search_radius" value="60" min="1" max="500" />
+          <label for="voyage-radius">Search Radius — <span id="voyage-radius-display">60</span> nm</label>
+          <input type="range" id="voyage-radius" name="search_radius" value="60" min="1" max="150" step="1" />
         </div>
-        
+
         <div id="voyage-date-fields" class="form-row">
           <div class="form-group">
             <label for="voyage-start">Start Date (Optional)</label>
@@ -190,9 +195,8 @@
           </div>
         </div>
 
-        <div class="form-actions">
-          <button type="button" id="btn-cancel-voyage" class="btn secondary">Cancel</button>
-          <button type="submit" class="btn primary">Create Voyage</button>
+        <div class="form-actions" style="margin-top:20px">
+          <button type="submit" class="btn primary" style="flex:1">Create Voyage</button>
         </div>
       </form>
     </div>
@@ -218,49 +222,49 @@
       </div>
     </div>
 
-    <div id="modal-briefing" class="modal hidden modal-scrollable">
+    <div id="modal-briefing" class="modal hidden modal-scrollable" role="dialog" aria-modal="true" aria-labelledby="modal-briefing-title">
       <div class="modal-header-row flex justify-between align-center">
-        <h2 class="m-0">Destination Briefing</h2>
+        <h2 id="modal-briefing-title" class="m-0">Destination Briefing</h2>
         <div class="flex gap-sm">
-            <button id="btn-redo-briefing" class="btn secondary p-xs font-sm" title="Redo Research">
-                <span class="material-symbols-outlined icon-lg icon-align">refresh</span>
+            <button id="btn-redo-briefing" class="btn secondary p-xs font-sm" aria-label="Redo research">
+                <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">refresh</span>
                 Redo
             </button>
-            <button id="btn-close-briefing" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+            <button id="btn-close-briefing" class="btn-icon icon-xl" aria-label="Close briefing"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
         </div>
       </div>
-      <div id="briefing-content" class="briefing-body modal-content-scroll"></div>
+      <div id="briefing-content" class="briefing-body modal-content-scroll" aria-live="polite"></div>
     </div>
 
-    <div id="modal-guide" class="modal hidden modal-scrollable">
+    <div id="modal-guide" class="modal hidden modal-scrollable" role="dialog" aria-modal="true" aria-labelledby="modal-guide-title">
       <div class="modal-header-row flex justify-between align-center">
-        <h2 class="m-0">Destination Guide</h2>
+        <h2 id="modal-guide-title" class="m-0">Destination Guide</h2>
         <div class="flex gap-sm">
-             <button id="btn-redo-guide" class="btn secondary p-xs font-sm" title="Redo Research">
-                <span class="material-symbols-outlined icon-lg icon-align">refresh</span>
+             <button id="btn-redo-guide" class="btn secondary p-xs font-sm" aria-label="Redo guide research">
+                <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">refresh</span>
                 Redo
             </button>
-            <button id="btn-close-guide" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+            <button id="btn-close-guide" class="btn-icon icon-xl" aria-label="Close guide"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
         </div>
       </div>
-      <div id="guide-content" class="briefing-body modal-content-scroll"></div>
+      <div id="guide-content" class="briefing-body modal-content-scroll" aria-live="polite"></div>
     </div>
 
-    <div id="modal-region-briefing" class="modal hidden modal-scrollable">
+    <div id="modal-region-briefing" class="modal hidden modal-scrollable" role="dialog" aria-modal="true" aria-labelledby="region-title">
       <div class="modal-header-row flex justify-between align-center">
         <h2 id="region-title" class="m-0">Region Briefing</h2>
-        <button id="btn-close-region-briefing" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+        <button id="btn-close-region-briefing" class="btn-icon icon-xl" aria-label="Close region briefing"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       </div>
-      <div id="region-briefing-content" class="briefing-body modal-content-scroll"></div>
+      <div id="region-briefing-content" class="briefing-body modal-content-scroll" aria-live="polite"></div>
     </div>
 
     <!-- Report Modal -->
-    <div id="modal-report" class="modal hidden modal-scrollable flex flex-col">
+    <div id="modal-report" class="modal hidden modal-scrollable flex flex-col" role="dialog" aria-modal="true" aria-labelledby="modal-report-title">
         <div class="modal-header-row flex justify-between align-center">
-            <h2 class="m-0">Voyage Report</h2>
+            <h2 id="modal-report-title" class="m-0">Voyage Report</h2>
             <div class="flex gap-sm">
                 <button id="btn-copy-report" class="btn primary px-md py-sm">Copy to Clipboard</button>
-                <button id="btn-close-report" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
+                <button id="btn-close-report" class="btn-icon icon-xl" aria-label="Close report"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
             </div>
         </div>
         <div id="report-content" class="report-body modal-content-scroll">
@@ -269,7 +273,7 @@
     </div>
 
     <!-- Notification Modal -->
-    <div id="modal-notification" class="modal hidden text-center">
+    <div id="modal-notification" class="modal hidden text-center" role="alertdialog" aria-modal="true" aria-labelledby="notification-title" aria-describedby="notification-message">
         <h2 id="notification-title" class="mb-md">Notification</h2>
         <p id="notification-message" class="mb-lg text-dark"></p>
         <div id="notification-actions" class="flex flex-col gap-sm">
@@ -339,6 +343,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Mobile bottom tab bar (hidden on desktop) -->
+    <nav id="mobile-tab-bar" aria-label="Primary navigation">
+      <button class="np-tab" id="tab-map" data-tab="map" aria-label="Map" aria-pressed="true">
+        <span class="material-symbols-outlined" aria-hidden="true">map</span>
+        <span class="np-tab-label">Map</span>
+      </button>
+      <button class="np-tab" id="tab-plan" data-tab="plan" aria-label="Plan">
+        <span class="material-symbols-outlined" aria-hidden="true">anchor</span>
+        <span class="np-tab-label">Plan</span>
+      </button>
+      <button class="np-tab" id="tab-guide" data-tab="guide" aria-label="Guide">
+        <span class="material-symbols-outlined" aria-hidden="true">travel_explore</span>
+        <span class="np-tab-label">Guide</span>
+      </button>
+      <button class="np-tab" id="tab-profile" data-tab="profile" aria-label="Profile">
+        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+        <span class="np-tab-label">Profile</span>
+      </button>
+    </nav>
 
     <script type="module" src="js/main.js"></script>
 </body>

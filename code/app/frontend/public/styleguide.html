@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NavalPlan · Signal Styleguide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ── inline tokens (self-contained for styleguide) ── */
+    :root {
+      --bg: #FAF9F6; --surface: #FFFFFF; --ink: #0B1220; --ink2: #242E42;
+      --muted: #566074; --hair: #E6E9EF; --chip: #F2F4F8;
+      --coral: #C23A1B; --teal: #0B7A6F; --amber: #8A5200;
+      --violet: #5B3BD4; --sky: #1A5BCE; --green: #116A3D;
+      --focus: #1A5BCE; --danger: #B42318;
+      --radius-pill: 999px; --radius-card: 22px; --radius-tile: 15px; --radius-input: 12px;
+      --shadow: 0 2px 8px rgba(15,23,42,.06), 0 20px 40px -20px rgba(15,23,42,.2);
+      --shadow-soft: 0 1px 2px rgba(15,23,42,.05);
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #0B1220; --surface: #121A2C; --ink: #F5F7FB; --ink2: #C4CAD6;
+      --muted: #8A92A3; --hair: #22304A; --chip: #1A2338;
+      --coral: #FF9A7A; --teal: #5FE3D2; --amber: #FFC773;
+      --violet: #C2A9FF; --sky: #8BB8FF; --green: #7BE0A8;
+      --focus: #8BB8FF; --danger: #FF9E9E;
+      --shadow: 0 2px 8px rgba(0,0,0,.2), 0 20px 40px -20px rgba(0,0,0,.5);
+      --shadow-soft: 0 1px 2px rgba(0,0,0,.15);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.55;
+      min-height: 100vh;
+      transition: background .2s, color .2s;
+    }
+    .sg-page { max-width: 900px; margin: 0 auto; padding: 48px 24px; }
+    .sg-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 48px;
+    }
+    .sg-title { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+    .sg-section { margin-bottom: 48px; }
+    .sg-section-title {
+      font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 20px; padding-bottom: 8px;
+      border-bottom: 1.5px solid var(--hair);
+    }
+    .sg-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+    .sg-card-demo {
+      padding: 20px; border-radius: var(--radius-card);
+      background: var(--surface); box-shadow: var(--shadow);
+      min-width: 200px;
+    }
+    .sg-card-tint {
+      padding: 20px; border-radius: var(--radius-card);
+      min-width: 200px;
+    }
+
+    /* ── Chip ── */
+    .np-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      height: 28px; padding: 0 10px; border-radius: 14px;
+      font-size: 12px; font-weight: 700; letter-spacing: .04em;
+      white-space: nowrap;
+    }
+
+    /* ── Btn ── */
+    .np-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; min-width: 44px; padding: 0 20px;
+      border-radius: var(--radius-pill); font-size: 15px; font-weight: 700;
+      font-family: var(--font); cursor: pointer; border: none;
+      transition: opacity .15s; white-space: nowrap;
+    }
+    .np-btn--primary { background: var(--coral); color: #fff; }
+    .np-btn--ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--hair); }
+    .np-btn--secondary { background: var(--chip); color: var(--ink); }
+    .np-btn:hover { opacity: .85; }
+    .np-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+    /* ── IconBtn ── */
+    .np-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--surface); border: none; cursor: pointer;
+      box-shadow: var(--shadow-soft); font-size: 20px;
+    }
+    .np-icon-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+    /* ── DataTile ── */
+    .np-data-tile {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 12px 14px; border-radius: var(--radius-tile); min-width: 80px;
+    }
+
+    /* ── SegmentedTabs ── */
+    .np-seg-tabs {
+      display: inline-flex; align-items: center;
+      background: var(--chip); border-radius: var(--radius-pill);
+      padding: 4px; gap: 2px;
+    }
+    .np-seg-tabs button {
+      height: 34px; min-width: 44px; padding: 0 14px;
+      border-radius: var(--radius-pill); border: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; font-family: var(--font);
+    }
+    .np-seg-tabs button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+    .np-seg-tabs button[aria-selected="false"] { background: transparent; color: var(--muted); }
+    .np-seg-tabs button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+    /* ── MapPin ── */
+    .np-pin { cursor: pointer; }
+    .np-pin:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+    /* ── Stepper ── */
+    .np-stepper { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── theme toggle ── */
+    #theme-toggle {
+      display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+      border-radius: var(--radius-pill); background: var(--chip);
+      border: none; cursor: pointer; font-size: 14px; font-weight: 600;
+      font-family: var(--font); color: var(--ink);
+    }
+    #theme-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+    /* ── token swatch ── */
+    .sg-swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+    .sg-swatch { border-radius: var(--radius-tile); overflow: hidden; }
+    .sg-swatch-color { height: 48px; }
+    .sg-swatch-label { padding: 6px 8px; background: var(--surface); font-size: 11px; font-weight: 700; color: var(--muted); }
+    .sg-swatch-hex { font-size: 10px; color: var(--muted); font-family: monospace; }
+
+    /* ── BrandMark ── */
+    .np-brand-mark {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: conic-gradient(from 135deg, var(--coral) 0deg, var(--amber) 90deg, var(--teal) 180deg, var(--violet) 270deg, var(--coral) 360deg);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+
+    /* ── TideChart ── */
+    .np-tide-chart { border-radius: var(--radius-tile); overflow: hidden; }
+
+    /* ── WindBars ── */
+    .np-wind-bars { border-radius: var(--radius-tile); overflow: hidden; }
+
+    /* ── ScoreRing ── */
+    .sg-ring-demo { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+<div class="sg-page">
+
+  <header class="sg-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="np-brand-mark" aria-label="NavalPlan">
+        <span aria-hidden="true" style="font-size:14px;filter:brightness(10)">✦</span>
+      </div>
+      <h1 class="sg-title">Signal Styleguide</h1>
+    </div>
+    <button id="theme-toggle" aria-pressed="false" aria-label="Toggle dark mode">
+      <span id="theme-icon">🌙</span>
+      <span id="theme-label">Dark mode</span>
+    </button>
+  </header>
+
+  <!-- ── TOKENS ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Color tokens</h2>
+    <div class="sg-swatch-grid" id="swatch-grid"></div>
+  </section>
+
+  <!-- ── CHIP ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Chip</h2>
+    <div class="sg-row" id="chip-demo"></div>
+  </section>
+
+  <!-- ── BUTTONS ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Button</h2>
+    <div class="sg-row">
+      <button class="np-btn np-btn--primary">Sign in</button>
+      <button class="np-btn np-btn--primary" style="background:var(--teal)">Start here</button>
+      <button class="np-btn np-btn--secondary">Secondary</button>
+      <button class="np-btn np-btn--ghost">Ghost</button>
+      <button class="np-icon-btn" aria-label="Notifications">🔔</button>
+      <button class="np-icon-btn" aria-label="Help">❓</button>
+      <button class="np-icon-btn" aria-label="Close">✕</button>
+    </div>
+  </section>
+
+  <!-- ── SEGMENTED TABS ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">SegmentedTabs</h2>
+    <div class="sg-row">
+      <div class="np-seg-tabs" role="tablist" id="tabs-demo"></div>
+    </div>
+  </section>
+
+  <!-- ── DATA TILES ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">DataTile</h2>
+    <div class="sg-row" id="tile-demo"></div>
+  </section>
+
+  <!-- ── CARD ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Card</h2>
+    <div class="sg-row">
+      <div class="sg-card-demo">
+        <p style="font-size:14px;color:var(--ink2)">Default card — white surface, 22 px radius, elevation shadow.</p>
+      </div>
+      <div class="sg-card-tint" style="background:color-mix(in oklab,var(--coral) 10%,var(--surface));box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--coral) 30%,transparent),var(--shadow)">
+        <p style="font-size:14px;color:var(--ink2)">Coral tint card</p>
+      </div>
+      <div class="sg-card-tint" style="background:color-mix(in oklab,var(--teal) 10%,var(--surface));box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--teal) 30%,transparent),var(--shadow)">
+        <p style="font-size:14px;color:var(--ink2)">Teal tint card</p>
+      </div>
+      <div class="sg-card-tint" style="background:color-mix(in oklab,var(--violet) 10%,var(--surface));box-shadow:inset 0 0 0 2px color-mix(in oklab,var(--violet) 30%,transparent),var(--shadow)">
+        <p style="font-size:14px;color:var(--ink2)">Violet tint card</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STEPPER ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Stepper</h2>
+    <div style="max-width:320px" class="sg-card-demo">
+      <ol class="np-stepper" id="stepper-demo" role="list"></ol>
+    </div>
+  </section>
+
+  <!-- ── MAP PIN ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">MapPin</h2>
+    <div class="sg-row" id="pin-demo"></div>
+  </section>
+
+  <!-- ── SCORE RING ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">ScoreRing</h2>
+    <div class="sg-ring-demo" id="ring-demo"></div>
+  </section>
+
+  <!-- ── TIDE CHART ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">TideChart</h2>
+    <div id="tide-demo" style="max-width:400px"></div>
+  </section>
+
+  <!-- ── WIND BARS ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">WindBars</h2>
+    <div id="wind-demo" style="max-width:320px"></div>
+  </section>
+
+  <!-- ── TYPOGRAPHY ── -->
+  <section class="sg-section">
+    <h2 class="sg-section-title">Typography</h2>
+    <div class="sg-card-demo" style="display:flex;flex-direction:column;gap:12px">
+      <p style="font-size:32px;font-weight:800;letter-spacing:-.8px;line-height:1.1">Display heading 800</p>
+      <p style="font-size:24px;font-weight:700;letter-spacing:-.5px;line-height:1.1">Screen title 700</p>
+      <p style="font-size:18px;font-weight:600">Section heading 600</p>
+      <p style="font-size:16px;font-weight:500;line-height:1.55">Body 16 / 500 — AAA floor. <span style="color:var(--muted)">Muted secondary text sits here.</span></p>
+      <p style="font-size:14px;color:var(--ink2)">Caption 14 / 400</p>
+      <p style="font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">MICRO LABEL 12 / 800</p>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+  // ── Theme toggle ──
+  const html = document.documentElement;
+  const btn = document.getElementById('theme-toggle');
+  const icon = document.getElementById('theme-icon');
+  const lbl = document.getElementById('theme-label');
+
+  const saved = localStorage.getItem('theme');
+  const sys = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const init = saved || sys;
+  html.dataset.theme = init;
+  if (init === 'dark') { icon.textContent = '☀️'; lbl.textContent = 'Light mode'; btn.setAttribute('aria-pressed','true'); }
+
+  btn.addEventListener('click', () => {
+    const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+    html.dataset.theme = next;
+    localStorage.setItem('theme', next);
+    if (next === 'dark') { icon.textContent = '☀️'; lbl.textContent = 'Light mode'; btn.setAttribute('aria-pressed','true'); }
+    else { icon.textContent = '🌙'; lbl.textContent = 'Dark mode'; btn.setAttribute('aria-pressed','false'); }
+  });
+
+  // ── Color swatches ──
+  const TOKENS = [
+    { name: '--coral', label: 'Coral · CTA' },
+    { name: '--teal', label: 'Teal · Safe' },
+    { name: '--amber', label: 'Amber · Caution' },
+    { name: '--violet', label: 'Violet · Tides' },
+    { name: '--sky', label: 'Sky · Wind' },
+    { name: '--green', label: 'Green · Success' },
+    { name: '--ink', label: 'Ink · Heading' },
+    { name: '--ink2', label: 'Ink2 · Secondary' },
+    { name: '--muted', label: 'Muted · Labels' },
+    { name: '--hair', label: 'Hair · Hairline' },
+    { name: '--chip', label: 'Chip · Fill' },
+    { name: '--surface', label: 'Surface' },
+    { name: '--bg', label: 'Background' },
+    { name: '--danger', label: 'Danger' },
+    { name: '--focus', label: 'Focus ring' },
+  ];
+  const grid = document.getElementById('swatch-grid');
+  TOKENS.forEach(({ name, label }) => {
+    const sw = document.createElement('div');
+    sw.className = 'sg-swatch';
+    sw.innerHTML = `
+      <div class="sg-swatch-color" style="background:var(${name})"></div>
+      <div class="sg-swatch-label">${label}<br><span class="sg-swatch-hex">${name}</span></div>`;
+    grid.appendChild(sw);
+  });
+
+  // ── Chips ──
+  const ACCENTS = ['coral','teal','amber','violet','sky','green'];
+  const CHIP_LABELS = ['⚓ Anchorages','⛵ Marinas','🌊 Tides','💨 Winds','🌿 Nature','✓ Done'];
+  const chipRow = document.getElementById('chip-demo');
+  ACCENTS.forEach((a, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'np-chip';
+    chip.style.background = `color-mix(in oklab,var(--${a}) 12%,var(--surface))`;
+    chip.style.color = 'var(--ink)';
+    chip.textContent = CHIP_LABELS[i] || a;
+    chipRow.appendChild(chip);
+  });
+  const neutral = document.createElement('span');
+  neutral.className = 'np-chip';
+  neutral.style.background = 'var(--chip)';
+  neutral.style.color = 'var(--ink)';
+  neutral.textContent = '4 stops';
+  chipRow.appendChild(neutral);
+
+  // ── Segmented tabs ──
+  const tabsEl = document.getElementById('tabs-demo');
+  const tabDefs = [{id:'map',label:'Map'},{id:'satellite',label:'Satellite'},{id:'nautical',label:'Nautical'}];
+  let activeTab = 'map';
+  const tabBtns = tabDefs.map(({ id, label }) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role','tab'); b.textContent = label;
+    const apply = () => {
+      tabBtns.forEach(tb => {
+        const on = tb === b;
+        tb.setAttribute('aria-selected', on);
+        tb.style.background = on ? 'var(--ink)' : 'transparent';
+        tb.style.color = on ? 'var(--surface)' : 'var(--muted)';
+      });
+    };
+    b.addEventListener('click', apply);
+    tabsEl.appendChild(b);
+    return b;
+  });
+  tabBtns[0].setAttribute('aria-selected','true');
+  tabBtns[0].style.background = 'var(--ink)';
+  tabBtns[0].style.color = 'var(--surface)';
+  tabBtns.slice(1).forEach(b => { b.setAttribute('aria-selected','false'); b.style.background = 'transparent'; b.style.color = 'var(--muted)'; });
+
+  // ── DataTiles ──
+  const tileData = [
+    { label:'Conditions', value:'Fair', sub:'Partly cloudy', emoji:'⛅', accent:'sky' },
+    { label:'Wind', value:'12 kt', sub:'NE', emoji:'💨', accent:'teal' },
+    { label:'Tide range', value:'1.4 m', sub:'HW 14:30', emoji:'🌊', accent:'violet' },
+    { label:'Visibility', value:'10 nm', sub:'Good', emoji:'👁', accent:'amber' },
+  ];
+  const tileRow = document.getElementById('tile-demo');
+  tileData.forEach(({ label, value, sub, emoji, accent }) => {
+    const t = document.createElement('div');
+    t.className = 'np-data-tile';
+    t.style.background = `color-mix(in oklab,var(--${accent}) 10%,var(--surface))`;
+    t.innerHTML = `
+      <span aria-hidden="true" style="font-size:16px;line-height:1;margin-bottom:2px">${emoji}</span>
+      <span style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${label}</span>
+      <span style="font-size:18px;font-weight:800;color:var(--ink);line-height:1.1">${value}</span>
+      <span style="font-size:11px;color:var(--muted)">${sub}</span>`;
+    tileRow.appendChild(t);
+  });
+
+  // ── Stepper ──
+  const steps = [
+    { label: 'Checking weather charts', state: 'done' },
+    { label: 'Analyzing tide patterns', state: 'done' },
+    { label: 'Contacting local marinas', state: 'active' },
+    { label: 'Compiling pilot notes', state: 'queued' },
+  ];
+  const stepperEl = document.getElementById('stepper-demo');
+  steps.forEach(({ label, state }) => {
+    const li = document.createElement('li');
+    li.style.cssText = 'display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink2)';
+    const dot = document.createElement('span');
+    dot.setAttribute('aria-hidden','true');
+    dot.style.cssText = [
+      'flex-shrink:0;width:22px;height:22px;border-radius:50%',
+      'display:inline-flex;align-items:center;justify-content:center',
+      'font-size:12px;font-weight:700',
+      state === 'done' ? 'background:var(--teal);color:#fff' : state === 'active' ? 'background:var(--sky);color:#fff' : 'background:var(--chip);color:var(--muted)',
+    ].join(';');
+    dot.textContent = state === 'done' ? '✓' : state === 'active' ? '●' : '○';
+    const txt = document.createElement('span');
+    txt.textContent = label;
+    if (state === 'done') txt.style.color = 'var(--muted)';
+    if (state === 'active') txt.style.fontWeight = '600';
+    li.appendChild(dot); li.appendChild(txt);
+    stepperEl.appendChild(li);
+  });
+
+  // ── Map Pins ──
+  const pinRow = document.getElementById('pin-demo');
+  const pinAccents = ['coral','teal','amber','violet','sky'];
+  pinAccents.forEach((a, i) => {
+    const wrap = document.createElement('div');
+    wrap.setAttribute('role','img');
+    wrap.setAttribute('aria-label', `Stop ${i+1}`);
+    wrap.style.setProperty('--pin', `var(--${a})`);
+    wrap.innerHTML = `<svg viewBox="0 0 32 42" width="32" height="42" aria-hidden="true">
+      <path d="M16 0C7.2 0 0 7.2 0 16c0 11 16 26 16 26s16-15 16-26C32 7.2 24.8 0 16 0z"
+            fill="var(--pin)" filter="drop-shadow(0 2px 4px rgba(0,0,0,.25))"/>
+      <circle cx="16" cy="16" r="9" fill="var(--surface)"/>
+      <text x="16" y="20" text-anchor="middle" font-size="12" font-weight="800"
+            fill="var(--pin)" font-family="var(--font)">${i+1}</text>
+    </svg>`;
+    pinRow.appendChild(wrap);
+  });
+
+  // ── Score Rings ──
+  const ringRow = document.getElementById('ring-demo');
+  [85, 62, 40, 95].forEach((score, i) => {
+    const accents = ['coral','teal','amber','green'];
+    const size = 64;
+    const r = size/2 - 5;
+    const circ = 2 * Math.PI * r;
+    const fill = circ * (score / 100);
+    const accent = accents[i];
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px';
+    wrap.innerHTML = `
+      <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Score ${score}" style="display:block">
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--hair)" stroke-width="3"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none"
+                stroke="var(--${accent})" stroke-width="3" stroke-linecap="round"
+                stroke-dasharray="${fill.toFixed(1)} ${circ.toFixed(1)}"
+                transform="rotate(-90 ${size/2} ${size/2})"/>
+        <text x="${size/2}" y="${size/2+5}" text-anchor="middle" font-size="14" font-weight="800"
+              fill="var(--${accent})" font-family="var(--font)">${score}</text>
+      </svg>
+      <span style="font-size:11px;color:var(--muted)">${accent}</span>`;
+    ringRow.appendChild(wrap);
+  });
+
+  // ── Tide Chart ──
+  const tideData = Array.from({length: 24}, (_, i) => ({
+    time: `${i}:00`,
+    height: 1.5 + Math.sin((i / 24) * Math.PI * 2 * 2 - 0.5) * 0.8
+  }));
+  const tideWrap = document.getElementById('tide-demo');
+  const tw = 400, th = 90;
+  const pad = 8;
+  const maxH = Math.max(...tideData.map(p => p.height));
+  const minH = Math.min(...tideData.map(p => p.height));
+  const range = maxH - minH || 1;
+  const toX = i => pad + (i / (tideData.length - 1)) * (tw - pad * 2);
+  const toY = h => pad + (1 - (h - minH) / range) * (th - pad * 2);
+  const pathD = tideData.map((p, i) => `${i===0?'M':'L'}${toX(i).toFixed(1)},${toY(p.height).toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L${toX(tideData.length-1).toFixed(1)},${th} L${toX(0).toFixed(1)},${th} Z`;
+
+  const tideDiv = document.createElement('div');
+  tideDiv.className = 'np-tide-chart';
+  tideDiv.style.background = `color-mix(in oklab,var(--coral) 6%,var(--surface))`;
+  tideDiv.innerHTML = `
+    <svg viewBox="0 0 ${tw} ${th}" width="${tw}" height="${th}" role="img" aria-label="Tide chart" style="display:block">
+      <defs>
+        <linearGradient id="tide-fill-sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--coral)" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="var(--coral)" stop-opacity="0.03"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaD}" fill="url(#tide-fill-sg)"/>
+      <path d="${pathD}" fill="none" stroke="var(--coral)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  tideWrap.appendChild(tideDiv);
+
+  // ── Wind Bars ──
+  const windData = Array.from({length: 12}, (_, i) => ({
+    label: `${i*2}`,
+    speed: 8 + Math.random() * 12
+  }));
+  const windWrap = document.getElementById('wind-demo');
+  const ww = 300, wh = 70;
+  const wpX = 8, wpY = 8;
+  const barW2 = Math.floor((ww - wpX*2 - 11*4) / 12);
+  const maxSpd = Math.max(...windData.map(b => b.speed));
+  const svgH2 = wh + 16;
+
+  const windDiv = document.createElement('div');
+  windDiv.className = 'np-wind-bars';
+  windDiv.style.background = `color-mix(in oklab,var(--sky) 6%,var(--surface))`;
+
+  const barsPath = windData.map((bar, i) => {
+    const bh = Math.max(4, (bar.speed / maxSpd) * (wh - wpY * 2));
+    const x = wpX + i * (barW2 + 4);
+    const y = wpY + (wh - wpY * 2) - bh;
+    return `<rect x="${x}" y="${y}" width="${barW2}" height="${bh}" rx="${Math.min(barW2/2,6)}" fill="url(#wind-grad-sg)"/>
+    <text x="${x + barW2/2}" y="${svgH2 - 2}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="var(--font)">${bar.label}</text>`;
+  }).join('');
+
+  windDiv.innerHTML = `
+    <svg viewBox="0 0 ${ww} ${svgH2}" width="${ww}" height="${svgH2}" role="img" aria-label="Wind chart" style="display:block">
+      <defs>
+        <linearGradient id="wind-grad-sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--sky)" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="var(--teal)" stop-opacity="0.7"/>
+        </linearGradient>
+      </defs>
+      ${barsPath}
+    </svg>`;
+  windWrap.appendChild(windDiv);
+</script>
+</body>
+</html>

@@ -1,14 +1,15 @@
 /* =====================================================
    NavalPlan Theme Definitions
    Set data-theme on <html> to activate a theme.
-   Available: "nautical" (default), "midnight-mariner"
+   Available: "light" / "nautical" (default), "dark" / "midnight-mariner"
    ===================================================== */
 
 /* ----------------------------------------
-   Theme: Nautical (Default)
+   Theme: Light / Nautical (Default)
    Earthy tones, gold accents, glassmorphism
    ---------------------------------------- */
-[data-theme="nautical"] {
+[data-theme="nautical"],
+[data-theme="light"] {
     /* Brand Colors */
     --brand-dark:         rgb(88, 61, 27);
     --brand-darker:       rgb(55, 38, 17);
@@ -69,9 +70,9 @@
     --card-bg:            #ffffff;
     --card-border:        #cccccc;
 
-    /* Accent (radar, pilot circle, animations) */
-    --color-accent:       #f59e0b;
-    --color-radar:        #f59e0b;   /* pilot radius circle & radar sweep */
+    /* Accent (radar, pilot circle, animations) — wired to Signal tokens */
+    --color-accent:       var(--teal);
+    --color-radar:        var(--teal);  /* radar sweep during research */
 
     /* Links */
     --color-link:         var(--brand-medium);
@@ -92,10 +93,11 @@
 }
 
 /* ----------------------------------------
-   Theme: Midnight Mariner
+   Theme: Dark / Midnight Mariner
    Dark navy, electric cyan, opaque surfaces
    ---------------------------------------- */
-[data-theme="midnight-mariner"] {
+[data-theme="midnight-mariner"],
+[data-theme="dark"] {
     /* Brand Colors (mapped to MM palette) */
     --brand-dark:         #00E5FF;                   /* Electric Cyan — primary accent */
     --brand-darker:       #00B8D4;                   /* Deeper cyan */
@@ -156,9 +158,9 @@
     --card-bg:            #1C2B3D;
     --card-border:        rgba(255, 255, 255, 0.1);
 
-    /* Accent (radar, pilot circle, animations) */
-    --color-accent:       #00E5FF;
-    --color-radar:        #FFCA28;   /* amber — distinct from primary cyan for contrast */
+    /* Accent (radar, pilot circle, animations) — wired to Signal tokens */
+    --color-accent:       var(--teal);
+    --color-radar:        var(--teal);  /* radar sweep during research */
 
     /* Links */
     --color-link:         #00E5FF;
@@ -186,21 +188,32 @@
 
 /* Disable glassmorphism on all panels */
 [data-theme="midnight-mariner"] #sidebar,
+[data-theme="dark"] #sidebar,
 [data-theme="midnight-mariner"] .modal,
+[data-theme="dark"] .modal,
 [data-theme="midnight-mariner"] #user-floating-menu,
+[data-theme="dark"] #user-floating-menu,
 [data-theme="midnight-mariner"] #facility-controls,
+[data-theme="dark"] #facility-controls,
 [data-theme="midnight-mariner"] #pilot-controls,
+[data-theme="dark"] #pilot-controls,
 [data-theme="midnight-mariner"] #discovery-controls,
+[data-theme="dark"] #discovery-controls,
 [data-theme="midnight-mariner"] #btn-mobile-menu,
+[data-theme="dark"] #btn-mobile-menu,
 [data-theme="midnight-mariner"] #btn-login-floating,
+[data-theme="dark"] #btn-login-floating,
 [data-theme="midnight-mariner"] #btn-help-floating,
-[data-theme="midnight-mariner"] #btn-theme-toggle {
+[data-theme="dark"] #btn-help-floating,
+[data-theme="midnight-mariner"] #btn-theme-toggle,
+[data-theme="dark"] #btn-theme-toggle {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 }
 
 /* Ticker: replace branded glow animation */
-[data-theme="midnight-mariner"] #research-ticker {
+[data-theme="midnight-mariner"] #research-ticker,
+[data-theme="dark"] #research-ticker {
     animation: ticker-glow-mm 2s infinite alternate;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 15px rgba(0, 229, 255, 0.1);
 }
@@ -219,56 +232,78 @@
 }
 
 /* Brand heading letter spacing */
-[data-theme="midnight-mariner"] .brand h1 {
+[data-theme="midnight-mariner"] .brand h1,
+[data-theme="dark"] .brand h1 {
     letter-spacing: 0.1em;
 }
 
 /* Form inputs: ensure readable text colour on dark bg */
-[data-theme="midnight-mariner"] .form-group input {
+[data-theme="midnight-mariner"] .form-group input,
+[data-theme="dark"] .form-group input {
     color: var(--text-dark);
 }
 
 /* Overview cards (hardcoded #fff in base) */
-[data-theme="midnight-mariner"] .overview-card {
+[data-theme="midnight-mariner"] .overview-card,
+[data-theme="dark"] .overview-card {
     background: var(--card-bg);
     border-color: var(--card-border);
 }
 
 /* Report title divider */
-[data-theme="midnight-mariner"] .report-title {
+[data-theme="midnight-mariner"] .report-title,
+[data-theme="dark"] .report-title {
     border-bottom-color: var(--border-color-dark);
     color: var(--text-dark);
 }
 
 /* Report guide background */
-[data-theme="midnight-mariner"] .report-guide-bg {
+[data-theme="midnight-mariner"] .report-guide-bg,
+[data-theme="dark"] .report-guide-bg {
     background: rgba(0, 229, 255, 0.03);
 }
 
 /* Briefing table header row */
-[data-theme="midnight-mariner"] .briefing-th {
+[data-theme="midnight-mariner"] .briefing-th,
+[data-theme="dark"] .briefing-th {
     background-color: rgba(0, 229, 255, 0.05);
     color: var(--brand-dark);
 }
 
 /* Loading / error text */
-[data-theme="midnight-mariner"] .loading-state {
+[data-theme="midnight-mariner"] .loading-state,
+[data-theme="dark"] .loading-state {
     color: var(--text-light);
 }
 [data-theme="midnight-mariner"] .error-state,
 [data-theme="midnight-mariner"] .loading-text.error,
-[data-theme="midnight-mariner"] .error-text {
+[data-theme="midnight-mariner"] .error-text,
+[data-theme="dark"] .error-state,
+[data-theme="dark"] .loading-text.error,
+[data-theme="dark"] .error-text {
     color: var(--color-error);
 }
 
-
 /* Day-item selected state */
-[data-theme="midnight-mariner"] .day-item.selected {
+[data-theme="midnight-mariner"] .day-item.selected,
+[data-theme="dark"] .day-item.selected {
     border-color: var(--item-selected-border);
     background-color: var(--item-selected-bg);
 }
 
 /* Modal h3 border (report sections) */
-[data-theme="midnight-mariner"] .report-body h3 {
+[data-theme="midnight-mariner"] .report-body h3,
+[data-theme="dark"] .report-body h3 {
     border-bottom-color: var(--border-color);
+}
+
+/* Shared report: slightly brighter page background */
+[data-theme="nautical"] body.shared-view,
+[data-theme="light"] body.shared-view,
+body.shared-view {
+    background-color: #C8EAFF;
+}
+[data-theme="midnight-mariner"] body.shared-view,
+[data-theme="dark"] body.shared-view {
+    background-color: #101D2C;
 }
