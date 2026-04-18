@@ -3255,18 +3255,20 @@ async function initMap() {
           notes: ''
       };
   
-      try {
-          if (stop) {
-              const updated = await API.updateStop(stop.id, stopData);
-              const idx = currentStops.findIndex(s => s.id === stop.id);
-              currentStops[idx] = updated;
-          } else {
-              const created = await API.createStop(currentVoyage.id, stopData);
-              currentStops.push(created);
-          }
-          renderItinerary();
-          renderMapStops();
-          await checkItineraryFullness(true);
+      const doSave = async () => {
+          try {
+              if (stop) {
+                  const updated = await API.updateStop(stop.id, stopData);
+                  const idx = currentStops.findIndex(s => s.id === stop.id);
+                  currentStops[idx] = updated;
+              } else {
+                  const created = await API.createStop(currentVoyage.id, stopData);
+                  currentStops.push(created);
+              }
+              renderItinerary();
+              renderMapStops();
+              await checkItineraryFullness(true);
+
           // Auto-advance to next empty date
 
           if (currentVoyage && selectedDate) {
@@ -3288,6 +3290,21 @@ async function initMap() {
       } catch (err) {
           console.error(err);
           showNotification('Error', 'Failed to save stop');
+      }
+      };
+
+      if (stop && stop.location_name) {
+          const existing = displayLocationName(stop.location_name);
+          showNotification(
+              'Change Location?',
+              `This date is already set to "${existing}". Replace it with the new location?`,
+              [
+                  { label: 'Replace', type: 'primary', hideClose: true, callback: doSave },
+                  { label: 'Cancel', type: 'secondary' },
+              ]
+          );
+      } else {
+          doSave();
       }
     });
   }

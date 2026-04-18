@@ -1329,6 +1329,13 @@
     gap: 8px;
 }
 
+.voyage-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
 .voyage-info {
     flex: 1;
     min-width: 0;
@@ -1349,8 +1356,8 @@
 
 .np-chip-row {
     display: flex;
-    gap: 5px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .np-chip {
@@ -1378,7 +1385,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    align-self: flex-start;
+    max-width: 100%;
 }
 
 /* Pilot / facility dot colors keyed to data-type */
