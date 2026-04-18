@@ -53,11 +53,11 @@
         </div>
         
         <div class="sidebar-actions">
-           <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
            <button id="btn-discover" class="btn secondary">
               <span class="material-symbols-outlined icon-align">explore</span>
               Discover
            </button>
+           <button id="btn-new-voyage" class="btn primary">+ New Voyage</button>
         </div>
 
         <div id="voyage-list">
@@ -81,13 +81,13 @@
             </button>
           </div>
           <div class="voyage-header">
-            <div class="flex justify-between align-start">
+            <div class="voyage-header__text">
               <h2 id="itinerary-title">Voyage Title</h2>
-              <button id="btn-edit-voyage" class="btn-icon" title="Edit Voyage" aria-label="Edit voyage">
-                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-              </button>
+              <p id="itinerary-dates">Dates</p>
             </div>
-            <p id="itinerary-dates">Dates</p>
+            <button id="btn-edit-voyage" class="btn-icon voyage-header__edit" title="Edit Voyage" aria-label="Edit voyage">
+              <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+            </button>
             <button id="btn-set-dates" class="btn primary w-full mt-sm hidden">Set Voyage Dates</button>
           </div>
           <div id="itinerary-list">
@@ -156,7 +156,7 @@
     <!-- Voyage Form Modal -->
     <div id="modal-new-voyage" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-voyage-title" style="max-width:440px;padding:26px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--coral) 12%,var(--surface));color:var(--coral)">NEW VOYAGE</span>
+        <span id="modal-voyage-pill" style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:color-mix(in oklab,var(--coral) 12%,var(--surface));color:var(--coral)">NEW VOYAGE</span>
         <button type="button" id="btn-cancel-voyage" aria-label="Close"
           style="width:32px;height:32px;border-radius:50%;border:none;background:var(--chip);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">✕</button>
       </div>
@@ -171,7 +171,7 @@
           <label>Starting Location</label>
           <div class="flex gap-sm">
             <input type="text" id="voyage-location-name" name="location_name" placeholder="e.g. Seattle" />
-            <button type="button" id="btn-use-map-center" class="btn secondary p-sm w-auto">Use Map Center</button>
+            <button type="button" id="btn-use-map-center" class="btn secondary" style="padding: 0 16px; white-space: nowrap; flex-shrink: 0;">Use Map Center</button>
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />
           <input type="hidden" id="voyage-lng" name="longitude" />
@@ -180,8 +180,8 @@
         </div>
 
         <div class="form-group">
-          <label for="voyage-radius">Search Radius (nm)</label>
-          <input type="number" id="voyage-radius" name="search_radius" value="60" min="1" max="500" />
+          <label for="voyage-radius">Search Radius — <span id="voyage-radius-display">60</span> nm</label>
+          <input type="range" id="voyage-radius" name="search_radius" value="60" min="1" max="150" step="1" />
         </div>
 
         <div id="voyage-date-fields" class="form-row">
