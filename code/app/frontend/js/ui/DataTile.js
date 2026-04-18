@@ -7,10 +7,11 @@
  * @param {string} [opts.emoji]    optional icon above label
  * @param {string} [opts.accent]   token name for tint bg
  * @param {boolean} [opts.detail]  use smaller, non-bold value style
+ * @param {boolean} [opts.compact] constrain to 25% of containing row
  */
-export function DataTile({ label, value, sub, emoji, accent = 'sky', detail = false } = {}) {
+export function DataTile({ label, value, sub, emoji, accent = 'sky', detail = false, compact = false } = {}) {
   const el = document.createElement('div');
-  el.className = 'np-data-tile';
+  el.className = ['np-data-tile', compact && 'np-data-tile--compact'].filter(Boolean).join(' ');
   el.style.setProperty('--accent', `var(--${accent})`);
 
   if (emoji) {
