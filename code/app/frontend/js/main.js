@@ -857,7 +857,81 @@ async function handleCopyReport() {
         overviewReplacements.push({ grid: overviewGrid, table, originalCards: cards });
     }
 
-    // 3. Strip Styles and Classes
+    // 2d. Convert grid/flex layouts to tables for Google Docs compatibility
+    const gridLayouts = [];
+    const convertGridToTable = (selector, colOverride = null) => {
+        content.querySelectorAll(selector).forEach(container => {
+            const children = Array.from(container.children);
+            if (!children.length) return;
+            const cols = colOverride ?? (() => {
+                const tpl = window.getComputedStyle(container).gridTemplateColumns;
+                return tpl ? tpl.trim().split(/\s+/).length : children.length;
+            })();
+            const table = document.createElement('table');
+            table.style.cssText = 'width:100%;border-collapse:separate;border-spacing:6px;margin:8px 0';
+            let row = null;
+            children.forEach((child, i) => {
+                if (i % cols === 0) { row = document.createElement('tr'); table.appendChild(row); }
+                const td = document.createElement('td');
+                const cs = window.getComputedStyle(child);
+                const bg = cs.getPropertyValue('background-color');
+                if (bg && bg !== 'rgba(0, 0, 0, 0)') td.style.backgroundColor = bg;
+                td.style.borderRadius = cs.getPropertyValue('border-top-left-radius');
+                td.style.padding = [
+                    cs.getPropertyValue('padding-top'), cs.getPropertyValue('padding-right'),
+                    cs.getPropertyValue('padding-bottom'), cs.getPropertyValue('padding-left'),
+                ].join(' ');
+                td.style.verticalAlign = 'top';
+                td.style.width = `${Math.floor(100 / cols)}%`;
+                td.appendChild(child);
+                row.appendChild(td);
+            });
+            // Pad last row with borderless empty cells
+            if (row) {
+                while (row.children.length < cols) {
+                    const empty = document.createElement('td');
+                    empty.style.border = 'none';
+                    row.appendChild(empty);
+                }
+            }
+            container.parentNode.insertBefore(table, container);
+            container.style.display = 'none';
+            gridLayouts.push({ container, table, children });
+        });
+    };
+    convertGridToTable('.np-metric-grid');
+    convertGridToTable('.np-day-grid');
+    convertGridToTable('.np-weather-grid');
+    convertGridToTable('.np-wind-forecast', 4);
+    convertGridToTable('.np-report-hero', 2);
+    convertGridToTable('.np-guide-grid', 2);
+
+    // 2e. Replace circular stop number badges — they render as full-width colored bars in Docs
+    const stopNumberData = [];
+    content.querySelectorAll('.np-report-stop').forEach(stopEl => {
+        const numEl = stopEl.querySelector('.np-report-stop__number');
+        const titleEl = stopEl.querySelector('.np-report-stop__title');
+        if (numEl && titleEl) {
+            stopNumberData.push({ numEl, titleEl, origTitle: titleEl.textContent });
+            numEl.style.display = 'none';
+            titleEl.textContent = `Stop ${numEl.textContent.trim()}: ${titleEl.textContent}`;
+        }
+    });
+
+    // 3. Inline computed styles so Google Docs preserves colors, weights, and backgrounds
+    const INLINE_PROPS = [
+        'color', 'background-color',
+        'font-family', 'font-size', 'font-weight', 'font-style',
+        'text-transform', 'letter-spacing', 'line-height', 'text-align',
+        'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+        'border-top-width', 'border-top-style', 'border-top-color',
+        'border-right-width', 'border-right-style', 'border-right-color',
+        'border-bottom-width', 'border-bottom-style', 'border-bottom-color',
+        'border-left-width', 'border-left-style', 'border-left-color',
+        'border-top-left-radius', 'border-top-right-radius',
+        'border-bottom-left-radius', 'border-bottom-right-radius',
+        'vertical-align', 'white-space',
+    ];
     const allElements = content.querySelectorAll('*');
     const originalAttributes = [];
     allElements.forEach(el => {
@@ -865,11 +939,24 @@ async function handleCopyReport() {
         if (modifiedLists.some(m => m.ul === el)) return;
         if (overviewReplacements.some(r => r.grid === el)) return;
         originalAttributes.push({ el, style: el.getAttribute('style'), class: el.getAttribute('class') });
-        el.removeAttribute('style');
+
+        const cs = window.getComputedStyle(el);
+        // Skip background on circle elements — they lose their shape in Docs and become colored bars
+        const isCircle = el.offsetWidth > 0 &&
+            parseFloat(cs.getPropertyValue('border-top-left-radius')) >= el.offsetWidth / 2;
+        const parts = [];
+        for (const prop of INLINE_PROPS) {
+            const val = cs.getPropertyValue(prop);
+            if (!val) continue;
+            if (prop === 'background-color' && (val === 'rgba(0, 0, 0, 0)' || val === 'transparent')) continue;
+            if (prop === 'background-color' && isCircle) continue;
+            parts.push(`${prop}:${val}`);
+        }
+        el.setAttribute('style', parts.join(';'));
         el.removeAttribute('class');
     });
 
-    // 3a. Apply clipboard-friendly styles
+    // 3a. Override with clipboard-friendly table/image styles
     content.querySelectorAll('th').forEach(th => {
         th.style.textAlign = 'left';
         th.style.backgroundColor = 'rgb(227, 220, 211)';
@@ -883,10 +970,11 @@ async function handleCopyReport() {
         }
     });
     content.querySelectorAll('thead').forEach(thead => { thead.style.backgroundColor = 'rgba(0,0,0,0.05)'; });
-    content.querySelectorAll('td').forEach(td => { td.style.padding = '4px 8px'; td.style.border = '1px solid #cccccc'; td.style.verticalAlign = 'top'; });
+    content.querySelectorAll('td').forEach(td => {
+        if (!td.textContent.trim() && !td.children.length) { td.style.border = 'none'; return; }
+        td.style.padding = '4px 8px'; td.style.border = '1px solid #cccccc'; td.style.verticalAlign = 'top';
+    });
     content.querySelectorAll('table').forEach(table => { table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.marginTop = '1rem'; table.style.marginBottom = '1rem'; });
-    content.querySelectorAll('h3').forEach(h3 => { h3.style.color = 'rgb(88, 61, 27)'; h3.style.marginTop = '1.5rem'; h3.style.marginBottom = '0.5rem'; h3.style.borderBottom = '1px solid #cccccc'; h3.style.paddingBottom = '4px'; });
-    content.querySelectorAll('h4').forEach(h4 => { h4.style.margin = '0.5rem 0'; h4.style.fontSize = '1.1rem'; h4.style.color = 'rgb(88, 61, 27)'; });
     content.querySelectorAll('img').forEach(img => { img.style.width = '100%'; img.style.maxWidth = '600px'; img.style.height = 'auto'; img.style.display = 'block'; img.style.margin = '1rem 0'; });
 
     // 4. Copy to clipboard (Clipboard API with HTML, fallback to execCommand)
@@ -933,6 +1021,15 @@ async function handleCopyReport() {
             });
             table.remove();
             grid.style.display = '';
+        });
+        gridLayouts.forEach(({ container, table, children }) => {
+            children.forEach(child => container.appendChild(child));
+            table.remove();
+            container.style.display = '';
+        });
+        stopNumberData.forEach(({ numEl, titleEl, origTitle }) => {
+            numEl.style.display = '';
+            titleEl.textContent = origTitle;
         });
         processedImages.forEach(({ el, src }) => { el.src = src; });
         btnCopyReport.disabled = false;
