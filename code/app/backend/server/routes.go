@@ -100,6 +100,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},
 		{http.MethodPost, "/api/admin/invite", http.HandlerFunc(s.Handler.InviteUser), 2},
 		{http.MethodDelete, "/api/admin/invite/{email}", http.HandlerFunc(s.Handler.RevokeInvitation), 2},
+		{http.MethodPost, "/api/admin/weather/update-future", http.HandlerFunc(s.Handler.UpdateAllFutureWeather), 2},
 
 		// --- Discovery (The Commodore) ---
 		{http.MethodGet, "/api/v1/discovery/regions", http.HandlerFunc(s.Handler.GetDiscoveryRegions), 0}, // Public

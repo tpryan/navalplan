@@ -63,6 +63,7 @@ CREATE TABLE briefing (
     sun_phase JSONB,
     tides JSONB,
     facilities JSONB,
+    weather_last_updated TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

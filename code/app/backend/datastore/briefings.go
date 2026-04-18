@@ -2,9 +2,12 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	"app/models"
 )
+
 
 func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error) {
 	var b models.Briefing
@@ -74,4 +77,37 @@ func (db *DB) CreateBriefing(ctx context.Context, b *models.Briefing) error {
 		return rows.Scan(&b.ID, &b.CreatedAt)
 	}
 	return nil
+}
+
+func (db *DB) ListAllFutureStops(ctx context.Context) ([]models.Stop, error) {
+	stops := []models.Stop{}
+	query := `
+		SELECT s.*
+		FROM stop s
+		JOIN voyage v ON s.voyage_id = v.id
+		WHERE s.target_date >= CURRENT_DATE
+		ORDER BY s.target_date ASC
+	`
+	err := db.SelectContext(ctx, &stops, query)
+	if err != nil {
+		return nil, err
+	}
+	return stops, nil
+}
+
+func (db *DB) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error {
+	data, err := json.Marshal(weather)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	query := `
+		INSERT INTO briefing (stop_id, weather_summary, weather_last_updated)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (stop_id) DO UPDATE SET
+			weather_summary = EXCLUDED.weather_summary,
+			weather_last_updated = EXCLUDED.weather_last_updated
+	`
+	_, err = db.ExecContext(ctx, query, stopID, string(data), now)
+	return err
 }
