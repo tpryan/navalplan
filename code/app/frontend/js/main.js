@@ -4481,7 +4481,7 @@ async function handleShareClick(guide) {
         <div class="text-left">
             <h3 class="mt-0">Public Sharing</h3>
             <p class="text-gray mb-md">Share this report with friends and crew.</p>
-            
+
             <div class="form-group">
                 <label class="flex align-center gap-sm" style="cursor:pointer;">
                     <input type="checkbox" id="chk-share-public">
@@ -4495,8 +4495,11 @@ async function handleShareClick(guide) {
                     <input type="text" id="share-link-input" readonly value="" class="w-full p-sm border-radius border">
                     <button id="btn-copy-share" class="btn secondary">Copy</button>
                 </div>
+                <div class="np-qr-wrap">
+                    <canvas id="share-qr-canvas"></canvas>
+                </div>
             </div>
-            
+
             <div class="mt-xl text-right">
                 <button id="btn-close-share" class="btn primary">Done</button>
             </div>
@@ -4512,16 +4515,33 @@ async function handleShareClick(guide) {
     }
     
     shareModal.innerHTML = DOMPurify.sanitize(content);
-    
+
     const chk = shareModal.querySelector('#chk-share-public');
     const linkInput = shareModal.querySelector('#share-link-input');
     const linkContainer = shareModal.querySelector('#share-link-container');
 
+    const renderQR = async (url) => {
+        const canvas = shareModal.querySelector('#share-qr-canvas');
+        if (!canvas) return;
+        const QRCode = (await import('qrcode')).default;
+        const cs = getComputedStyle(document.documentElement);
+        await QRCode.toCanvas(canvas, url, {
+            width: 180,
+            margin: 2,
+            color: {
+                dark: cs.getPropertyValue('--ink').trim() || '#000000',
+                light: cs.getPropertyValue('--surface').trim() || '#ffffff',
+            },
+        });
+    };
+
     // Init State
     chk.checked = currentVoyage.is_public;
     if (currentVoyage.is_public) {
-        linkInput.value = `${window.location.origin}/shared/${currentVoyage.share_token}`;
+        const url = `${window.location.origin}/shared/${currentVoyage.share_token}`;
+        linkInput.value = url;
         linkContainer.classList.remove('hidden');
+        renderQR(url);
     }
     
     document.getElementById('modal-overlay').classList.remove('hidden');
@@ -4533,9 +4553,11 @@ async function handleShareClick(guide) {
                 const res = await API.enableSharing(currentVoyage.id);
                 currentVoyage.is_public = true;
                 currentVoyage.share_token = res.share_token;
-                
-                linkInput.value = `${window.location.origin}/shared/${res.share_token}`;
+
+                const url = `${window.location.origin}/shared/${res.share_token}`;
+                linkInput.value = url;
                 linkContainer.classList.remove('hidden');
+                renderQR(url);
             } else {
                 await API.disableSharing(currentVoyage.id);
                 currentVoyage.is_public = false;
