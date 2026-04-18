@@ -1930,9 +1930,9 @@ async function checkItineraryFullness(isManualAction = false) {
     if (!currentVoyage.start_date || !currentVoyage.end_date) {
         lastKnownItineraryFull = false;
         
-        // Ensure recommendations are visible if research hasn't been done
+        // Hide pilot suggestions — not applicable for undated voyages
         const btnPilot = document.getElementById('btn-pilot-suggestions');
-        if (btnPilot) btnPilot.classList.remove('hidden');
+        if (btnPilot) btnPilot.classList.add('hidden');
         
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) btnResearchAll.classList.add('hidden');
@@ -1986,15 +1986,9 @@ async function checkItineraryFullness(isManualAction = false) {
         }
     }
 
-    // Toggle visibility of Pilot Suggestions button
+    // Pilot Suggestions button is not shown in the dated view — control lives in the sidebar list
     const btnPilot = document.getElementById('btn-pilot-suggestions');
-    if (btnPilot) {
-        if (isFull) {
-            btnPilot.classList.add('hidden');
-        } else {
-            btnPilot.classList.remove('hidden');
-        }
-    }
+    if (btnPilot) btnPilot.classList.add('hidden');
 
     // If it just BECAME full OR if this was a manual action filling the last slot, notify user
     // (ONLY if research isn't already done)
@@ -2526,24 +2520,15 @@ function renderItinerary() {
     if (!currentVoyage.start_date || !currentVoyage.end_date) {
         if (isPilotResearching) {
             const card = document.createElement('div');
-            card.style.cssText = [
-                'margin:12px 0',
-                'padding:18px 16px',
-                'border-radius:var(--radius-card)',
-                'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
-                'display:flex',
-                'flex-direction:column',
-                'gap:14px',
-            ].join(';');
+            card.className = 'np-research-card';
 
             const top = document.createElement('div');
-            top.style.cssText = 'display:flex;align-items:center;gap:10px';
+            top.className = 'np-research-card__top';
             const spinner = document.createElement('span');
-            spinner.className = 'material-symbols-outlined spin';
-            spinner.style.cssText = 'font-size:20px;color:var(--sky)';
+            spinner.className = 'material-symbols-outlined spin np-research-card__icon';
             spinner.textContent = 'explore';
             const lbl = document.createElement('span');
-            lbl.style.cssText = 'font-size:14px;font-weight:700;color:var(--ink)';
+            lbl.className = 'np-research-card__label';
             lbl.textContent = 'Researching area…';
             top.appendChild(spinner);
             top.appendChild(lbl);
@@ -2596,6 +2581,16 @@ function renderItinerary() {
                 };
                 list.appendChild(el);
             });
+
+            const redoContainer = document.createElement('div');
+            redoContainer.className = 'p-md text-center';
+            redoContainer.innerHTML = '<p class="text-gray mb-md">Results looking stale? <b>Re-run Local Pilot Research</b> to refresh hubs and spots for this area.</p>';
+            const redoBtn = document.createElement('button');
+            redoBtn.className = 'btn secondary w-full';
+            redoBtn.innerHTML = '<span class="material-symbols-outlined icon-align">refresh</span> Re-run Local Pilot Research';
+            redoBtn.onclick = () => handlePilotSuggestionsClick();
+            redoContainer.appendChild(redoBtn);
+            list.appendChild(redoContainer);
             return;
         }
 
@@ -2800,7 +2795,18 @@ function renderItinerary() {
             container.innerHTML = '<p class="text-gray mb-md"><b>Itinerary Complete!</b> Run full voyage research to get weather, tides, and pilot info for every stop.</p>';
             list.appendChild(container);
         }
-        }
+    }
+
+    // Pilot re-run control — always visible at the bottom of the dated itinerary
+    const pilotRedoContainer = document.createElement('div');
+    pilotRedoContainer.className = 'p-md text-center border-t mt-md';
+    pilotRedoContainer.innerHTML = '<p class="text-gray mb-md">Want to refresh area hubs and spots? <b>Re-run Local Pilot Research</b> to update anchorages, marinas, and moorings.</p>';
+    const pilotRedoBtn = document.createElement('button');
+    pilotRedoBtn.className = 'btn secondary w-full';
+    pilotRedoBtn.innerHTML = '<span class="material-symbols-outlined icon-align">refresh</span> Re-run Local Pilot Research';
+    pilotRedoBtn.onclick = () => handlePilotSuggestionsClick();
+    pilotRedoContainer.appendChild(pilotRedoBtn);
+    list.appendChild(pilotRedoContainer);
 
 }
 
@@ -2821,28 +2827,20 @@ async function handleResearchClick(stop, button) {
 
         content.innerHTML = '';
         const loadCard = document.createElement('div');
-        loadCard.style.cssText = [
-            'padding:24px 20px',
-            'border-radius:var(--radius-card)',
-            'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
-            'display:flex',
-            'flex-direction:column',
-            'gap:16px',
-        ].join(';');
+        loadCard.className = 'np-research-card np-research-card--modal';
 
         const loadTop = document.createElement('div');
-        loadTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+        loadTop.className = 'np-research-card__top';
         const loadSpinner = document.createElement('span');
-        loadSpinner.className = 'material-symbols-outlined spin';
-        loadSpinner.style.cssText = 'font-size:24px;color:var(--sky)';
+        loadSpinner.className = 'material-symbols-outlined spin np-research-card__icon';
         loadSpinner.textContent = 'explore';
         const loadLbl = document.createElement('div');
-        loadLbl.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+        loadLbl.className = 'np-research-card__meta';
         const loadTitle = document.createElement('span');
-        loadTitle.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+        loadTitle.className = 'np-research-card__label';
         loadTitle.textContent = 'Researching stop…';
         const loadSub = document.createElement('span');
-        loadSub.style.cssText = 'font-size:12px;color:var(--muted)';
+        loadSub.className = 'np-research-card__sub';
         loadSub.textContent = 'Checking weather, tides, and local charts';
         loadLbl.appendChild(loadTitle);
         loadLbl.appendChild(loadSub);
@@ -3377,22 +3375,14 @@ async function redoBriefing(oldBriefing, btn) {
     const content = document.getElementById('briefing-content');
     content.innerHTML = '';
     const redoCard = document.createElement('div');
-    redoCard.style.cssText = [
-        'padding:24px 20px',
-        'border-radius:var(--radius-card)',
-        'background:linear-gradient(135deg,color-mix(in oklab,var(--sky) 12%,var(--surface)),color-mix(in oklab,var(--violet) 12%,var(--surface)))',
-        'display:flex',
-        'flex-direction:column',
-        'gap:16px',
-    ].join(';');
+    redoCard.className = 'np-research-card np-research-card--modal';
     const redoTop = document.createElement('div');
-    redoTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+    redoTop.className = 'np-research-card__top';
     const redoSpinner = document.createElement('span');
-    redoSpinner.className = 'material-symbols-outlined spin';
-    redoSpinner.style.cssText = 'font-size:24px;color:var(--sky)';
+    redoSpinner.className = 'material-symbols-outlined spin np-research-card__icon';
     redoSpinner.textContent = 'explore';
     const redoLbl = document.createElement('span');
-    redoLbl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+    redoLbl.className = 'np-research-card__label';
     redoLbl.textContent = 'Re-researching stop…';
     redoTop.appendChild(redoSpinner);
     redoTop.appendChild(redoLbl);
@@ -4203,27 +4193,19 @@ async function handleGuideClick(voyage, button, doPushState = true) {
         
         content.innerHTML = '';
         const guideLoadCard = document.createElement('div');
-        guideLoadCard.style.cssText = [
-            'padding:24px 20px',
-            'border-radius:var(--radius-card)',
-            'background:linear-gradient(135deg,color-mix(in oklab,var(--teal) 12%,var(--surface)),color-mix(in oklab,var(--sky) 10%,var(--surface)))',
-            'display:flex',
-            'flex-direction:column',
-            'gap:16px',
-        ].join(';');
+        guideLoadCard.className = 'np-research-card np-research-card--modal np-research-card--guide';
         const guideLoadTop = document.createElement('div');
-        guideLoadTop.style.cssText = 'display:flex;align-items:center;gap:12px';
+        guideLoadTop.className = 'np-research-card__top';
         const guideSpinner = document.createElement('span');
-        guideSpinner.className = 'material-symbols-outlined spin';
-        guideSpinner.style.cssText = 'font-size:24px;color:var(--teal)';
+        guideSpinner.className = 'material-symbols-outlined spin np-research-card__icon';
         guideSpinner.textContent = 'travel_explore';
         const guideLbl = document.createElement('div');
-        guideLbl.style.cssText = 'display:flex;flex-direction:column;gap:2px';
+        guideLbl.className = 'np-research-card__meta';
         const guideTitleEl = document.createElement('span');
-        guideTitleEl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+        guideTitleEl.className = 'np-research-card__label';
         guideTitleEl.textContent = 'Building destination guide…';
         const guideSubEl = document.createElement('span');
-        guideSubEl.style.cssText = 'font-size:12px;color:var(--muted)';
+        guideSubEl.className = 'np-research-card__sub';
         guideSubEl.textContent = 'Gathering local knowledge, seasonal data, and regional hazards';
         guideLbl.appendChild(guideTitleEl);
         guideLbl.appendChild(guideSubEl);
@@ -4372,15 +4354,14 @@ async function redoGuide(oldGuide, btn) {
     const content = document.getElementById('guide-content');
     content.innerHTML = '';
     const redoGuideCard = document.createElement('div');
-    redoGuideCard.style.cssText = 'padding:24px 20px;border-radius:var(--radius-card);background:linear-gradient(135deg,color-mix(in oklab,var(--teal) 12%,var(--surface)),color-mix(in oklab,var(--sky) 10%,var(--surface)));display:flex;flex-direction:column;gap:16px';
+    redoGuideCard.className = 'np-research-card np-research-card--modal np-research-card--guide';
     const rt = document.createElement('div');
-    rt.style.cssText = 'display:flex;align-items:center;gap:12px';
+    rt.className = 'np-research-card__top';
     const rs = document.createElement('span');
-    rs.className = 'material-symbols-outlined spin';
-    rs.style.cssText = 'font-size:24px;color:var(--teal)';
+    rs.className = 'material-symbols-outlined spin np-research-card__icon';
     rs.textContent = 'travel_explore';
     const rl = document.createElement('span');
-    rl.style.cssText = 'font-size:15px;font-weight:800;color:var(--ink)';
+    rl.className = 'np-research-card__label';
     rl.textContent = 'Re-researching guide…';
     rt.appendChild(rs); rt.appendChild(rl);
     redoGuideCard.appendChild(rt);
