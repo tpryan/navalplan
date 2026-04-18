@@ -2589,6 +2589,8 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
     const ctx = document.getElementById(canvasId).getContext('2d');
 
     const cs = getComputedStyle(document.documentElement);
+    const appFont = cs.getPropertyValue('--font').trim() || 'Inter, system-ui, sans-serif';
+    Chart.defaults.font.family = appFont;
     const tideLine    = cs.getPropertyValue('--chart-tide-line').trim()    || '#0077be';
     const tideFill    = cs.getPropertyValue('--chart-tide-fill').trim()    || 'rgba(0, 119, 190, 0.2)';
     const gridZero    = cs.getPropertyValue('--chart-grid-zero').trim()    || '#333333';
@@ -3427,6 +3429,8 @@ async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const Chart = await loadChart();
 
     const cs = getComputedStyle(document.documentElement);
+    const appFont = cs.getPropertyValue('--font').trim() || 'Inter, system-ui, sans-serif';
+    Chart.defaults.font.family = appFont;
     const tideLine      = cs.getPropertyValue('--chart-tide-line').trim()       || '#0077be';
     const tideFillMini  = cs.getPropertyValue('--chart-tide-fill-mini').trim()  || 'rgba(0, 119, 190, 0.1)';
     const highLabel     = cs.getPropertyValue('--chart-tide-high-label').trim() || '#d9534f';
