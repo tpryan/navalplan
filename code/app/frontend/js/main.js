@@ -286,40 +286,24 @@ async function getSearchRingClass() {
 }
 
 // Stop sweep sequencer state
-const STOP_SWEEP_RADIUS_M = 1852; // 1 nautical mile
-let stopSweepTimer = null;
-let activeStopSweepInstance = null;
-let activeStopSweepStop = null; // stop object currently being swept
-let stopSweepQueue = []; // pending stop objects (not yet researched)
-let stopSweepCursor = 0;
+const STOP_SWEEP_RADIUS_M = 9260; // 5 nautical miles
+const stopSweepInstances = new Map(); // stopId → RadarSweep instance
+let stopSweepQueue = [];
 let _routeLineAnimInterval = null;
-
-
-async function advanceStopSweep() {
-    if (!map || stopSweepQueue.length === 0) return;
-    if (activeStopSweepInstance) { activeStopSweepInstance.stop(); activeStopSweepInstance = null; }
-
-    const stop = stopSweepQueue[stopSweepCursor % stopSweepQueue.length];
-    stopSweepCursor++;
-    activeStopSweepStop = stop;
-
-    const Cls = await getRadarSweepClass();
-    activeStopSweepInstance = new Cls(map, { lat: stop.latitude, lng: stop.longitude }, STOP_SWEEP_RADIUS_M);
-}
 
 async function startStopSweepSequence(stops) {
     clearStopSweeps();
     stopSweepQueue = [...stops];
-    stopSweepCursor = 0;
-    // Hide all stop markers for the duration of the sweep sequence
     markers.forEach(m => m.map = null);
-    await advanceStopSweep();
-    // Only cycle if there are multiple stops; a single stop runs continuously.
-    if (stops.length > 1) {
-        stopSweepTimer = setInterval(advanceStopSweep, 3000);
+
+    // Launch one continuous sweep per stop simultaneously
+    const Cls = await getRadarSweepClass();
+    for (const stop of stopSweepQueue) {
+        const inst = new Cls(map, { lat: stop.latitude, lng: stop.longitude }, STOP_SWEEP_RADIUS_M);
+        stopSweepInstances.set(stop.id, inst);
     }
 
-    // Show the animated outer ring around the full voyage search area
+    // Animated outer ring around the full voyage search area
     if (map && currentVoyage && currentVoyage.latitude != null && currentVoyage.longitude != null) {
         if (searchRing) { searchRing.stop(); searchRing = null; }
         const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
@@ -331,7 +315,7 @@ async function startStopSweepSequence(stops) {
         );
     }
 
-    // Animate the route line (marching ants)
+    // Marching-ants route line
     if (routePolyline) {
         let iconOffset = 0;
         if (_routeLineAnimInterval) clearInterval(_routeLineAnimInterval);
@@ -349,24 +333,21 @@ async function startStopSweepSequence(stops) {
 }
 
 function removeStopFromSweepQueue(stopId) {
+    // Stop and remove just this stop's sweep synchronously — no async race
+    const inst = stopSweepInstances.get(stopId);
+    if (inst) { inst.stop(); stopSweepInstances.delete(stopId); }
     stopSweepQueue = stopSweepQueue.filter(s => s.id !== stopId);
-    if (stopSweepQueue.length === 0) {
-        clearStopSweeps();
-    } else if (stopSweepQueue.length === 1 && stopSweepTimer) {
-        // Stop cycling — one stop left, let it run continuously
-        clearInterval(stopSweepTimer);
-        stopSweepTimer = null;
-    }
+    if (stopSweepQueue.length === 0) clearStopSweeps();
 }
 
 function clearStopSweeps() {
-    if (stopSweepTimer) { clearInterval(stopSweepTimer); stopSweepTimer = null; }
-    if (activeStopSweepInstance) { activeStopSweepInstance.stop(); activeStopSweepInstance = null; }
+    stopSweepInstances.forEach(inst => inst.stop());
+    stopSweepInstances.clear();
+    stopSweepQueue = [];
     if (searchRing) { searchRing.stop(); searchRing = null; }
     if (_routeLineAnimInterval) {
         clearInterval(_routeLineAnimInterval);
         _routeLineAnimInterval = null;
-        // Reset line to static dashes
         if (routePolyline) {
             routePolyline.set('icons', [{
                 icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
@@ -375,11 +356,7 @@ function clearStopSweeps() {
             }]);
         }
     }
-    activeStopSweepStop = null;
-    // Restore all stop markers
     markers.forEach(m => m.map = map);
-    stopSweepQueue = [];
-    stopSweepCursor = 0;
 }
 
 let isResearchAllRunning = false;
