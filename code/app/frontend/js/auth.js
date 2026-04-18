@@ -32,13 +32,13 @@ function updateUIForLogin(person) {
 
     if (!container) return;
 
-    const sidebarActions = document.querySelector('.sidebar-actions');
+    const sidebarActions = document.querySelectorAll('.sidebar-actions');
 
     // Show App Content
     if (sidebar) sidebar.classList.remove('hidden');
     if (mapContainer) mapContainer.classList.remove('hidden');
     if (btnNewVoyage) btnNewVoyage.classList.remove('hidden');
-    if (sidebarActions) sidebarActions.classList.remove('hidden');
+    sidebarActions.forEach(el => el.classList.remove('hidden'));
 
     // Reset Container Style (remove modal class)
     container.className = ''; 
@@ -112,7 +112,7 @@ function updateUIForLogout() {
     const sidebar = document.getElementById('sidebar');
     const mapContainer = document.getElementById('map-container');
     const btnNewVoyage = document.getElementById('btn-new-voyage');
-    const sidebarActions = document.querySelector('.sidebar-actions');
+    const sidebarActions = document.querySelectorAll('.sidebar-actions');
     const voyageList = document.getElementById('voyage-list');
 
     if (!container) return;
@@ -120,7 +120,7 @@ function updateUIForLogout() {
     if (sidebar) sidebar.classList.remove('hidden');
     if (mapContainer) mapContainer.classList.remove('hidden');
     if (btnNewVoyage) btnNewVoyage.classList.add('hidden');
-    if (sidebarActions) sidebarActions.classList.add('hidden');
+    sidebarActions.forEach(el => el.classList.add('hidden'));
 
     // Auth-container: help + login pill buttons
     container.className = '';

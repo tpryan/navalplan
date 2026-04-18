@@ -24,6 +24,7 @@ export function SegmentedTabs({ tabs = [], active, onChange } = {}) {
     buttons.forEach(({ btn, tabId }) => {
       const on = tabId === id;
       btn.setAttribute('aria-selected', on);
+      btn.setAttribute('tabindex', on ? '0' : '-1');
       btn.style.cssText = [
         'height:34px',
         'min-width:44px',
@@ -50,6 +51,21 @@ export function SegmentedTabs({ tabs = [], active, onChange } = {}) {
     btn.addEventListener('click', () => {
       setActive(id);
       onChange?.(id);
+    });
+    btn.addEventListener('keydown', (e) => {
+      const idx = buttons.findIndex(b => b.tabId === id);
+      let next = -1;
+      if (e.key === 'ArrowRight') next = (idx + 1) % buttons.length;
+      else if (e.key === 'ArrowLeft') next = (idx - 1 + buttons.length) % buttons.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = buttons.length - 1;
+      if (next !== -1) {
+        e.preventDefault();
+        const { btn: nextBtn, tabId: nextId } = buttons[next];
+        setActive(nextId);
+        onChange?.(nextId);
+        nextBtn.focus();
+      }
     });
     buttons.push({ btn, tabId: id });
     wrap.appendChild(btn);

@@ -62,9 +62,10 @@ export function TideChart({ points = [], width = 320, height = 80 } = {}) {
   svg.setAttribute('aria-label', 'Tide chart');
   svg.style.cssText = 'display:block;width:100%;height:100%';
 
+  const gradId = `tide-fill-${crypto.randomUUID()}`;
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   defs.innerHTML = `
-    <linearGradient id="tide-fill" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="var(--coral)" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="var(--coral)" stop-opacity="0.03"/>
     </linearGradient>`;
@@ -72,7 +73,7 @@ export function TideChart({ points = [], width = 320, height = 80 } = {}) {
 
   const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   area.setAttribute('d', areaD);
-  area.setAttribute('fill', 'url(#tide-fill)');
+  area.setAttribute('fill', `url(#${gradId})`);
   svg.appendChild(area);
 
   const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');

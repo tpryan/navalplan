@@ -35,7 +35,8 @@
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme="midnight-mariner"] {
   --bg: #0B1220;
   --surface: #121A2C;
   --ink: #F5F7FB;

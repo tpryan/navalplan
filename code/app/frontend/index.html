@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
-    <!-- Apply saved theme immediately to avoid flash — checks new key then migrates legacy key -->
-    <script>(function(){var t=localStorage.getItem('theme');if(!t){var l=localStorage.getItem('navalplan-theme');if(l){t=l==='midnight-mariner'?'dark':'light';localStorage.setItem('theme',t);localStorage.removeItem('navalplan-theme');}}if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <!-- Apply saved theme immediately to avoid flash — checks new key, migrates legacy key, falls back to OS preference -->
+    <script>(function(){var t=localStorage.getItem('theme');if(!t){var l=localStorage.getItem('navalplan-theme');if(l){t=l==='midnight-mariner'?'dark':'light';localStorage.setItem('theme',t);localStorage.removeItem('navalplan-theme');}}if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);})();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Plan your nautical voyages with ease. Research weather, tides, and local facilities for every stop on your journey." />
