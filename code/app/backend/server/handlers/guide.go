@@ -189,7 +189,7 @@ func (h *Handler) performGuideResearch(voyage *models.Voyage, sessionID string) 
 }
 
 func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[guide-agent] Starting research for voyage %d", voyage.ID))
 	h.broadcastProgress(sessionID, "start", "Starting voyage guide research")

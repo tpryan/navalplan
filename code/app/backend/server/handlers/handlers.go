@@ -51,7 +51,7 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 			client.Timeout = 20 * time.Minute
 		}
 	} else {
-		client = &http.Client{Timeout: 300 * time.Second}
+		client = &http.Client{Timeout: 20 * time.Minute}
 	}
 
 	return &Handler{
