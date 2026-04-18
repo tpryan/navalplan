@@ -125,9 +125,8 @@ function updateUIForLogout() {
     // Auth-container: help + login pill buttons
     container.className = '';
     container.innerHTML = `
-        <a href="/help" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide"
-           style="width:44px;height:44px;padding:0;border-radius:50%;box-shadow:var(--shadow-soft)">
-            <span class="material-symbols-outlined" style="font-size:20px;margin:0">help_outline</span>
+        <a href="/help" id="btn-help-floating" class="btn secondary" target="_blank" title="User Guide">
+            <span class="material-symbols-outlined">help_outline</span>
         </a>
         <a href="/auth/google/login" id="btn-login-floating" class="btn primary">Sign in</a>
     `;
@@ -137,15 +136,15 @@ function updateUIForLogout() {
     if (voyageList) {
         voyageList.innerHTML = '';
         const greeting = document.createElement('div');
-        greeting.style.cssText = 'display:flex;flex-direction:column;gap:18px;padding:4px 4px 8px';
+        greeting.className = 'np-auth-greeting';
 
         const headline = document.createElement('p');
-        headline.style.cssText = 'font-size:26px;font-weight:800;line-height:1.15;letter-spacing:-.5px;color:var(--ink);margin:0';
-        headline.innerHTML = 'Plan your perfect <span style="color:var(--coral)">voyage.</span>';
+        headline.className = 'np-auth-headline';
+        headline.innerHTML = 'Plan your perfect <span class="np-auth-headline__accent">voyage.</span>';
         greeting.appendChild(headline);
 
         const chips = document.createElement('div');
-        chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+        chips.className = 'np-auth-chips';
         [
             { label: 'Anchorages', emoji: '⚓', accent: 'teal' },
             { label: 'Marinas',    emoji: '⛵', accent: 'amber' },
@@ -153,14 +152,15 @@ function updateUIForLogout() {
             { label: 'Winds',      emoji: '💨', accent: 'sky' },
         ].forEach(({ label, emoji, accent }) => {
             const chip = document.createElement('span');
-            chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:14px;font-size:12px;font-weight:700;background:color-mix(in oklab,var(--${accent}) 12%,var(--surface));color:var(--ink)`;
+            chip.className = 'np-auth-chip';
+            chip.style.setProperty('--accent', `var(--${accent})`);
             chip.textContent = `${emoji} ${label}`;
             chips.appendChild(chip);
         });
         greeting.appendChild(chips);
 
         const btnWrap = document.createElement('div');
-        btnWrap.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-top:4px';
+        btnWrap.className = 'np-auth-btn-wrap';
 
         const signIn = document.createElement('a');
         signIn.href = '/auth/google/login';
@@ -169,8 +169,7 @@ function updateUIForLogout() {
 
         const explore = document.createElement('button');
         explore.type = 'button';
-        explore.className = 'btn secondary';
-        explore.style.cssText += ';border:1.5px solid var(--hair);background:transparent;color:var(--ink)';
+        explore.className = 'btn secondary np-auth-explore-btn';
         explore.textContent = 'Explore the map';
         explore.addEventListener('click', () => {
             if (sidebar) sidebar.classList.add('hidden');
@@ -187,18 +186,10 @@ function makeThemeButton() {
     const btn = document.createElement('button');
     btn.id = 'btn-theme-toggle';
     btn.type = 'button';
+    btn.className = 'np-fab';
     btn.setAttribute('aria-label', 'Toggle dark mode');
     btn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
-    btn.style.cssText = [
-        'display:inline-flex', 'align-items:center', 'justify-content:center',
-        'width:44px', 'height:44px', 'border-radius:50%',
-        'background:var(--surface)', 'border:none', 'cursor:pointer',
-        'box-shadow:var(--shadow-soft)', 'font-size:20px', 'flex-shrink:0',
-        'transition:opacity .15s',
-    ].join(';');
     btn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
-    btn.addEventListener('mouseenter', () => { btn.style.opacity = '.8'; });
-    btn.addEventListener('mouseleave', () => { btn.style.opacity = '1'; });
     btn.addEventListener('focus', () => { btn.style.outline = '3px solid var(--focus)'; btn.style.outlineOffset = '2px'; });
     btn.addEventListener('blur', () => { btn.style.outline = 'none'; });
     return btn;

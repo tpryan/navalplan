@@ -802,10 +802,12 @@
     padding: 2px 7px;
     border-radius: 20px;
     white-space: nowrap;
+    background: var(--accent, var(--sky));
 }
 
 .rec-icon {
     font-size: 20px;
+    color: var(--accent, var(--sky));
 }
 
 .rec-description {
@@ -822,6 +824,8 @@
     width: 100%;
     box-sizing: border-box;
     margin-top: 8px;
+    background: color-mix(in oklab, var(--accent, var(--sky)) 10%, var(--surface));
+    border-left: 3px solid var(--accent, var(--sky));
 }
 
 .pilot-reasoning p {
@@ -833,6 +837,7 @@
 
 .pilot-reasoning strong {
     font-style: normal;
+    color: var(--accent, var(--sky));
 }
 
 /* ─── Google Maps overrides ──────────────────────────────────────────────── */

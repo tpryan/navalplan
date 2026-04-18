@@ -1,0 +1,891 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   components.css — Signal design-language component classes
+   Replaces inline styles throughout main.js and auth.js.
+   Dynamic accent colors are passed via --accent CSS custom property:
+       <div class="np-metric-tile" style="--accent:var(--coral)">
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ─── Typography helpers ─────────────────────────────────────────────────── */
+.np-eyebrow {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: block;
+}
+.np-eyebrow-accent {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    margin-bottom: 8px;
+    display: block;
+}
+.np-section-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: block;
+}
+.np-body-text {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0 0 12px;
+}
+.np-caption {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0 0 4px;
+}
+
+/* ─── Report header ──────────────────────────────────────────────────────── */
+.np-report-header {
+    margin-bottom: 24px;
+}
+.np-report-header__tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--coral);
+    margin-bottom: 8px;
+}
+.np-report-header__title {
+    font-size: 23px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 0 0 4px;
+    line-height: 1.2;
+}
+.np-report-header__meta {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+}
+
+/* ─── Metric tile grid (voyage stat totals) ──────────────────────────────── */
+.np-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+}
+.np-metric-tile {
+    --accent: var(--sky);
+    padding: 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+}
+.np-metric-tile__label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    margin-bottom: 4px;
+}
+.np-metric-tile__value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+/* ─── Day-by-day grid tiles ──────────────────────────────────────────────── */
+.np-day-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 28px;
+}
+.np-day-tile {
+    --accent: var(--sky);
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+}
+.np-day-tile__label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    margin-bottom: 4px;
+}
+.np-day-tile__name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+.np-day-tile__meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+.np-day-tile__chart {
+    margin-top: 8px;
+    height: 40px;
+}
+
+/* ─── Destination overview pull-quote ────────────────────────────────────── */
+.np-destination-overview {
+    border-left: 4px solid var(--coral);
+    padding: 14px 20px;
+    border-radius: 0 var(--radius-tile) var(--radius-tile) 0;
+    background: color-mix(in oklab, var(--coral) 4%, var(--surface));
+    margin-bottom: 28px;
+}
+.np-destination-overview__eyebrow {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--coral);
+    margin-bottom: 8px;
+}
+.np-destination-overview__quote {
+    margin: 0 0 10px;
+    padding: 0;
+    font-size: 15px;
+    font-style: italic;
+    color: var(--ink2);
+    line-height: 1.7;
+}
+.np-destination-overview__cta {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* ─── Guide section wrapper ──────────────────────────────────────────────── */
+.np-guide-section {
+    padding: 20px;
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--teal) 6%, var(--surface));
+    margin-bottom: 28px;
+}
+.np-guide-section__eyebrow {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 12px;
+}
+
+/* ─── Report daily stop section ──────────────────────────────────────────── */
+.np-report-stop {
+    --accent: var(--sky);
+    margin-bottom: 24px;
+    padding: 18px 20px;
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+}
+.np-report-stop__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.np-report-stop__number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent, var(--sky));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+}
+.np-report-stop__title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+}
+.np-report-stop__date {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ─── Weather condition tiles ────────────────────────────────────────────── */
+.np-weather-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.np-weather-tile {
+    --accent: var(--sky);
+    padding: 10px 12px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+}
+.np-weather-tile__label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+}
+.np-weather-tile__value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+/* ─── Facility card (Voyage Report) ─────────────────────────────────────── */
+.np-facility-report-card {
+    --accent: var(--sky);
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 8%, var(--surface));
+    border: 1.5px solid color-mix(in oklab, var(--accent) 22%, var(--hair));
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    margin-bottom: 8px;
+}
+.np-facility-report-card__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.np-facility-report-card__name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    flex: 1;
+}
+.np-facility-report-card__badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--accent, var(--sky));
+    background: color-mix(in oklab, var(--accent, var(--sky)) 15%, var(--surface));
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+}
+.np-facility-report-card__address {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 4px;
+    line-height: 1.4;
+}
+.np-facility-report-card__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 4px;
+    line-height: 1.5;
+}
+.np-facility-report-card__rating {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 4px;
+}
+.np-facility-report-card__website {
+    font-size: 12px;
+    color: var(--sky);
+    word-break: break-all;
+}
+
+/* ─── Facility card (Destination Briefing) ───────────────────────────────── */
+.np-facility-briefing-item {
+    --accent: var(--sky);
+    background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+    border: 1.5px solid color-mix(in oklab, var(--accent) 18%, var(--hair));
+    border-radius: var(--radius-tile);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.np-facility-briefing-item__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.np-facility-briefing-item__icon {
+    font-size: 18px;
+    color: var(--accent, var(--sky));
+    flex-shrink: 0;
+}
+.np-facility-briefing-item__name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.np-facility-briefing-item__badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--accent, var(--sky));
+    background: color-mix(in oklab, var(--accent, var(--sky)) 15%, var(--surface));
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+}
+.np-facility-briefing-item__address {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 6px;
+    line-height: 1.4;
+    width: 100%;
+}
+.np-facility-briefing-item__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 6px;
+    line-height: 1.5;
+    width: 100%;
+}
+.np-facility-briefing-item__website {
+    display: block;
+    font-size: 12px;
+    color: var(--sky);
+    margin-top: 4px;
+    word-break: break-all;
+    width: 100%;
+}
+.np-facility-briefing-item__tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+}
+.np-facility-briefing-item__tiles .np-data-tile {
+    background: color-mix(in oklab, var(--accent) 20%, var(--surface));
+    flex: 1;
+}
+.np-facility-briefing-item__status {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--coral);
+}
+
+/* ─── Recommendation item ────────────────────────────────────────────────── */
+.np-rec-item {
+    --accent: var(--sky);
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 8%, var(--surface));
+    margin-bottom: 8px;
+}
+.np-rec-item__header {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 6px;
+}
+.np-rec-item__type {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--accent, var(--sky));
+    white-space: nowrap;
+}
+.np-rec-item__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 6px;
+    line-height: 1.5;
+}
+.np-rec-item__reasoning {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 0;
+    font-style: italic;
+}
+
+/* ─── Guide at-a-glance tiles ────────────────────────────────────────────── */
+.np-glance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.np-glance-tile {
+    --accent: var(--sky);
+    padding: 10px 12px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+}
+.np-glance-tile__label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent, var(--sky));
+    margin-bottom: 2px;
+}
+.np-glance-tile__value {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+/* ─── Sailing season card ────────────────────────────────────────────────── */
+.np-season-card {
+    padding: 14px;
+    border-radius: var(--radius-tile);
+    background: var(--chip);
+    margin-bottom: 12px;
+}
+.np-season-month-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+    margin-bottom: 10px;
+}
+.np-season-month {
+    padding: 4px 2px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 700;
+}
+.np-season-month--best  { background: var(--teal);  color: #fff; }
+.np-season-month--storm { background: var(--coral); color: #fff; }
+.np-season-month--off   { background: var(--hair);  color: var(--muted); }
+.np-season-legend {
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    color: var(--muted);
+}
+.np-season-legend__dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 3px;
+}
+
+/* ─── Hub grid (Major Hubs full-width section) ───────────────────────────── */
+.np-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.np-hub-card {
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--amber) 6%, var(--surface));
+    border: 1.5px solid color-mix(in oklab, var(--amber) 15%, var(--hair));
+}
+.np-hub-card__name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+}
+.np-hub-card__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ─── Charter info card ──────────────────────────────────────────────────── */
+.np-charter-card {
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--amber) 8%, var(--surface));
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ─── Airport list ───────────────────────────────────────────────────────── */
+.np-airport-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.np-airport-row__icon {
+    font-size: 18px;
+}
+.np-airport-row__name {
+    font-weight: 700;
+    color: var(--ink);
+}
+.np-airport-row__code {
+    font-weight: 400;
+    color: var(--muted);
+}
+.np-airport-row__meta {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* ─── Report map image ───────────────────────────────────────────────────── */
+.np-report-map {
+    width: 100%;
+    border-radius: var(--radius-card);
+    border: 1.5px solid var(--hair);
+    display: block;
+    margin-bottom: 24px;
+}
+
+/* ─── Section divider label (Facilities, Day-by-Day) ────────────────────── */
+.np-facilities-header {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* ─── Loading card (research / guide loading states) ────────────────────── */
+.np-loading-card {
+    padding: 24px 20px;
+    border-radius: var(--radius-card);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.np-loading-card__top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.np-loading-card__spinner {
+    font-size: 24px;
+    color: var(--sky);
+}
+.np-loading-card__title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--ink);
+}
+.np-loading-card__sub {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ─── Wind forecast tiles ────────────────────────────────────────────────── */
+.np-wind-forecast {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+}
+.np-wind-forecast__tile {
+    padding: 8px 6px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--sky) 10%, var(--surface));
+    text-align: center;
+}
+.np-wind-forecast__period {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--sky);
+    letter-spacing: .05em;
+}
+.np-wind-forecast__value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    line-height: 1.2;
+}
+.np-wind-forecast__unit {
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 5px;
+}
+.np-wind-forecast__bars {
+    display: flex;
+    gap: 2px;
+}
+.np-wind-forecast__bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--hair);
+}
+/* Strength variants set via JS className */
+.np-wind-forecast__bar--light  { background: var(--teal); }
+.np-wind-forecast__bar--moderate { background: var(--amber); }
+.np-wind-forecast__bar--strong   { background: var(--coral); }
+
+/* ─── Sun phase card (briefing) ──────────────────────────────────────────── */
+.np-sun-card {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: var(--radius-tile);
+    background: linear-gradient(120deg,
+        color-mix(in oklab, var(--amber) 10%, var(--surface)),
+        color-mix(in oklab, var(--violet) 8%, var(--surface)));
+}
+
+/* ─── Auth / user floating menu ──────────────────────────────────────────── */
+.np-auth-login-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    padding: 32px 24px;
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    max-width: 340px;
+    width: 100%;
+    text-align: center;
+}
+.np-auth-login-box__title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 0;
+}
+.np-auth-login-box__sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+}
+.np-fab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--hair);
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    font-size: 20px;
+    flex-shrink: 0;
+    transition: opacity .15s;
+    color: var(--ink2);
+}
+.np-fab:hover { opacity: .85; }
+
+/* ─── Auth greeting (logged-out sidebar) ─────────────────────────────────── */
+.np-auth-greeting {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 4px 4px 8px;
+}
+.np-auth-headline {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -.5px;
+    color: var(--ink);
+    margin: 0;
+}
+.np-auth-headline__accent { color: var(--coral); }
+.np-auth-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.np-auth-chip {
+    --accent: var(--sky);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 700;
+    background: color-mix(in oklab, var(--accent) 12%, var(--surface));
+    color: var(--ink);
+}
+.np-auth-btn-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+.np-auth-explore-btn {
+    border: 1.5px solid var(--hair);
+    background: transparent;
+    color: var(--ink);
+}
+
+/* ─── Tide chart canvas wrapper (Voyage Report stop sections) ────────────── */
+.np-tide-chart-wrap {
+    height: 200px;
+    border-radius: var(--radius-tile);
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+/* ─── Guide two-column layout ────────────────────────────────────────────── */
+.np-guide-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+/* ─── Guide overview summary text ────────────────────────────────────────── */
+.np-overview-summary {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+/* ─── Hazard / security card ─────────────────────────────────────────────── */
+.np-hazard-card {
+    --accent: var(--amber);
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+    margin-bottom: 8px;
+}
+.np-hazard-card__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+}
+.np-hazard-card__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ─── Safety tips list ───────────────────────────────────────────────────── */
+.np-safety-tips {
+    font-size: 12px;
+    color: var(--muted);
+    padding-left: 16px;
+    margin: 4px 0 12px;
+}
+.np-safety-tips li { margin-bottom: 2px; }
+
+/* ─── Point of interest item ─────────────────────────────────────────────── */
+.np-poi-item {
+    margin-bottom: 10px;
+}
+.np-poi-item__name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.np-poi-item__desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 2px 0 0;
+    line-height: 1.5;
+}
+
+/* ─── Season legend dot modifiers ────────────────────────────────────────── */
+.np-season-legend__dot--best  { background: var(--teal); }
+.np-season-legend__dot--storm { background: var(--coral); }
+
+/* ─── Charter companies list ─────────────────────────────────────────────── */
+.np-charter-list {
+    font-size: 12px;
+    color: var(--muted);
+    padding-left: 14px;
+    margin: 6px 0 0;
+}
+
+/* ─── DataTile component ─────────────────────────────────────────────────── */
+.np-data-tile {
+    --accent: var(--sky);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+    min-width: 80px;
+}
+.np-data-tile__emoji {
+    font-size: 16px;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+.np-data-tile__label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.np-data-tile__value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    line-height: 1.1;
+}
+.np-data-tile__value--detail {
+    font-size: 14px;
+    font-weight: 400;
+}
+.np-data-tile__sub {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* ─── Empty state text (voyage list) ─────────────────────────────────────── */
+.np-empty-state {
+    font-size: 14px;
+    color: var(--muted);
+    padding: 8px 0;
+    margin: 0;
+}
+
+/* ─── Tides header meta span ─────────────────────────────────────────────── */
+.np-tides-meta {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ─── Report footer ──────────────────────────────────────────────────────── */
+.np-report-footer {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 16px;
+}

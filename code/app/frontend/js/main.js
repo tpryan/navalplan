@@ -1320,7 +1320,7 @@ function renderVoyageList() {
   listContainer.innerHTML = '';
 
   if ((!voyages || voyages.length === 0) && currentVoyagePage === 1) {
-    listContainer.innerHTML = '<p class="loading-text" style="color:var(--muted);font-size:14px;padding:8px 0">No voyages yet. Plan your first trip!</p>';
+    listContainer.innerHTML = '<p class="np-empty-state">No voyages yet. Plan your first trip!</p>';
     return;
   }
 
@@ -1421,13 +1421,12 @@ function renderVoyageList() {
     // Action buttons
     const actions = document.createElement('div');
     actions.className = 'voyage-actions';
-    actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0';
     actions.innerHTML = `
-      <button class="btn-icon edit" title="Edit" style="width:32px;height:32px;background:transparent;border:none;cursor:pointer;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)">
-        <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+      <button class="btn-icon edit" title="Edit">
+        <span class="material-symbols-outlined">edit</span>
       </button>
-      <button class="btn-icon delete" title="Delete" style="width:32px;height:32px;background:transparent;border:none;cursor:pointer;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)">
-        <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+      <button class="btn-icon delete" title="Delete">
+        <span class="material-symbols-outlined">delete</span>
       </button>`;
 
     el.appendChild(info);
@@ -2575,7 +2574,7 @@ function renderItinerary() {
             list.appendChild(header);
 
             voyageRecommendations.forEach(rec => {
-                const recColor = markerColor(rec.type);
+                const accent = markerAccent(rec.type);
                 const tl = (rec.type || '').toLowerCase();
                 let recIcon = 'location_on';
                 if (tl.includes('anchor')) recIcon = 'anchor';
@@ -2584,16 +2583,17 @@ function renderItinerary() {
 
                 const el = document.createElement('div');
                 el.className = 'day-item day-item--stacked';
+                el.style.setProperty('--accent', `var(--${accent})`);
                 el.innerHTML = DOMPurify.sanitize(`
                     <div class="rec-header">
-                        <span class="material-symbols-outlined rec-icon" style="color:${recColor};">${recIcon}</span>
+                        <span class="material-symbols-outlined rec-icon">${recIcon}</span>
                         <span class="rec-name">${displayLocationName(rec.name)}</span>
-                        <span class="rec-badge" style="background:${recColor};">${rec.type || 'Spot'}</span>
+                        <span class="rec-badge">${rec.type || 'Spot'}</span>
                     </div>
                     ${rec.description ? `<p class="rec-description">${rec.description}</p>` : ''}
                     ${rec.reasoning ? `
-                        <div class="pilot-reasoning" style="background:${recColor}1A;border-left:3px solid ${recColor};">
-                            <p><strong style="color:${recColor};">Pilot's Reasoning:</strong> "${rec.reasoning}"</p>
+                        <div class="pilot-reasoning">
+                            <p><strong>Pilot's Reasoning:</strong> "${rec.reasoning}"</p>
                         </div>` : ''}
                 `);
                 el.onclick = () => {
@@ -3183,22 +3183,22 @@ async function showBriefing(briefing, doPushState = true) {
         const speeds = multipliers.map(m => Math.round(speed * m));
         const maxKt = Math.max(...speeds);
         const windForecast = document.createElement('div');
-        windForecast.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px';
+        windForecast.className = 'np-wind-forecast';
         ['AM', 'Mid', 'PM', 'Eve'].forEach((lbl, i) => {
             const kt = speeds[i];
             // Beaufort-style: 3 bars, filled count based on strength (1 = light <11kt, 2 = moderate <22kt, 3 = strong 22+kt)
             const filled = kt < 11 ? 1 : kt < 22 ? 2 : 3;
-            const barColor = filled === 1 ? 'var(--teal)' : filled === 2 ? 'var(--amber)' : 'var(--coral)';
+            const strengthClass = filled === 1 ? 'light' : filled === 2 ? 'moderate' : 'strong';
             const bars = [1, 2, 3].map(n =>
-                `<div style="flex:1;height:4px;border-radius:2px;background:${n <= filled ? barColor : 'var(--hair)'}"></div>`
+                `<div class="np-wind-forecast__bar${n <= filled ? ` np-wind-forecast__bar--${strengthClass}` : ''}"></div>`
             ).join('');
             const tile = document.createElement('div');
-            tile.style.cssText = 'padding:8px 6px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--sky) 10%,var(--surface));text-align:center';
+            tile.className = 'np-wind-forecast__tile';
             tile.innerHTML =
-                `<div style="font-size:9px;font-weight:800;text-transform:uppercase;color:var(--sky);letter-spacing:.05em">${lbl}</div>` +
-                `<div style="font-size:18px;font-weight:800;color:var(--ink);line-height:1.2">${kt}</div>` +
-                `<div style="font-size:9px;color:var(--muted);margin-bottom:5px">kt</div>` +
-                `<div style="display:flex;gap:2px">${bars}</div>`;
+                `<div class="np-wind-forecast__period">${lbl}</div>` +
+                `<div class="np-wind-forecast__value">${kt}</div>` +
+                `<div class="np-wind-forecast__unit">kt</div>` +
+                `<div class="np-wind-forecast__bars">${bars}</div>`;
             windForecast.appendChild(tile);
         });
         weatherSec.appendChild(windForecast);
@@ -3244,7 +3244,7 @@ async function showBriefing(briefing, doPushState = true) {
 
     const tidesHeader = document.createElement('h3');
     tidesHeader.className = 'briefing-header-icon';
-    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span style="font-weight:400;font-size:12px;color:var(--muted)">${displayDateHeader}</span>`;
+    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span class="np-tides-meta">${displayDateHeader}</span>`;
     tidesSec.appendChild(tidesHeader);
 
     // Chart.js tide chart — same renderer used in the Voyage Report
@@ -3319,25 +3319,24 @@ async function showBriefing(briefing, doPushState = true) {
             else if (tl.includes('restaurant')) icon = 'restaurant';
 
             const li = document.createElement('li');
-            li.className = 'facility-item';
-            li.style.cssText = `background:color-mix(in oklab,var(--${accent}) 7%,var(--surface));border:1.5px solid color-mix(in oklab,var(--${accent}) 18%,var(--hair));border-radius:var(--radius-tile);padding:12px 14px;margin-bottom:8px;width:100%;box-sizing:border-box`;
+            li.className = 'facility-item np-facility-briefing-item';
+            li.style.setProperty('--accent', `var(--${accent})`);
 
             // ── Row 1: icon + name + type badge ──────────────────────────────
             const header = document.createElement('div');
-            header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+            header.className = 'np-facility-briefing-item__header';
 
             const iconEl = document.createElement('span');
-            iconEl.className = 'material-symbols-outlined';
+            iconEl.className = 'material-symbols-outlined np-facility-briefing-item__icon';
             iconEl.setAttribute('aria-hidden', 'true');
-            iconEl.style.cssText = `font-size:18px;color:var(--${accent});flex-shrink:0`;
             iconEl.textContent = icon;
 
             const nameSpan = document.createElement('span');
-            nameSpan.style.cssText = 'font-size:14px;font-weight:700;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+            nameSpan.className = 'np-facility-briefing-item__name';
             nameSpan.textContent = f.name;
 
             const badge = document.createElement('span');
-            badge.style.cssText = `flex-shrink:0;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--${accent});background:color-mix(in oklab,var(--${accent}) 15%,var(--surface));padding:2px 7px;border-radius:var(--radius-pill)`;
+            badge.className = 'np-facility-briefing-item__badge';
             badge.textContent = f.type || 'Facility';
 
             header.appendChild(iconEl);
@@ -3349,7 +3348,7 @@ async function showBriefing(briefing, doPushState = true) {
             const address = f.address || (f.details && typeof f.details === 'object' && f.details.address);
             if (address) {
                 const addr = document.createElement('p');
-                addr.style.cssText = 'font-size:13px;color:var(--muted);margin:0 0 6px;line-height:1.4;width:100%';
+                addr.className = 'np-facility-briefing-item__address';
                 addr.textContent = address;
                 li.appendChild(addr);
             }
@@ -3357,7 +3356,7 @@ async function showBriefing(briefing, doPushState = true) {
             // ── Row 3: description / string details ───────────────────────────
             if (typeof f.details === 'string') {
                 const desc = document.createElement('p');
-                desc.style.cssText = 'font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5;width:100%';
+                desc.className = 'np-facility-briefing-item__desc';
                 desc.textContent = f.details;
                 li.appendChild(desc);
             }
@@ -3366,14 +3365,14 @@ async function showBriefing(briefing, doPushState = true) {
             if (f.details && typeof f.details === 'object') {
                 const starHtml = (r) => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
                 const tiles = document.createElement('div');
-                tiles.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;width:100%';
+                tiles.className = 'np-facility-briefing-item__tiles';
 
                 if (f.rating) {
-                    tiles.appendChild(DataTile({ label: 'Rating', value: `${f.rating.toFixed(1)} ${starHtml(f.rating)}`, sub: f.user_rating_count ? `${f.user_rating_count.toLocaleString()} reviews` : '', accent }));
+                    tiles.appendChild(DataTile({ label: 'Rating', value: `${f.rating.toFixed(1)} ${starHtml(f.rating)}`, sub: f.user_rating_count ? `${f.user_rating_count.toLocaleString()} reviews` : '', accent, detail: true }));
                 }
                 if (f.business_status && f.business_status !== 'OPERATIONAL') {
                     const stat = document.createElement('span');
-                    stat.style.cssText = 'font-size:11px;font-weight:700;color:var(--coral)';
+                    stat.className = 'np-facility-briefing-item__status';
                     stat.textContent = f.business_status.replace(/_/g, ' ');
                     tiles.appendChild(stat);
                 }
@@ -3382,7 +3381,7 @@ async function showBriefing(briefing, doPushState = true) {
                     if (k === 'address' || !v) return;
                     const sv = String(v).toLowerCase().trim();
                     if (['n/a','','unknown','not specified'].includes(sv)) return;
-                    tiles.appendChild(DataTile({ label: k.replace(/_/g,' '), value: String(v), accent }));
+                    tiles.appendChild(DataTile({ label: k.replace(/_/g,' '), value: String(v), accent, detail: true }));
                 });
                 if (tiles.children.length > 0) li.appendChild(tiles);
             }
@@ -3394,8 +3393,7 @@ async function showBriefing(briefing, doPushState = true) {
                 link.href = website;
                 link.target = '_blank';
                 link.rel = 'noopener';
-                link.className = 'ref-anchor';
-                link.style.cssText = 'display:block;font-size:12px;color:var(--sky);margin-top:4px;word-break:break-all;width:100%';
+                link.className = 'np-facility-briefing-item__website';
                 link.textContent = website;
                 li.appendChild(link);
             }
@@ -3404,7 +3402,6 @@ async function showBriefing(briefing, doPushState = true) {
             if (f.references && f.references.length > 0) {
                 const refs = document.createElement('div');
                 refs.className = 'ref-link';
-                refs.style.marginTop = '4px';
                 refs.innerHTML = `<strong>Refs:</strong> ${f.references.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i+1}]</a>`).join('')}`;
                 li.appendChild(refs);
             }
@@ -4415,10 +4412,7 @@ function showVoyageGuide(resp, doPushState = true) {
     if (mapURL) {
         const sep = mapURL.includes('?') ? '&' : '?';
         const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `<div style="margin-bottom:20px">
-            <img src="${url}" alt="Voyage Map" class="report-map-img"
-                 style="width:100%;border-radius:var(--radius-card);border:1.5px solid var(--hair);display:block" />
-        </div>`;
+        html += `<img src="${url}" alt="Voyage Map" class="np-report-map" />`;
     }
 
     html += generateGuideHTML(guide);
@@ -5043,19 +5037,19 @@ function generateGuideHTML(guide) {
 
     // Helper: Signal section label chip
     const sectionChip = (label, accent = 'coral') =>
-        `<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--${accent});margin-bottom:8px">${label}</div>`;
+        `<div class="np-eyebrow-accent" style="--accent:var(--${accent})">${label}</div>`;
 
     // Helper: tinted hazard card
     const hazardCard = (title, desc, refs, accent = 'amber', emoji = '⚠️') => `
-        <div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${accent}) 10%,var(--surface));margin-bottom:8px">
-            <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px">${emoji} ${title}</div>
-            <p style="font-size:12px;color:var(--muted);margin:0;line-height:1.5">${desc}</p>
+        <div class="np-hazard-card" style="--accent:var(--${accent})">
+            <div class="np-hazard-card__title">${emoji} ${title}</div>
+            <p class="np-hazard-card__desc">${desc}</p>
             ${refs && refs.length ? renderReferences(refs) : ''}
         </div>`;
 
     // Overview + Hazards (left col)
     let leftCol = sectionChip('Overview', 'coral');
-    leftCol += `<p style="font-size:14px;color:var(--ink);line-height:1.6;margin-bottom:16px">${guide.summary || 'No summary available.'}</p>`;
+    leftCol += `<p class="np-overview-summary">${guide.summary || 'No summary available.'}</p>`;
 
     if (guide.hazards && guide.hazards.length > 0) {
         leftCol += sectionChip('Regional Hazards', 'amber');
@@ -5079,8 +5073,8 @@ function generateGuideHTML(guide) {
             '🔒'
         );
         if (s.safety_tips && s.safety_tips.length > 0) {
-            leftCol += `<ul style="font-size:12px;color:var(--muted);padding-left:16px;margin:4px 0 12px">` +
-                s.safety_tips.map(t => `<li style="margin-bottom:2px">${t}</li>`).join('') + `</ul>`;
+            leftCol += `<ul class="np-safety-tips">` +
+                s.safety_tips.map(t => `<li>${t}</li>`).join('') + `</ul>`;
         }
     }
 
@@ -5088,11 +5082,11 @@ function generateGuideHTML(guide) {
     let hubsSection = '';
     if (guide.hubs && guide.hubs.length > 0) {
         hubsSection += sectionChip('Major Hubs', 'amber');
-        hubsSection += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:12px">`;
+        hubsSection += `<div class="np-hub-grid">`;
         guide.hubs.forEach(h => {
-            hubsSection += `<div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--amber) 6%,var(--surface));border:1.5px solid color-mix(in oklab,var(--amber) 15%,var(--hair))">
-                <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px">${h.name}${h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
-                <p style="font-size:12px;color:var(--muted);margin:0;line-height:1.5">${h.description}</p>
+            hubsSection += `<div class="np-hub-card">
+                <div class="np-hub-card__name">${h.name}${h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
+                <p class="np-hub-card__desc">${h.description}</p>
                 ${h.references && h.references.length ? renderReferences(h.references) : ''}
             </div>`;
         });
@@ -5102,9 +5096,9 @@ function generateGuideHTML(guide) {
     if (guide.points_of_interest && guide.points_of_interest.length > 0) {
         leftCol += sectionChip('Points of Interest', 'violet');
         guide.points_of_interest.forEach(poi => {
-            leftCol += `<div style="margin-bottom:10px">
-                <div style="font-size:13px;font-weight:700;color:var(--ink)">${poi.name}${poi.url ? ` <a href="${poi.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
-                <p style="font-size:12px;color:var(--muted);margin:2px 0 0;line-height:1.5">${poi.description}</p>
+            leftCol += `<div class="np-poi-item">
+                <div class="np-poi-item__name">${poi.name}${poi.url ? ` <a href="${poi.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
+                <p class="np-poi-item__desc">${poi.description}</p>
                 ${poi.references && poi.references.length ? renderReferences(poi.references) : ''}
             </div>`;
         });
@@ -5118,25 +5112,22 @@ function generateGuideHTML(guide) {
         const bestMonths = s.primary_season_months || [];
         const stormMonths = s.storm_season_months || [];
         rightCol += sectionChip('Sailing Season', 'teal');
-        rightCol += `<div style="padding:14px;border-radius:var(--radius-tile);background:var(--chip);margin-bottom:12px">`;
-        // 12 colored month squares
-        rightCol += `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:10px">`;
+        rightCol += `<div class="np-season-card">`;
+        rightCol += `<div class="np-season-month-grid">`;
         MONTHS.forEach((mo, i) => {
             const num = i + 1;
             const isBest = bestMonths.includes(num) || bestMonths.includes(mo) || bestMonths.some(m => String(m).startsWith(mo));
             const isStorm = stormMonths.includes(num) || stormMonths.includes(mo) || stormMonths.some(m => String(m).startsWith(mo));
-            const bg = isBest ? 'var(--teal)' : isStorm ? 'var(--coral)' : 'var(--hair)';
-            const color = (isBest || isStorm) ? '#fff' : 'var(--muted)';
-            rightCol += `<div style="padding:4px 2px;border-radius:6px;background:${bg};text-align:center;font-size:9px;font-weight:700;color:${color}">${mo}</div>`;
+            const mod = isBest ? 'best' : isStorm ? 'storm' : 'off';
+            rightCol += `<div class="np-season-month np-season-month--${mod}">${mo}</div>`;
         });
         rightCol += `</div>`;
-        // Legend
-        rightCol += `<div style="display:flex;gap:10px;font-size:10px;color:var(--muted)">
-            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--teal);margin-right:3px"></span>Best</span>
-            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--coral);margin-right:3px"></span>Storm</span>
+        rightCol += `<div class="np-season-legend">
+            <span><span class="np-season-legend__dot np-season-legend__dot--best"></span>Best</span>
+            <span><span class="np-season-legend__dot np-season-legend__dot--storm"></span>Storm</span>
         </div>`;
         if (s.notes) {
-            rightCol += `<p style="font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.5">${s.notes}</p>`;
+            rightCol += `<p class="np-caption" style="margin-top:8px">${s.notes}</p>`;
         }
         rightCol += `${s.references && s.references.length ? renderReferences(s.references) : ''}</div>`;
     }
@@ -5155,11 +5146,11 @@ function generateGuideHTML(guide) {
     }
     if (glanceTiles.length > 0) {
         rightCol += sectionChip('At a Glance', 'sky');
-        rightCol += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">`;
+        rightCol += `<div class="np-glance-grid">`;
         glanceTiles.forEach(({ label, value, accent }) => {
-            rightCol += `<div style="padding:10px 12px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${accent}) 10%,var(--surface))">
-                <div style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--${accent});margin-bottom:2px">${label}</div>
-                <div style="font-size:14px;font-weight:800;color:var(--ink)">${value}</div>
+            rightCol += `<div class="np-glance-tile" style="--accent:var(--${accent})">
+                <div class="np-glance-tile__label">${label}</div>
+                <div class="np-glance-tile__value">${value}</div>
             </div>`;
         });
         rightCol += `</div>`;
@@ -5168,10 +5159,10 @@ function generateGuideHTML(guide) {
     if (guide.charter_info) {
         const c = guide.charter_info;
         rightCol += sectionChip('Charter Info', 'amber');
-        rightCol += `<div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--amber) 8%,var(--surface));margin-bottom:12px">
-            <div style="font-size:12px;color:var(--muted)">Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
+        rightCol += `<div class="np-charter-card">
+            <div>Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
         if (c.companies && c.companies.length > 0) {
-            rightCol += `<ul style="font-size:12px;color:var(--muted);padding-left:14px;margin:6px 0 0">` +
+            rightCol += `<ul class="np-charter-list">` +
                 c.companies.map(comp => {
                     if (typeof comp === 'string') return `<li>${comp}</li>`;
                     return `<li>${comp.url ? `<a href="${comp.url}" target="_blank" style="color:var(--sky)">${comp.name}</a>` : comp.name}${comp.references && comp.references.length ? renderReferences(comp.references) : ''}</li>`;
@@ -5184,18 +5175,18 @@ function generateGuideHTML(guide) {
         rightCol += sectionChip('Nearest Airports', 'sky');
         guide.airports.forEach(a => {
             const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
-            rightCol += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
-                <span style="font-size:18px">✈️</span>
+            rightCol += `<div class="np-airport-row">
+                <span class="np-airport-row__icon">✈️</span>
                 <div>
-                    <div style="font-weight:700;color:var(--ink)">${a.name} <span style="font-weight:400;color:var(--muted)">(${a.iata_code || 'N/A'})</span></div>
-                    <div style="font-size:11px;color:var(--muted)">${type}${a.distance_km ? ` · ${a.distance_km} km` : ''}</div>
+                    <div><span class="np-airport-row__name">${a.name}</span> <span class="np-airport-row__code">(${a.iata_code || 'N/A'})</span></div>
+                    <div class="np-airport-row__meta">${type}${a.distance_km ? ` · ${a.distance_km} km` : ''}</div>
                 </div>
             </div>`;
         });
     }
 
     return `
-        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">
+        <div class="np-guide-grid">
             <div>${leftCol}</div>
             <div>${rightCol}</div>
         </div>
@@ -5221,10 +5212,10 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
     // ── Header ────────────────────────────────────────────────────────────────
     let html = `
-        <div style="margin-bottom:24px">
-            <div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--coral);margin-bottom:8px">Voyage Report</div>
-            <h1 style="font-size:23px;font-weight:800;color:var(--ink);margin:0 0 4px;line-height:1.2">${DOMPurify.sanitize(voyage.title)}</h1>
-            <p style="font-size:13px;color:var(--muted);margin:0">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
+        <div class="np-report-header">
+            <span class="np-report-header__tag">Voyage Report</span>
+            <h1 class="np-report-header__title">${DOMPurify.sanitize(voyage.title)}</h1>
+            <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
         </div>
     `;
 
@@ -5237,22 +5228,22 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         return speeds.length ? Math.round(speeds.reduce((a,b) => a+b, 0) / speeds.length) + ' kt' : '--';
     })();
 
-    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:24px">
-        <div style="padding:14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--sky) 10%,var(--surface))">
-            <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--sky);margin-bottom:4px">Stops</div>
-            <div style="font-size:22px;font-weight:800;color:var(--ink)">${sortedStops.length}</div>
+    html += `<div class="np-metric-grid">
+        <div class="np-metric-tile" style="--accent:var(--sky)">
+            <div class="np-metric-tile__label">Stops</div>
+            <div class="np-metric-tile__value">${sortedStops.length}</div>
         </div>
-        <div style="padding:14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--teal) 10%,var(--surface))">
-            <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:4px">Days</div>
-            <div style="font-size:22px;font-weight:800;color:var(--ink)">${dayCount}</div>
+        <div class="np-metric-tile" style="--accent:var(--teal)">
+            <div class="np-metric-tile__label">Days</div>
+            <div class="np-metric-tile__value">${dayCount}</div>
         </div>
-        <div style="padding:14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--amber) 10%,var(--surface))">
-            <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-bottom:4px">Avg Wind</div>
-            <div style="font-size:22px;font-weight:800;color:var(--ink)">${avgWind}</div>
+        <div class="np-metric-tile" style="--accent:var(--amber)">
+            <div class="np-metric-tile__label">Avg Wind</div>
+            <div class="np-metric-tile__value">${avgWind}</div>
         </div>
-        <div style="padding:14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--violet) 10%,var(--surface))">
-            <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--violet);margin-bottom:4px">Researched</div>
-            <div style="font-size:22px;font-weight:800;color:var(--ink)">${researchedCount}/${sortedStops.length}</div>
+        <div class="np-metric-tile" style="--accent:var(--violet)">
+            <div class="np-metric-tile__label">Researched</div>
+            <div class="np-metric-tile__value">${researchedCount}/${sortedStops.length}</div>
         </div>
     </div>`;
 
@@ -5260,31 +5251,27 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     if (mapURL) {
         const sep = mapURL.includes('?') ? '&' : '?';
         const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `<div style="margin-bottom:24px">
-            <img src="${url}" alt="Voyage Map" class="report-map-img"
-                 style="width:100%;border-radius:var(--radius-card);border:1.5px solid var(--hair);display:block" />
-        </div>`;
+        html += `<img src="${url}" alt="Voyage Map" class="np-report-map" />`;
     }
 
     // ── Day by day grid ───────────────────────────────────────────────────────
     if (hasBriefings) {
-        html += `<div style="margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Day by Day</div>`;
-        html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:28px">`;
+        html += `<span class="np-section-label">Day by Day</span>`;
+        html += `<div class="np-day-grid">`;
         sortedStops.forEach((stop, idx) => {
             const briefing = briefings.find(br => br && br.stop_id === stop.id) || {};
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
-            const date = new Date(stop.target_date);
-            const dateStr = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
             const w = briefing.weather_summary || {};
             const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '';
             const canvasId = `reportMiniTideChart_${idx}`;
             html += `
-                <div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${accent}) 10%,var(--surface))">
-                    <div style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--${accent});margin-bottom:4px">Day ${idx+1} · ${dateStr}</div>
-                    <div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
-                    ${temp ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🌡 ${temp}</div>` : ''}
-                    ${w.wind_speed_kt ? `<div style="font-size:11px;color:var(--muted)">💨 ${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
-                    <div class="overview-chart" style="margin-top:8px;height:40px">
+                <div class="np-day-tile" style="--accent:var(--${accent})">
+                    <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
+                    <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
+                    ${temp ? `<div class="np-day-tile__meta">🌡 ${temp}</div>` : ''}
+                    ${w.wind_speed_kt ? `<div class="np-day-tile__meta">💨 ${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    <div class="np-day-tile__chart overview-chart">
                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
                     </div>
                 </div>`;
@@ -5295,10 +5282,10 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Destination Guide summary card — pull quote ───────────────────────────
     if (guide && guide.summary) {
         html += `
-            <div style="border-left:4px solid var(--coral);padding:14px 20px 14px 20px;border-radius:0 var(--radius-tile) var(--radius-tile) 0;background:color-mix(in oklab,var(--coral) 4%,var(--surface));margin-bottom:28px">
-                <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--coral);margin-bottom:8px">Destination Overview</div>
-                <blockquote style="margin:0 0 10px;padding:0;font-size:15px;font-style:italic;color:var(--ink2);line-height:1.7">${DOMPurify.sanitize(guide.summary)}</blockquote>
-                <div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">↓ Full guide below</div>
+            <div class="np-destination-overview">
+                <span class="np-destination-overview__eyebrow">Destination Overview</span>
+                <blockquote class="np-destination-overview__quote">${DOMPurify.sanitize(guide.summary)}</blockquote>
+                <span class="np-destination-overview__cta">↓ Full guide below</span>
             </div>
         `;
     }
@@ -5306,8 +5293,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Full Destination Guide ────────────────────────────────────────────────
     if (guide) {
         html += `
-            <div style="padding:20px;border-radius:var(--radius-card);background:color-mix(in oklab,var(--teal) 6%,var(--surface));margin-bottom:28px">
-                <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:12px">Destination Guide</div>
+            <div class="np-guide-section">
+                <span class="np-guide-section__eyebrow">Destination Guide</span>
                 ${generateGuideHTML(guide)}
             </div>
         `;
@@ -5331,18 +5318,18 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         ['marina','anchorage','mooring','other'].forEach(key => {
             const { title, accent, items } = groups[key];
             if (!items.length) return;
-            html += `<div style="margin-bottom:20px">
-                <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--${accent});margin-bottom:8px">${title}</div>`;
+            html += `<div class="np-rec-section">
+                <span class="np-eyebrow-accent" style="--accent:var(--${accent})">${title}</span>`;
             items.forEach(rec => {
                 const ra = markerAccent(rec.type);
                 html += `
-                    <div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${ra}) 8%,var(--surface));margin-bottom:8px">
-                        <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px">
+                    <div class="np-rec-item" style="--accent:var(--${ra})">
+                        <div class="np-rec-item__header">
                             ${DOMPurify.sanitize(rec.name)}
-                            <span style="float:right;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--${ra})">${DOMPurify.sanitize(rec.type || 'Spot')}</span>
+                            <span class="np-rec-item__type">${DOMPurify.sanitize(rec.type || 'Spot')}</span>
                         </div>
-                        <p style="font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.5">${DOMPurify.sanitize(rec.description)}</p>
-                        ${rec.reasoning ? `<p style="font-size:11px;color:var(--muted);margin:0;font-style:italic">"${DOMPurify.sanitize(rec.reasoning)}"</p>` : ''}
+                        <p class="np-rec-item__desc">${DOMPurify.sanitize(rec.description)}</p>
+                        ${rec.reasoning ? `<p class="np-rec-item__reasoning">"${DOMPurify.sanitize(rec.reasoning)}"</p>` : ''}
                     </div>`;
             });
             html += `</div>`;
@@ -5359,28 +5346,28 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const w = b.weather_summary || {};
 
             html += `
-                <div style="margin-bottom:24px;padding:18px 20px;border-radius:var(--radius-card);background:color-mix(in oklab,var(--${accent}) 6%,var(--surface))">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-                        <div style="width:36px;height:36px;border-radius:50%;background:var(--${accent});display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${idx+1}</div>
+                <div class="np-report-stop" style="--accent:var(--${accent})">
+                    <div class="np-report-stop__header">
+                        <div class="np-report-stop__number">${idx+1}</div>
                         <div>
-                            <div style="font-size:16px;font-weight:800;color:var(--ink)">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
-                            <div style="font-size:12px;color:var(--muted)">${dateStr}</div>
+                            <div class="np-report-stop__title">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
+                            <div class="np-report-stop__date">${dateStr}</div>
                         </div>
                     </div>
             `;
 
             // Weather tiles
             if (!isInvalidVal(w.condition)) {
-                html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-bottom:12px">`;
-                if (!isInvalidVal(w.condition)) html += `<div style="padding:10px 12px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--sky) 10%,var(--surface))"><div style="font-size:9px;font-weight:800;text-transform:uppercase;color:var(--sky)">Conditions</div><div style="font-size:13px;font-weight:700;color:var(--ink)">${w.condition}</div></div>`;
-                if (w.wind_speed_kt) html += `<div style="padding:10px 12px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--teal) 10%,var(--surface))"><div style="font-size:9px;font-weight:800;text-transform:uppercase;color:var(--teal)">Wind</div><div style="font-size:13px;font-weight:700;color:var(--ink)">${w.wind_speed_kt} kt</div></div>`;
-                if (w.temp_max_f) html += `<div style="padding:10px 12px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--amber) 10%,var(--surface))"><div style="font-size:9px;font-weight:800;text-transform:uppercase;color:var(--amber)">Temp</div><div style="font-size:13px;font-weight:700;color:var(--ink)">${Math.round(w.temp_max_f)}°F</div></div>`;
+                html += `<div class="np-weather-grid">`;
+                if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
+                if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
+                if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 html += `</div>`;
             }
 
             // Tide chart canvas (preserved for Chart.js rendering)
             if (b.tides && b.tides.events) {
-                html += `<div style="height:200px;border-radius:var(--radius-tile);overflow:hidden;margin-bottom:12px"><canvas id="reportTideChart_${idx}"></canvas></div>`;
+                html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
             }
 
             // Facilities
@@ -5396,34 +5383,32 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             })();
 
             if (isReturnStop) {
-                html += `<p style="font-size:12px;color:var(--muted);font-style:italic">Facilities omitted — return to starting area.</p>`;
+                html += `<p class="np-caption" style="font-style:italic">Facilities omitted — return to starting area.</p>`;
             } else if (b.facilities && b.facilities.length > 0) {
-                html += `<div style="margin-bottom:0">
-                    <div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Facilities</div>`;
+                html += `<span class="np-facilities-header">Facilities</span>`;
                 b.facilities.forEach(f => {
                     const fa = markerAccent(f.type);
                     const desc = typeof f.details === 'string' ? f.details : (f.details?.description || '');
                     const address = f.address || (typeof f.details === 'object' && f.details?.address) || '';
-                    html += `<div style="padding:12px 14px;border-radius:var(--radius-tile);background:color-mix(in oklab,var(--${fa}) 8%,var(--surface));border:1.5px solid color-mix(in oklab,var(--${fa}) 22%,var(--hair));box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:8px">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${address || desc ? '6px' : '0'}">
-                            <span style="font-size:14px;font-weight:700;color:var(--ink);flex:1">${esc(f.name)}</span>
-                            <span style="flex-shrink:0;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--${fa});background:color-mix(in oklab,var(--${fa}) 15%,var(--surface));padding:2px 7px;border-radius:999px">${esc(f.type || 'Facility')}</span>
+                    html += `<div class="np-facility-report-card" style="--accent:var(--${fa})">
+                        <div class="np-facility-report-card__header">
+                            <span class="np-facility-report-card__name">${esc(f.name)}</span>
+                            <span class="np-facility-report-card__badge">${esc(f.type || 'Facility')}</span>
                         </div>
-                        ${address ? `<p style="font-size:13px;color:var(--muted);margin:0 0 4px;line-height:1.4">${esc(address)}</p>` : ''}
-                        ${desc ? `<p style="font-size:12px;color:var(--muted);margin:0 0 4px;line-height:1.5">${esc(desc)}</p>` : ''}
-                        ${f.rating ? `<p style="font-size:12px;color:var(--muted);margin:0 0 4px">${'★'.repeat(Math.round(f.rating))}${'☆'.repeat(5-Math.round(f.rating))} ${f.rating.toFixed(1)}</p>` : ''}
-                        ${f.website ? `<a href="${f.website}" target="_blank" style="font-size:12px;color:var(--sky);word-break:break-all">${esc(f.website)}</a>` : ''}
+                        ${address ? `<p class="np-facility-report-card__address">${esc(address)}</p>` : ''}
+                        ${desc ? `<p class="np-facility-report-card__desc">${esc(desc)}</p>` : ''}
+                        ${f.rating ? `<p class="np-facility-report-card__rating">${'★'.repeat(Math.round(f.rating))}${'☆'.repeat(5-Math.round(f.rating))} ${f.rating.toFixed(1)}</p>` : ''}
+                        ${f.website ? `<a href="${f.website}" target="_blank" class="np-facility-report-card__website">${esc(f.website)}</a>` : ''}
                         ${renderReferences(f.references)}
                     </div>`;
                 });
-                html += `</div>`;
             }
 
             html += `</div>`;
         });
     }
 
-    html += `<footer style="margin-top:32px;text-align:center;font-size:11px;color:var(--muted);padding:16px"><p>Generated by NavalPlan</p></footer>`;
+    html += `<footer class="np-report-footer"><p>Generated by NavalPlan</p></footer>`;
     return html;
 }
 
