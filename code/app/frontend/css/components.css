@@ -1052,6 +1052,7 @@
     cursor: pointer;
     transition: background .15s;
     background: var(--chip);
+    border: 1px solid var(--accent, var(--sky));
 }
 
 .np-stop-card--selected {
