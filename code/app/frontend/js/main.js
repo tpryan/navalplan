@@ -2595,6 +2595,33 @@ function renderItinerary() {
         return;
     }
 
+    // §5.6 — Research-all in progress card
+    if (isResearchAllRunning) {
+        const card = document.createElement('div');
+        card.className = 'np-research-card';
+
+        const top = document.createElement('div');
+        top.className = 'np-research-card__top';
+        const spinner = document.createElement('span');
+        spinner.className = 'material-symbols-outlined spin np-research-card__icon';
+        spinner.textContent = 'travel_explore';
+        const lbl = document.createElement('span');
+        lbl.className = 'np-research-card__label';
+        lbl.textContent = 'Researching all stops…';
+        top.appendChild(spinner);
+        top.appendChild(lbl);
+        card.appendChild(top);
+
+        card.appendChild(Stepper({ steps: [
+            { label: 'Fetching weather forecasts', state: 'active' },
+            { label: 'Reading tide tables', state: 'queued' },
+            { label: 'Locating nearby facilities', state: 'queued' },
+            { label: 'Building voyage guide', state: 'queued' },
+        ]}));
+        list.appendChild(card);
+        return;
+    }
+
     // §5.7 — Research complete success banner
     if (lastKnownResearchDone) {
         const banner = document.createElement('div');
