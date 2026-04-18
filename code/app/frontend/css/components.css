@@ -1177,6 +1177,113 @@
     font-size: 16px;
 }
 
+/* ─── Research progress card (undated / stop research) ─────────────────── */
+.np-research-card {
+    margin: 12px 0;
+    padding: 18px 16px;
+    border-radius: var(--radius-card);
+    background: linear-gradient(135deg,
+        color-mix(in oklab, var(--sky) 12%, var(--surface)),
+        color-mix(in oklab, var(--violet) 12%, var(--surface)));
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.np-research-card--modal {
+    margin: 0;
+    padding: 24px 20px;
+    gap: 16px;
+}
+
+.np-research-card--guide {
+    background: linear-gradient(135deg,
+        color-mix(in oklab, var(--teal) 12%, var(--surface)),
+        color-mix(in oklab, var(--sky) 10%, var(--surface)));
+}
+
+.np-research-card__top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.np-research-card--modal .np-research-card__top {
+    gap: 12px;
+}
+
+.np-research-card__icon {
+    font-size: 20px;
+    color: var(--sky);
+}
+
+.np-research-card--modal .np-research-card__icon {
+    font-size: 24px;
+}
+
+.np-research-card--guide .np-research-card__icon {
+    color: var(--teal);
+}
+
+.np-research-card__label {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.np-research-card--modal .np-research-card__label {
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.np-research-card__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.np-research-card__sub {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ─── Stepper ───────────────────────────────────────────────────────────── */
+.np-stepper {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.np-stepper__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--ink2);
+}
+
+.np-stepper__dot {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.np-stepper__dot--done   { background: var(--teal); color: #fff; }
+.np-stepper__dot--active { background: var(--sky);  color: #fff; }
+.np-stepper__dot--queued { background: var(--chip); color: var(--muted); }
+
+.np-stepper__text--done   { color: var(--muted); }
+.np-stepper__text--active { font-weight: 600; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Responsive overrides
    ═══════════════════════════════════════════════════════════════════════════ */
