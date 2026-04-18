@@ -2835,7 +2835,7 @@ async function showBriefing(briefing, doPushState = true) {
     wxTiles.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:8px';
 
     if (!isInvalid(weather.condition)) {
-        wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, emoji: getIconForWeather(weather.condition) === 'wb_sunny' ? '☀️' : '🌤', accent: 'sky' }));
+        wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, icon: getIconForWeather(weather.condition), accent: 'sky' }));
     }
     if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
         wxTiles.appendChild(DataTile({ label: 'Wind', value: `${weather.wind_speed_kt || 0} kt`, sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction, emoji: '💨', accent: 'sky' }));
@@ -4880,6 +4880,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 <div class="np-day-tile" style="--accent:var(--${accent})">
                     <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
                     <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
+                    ${w.condition ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">${getIconForWeather(w.condition)}</span>${w.condition}</div>` : ''}
                     ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
                     ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">air</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
                     ${briefing.weather_last_updated ? `<div class="np-day-tile__meta" style="font-style:italic;opacity:0.7"><span class="material-symbols-outlined np-day-tile__icon">update</span>${new Date(briefing.weather_last_updated).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
