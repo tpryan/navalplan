@@ -211,26 +211,6 @@
     -webkit-backdrop-filter: none;
 }
 
-/* Ticker: replace branded glow animation */
-[data-theme="midnight-mariner"] #research-ticker,
-[data-theme="dark"] #research-ticker {
-    animation: ticker-glow-mm 2s infinite alternate;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 15px rgba(0, 229, 255, 0.1);
-}
-
-@keyframes ticker-glow-mm {
-    from {
-        border-color: #00E5FF;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 15px rgba(0, 229, 255, 0.1);
-        transform: scale(1);
-    }
-    to {
-        border-color: #00B8D4;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 229, 255, 0.25);
-        transform: scale(1.02);
-    }
-}
-
 /* Brand heading letter spacing */
 [data-theme="midnight-mariner"] .brand h1,
 [data-theme="dark"] .brand h1 {
