@@ -916,3 +916,84 @@
     color: var(--muted);
     padding: 16px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── ≤ 768px (mobile / tablet portrait) ────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Report hero: two-col → single col */
+    .np-report-hero {
+        grid-template-columns: 1fr;
+    }
+    .np-report-hero .np-destination-overview {
+        height: auto;
+    }
+
+    /* Guide two-col → single col */
+    .np-guide-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Day-grid fill: revert to auto-wrap so short itineraries don't squish */
+    .np-day-grid--fill {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    /* Hub grid: already auto-fill, shrink min to fit mobile */
+    .np-hub-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    /* Metric grid: 2 across */
+    .np-metric-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Wind forecast: 2 × 2 */
+    .np-wind-forecast {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Report stop header: tighter */
+    .np-report-stop {
+        padding: 14px 16px;
+    }
+
+    /* Compact rating tile: relax to flex-1 on mobile */
+    .np-facility-briefing-item__tiles .np-data-tile--compact {
+        flex: 1;
+    }
+}
+
+/* ─── ≤ 480px (small phones) ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    /* Glance tiles: single column */
+    .np-glance-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Season card: 4-col months are fine but reduce padding */
+    .np-season-card {
+        padding: 10px;
+    }
+
+    /* Auth chips: smaller */
+    .np-auth-chip {
+        height: 26px;
+        padding: 0 8px;
+        font-size: 11px;
+    }
+
+    /* Day tiles: 2 across on tiny screens */
+    .np-day-grid,
+    .np-day-grid--fill {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Weather tiles: 2 across */
+    .np-weather-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
