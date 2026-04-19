@@ -705,14 +705,10 @@ function initVoyageModalListeners() {
 function initNavigationListeners() {
     const btnBack = document.getElementById('btn-back-voyages');
     const btnExport = document.getElementById('btn-export-voyage');
-    const btnPrint = document.getElementById('btn-print-voyage');
     const btnEditVoyage = document.getElementById('btn-edit-voyage');
 
     if (btnBack) btnBack.addEventListener('click', showVoyageList);
     if (btnExport) btnExport.addEventListener('click', handleShowReport);
-    if (btnPrint) btnPrint.addEventListener('click', () => {
-        if (currentVoyage) window.open(`/voyages/${currentVoyage.id}/print`, '_blank');
-    });
 
     if (btnEditVoyage) {
         btnEditVoyage.addEventListener('click', () => { if (currentVoyage) openEditModal(currentVoyage); });
@@ -740,8 +736,12 @@ function initModalCloseListeners() {
             modalOverlay.classList.add('hidden');
         }
     };
+    const btnPrintVoyage = document.getElementById('btn-print-voyage');
     if (btnCloseReport) btnCloseReport.onclick = closeReport;
     if (btnCopyReport) btnCopyReport.onclick = handleCopyReport;
+    if (btnPrintVoyage) btnPrintVoyage.addEventListener('click', () => {
+        if (currentVoyage) window.open(`/voyages/${currentVoyage.id}/print`, '_blank');
+    });
 
     // Notification modal
     const modalNotification = document.getElementById('modal-notification');
@@ -3935,9 +3935,9 @@ async function captureAndUploadMap(voyageId) {
             if (!btnShare) {
                 btnShare = document.createElement('button');
                 btnShare.id = 'btn-share-report';
-                btnShare.className = 'btn secondary p-xs font-sm';
+                btnShare.className = 'btn-icon icon-xl';
                 btnShare.title = 'Share Report';
-                btnShare.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align">share</span>';
+                btnShare.innerHTML = '<span class="material-symbols-outlined">share</span>';
                 headerControls.insertBefore(btnShare, headerControls.firstChild);
             }
             btnShare.onclick = () => handleShareClick(guide);
