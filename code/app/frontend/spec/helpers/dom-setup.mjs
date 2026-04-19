@@ -19,6 +19,13 @@ try {
 }
 
 global.HTMLElement = dom.window.HTMLElement; // Needed for some checks
+global.localStorage = dom.window.localStorage;
+global.sessionStorage = dom.window.sessionStorage;
+
+// JSDOM does not implement matchMedia; provide a minimal stub.
+global.matchMedia = global.matchMedia || function() {
+    return { matches: false, addListener: () => {}, removeListener: () => {} };
+};
 
 // Make common globals available on window
 if (!global.window.fetch) {

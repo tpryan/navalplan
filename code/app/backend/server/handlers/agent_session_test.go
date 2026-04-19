@@ -62,6 +62,10 @@ func (s *sessionTrackingStore) DeleteVoyageRecommendations(_ context.Context, _ 
 	return nil
 }
 
+func (s *sessionTrackingStore) GetVoyageGuide(_ context.Context, _ int64) (*models.VoyageGuide, error) {
+	return nil, nil
+}
+
 // agentServerWithSessionFailure starts a test HTTP server whose session
 // creation endpoint returns 500 and records whether /api/run was called.
 func agentServerWithSessionFailure(t *testing.T) (srv *httptest.Server, runCalled *bool) {

@@ -58,7 +58,7 @@ describe('Auth Service', () => {
     expect(mapContainer.classList.contains('hidden')).toBeFalse();
     
     // Auth container should show login button
-    expect(authContainer.innerHTML).toContain('Login');
+    expect(authContainer.innerHTML).toContain('Sign in');
   });
 
   it('checkSession should handle API errors gracefully (treat as logout)', async () => {
@@ -69,6 +69,6 @@ describe('Auth Service', () => {
     // Should default to logout state
     expect(sidebar.classList.contains('hidden')).toBeFalse();
     expect(mapContainer.classList.contains('hidden')).toBeFalse();
-    expect(authContainer.innerHTML).toContain('Login');
+    expect(authContainer.innerHTML).toContain('Sign in');
   });
 });

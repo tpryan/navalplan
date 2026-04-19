@@ -666,6 +666,8 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 	}, nil).Maybe()
 	mockStore.On("GetBriefing", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	// Agent at "http://test-agent" will fail → failGuideResearch checks for existing guide, then saves empty.
+	mockStore.On("GetVoyageGuide", mock.Anything).Return(nil, assert.AnError).Maybe()
 	// Agent at "http://test-agent" will fail → saveEmptyBriefing / saveEmptyGuide are called.
 	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("CreateVoyageGuide", mock.Anything, mock.Anything).Return(nil).Maybe()
@@ -777,7 +779,8 @@ func TestGuideHandlers(t *testing.T) {
 		loc := "Sea"
 		// Ownership check included in getting voyage
 		mockStore.On("GetVoyage", voyageID).Return(&models.Voyage{ID: voyageID, PersonID: personID, LocationName: &loc}, nil)
-		// Async goroutine: agent at "http://test-agent" will fail → saveEmptyGuide calls CreateVoyageGuide.
+		// Async goroutine: agent at "http://test-agent" will fail → failGuideResearch checks for existing guide, then saves empty.
+		mockStore.On("GetVoyageGuide", voyageID).Return(nil, assert.AnError).Maybe()
 		mockStore.On("CreateVoyageGuide", mock.Anything).Return(nil).Maybe()
 
 		req := httptest.NewRequest("POST", "/voyages/2/research_guide", nil)
