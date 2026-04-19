@@ -150,6 +150,12 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jobKey := fmt.Sprintf("stop:%d", stop.ID)
+	if !h.tryClaimJob(jobKey) {
+		writeError(w, http.StatusConflict, "Research is already in progress for this stop")
+		return
+	}
+
 	sessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
 
 	// Pre-register progress channel before spawning goroutine so early events are buffered.
@@ -160,10 +166,11 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "stop_id": idStr, "session_id": sessionID})
 
 	// Async processing
-	go h.performStopResearch(stop, sessionID)
+	go h.performStopResearch(stop, sessionID, jobKey)
 }
 
-func (h *Handler) performStopResearch(stop *models.Stop, sessionID string) {
+func (h *Handler) performStopResearch(stop *models.Stop, sessionID, jobKey string) {
+	defer h.releaseJob(jobKey)
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
 	h.performStopResearchLogic(stop, sessionID)
@@ -396,6 +403,12 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	fullJobKey := fmt.Sprintf("full:%d", voyageID)
+	if !h.tryClaimJob(fullJobKey) {
+		writeError(w, http.StatusConflict, "Full voyage research is already in progress")
+		return
+	}
+
 	sessionID := fmt.Sprintf("voyage_%d_%d", voyageID, time.Now().Unix())
 
 	// Pre-register progress channel before spawning goroutines so early events are buffered.
@@ -410,6 +423,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	})
 
 	go func() {
+		defer h.releaseJob(fullJobKey)
 		ctx := context.Background()
 		slog.InfoContext(ctx, fmt.Sprintf("[research-coordinator] Starting full research for voyage %d", voyageID))
 
@@ -420,7 +434,9 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		go func() {
 			defer wg.Done()
 			slog.InfoContext(ctx, fmt.Sprintf("Starting guide research for voyage %d", voyageID))
-			h.performGuideResearch(voyage, sessionID)
+			h.ResearchSem <- struct{}{}
+			defer func() { <-h.ResearchSem }()
+			h.performGuideResearchLogic(voyage, sessionID)
 		}()
 
 		// Identify redundant last stop to avoid double AI calls in parallel runs

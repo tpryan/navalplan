@@ -54,7 +54,7 @@ func TestPerformGuideResearch_NilLatLng_DoesNotPanic(t *testing.T) {
 	}
 
 	// Must not panic even though PreciseLocation is set but lat/lng are nil.
-	h.performGuideResearch(voyage, "")
+	h.performGuideResearch(voyage, "", "")
 }
 
 func TestPerformGuideResearch_WithLatLng_IncludesCoords(t *testing.T) {
@@ -84,7 +84,7 @@ func TestPerformGuideResearch_WithLatLng_IncludesCoords(t *testing.T) {
 	}
 
 	// Must not panic and must reach the agent.
-	h.performGuideResearch(voyage, "")
+	h.performGuideResearch(voyage, "", "")
 }
 
 // --- recommendation.go: nil Latitude/Longitude guard ---

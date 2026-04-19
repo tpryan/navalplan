@@ -34,6 +34,10 @@ type Handler struct {
 	// progressStreams holds active progress SSE channels keyed by session ID.
 	muProgressStreams sync.RWMutex
 	progressStreams   map[string]chan models.ProgressEvent
+
+	// activeJobs tracks in-flight agent research tasks keyed by job key (e.g. "guide:42", "stop:7", "full:42").
+	muActiveJobs sync.Mutex
+	activeJobs   map[string]struct{}
 }
 
 // New creates a new Handler with the given dependencies.
@@ -63,7 +67,26 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		ResearchSem: make(chan struct{}, 10),
 		recStreams:       make(map[string]chan models.VoyageRecommendation),
 		progressStreams:   make(map[string]chan models.ProgressEvent),
+		activeJobs:        make(map[string]struct{}),
 	}
+}
+
+// tryClaimJob atomically marks a job key as in-flight. Returns false if already running.
+func (h *Handler) tryClaimJob(key string) bool {
+	h.muActiveJobs.Lock()
+	defer h.muActiveJobs.Unlock()
+	if _, ok := h.activeJobs[key]; ok {
+		return false
+	}
+	h.activeJobs[key] = struct{}{}
+	return true
+}
+
+// releaseJob removes a job key from the active set.
+func (h *Handler) releaseJob(key string) {
+	h.muActiveJobs.Lock()
+	defer h.muActiveJobs.Unlock()
+	delete(h.activeJobs, key)
 }
 
 // CheckAgentHealth pings the agent's /healthz endpoint.
