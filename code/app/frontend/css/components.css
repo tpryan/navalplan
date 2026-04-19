@@ -208,6 +208,9 @@
 
 /* ─── Guide section wrapper ──────────────────────────────────────────────── */
 .np-guide-section {
+    padding: 20px;
+    border-radius: var(--radius-card);
+    background: color-mix(in oklab, var(--teal) 6%, var(--surface));
     margin-bottom: 28px;
 }
 .np-guide-section__eyebrow {
