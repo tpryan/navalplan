@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -48,14 +47,14 @@ func TestGetTides_Success(t *testing.T) {
 		},
 	}
 
-	tp := &TideProvider{client: mockClient}
+	tp := &NOAAProvider{client: mockClient}
 	args := TideArgs{
 		Latitude:  41.5,
 		Longitude: -71.3,
 		Date:      "2025-01-01",
 	}
 
-	result, err := tp.GetTides(mockToolContext{Context: context.Background()}, args)
+	result, err := tp.GetTides(41.5, -71.3, args.Date)
 	if err != nil {
 		t.Fatalf("GetTides() error = %v", err)
 	}
@@ -94,14 +93,9 @@ func TestGetTides_NoStations(t *testing.T) {
 		},
 	}
 
-	tp := &TideProvider{client: mockClient}
-	args := TideArgs{
-		Latitude:  41.5,
-		Longitude: -71.3,
-		Date:      "2025-01-01",
-	}
+	tp := &NOAAProvider{client: mockClient}
 
-	_, err := tp.GetTides(mockToolContext{Context: context.Background()}, args)
+	_, err := tp.GetTides(41.5, -71.3, "2025-01-01")
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
@@ -125,8 +119,8 @@ func TestGetTides_InvalidDate(t *testing.T) {
 		},
 	}
 
-	tp := &TideProvider{client: mockClient}
-	_, err := tp.GetTides(mockToolContext{Context: context.Background()}, args)
+	tp := &NOAAProvider{client: mockClient}
+	_, err := tp.GetTides(args.Latitude, args.Longitude, args.Date)
 	if err == nil {
 		t.Error("Expected error for invalid date, got none")
 	}
@@ -152,7 +146,7 @@ func TestTideBufferRange(t *testing.T) {
 }
 
 func TestNewTideTool(t *testing.T) {
-	tool, _, err := NewTideTool()
+	tool, _, err := NewTideTool("", "")
 	if err != nil {
 		t.Fatalf("NewTideTool() error = %v", err)
 	}

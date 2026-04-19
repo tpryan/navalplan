@@ -5,13 +5,15 @@ import (
 )
 
 type Config struct {
-	Env          string
-	Project      string
-	ModelName    string
-	GeminiAPIKey string
-	MapsAPIKey   string
-	Port         string
-	BaseURL      string
+	Env             string
+	Project         string
+	ModelName       string
+	GeminiAPIKey    string
+	MapsAPIKey      string
+	UKTidalAPIKey   string
+	NIWAAPIKey      string
+	Port            string
+	BaseURL         string
 }
 
 func New(getEnv func(string) string) (*Config, error) {
@@ -49,6 +51,9 @@ func New(getEnv func(string) string) (*Config, error) {
 
 	baseURL := getEnv("NAVALPLAN_AGENT_BASE_URL")
 
+	ukTidalKey := getEnv("NAVALPLAN_TIDAL_UKTIDAL_API_KEY")
+	niwaKey := getEnv("NAVALPLAN_TIDAL_NIWA_API_KEY")
+
 	env := getEnv("ENV")
 	if env == "" {
 		env = "development"
@@ -57,13 +62,15 @@ func New(getEnv func(string) string) (*Config, error) {
 	project := getEnv("GOOGLE_CLOUD_PROJECT")
 
 	cfg := &Config{
-		Env:          env,
-		Project:      project,
-		ModelName:    modelName,
-		GeminiAPIKey: geminiKey,
-		MapsAPIKey:   mapsKey,
-		Port:         port,
-		BaseURL:      baseURL,
+		Env:           env,
+		Project:       project,
+		ModelName:     modelName,
+		GeminiAPIKey:  geminiKey,
+		MapsAPIKey:    mapsKey,
+		UKTidalAPIKey: ukTidalKey,
+		NIWAAPIKey:    niwaKey,
+		Port:          port,
+		BaseURL:       baseURL,
 	}
 
 	return cfg, nil

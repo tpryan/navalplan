@@ -1,17 +1,19 @@
 module github.com/tpryan/navalplan/services/researcher
 
-go 1.25.4
+go 1.26.2
 
 require (
 	cloud.google.com/go/maps v1.26.0
 	github.com/a2aproject/a2a-go v0.3.13
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/charmbracelet/log v0.4.2
+	github.com/charmbracelet/log v1.0.0
 	github.com/googleapis/gax-go/v2 v2.16.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nathan-osman/go-sunrise v1.1.0
+	github.com/tpryan/niwago v0.0.0-20260419055912-9f1a7b7a9763
 	github.com/tpryan/noaago v1.0.0
 	github.com/tpryan/openmeteogo v1.2.0
+	github.com/tpryan/uktidal v0.1.0
 	golang.org/x/sync v0.19.0
 	google.golang.org/adk v1.1.0
 	google.golang.org/api v0.259.0
@@ -36,7 +38,7 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
