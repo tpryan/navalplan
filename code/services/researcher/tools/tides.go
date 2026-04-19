@@ -207,26 +207,52 @@ func (p *UKProvider) GetTides(lat, lng float64, dateStr string) (TideResult, err
 		return TideResult{}, ErrNotFound
 	}
 
-	nearest, dist := nearestUKStation(lat, lng, stations.Features)
+	candidates := nearestUKStations(lat, lng, stations.Features, MaxStationsToCheck)
 
-	events, err := p.client.Events(nearest.Properties.Id, 7)
-	if err != nil {
-		return TideResult{}, fmt.Errorf("%w: fetching UK tidal events: %w", ErrAPIUnavailable, err)
+	// Try candidates in order of distance. Secondary ports only publish High Water
+	// predictions, so skip any station whose events don't contain both H and L types.
+	for _, candidate := range candidates {
+		events, err := p.client.Events(candidate.station.Properties.Id, 7)
+		if err != nil {
+			continue
+		}
+		tides := filterUKEvents(events, parsedDate)
+		if hasBothTideTypes(tides) {
+			return TideResult{
+				StationName:   candidate.station.Properties.Name,
+				StationID:     candidate.station.Properties.Id,
+				DistanceMiles: candidate.dist,
+				Tides:         tides,
+			}, nil
+		}
 	}
 
-	tides := filterUKEvents(events, parsedDate)
+	// Fallback: return whatever the nearest station has, even if incomplete.
+	if len(candidates) > 0 {
+		nearest := candidates[0]
+		events, err := p.client.Events(nearest.station.Properties.Id, 7)
+		if err != nil {
+			return TideResult{}, fmt.Errorf("%w: fetching UK tidal events: %w", ErrAPIUnavailable, err)
+		}
+		return TideResult{
+			StationName:   nearest.station.Properties.Name,
+			StationID:     nearest.station.Properties.Id,
+			DistanceMiles: nearest.dist,
+			Tides:         filterUKEvents(events, parsedDate),
+		}, nil
+	}
 
-	return TideResult{
-		StationName:   nearest.Properties.Name,
-		StationID:     nearest.Properties.Id,
-		DistanceMiles: dist,
-		Tides:         tides,
-	}, nil
+	return TideResult{}, ErrNotFound
 }
 
-func nearestUKStation(lat, lng float64, stations []uktidal.Station) (uktidal.Station, float64) {
-	var nearest uktidal.Station
-	minDist := math.MaxFloat64
+type ukStationDist struct {
+	station uktidal.Station
+	dist    float64
+}
+
+// nearestUKStations returns up to n stations sorted by distance from lat/lng.
+func nearestUKStations(lat, lng float64, stations []uktidal.Station, n int) []ukStationDist {
+	var all []ukStationDist
 	for _, s := range stations {
 		if len(s.Geometry.Coordinates) < 2 {
 			continue
@@ -235,12 +261,37 @@ func nearestUKStation(lat, lng float64, stations []uktidal.Station) (uktidal.Sta
 		sLng := s.Geometry.Coordinates[0]
 		sLat := s.Geometry.Coordinates[1]
 		d := haversineDistanceMiles(lat, lng, sLat, sLng)
-		if d < minDist {
-			minDist = d
-			nearest = s
+		all = append(all, ukStationDist{station: s, dist: d})
+	}
+	// Partial sort: bubble the n smallest distances to the front.
+	for i := 0; i < n && i < len(all); i++ {
+		for j := i + 1; j < len(all); j++ {
+			if all[j].dist < all[i].dist {
+				all[i], all[j] = all[j], all[i]
+			}
 		}
 	}
-	return nearest, minDist
+	if len(all) < n {
+		return all
+	}
+	return all[:n]
+}
+
+// hasBothTideTypes returns true when tides contains at least one H and one L event.
+func hasBothTideTypes(tides []TideEvent) bool {
+	var hasH, hasL bool
+	for _, t := range tides {
+		switch t.Type {
+		case "H":
+			hasH = true
+		case "L":
+			hasL = true
+		}
+		if hasH && hasL {
+			return true
+		}
+	}
+	return false
 }
 
 func filterUKEvents(events []uktidal.Event, date time.Time) []TideEvent {
