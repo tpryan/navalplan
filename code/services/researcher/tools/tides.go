@@ -182,10 +182,21 @@ func (p *UKProvider) CanHandle(lat, lng float64) bool {
 	return lat >= ukLatMin && lat <= ukLatMax && lng >= ukLngMin && lng <= ukLngMax
 }
 
+// ukForecastDays is the maximum number of days the ADMIRALTY Events API covers
+// from today. The endpoint has no start-date parameter; it always begins now.
+const ukForecastDays = 7
+
 func (p *UKProvider) GetTides(lat, lng float64, dateStr string) (TideResult, error) {
 	parsedDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
 		return TideResult{}, ErrInvalidDate
+	}
+
+	// Reject dates beyond the API's fixed forecast window so TideManager can
+	// fall through to the next provider rather than silently returning no tides.
+	cutoff := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, ukForecastDays)
+	if parsedDate.After(cutoff) {
+		return TideResult{}, fmt.Errorf("UK tidal data unavailable for %s: ADMIRALTY API covers at most %d days from today", dateStr, ukForecastDays)
 	}
 
 	stations, err := p.client.Stations("")
@@ -412,10 +423,19 @@ func NewTideTool(ukKey, niwaKey string) (tool.Tool, *TideManager, error) {
 }
 
 func (tm *TideManager) GetTides(ctx tool.Context, args TideArgs) (TideResult, error) {
+	var lastErr error
 	for _, p := range tm.providers {
-		if p.CanHandle(args.Latitude, args.Longitude) {
-			return p.GetTides(args.Latitude, args.Longitude, args.Date)
+		if !p.CanHandle(args.Latitude, args.Longitude) {
+			continue
 		}
+		result, err := p.GetTides(args.Latitude, args.Longitude, args.Date)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return TideResult{}, lastErr
 	}
 	return TideResult{}, fmt.Errorf("no tidal data provider supports coordinates: %f, %f", args.Latitude, args.Longitude)
 }

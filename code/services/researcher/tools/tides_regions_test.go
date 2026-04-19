@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/tpryan/niwago"
@@ -170,6 +171,16 @@ func TestUKProvider_GetTides_InvalidDate(t *testing.T) {
 	}
 }
 
+func TestUKProvider_GetTides_DateTooFar(t *testing.T) {
+	// A date well beyond the 7-day ADMIRALTY window should return an error
+	// rather than silently succeeding with empty tides.
+	p := &UKProvider{client: &mockUKTidalClient{}}
+	_, err := p.GetTides(51.5, -0.1, "2030-01-01")
+	if err == nil {
+		t.Error("expected error for date beyond ADMIRALTY 7-day window, got nil")
+	}
+}
+
 // --- NIWAProvider.GetTides ---
 
 func TestNIWAProvider_GetTides_Success(t *testing.T) {
@@ -223,11 +234,15 @@ func TestNIWAProvider_GetTides_InvalidDate(t *testing.T) {
 type captureProvider struct {
 	canHandle bool
 	called    bool
+	returnErr error
 }
 
 func (c *captureProvider) CanHandle(lat, lng float64) bool { return c.canHandle }
 func (c *captureProvider) GetTides(lat, lng float64, dateStr string) (TideResult, error) {
 	c.called = true
+	if c.returnErr != nil {
+		return TideResult{}, c.returnErr
+	}
 	return TideResult{StationName: "captured"}, nil
 }
 
@@ -253,6 +268,31 @@ func TestTideManager_DispatchesToFirstMatch(t *testing.T) {
 	}
 	if third.called {
 		t.Error("third provider should not have been called (second matched first)")
+	}
+}
+
+func TestTideManager_FallsThroughOnError(t *testing.T) {
+	// First matching provider errors; TideManager should try the next one.
+	failing := &captureProvider{canHandle: true}
+	succeeding := &captureProvider{canHandle: true}
+
+	tm := &TideManager{providers: []RegionalTideProvider{failing, succeeding}}
+
+	// Make failing return an error.
+	failing.returnErr = fmt.Errorf("date out of range")
+
+	result, err := tm.GetTides(mockToolContext{}, TideArgs{Latitude: 51.5, Longitude: -0.1, Date: "2030-01-01"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.StationName != "captured" {
+		t.Errorf("unexpected station: %s", result.StationName)
+	}
+	if !failing.called {
+		t.Error("failing provider should have been called")
+	}
+	if !succeeding.called {
+		t.Error("succeeding provider should have been called after fallthrough")
 	}
 }
 
