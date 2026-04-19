@@ -671,6 +671,136 @@ html:has(.shared-view) {
     }
 }
 
+/* ── Print View ─────────────────────────────────────────────────────────────── */
+
+.print-view {
+    overflow-y: auto !important;
+    height: auto !important;
+    background: none;
+}
+
+html:has(.print-view) {
+    overflow-y: auto !important;
+    height: auto !important;
+}
+
+.print-view #mobile-tab-bar,
+.print-view #sidebar,
+.print-view #btn-mobile-menu {
+    display: none !important;
+}
+
+.print-report-content {
+    max-width: 860px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+    box-sizing: border-box;
+}
+
+.print-view .np-report-stop {
+    background: none;
+    --accent: var(--muted);
+}
+
+.np-print-map-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+}
+
+.np-print-map-row .np-report-map {
+    flex: 0 0 55%;
+    max-width: 55%;
+    height: auto;
+    object-fit: contain;
+    object-position: left top;
+    margin-bottom: 0;
+}
+
+.np-print-map-row .np-metric-grid {
+    flex: 1;
+    grid-template-columns: 1fr 1fr;
+    align-content: start;
+}
+
+.np-print-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 860px;
+    margin: 1.5rem auto 0;
+    padding: 0.75rem 1.5rem;
+    background: var(--surface-2, #f5f5f5);
+    border-bottom: 1px solid var(--border, #e0e0e0);
+    gap: 1rem;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .print-report-content {
+        margin: 1rem auto;
+        padding: 0 1rem;
+    }
+    .np-print-bar {
+        padding: 0.75rem 1rem;
+    }
+}
+
+@media print {
+    .np-print-bar {
+        display: none !important;
+    }
+
+    /* Ensure colors and backgrounds print */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Each stop starts on a fresh page, no card background or accent */
+    .np-report-stop {
+        break-before: page;
+        background: none;
+        --accent: var(--muted);
+    }
+
+    /* Destination guide starts on a fresh page */
+    .np-guide-section {
+        break-before: page;
+    }
+
+    /* Keep the first-page block (hero + map + day grid) together */
+    .np-report-hero {
+        break-inside: avoid;
+        break-after: avoid;
+    }
+
+    .np-print-map-row {
+        break-inside: avoid;
+        break-after: avoid;
+    }
+
+    .np-print-map-row .np-report-map {
+        max-height: 220px;
+    }
+
+    .np-section-label {
+        break-after: avoid;
+    }
+
+    /* Avoid splitting key blocks across pages */
+    .np-report-stop__header,
+    .np-weather-grid,
+    .np-wind-forecast,
+    .np-day-grid,
+    .np-facility-report-card,
+    .np-rec-item,
+    .np-metric-grid {
+        break-inside: avoid;
+    }
+}
+
 @media (max-width: 480px) {
     .shared-report-content {
         margin: 0.5rem auto;

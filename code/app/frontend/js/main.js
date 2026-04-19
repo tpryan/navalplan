@@ -225,6 +225,13 @@ function initApp() {
       }
   }
 
+  // Print View Handler
+  const printMatch = path.match(/^\/voyages\/(\d+)\/print$/);
+  if (printMatch) {
+      initPrintMode(parseInt(printMatch[1], 10));
+      return;
+  }
+
   checkSession();
   initMap();
   initUI();
@@ -698,10 +705,14 @@ function initVoyageModalListeners() {
 function initNavigationListeners() {
     const btnBack = document.getElementById('btn-back-voyages');
     const btnExport = document.getElementById('btn-export-voyage');
+    const btnPrint = document.getElementById('btn-print-voyage');
     const btnEditVoyage = document.getElementById('btn-edit-voyage');
 
     if (btnBack) btnBack.addEventListener('click', showVoyageList);
     if (btnExport) btnExport.addEventListener('click', handleShowReport);
+    if (btnPrint) btnPrint.addEventListener('click', () => {
+        if (currentVoyage) window.open(`/voyages/${currentVoyage.id}/print`, '_blank');
+    });
 
     if (btnEditVoyage) {
         btnEditVoyage.addEventListener('click', () => { if (currentVoyage) openEditModal(currentVoyage); });
@@ -5142,6 +5153,95 @@ function renderSharedReport(data, container) {
         });
     }, 100);
 }
+// ─── Print View ───────────────────────────────────────────────────────────────
+
+async function initPrintMode(voyageId) {
+    document.body.classList.add('print-view');
+    document.documentElement.classList.add('print-view');
+    const app = document.getElementById('app');
+    app.innerHTML = '<div class="loading-state"><span class="material-symbols-outlined spin loading-icon">sync</span><p>Preparing print view…</p></div>';
+
+    let person;
+    try { person = await API.getPerson(); } catch (e) { /* treat as logged out */ }
+    if (!person) {
+        app.innerHTML = '<div class="error-state text-center p-xl"><h2 class="text-dark">Sign in required</h2><p>Please <a href="/">sign in</a> to view this report.</p></div>';
+        return;
+    }
+
+    try {
+        const [pilotReport, stops] = await Promise.all([
+            API.getPilotReport(voyageId),
+            API.getStops(voyageId),
+        ]);
+        const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+        const briefings = await Promise.all(sortedStops.map(s => API.getBriefing(s.id).catch(() => null)));
+
+        renderPrintReport({
+            voyage: pilotReport.voyage,
+            guide: pilotReport.guide,
+            stops,
+            briefings,
+            recommendations: pilotReport.recommendations,
+            map_url: pilotReport.map_url,
+        }, app);
+    } catch (err) {
+        console.error(err);
+        app.innerHTML = '<div class="error-state text-center p-xl"><h2 class="text-dark">Report Not Found</h2><p>Unable to load this voyage.</p></div>';
+    }
+}
+
+function renderPrintReport(data, container) {
+    const guide = data.guide || {};
+    const voyage = data.voyage || {};
+    const stops = data.stops || [];
+    const briefings = data.briefings || [];
+    const recommendations = data.recommendations || [];
+    const hasBriefings = briefings.some(b => b !== null);
+    const mapURL = data.map_url;
+
+    const printBar = `
+        <div class="np-print-bar">
+            <a href="/voyages/${voyage.id || ''}" class="btn secondary">← Back</a>
+            <button class="btn primary" onclick="window.print()">
+                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:18px">print</span>
+                Print / Save as PDF
+            </button>
+        </div>`;
+
+    const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL);
+
+    container.innerHTML = DOMPurify.sanitize(
+        `${printBar}<div class="print-report-content">${html}</div>`,
+        { ADD_ATTR: ['target'] }
+    );
+
+    // Re-attach print bar button (DOMPurify strips onclick; use event delegation instead)
+    const printBtn = container.querySelector('.np-print-bar .btn.primary');
+    if (printBtn) printBtn.addEventListener('click', () => window.print());
+
+    // Move metric grid to sit beside the map in a flex row
+    const metricGrid = container.querySelector('.np-metric-grid');
+    const map = container.querySelector('.np-report-map');
+    if (metricGrid && map) {
+        const row = document.createElement('div');
+        row.className = 'np-print-map-row';
+        map.parentNode.insertBefore(row, map);
+        row.appendChild(map);
+        row.appendChild(metricGrid);
+    }
+
+    setTimeout(() => {
+        const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+        sortedStops.forEach((stop, idx) => {
+            const b = briefings.find(br => br && br.stop_id === stop.id) || {};
+            if (b.tides && b.tides.events) {
+                renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
+                renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);
+            }
+        });
+    }, 100);
+}
+
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function initOnboarding() {
