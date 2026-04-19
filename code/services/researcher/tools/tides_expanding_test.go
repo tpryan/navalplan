@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/tpryan/noaago"
@@ -37,14 +36,9 @@ func TestGetTides_ExpandingSearch(t *testing.T) {
 		},
 	}
 
-	tp := &TideProvider{client: mockClient}
-	args := TideArgs{
-		Latitude:  41.5,
-		Longitude: -71.3,
-		Date:      "2025-01-01",
-	}
+	tp := &NOAAProvider{client: mockClient}
 
-	result, err := tp.GetTides(mockToolContext{Context: context.Background()}, args)
+	result, err := tp.GetTides(41.5, -71.3, "2025-01-01")
 	if err != nil {
 		t.Fatalf("GetTides() error = %v", err)
 	}

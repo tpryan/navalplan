@@ -196,6 +196,14 @@ func main() {
 		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
 	}
 
+	if len(cfg.UKTidalAPIKey) > 5 {
+		slog.Info("config", "UKTidalAPIKey", cfg.UKTidalAPIKey[:5]+"...")
+	}
+
+	if len(cfg.NIWAAPIKey) > 5 {
+		slog.Info("config", "NIWAAPIKey", cfg.NIWAAPIKey[:5]+"...")
+	}
+
 	ctx := context.Background()
 	srv := &Server{
 		config:  cfg,
@@ -402,7 +410,7 @@ func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, error) {
 	}
 	s.providers = append(s.providers, wp)
 
-	tideTool, tp, err := tools.NewTideTool()
+	tideTool, tp, err := tools.NewTideTool(s.config.UKTidalAPIKey, s.config.NIWAAPIKey)
 	if err != nil {
 		return nil, err
 	}
