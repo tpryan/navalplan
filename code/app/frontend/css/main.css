@@ -702,6 +702,12 @@ html:has(.print-view) {
     --accent: var(--muted);
 }
 
+.print-view .np-guide-section {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+}
+
 .print-view .np-charter-airports-row {
     display: flex;
     gap: 16px;
@@ -773,9 +779,12 @@ html:has(.print-view) {
         --accent: var(--muted);
     }
 
-    /* Destination guide starts on a fresh page */
+    /* Destination guide starts on a fresh page, no background in print */
     .np-guide-section {
         break-before: page;
+        background: none;
+        padding: 0;
+        border-radius: 0;
     }
 
     /* Constrain Chart.js canvases — they are fixed-pixel bitmaps that overflow on print */
