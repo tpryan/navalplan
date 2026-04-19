@@ -120,6 +120,7 @@ export const API = {
 
   async triggerResearch(stopId) {
     const res = await apiFetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
+    if (res.status === 409) { const e = new Error('Research already in progress for this stop'); e.conflict = true; throw e; }
     if (!res.ok) throw new Error('Failed to trigger research');
     return res.json();
   },
@@ -174,12 +175,14 @@ export const API = {
 
   async triggerVoyageGuideResearch(voyageId) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/research_guide`, { method: 'POST' });
+    if (res.status === 409) { const e = new Error('Guide research already in progress for this voyage'); e.conflict = true; throw e; }
     if (!res.ok) throw new Error('Failed to trigger guide research');
     return res.json();
   },
 
   async triggerFullResearch(voyageId) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/research`, { method: 'POST' });
+    if (res.status === 409) { const e = new Error('Full voyage research is already in progress'); e.conflict = true; throw e; }
     if (!res.ok) throw new Error('Failed to trigger full research');
     return res.json();
   },

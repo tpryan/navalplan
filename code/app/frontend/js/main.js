@@ -1611,7 +1611,11 @@ async function executeResearchAll() {
            btn.innerHTML = btn.dataset.originalContent || '<span class="material-symbols-outlined">science</span>';
            btn.disabled = false;
         });
-        showNotification('Error', 'Failed to trigger research.');
+        if (err.conflict) {
+            showNotification('Already Running', 'Full voyage research is already in progress. Please wait for it to finish.');
+        } else {
+            showNotification('Error', 'Failed to trigger research.');
+        }
     }
 }
 
@@ -1760,9 +1764,13 @@ async function handlePilotSuggestionsClick() {
 
 
         // 3. Trigger both Local Pilot (Recommendations) and Voyage Guide research
+        // Guide research conflict is non-fatal — recommendations still proceed.
         const [recRes] = await Promise.all([
             API.generateRecommendations(currentVoyage.id),
-            API.triggerVoyageGuideResearch(currentVoyage.id)
+            API.triggerVoyageGuideResearch(currentVoyage.id).catch(e => {
+                if (e.conflict) showNotification('Already Running', 'Guide research is already in progress for this voyage.');
+                else throw e;
+            }),
         ]);
 
         // Shared completion handler — called from either the done progress event or the poll.
@@ -2637,8 +2645,13 @@ async function handleResearchClick(stop, button) {
         clearInterval(_stopPoll); _stopPoll = null;
         if (_stopProgressES) { _stopProgressES.close(); _stopProgressES = null; }
         clearStopSweeps();
-        button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
-        setTimeout(() => button.innerHTML = originalContent, 2000);
+        if (err.conflict) {
+            showNotification('Already Running', 'Research is already in progress for this stop. Please wait for it to finish.');
+            button.innerHTML = originalContent;
+        } else {
+            button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
+            setTimeout(() => button.innerHTML = originalContent, 2000);
+        }
     }
 }
 
@@ -3191,8 +3204,12 @@ async function redoBriefing(oldBriefing, btn) {
         }, 3000);
     } catch (err) {
         console.error(err);
-        content.innerHTML = '<div class="error-state error-text"><p>Failed to redo research.</p></div>';
         btn.disabled = false;
+        if (err.conflict) {
+            content.innerHTML = '<div class="np-conflict-notice"><span class="material-symbols-outlined">sync</span><p>Research is already in progress for this stop. The briefing will update automatically when it completes.</p></div>';
+        } else {
+            content.innerHTML = '<div class="error-state error-text"><p>Failed to redo research.</p></div>';
+        }
     }
 }
 
@@ -4019,8 +4036,13 @@ async function handleGuideClick(voyage, button, doPushState = true) {
         console.error(err);
         clearInterval(_guidePoll); _guidePoll = null;
         if (_guideProgressES) { _guideProgressES.close(); _guideProgressES = null; }
-        button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
-        setTimeout(() => button.innerHTML = originalContent, 2000);
+        if (err.conflict) {
+            showNotification('Already Running', 'Guide research is already in progress for this voyage. Please wait for it to finish.');
+            button.innerHTML = originalContent;
+        } else {
+            button.innerHTML = '<span class="material-symbols-outlined error">error</span>';
+            setTimeout(() => button.innerHTML = originalContent, 2000);
+        }
     }
 }
 
@@ -4141,16 +4163,24 @@ async function redoGuide(oldGuide, btn) {
     try {
         const redoGuideRes = await API.triggerVoyageGuideResearch(oldGuide.voyage_id);
 
-        let redoGuideProgressES = null;
-        if (redoGuideRes && redoGuideRes.session_id) {
-            redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, () => {});
-        }
-
         const oldTime = new Date(oldGuide.created_at).getTime();
         const startTime = Date.now();
-        const TIMEOUT_MS = 60000;
+        const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — guide research can take ~60s+
 
-        const poll = setInterval(async () => {
+        let poll;
+        let redoGuideProgressES = null;
+        if (redoGuideRes && redoGuideRes.session_id) {
+            redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, (evt) => {
+                if (evt.stage === 'error') {
+                    clearInterval(poll);
+                    redoGuideProgressES.close();
+                    btn.disabled = false;
+                    content.innerHTML = `<div class="error-state"><p><strong>Research failed.</strong> ${evt.message || 'The agent was unable to generate a guide.'} The previous guide has been preserved.</p></div>`;
+                }
+            });
+        }
+
+        poll = setInterval(async () => {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
                 if (redoGuideProgressES) redoGuideProgressES.close();
@@ -4160,8 +4190,8 @@ async function redoGuide(oldGuide, btn) {
             }
             try {
                 const g = await API.getVoyageGuide(oldGuide.voyage_id);
-                if (g) {
-                    const newTime = new Date(g.created_at).getTime();
+                if (g && g.guide) {
+                    const newTime = new Date(g.guide.created_at).getTime();
                     if (newTime > oldTime) {
                         clearInterval(poll);
                         if (redoGuideProgressES) redoGuideProgressES.close();
@@ -4174,6 +4204,9 @@ async function redoGuide(oldGuide, btn) {
     } catch (err) {
         console.error(err);
         btn.disabled = false;
+        if (err.conflict) {
+            content.innerHTML = '<div class="np-conflict-notice"><span class="material-symbols-outlined">sync</span><p>Guide research is already in progress for this voyage. The guide will update automatically when it completes.</p></div>';
+        }
     }
 }
 

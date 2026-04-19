@@ -169,6 +169,12 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jobKey := fmt.Sprintf("guide:%d", voyageID)
+	if !h.tryClaimJob(jobKey) {
+		writeError(w, http.StatusConflict, "Guide research is already in progress for this voyage")
+		return
+	}
+
 	sessionID := fmt.Sprintf("guide_%d_%d", voyageID, time.Now().Unix())
 
 	// Pre-register progress channel before spawning goroutine so early events are buffered.
@@ -179,10 +185,11 @@ func (h *Handler) TriggerGuideResearch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "voyage_id": idStr, "session_id": sessionID})
 
 	// Async processing
-	go h.performGuideResearch(voyage, sessionID)
+	go h.performGuideResearch(voyage, sessionID, jobKey)
 }
 
-func (h *Handler) performGuideResearch(voyage *models.Voyage, sessionID string) {
+func (h *Handler) performGuideResearch(voyage *models.Voyage, sessionID, jobKey string) {
+	defer h.releaseJob(jobKey)
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
 	h.performGuideResearchLogic(voyage, sessionID)
@@ -201,7 +208,7 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID str
 	// 1. Create Session
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
-		h.saveEmptyGuide(ctx, voyage)
+		h.failGuideResearch(ctx, voyage, sessionID, "Failed to start research session")
 		return
 	}
 
@@ -224,27 +231,27 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID str
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
-		h.saveEmptyGuide(ctx, voyage)
+		h.failGuideResearch(ctx, voyage, sessionID, "Research agent failed to respond")
 		return
 	}
 
 	if responseText == "" {
 		slog.ErrorContext(ctx, "No response from agent")
-		h.saveEmptyGuide(ctx, voyage)
+		h.failGuideResearch(ctx, voyage, sessionID, "Agent returned no data")
 		return
 	}
 
 	cleanedResponse := cleanJSON(responseText)
 	if cleanedResponse == "" {
 		slog.ErrorContext(ctx, "Agent returned non-JSON response", "response", responseText)
-		h.saveEmptyGuide(ctx, voyage)
+		h.failGuideResearch(ctx, voyage, sessionID, "Agent response could not be parsed")
 		return
 	}
 
 	var output GuideAgentOutput
 	if err := json.Unmarshal([]byte(cleanedResponse), &output); err != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", cleanedResponse)
-		h.saveEmptyGuide(ctx, voyage)
+		h.failGuideResearch(ctx, voyage, sessionID, "Agent response could not be parsed")
 		return
 	}
 
@@ -268,6 +275,20 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID str
 	}
 	slog.InfoContext(ctx, fmt.Sprintf("Voyage guide saved for voyage %d", voyage.ID))
 	h.broadcastProgress(sessionID, "done", "Voyage guide research complete")
+}
+
+// failGuideResearch signals a guide research failure via the progress stream.
+// If no guide exists yet for this voyage it saves an error stub so first-time
+// callers get a record; on a redo it preserves the existing good guide.
+func (h *Handler) failGuideResearch(ctx context.Context, voyage *models.Voyage, sessionID, msg string) {
+	h.broadcastProgress(sessionID, "error", msg)
+
+	existing, err := h.DB.GetVoyageGuide(ctx, voyage.ID)
+	if err == nil && existing != nil && !strings.HasPrefix(existing.Summary, "Error:") {
+		// A real guide exists — preserve it, don't overwrite with an error stub.
+		return
+	}
+	h.saveEmptyGuide(ctx, voyage)
 }
 
 func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *models.Voyage) {
