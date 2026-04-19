@@ -871,6 +871,11 @@
     margin: 6px 0 0;
 }
 
+/* ─── Charter + Airports side-by-side row (print-view and @media print only) */
+.np-charter-airports-col {
+    min-width: 0;
+}
+
 /* ─── DataTile component ─────────────────────────────────────────────────── */
 .np-data-tile {
     --accent: var(--sky);

@@ -702,6 +702,15 @@ html:has(.print-view) {
     --accent: var(--muted);
 }
 
+.print-view .np-charter-airports-row {
+    display: flex;
+    gap: 16px;
+}
+
+.print-view .np-charter-airports-col {
+    flex: 1;
+}
+
 .np-print-map-row {
     display: flex;
     gap: 1.5rem;
@@ -712,9 +721,8 @@ html:has(.print-view) {
 .np-print-map-row .np-report-map {
     flex: 0 0 55%;
     max-width: 55%;
+    width: 100%;
     height: auto;
-    object-fit: contain;
-    object-position: left top;
     margin-bottom: 0;
 }
 
@@ -770,6 +778,17 @@ html:has(.print-view) {
         break-before: page;
     }
 
+    /* Constrain Chart.js canvases — they are fixed-pixel bitmaps that overflow on print */
+    canvas {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    .np-day-tile__chart,
+    .np-tide-chart-wrap {
+        overflow: hidden;
+    }
+
     /* Keep the first-page block (hero + map + day grid) together */
     .np-report-hero {
         break-inside: avoid;
@@ -789,6 +808,14 @@ html:has(.print-view) {
         break-after: avoid;
     }
 
+    /* Hide refs and external links — can't be followed on paper */
+    .ref-link,
+    .ref-anchor,
+    p:has(.ref-anchor),
+    .np-facility-report-card__website {
+        display: none !important;
+    }
+
     /* Avoid splitting key blocks across pages */
     .np-report-stop__header,
     .np-weather-grid,
@@ -796,8 +823,20 @@ html:has(.print-view) {
     .np-day-grid,
     .np-facility-report-card,
     .np-rec-item,
-    .np-metric-grid {
+    .np-metric-grid,
+    .np-season-card,
+    .np-hub-card {
         break-inside: avoid;
+    }
+
+    .np-charter-airports-row {
+        display: flex;
+        gap: 16px;
+        break-inside: avoid;
+    }
+
+    .np-charter-airports-col {
+        flex: 1;
     }
 }
 

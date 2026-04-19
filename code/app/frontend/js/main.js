@@ -4810,26 +4810,30 @@ function generateGuideHTML(guide) {
         rightCol += `</div>`;
     }
 
+    let charterAirportsHTML = '';
+
     if (guide.charter_info) {
         const c = guide.charter_info;
-        rightCol += sectionChip('Charter Info', 'amber');
-        rightCol += `<div class="np-charter-card">
+        charterAirportsHTML += `<div class="np-charter-airports-col">`;
+        charterAirportsHTML += sectionChip('Charter Info', 'amber');
+        charterAirportsHTML += `<div class="np-charter-card">
             <div>Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
         if (c.companies && c.companies.length > 0) {
-            rightCol += `<ul class="np-charter-list">` +
+            charterAirportsHTML += `<ul class="np-charter-list">` +
                 c.companies.map(comp => {
                     if (typeof comp === 'string') return `<li>${comp}</li>`;
                     return `<li>${comp.url ? `<a href="${comp.url}" target="_blank" style="color:var(--sky)">${comp.name}</a>` : comp.name}${comp.references && comp.references.length ? renderReferences(comp.references) : ''}</li>`;
                 }).join('') + `</ul>`;
         }
-        rightCol += `</div>`;
+        charterAirportsHTML += `</div></div>`;
     }
 
     if (guide.airports && guide.airports.length > 0) {
-        rightCol += sectionChip('Nearest Airports', 'sky');
+        charterAirportsHTML += `<div class="np-charter-airports-col">`;
+        charterAirportsHTML += sectionChip('Nearest Airports', 'sky');
         guide.airports.forEach(a => {
             const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
-            rightCol += `<div class="np-airport-row">
+            charterAirportsHTML += `<div class="np-airport-row">
                 <span class="np-airport-row__icon material-symbols-outlined" aria-hidden="true">local_airport</span>
                 <div>
                     <div><span class="np-airport-row__name">${a.name}</span> <span class="np-airport-row__code">(${a.iata_code || 'N/A'})</span></div>
@@ -4837,6 +4841,11 @@ function generateGuideHTML(guide) {
                 </div>
             </div>`;
         });
+        charterAirportsHTML += `</div>`;
+    }
+
+    if (charterAirportsHTML) {
+        rightCol += `<div class="np-charter-airports-row">${charterAirportsHTML}</div>`;
     }
 
     return `
