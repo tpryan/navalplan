@@ -293,6 +293,7 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 	// 1. Create Session
 	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
+		h.broadcastProgress(progressSessionID, "error", "Failed to start research session")
 		return
 	}
 
@@ -301,6 +302,7 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 	// 2. Build prompt
 	if v.Latitude == nil || v.Longitude == nil {
 		slog.ErrorContext(ctx, "Voyage has no coordinates, cannot generate recommendations", "voyage_id", v.ID)
+		h.broadcastProgress(progressSessionID, "error", "Voyage has no location set — please add coordinates first")
 		return
 	}
 
@@ -325,6 +327,8 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
 			h.broadcastProgress(progressSessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
+		} else {
+			h.broadcastProgress(progressSessionID, "error", "Research agent failed to respond")
 		}
 		return
 	}
@@ -339,6 +343,7 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 	}
 	if err := json.Unmarshal([]byte(fullText), &wrapper); err != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
+		h.broadcastProgress(progressSessionID, "error", "Agent returned an unreadable response — please try again")
 		return
 	}
 

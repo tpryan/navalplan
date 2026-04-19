@@ -137,6 +137,7 @@
     padding: 12px 14px;
     border-radius: var(--radius-tile);
     background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+    min-width: 0;
 }
 .np-day-tile__label {
     font-size: 9px;
