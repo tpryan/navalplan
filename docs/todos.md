@@ -17,5 +17,10 @@
 15. Done. After running the stop report this message appears: Itinerary Complete! Run full voyage research to get weather, tides, and pilot info for every stop. Be we did just run the full report, so this is unnecessary
 16. Done. If we can figure out ahead of time that stop 1 and 4 are the same place, we can avoid making a model heavy call that's redundant by omitting the last stop. 
 17. Done. We should have better navigation on the front end.  I'd like to have deep linking to trips, and back button history rewriting so that we can navigate through the app's state using the browser. 
-18. The tidal charts have weird corners where the border ends.  Maybe there is some sort of border radius that is causing that error. Let's remove the border entirely. 
-19. I'd like the voyage report to include the wind charts from each stop from the destination briefing.  
+18. Done. The tidal charts have weird corners where the border ends.  Maybe there is some sort of border radius that is causing that error. Let's remove the border entirely. 
+19. Done. I'd like the voyage report to include the wind charts from each stop from the destination briefing. 
+20. In print view. Look at /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.35.50 PM.png. The map doesn't fill it's container entirely. Can we change that? Make it fill the entire rounded container. 
+21. In print view. Can the sailing season grid be marked that it can't be page broken? I would like to avoid this look: /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.38.32 PM.png
+22. In print view. Can we hide any refs or links since presumably these will be printed and can't be followed.    
+23. In print view, Can charter info and airport info tile horizontally. So it doesn't look like /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.40.51 PM.png
+24. In print view, can we avoid breaking in the middle of major hub items, like we do in this pic: /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.41.59 PM.png
