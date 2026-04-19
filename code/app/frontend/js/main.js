@@ -2838,13 +2838,13 @@ async function showBriefing(briefing, doPushState = true) {
         wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, icon: getIconForWeather(weather.condition), accent: 'sky' }));
     }
     if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
-        wxTiles.appendChild(DataTile({ label: 'Wind', value: `${weather.wind_speed_kt || 0} kt`, sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction, emoji: '💨', accent: 'sky' }));
+        wxTiles.appendChild(DataTile({ label: 'Wind', value: `${weather.wind_speed_kt || 0} kt`, sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction, icon: 'air', accent: 'sky' }));
     }
     if (weather.temp_max_f || weather.temp_min_f) {
-        wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, emoji: '🌡', accent: 'amber' }));
+        wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
     }
     if (weather.wave_height_ft > 0) {
-        wxTiles.appendChild(DataTile({ label: 'Waves', value: `${weather.wave_height_ft} ft`, emoji: '🌊', accent: 'teal' }));
+        wxTiles.appendChild(DataTile({ label: 'Waves', value: `${weather.wave_height_ft} ft`, icon: 'waves', accent: 'teal' }));
     }
     weatherSec.appendChild(wxTiles);
 
@@ -4749,7 +4749,7 @@ function generateGuideHTML(guide) {
         guide.airports.forEach(a => {
             const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
             rightCol += `<div class="np-airport-row">
-                <span class="np-airport-row__icon">✈️</span>
+                <span class="np-airport-row__icon material-symbols-outlined" aria-hidden="true">local_airport</span>
                 <div>
                     <div><span class="np-airport-row__name">${a.name}</span> <span class="np-airport-row__code">(${a.iata_code || 'N/A'})</span></div>
                     <div class="np-airport-row__meta">${type}${a.distance_km ? ` · ${a.distance_km} km` : ''}</div>
