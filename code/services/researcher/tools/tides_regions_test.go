@@ -364,7 +364,7 @@ func TestDetectHighLow_TooFewValues(t *testing.T) {
 
 // --- nearestUKStation ---
 
-func TestNearestUKStation(t *testing.T) {
+func TestNearestUKStations(t *testing.T) {
 	stations := []uktidal.Station{
 		{
 			Properties: uktidal.Properties{Id: "far", Name: "Far Station"},
@@ -374,13 +374,83 @@ func TestNearestUKStation(t *testing.T) {
 			Properties: uktidal.Properties{Id: "near", Name: "Near Station"},
 			Geometry:   uktidal.Geometry{Coordinates: []float64{-1.1, 50.8}},
 		},
+		{
+			Properties: uktidal.Properties{Id: "mid", Name: "Mid Station"},
+			Geometry:   uktidal.Geometry{Coordinates: []float64{-0.5, 52.0}},
+		},
 	}
 
-	nearest, dist := nearestUKStation(50.8, -1.1, stations)
-	if nearest.Properties.Id != "near" {
-		t.Errorf("expected near station, got %s", nearest.Properties.Id)
+	result := nearestUKStations(50.8, -1.1, stations, 2)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(result))
 	}
-	if dist > 1.0 {
-		t.Errorf("expected near-zero distance, got %.2f miles", dist)
+	if result[0].station.Properties.Id != "near" {
+		t.Errorf("expected near station first, got %s", result[0].station.Properties.Id)
+	}
+	if result[0].dist > 1.0 {
+		t.Errorf("expected near-zero distance, got %.2f miles", result[0].dist)
+	}
+}
+
+func TestHasBothTideTypes(t *testing.T) {
+	cases := []struct {
+		tides []TideEvent
+		want  bool
+	}{
+		{[]TideEvent{{Type: "H"}, {Type: "L"}}, true},
+		{[]TideEvent{{Type: "H"}, {Type: "H"}}, false},
+		{[]TideEvent{{Type: "L"}}, false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		if got := hasBothTideTypes(c.tides); got != c.want {
+			t.Errorf("hasBothTideTypes(%v) = %v, want %v", c.tides, got, c.want)
+		}
+	}
+}
+
+func TestUKProvider_SkipsHWOnlyStation(t *testing.T) {
+	// First (nearest) station returns only HighWater events → should be skipped.
+	// Second station returns both → should be used.
+	callCount := 0
+	mockClient := &mockUKTidalClient{
+		StationsFunc: func(name string) (*uktidal.StationCollection, error) {
+			return &uktidal.StationCollection{
+				Features: []uktidal.Station{
+					{
+						Properties: uktidal.Properties{Id: "hw-only", Name: "HW Only"},
+						Geometry:   uktidal.Geometry{Coordinates: []float64{-1.1, 50.8}},
+					},
+					{
+						Properties: uktidal.Properties{Id: "full", Name: "Full Port"},
+						Geometry:   uktidal.Geometry{Coordinates: []float64{-1.2, 50.9}},
+					},
+				},
+			}, nil
+		},
+		EventsFunc: func(stationId string, duration int) ([]uktidal.Event, error) {
+			callCount++
+			if stationId == "hw-only" {
+				return []uktidal.Event{
+					{EventType: "HighWater", DateTime: "2026-04-20T06:30:00", Height: 11.2},
+				}, nil
+			}
+			return []uktidal.Event{
+				{EventType: "HighWater", DateTime: "2026-04-20T06:30:00", Height: 11.2},
+				{EventType: "LowWater", DateTime: "2026-04-20T12:45:00", Height: 1.0},
+			}, nil
+		},
+	}
+
+	p := &UKProvider{client: mockClient}
+	result, err := p.GetTides(50.8, -1.1, "2026-04-20")
+	if err != nil {
+		t.Fatalf("GetTides() error = %v", err)
+	}
+	if result.StationName != "Full Port" {
+		t.Errorf("expected Full Port, got %s", result.StationName)
+	}
+	if callCount < 2 {
+		t.Errorf("expected Events to be called at least twice (once per station tried), got %d", callCount)
 	}
 }
