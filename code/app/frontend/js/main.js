@@ -1816,12 +1816,22 @@ async function handlePilotSuggestionsClick() {
             }
         };
 
-        // Stream progress events; trigger completion on 'done'.
+        // Stream progress events; trigger completion on 'done' or immediate stop on 'error'.
         if (recRes.progress_session_id) {
             _pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
                 if (evt.stage === 'done') {
                     console.log('[progress] done received — finishing pilot research');
                     finishPilotResearch();
+                } else if (evt.stage === 'error') {
+                    clearInterval(_pilotPoll); _pilotPoll = null;
+                    if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
+                    if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
+                    if (radarSweep) { radarSweep.stop(); radarSweep = null; }
+                    isPilotResearching = false;
+                    icon.classList.remove('spin');
+                    btn.disabled = false;
+                    renderItinerary();
+                    showNotification('Research Failed', evt.message || 'The Local Pilot agent was unable to complete. Please try again.');
                 }
             });
         }
