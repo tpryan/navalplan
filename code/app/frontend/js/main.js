@@ -4435,16 +4435,43 @@ async function showRegionBriefing(props, month) {
     btnStart.textContent = 'Start here →';
     btnStart.addEventListener('click', () => {
         hide();
+
+        // Compute polygon centroid from the region's outer ring.
+        let centerLat = null, centerLng = null;
+        if (region && region.geometry && region.geometry.coordinates && region.geometry.coordinates[0]) {
+            const ring = region.geometry.coordinates[0];
+            const sumLat = ring.reduce((s, c) => s + c[1], 0);
+            const sumLng = ring.reduce((s, c) => s + c[0], 0);
+            centerLat = sumLat / ring.length;
+            centerLng = sumLng / ring.length;
+        }
+
+        // Pan the map to the region center before leaving discovery mode.
+        if (map && centerLat !== null) {
+            map.panTo({ lat: centerLat, lng: centerLng });
+            map.setZoom(7);
+        }
+
         toggleDiscoveryMode(false);
-        // Open new voyage modal pre-filled with this region
+
+        // Open new voyage modal pre-filled with this region.
         const btnNew = document.getElementById('btn-new-voyage');
         if (btnNew) btnNew.click();
-        // Pre-fill location
+
         setTimeout(() => {
             const locInput = document.getElementById('voyage-location-name');
             if (locInput) {
                 locInput.value = props.name;
                 locInput.dispatchEvent(new Event('input'));
+            }
+            // Pre-fill coordinates from the centroid.
+            if (centerLat !== null) {
+                const inputLat = document.getElementById('voyage-lat');
+                const inputLng = document.getElementById('voyage-lng');
+                const displayCoords = document.getElementById('voyage-coords-display');
+                if (inputLat) inputLat.value = centerLat.toFixed(6);
+                if (inputLng) inputLng.value = centerLng.toFixed(6);
+                if (displayCoords) displayCoords.textContent = `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`;
             }
         }, 100);
     });
