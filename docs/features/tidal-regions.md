@@ -24,8 +24,8 @@ You will need to pass the keys for both the UK and New Zealand services.
 1. **`.env` and `config.go`**:
    Add placeholders and parsing logic for the new APIs.
    ```env
-   UKTIDAL_API_KEY=your-uk-tidal-key
-   NIWA_API_KEY=your-niwa-key
+   NAVALPLAN_TIDAL_UKTIDAL_API_KEY=your-uk-tidal-key
+   NAVALPLAN_TIDAL_NIWA_API_KEY=your-niwa-key
    ```
 2. **Go Modules**:
    Fetch the new dependencies.
