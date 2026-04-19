@@ -643,6 +643,13 @@ html:has(.shared-view) {
     height: auto !important;
 }
 
+/* Hide app chrome that is irrelevant on a public shared report */
+.shared-view #mobile-tab-bar,
+.shared-view #sidebar,
+.shared-view #btn-mobile-menu {
+    display: none !important;
+}
+
 /* Utility for text truncation */
 .truncate {
     white-space: nowrap;
