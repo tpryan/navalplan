@@ -9,7 +9,7 @@
  * @param {boolean} [opts.detail]  use smaller, non-bold value style
  * @param {boolean} [opts.compact] constrain to 25% of containing row
  */
-export function DataTile({ label, value, sub, emoji, icon, accent = 'sky', detail = false, compact = false } = {}) {
+export function DataTile({ label, value, sub, emoji, icon, iconStyle, accent = 'sky', detail = false, compact = false } = {}) {
   const el = document.createElement('div');
   el.className = ['np-data-tile', compact && 'np-data-tile--compact'].filter(Boolean).join(' ');
   el.style.setProperty('--accent', `var(--${accent})`);
@@ -19,6 +19,7 @@ export function DataTile({ label, value, sub, emoji, icon, accent = 'sky', detai
     ico.className = 'material-symbols-outlined np-data-tile__icon';
     ico.setAttribute('aria-hidden', 'true');
     ico.textContent = icon;
+    if (iconStyle) ico.style.cssText += `;${iconStyle}`;
     el.appendChild(ico);
   } else if (emoji) {
     const ico = document.createElement('span');

@@ -21,20 +21,22 @@ type WeatherArgs struct {
 
 // WeatherResult defines the response structure for the get_weather_forecast tool.
 type WeatherResult struct {
-	Date            string  `json:"date"`
-	Condition       string  `json:"condition"`
-	ForecastType    string  `json:"forecast_type"`
-	MaxTemp         float64 `json:"max_temp"`
-	MinTemp         float64 `json:"min_temp"`
-	MaxWindKts      float64 `json:"max_wind_kts"`
-	MaxGustsKts     float64 `json:"max_gusts_kts"`
-	WindDirDeg      int     `json:"wind_dir_deg"`
-	WindDirection   string  `json:"wind_direction"`
-	PrecipTotal     float64 `json:"precip_total"`
-	WaveHeight      float64 `json:"wave_height"`
-	WaveDirection   float64 `json:"wave_direction"`
-	WavePeriod      float64 `json:"wave_period"`
-	DebugDurationMS int64   `json:"debug_duration_ms"`
+	Date            string    `json:"date"`
+	Condition       string    `json:"condition"`
+	ForecastType    string    `json:"forecast_type"`
+	MaxTemp         float64   `json:"max_temp"`
+	MinTemp         float64   `json:"min_temp"`
+	MaxWindKts      float64   `json:"max_wind_kts"`
+	MaxGustsKts     float64   `json:"max_gusts_kts"`
+	WindDirDeg      int       `json:"wind_dir_deg"`
+	WindDirection   string    `json:"wind_direction"`
+	HourlyWind      []float64 `json:"hourly_wind"`
+	HourlyWindDir   []string  `json:"hourly_wind_dir"`
+	PrecipTotal     float64   `json:"precip_total"`
+	WaveHeight      float64   `json:"wave_height"`
+	WaveDirection   float64   `json:"wave_direction"`
+	WavePeriod      float64   `json:"wave_period"`
+	DebugDurationMS int64     `json:"debug_duration_ms"`
 }
 
 // WeatherClient defines the interface for the Open-Meteo API client.
@@ -139,6 +141,10 @@ func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time,
 			openmeteogo.WindGusts10mMax,
 			openmeteogo.WindDirection10mDominant,
 			openmeteogo.PrecipitationSum,
+		}).
+		HourlyMetrics(openmeteogo.Metrics{
+			openmeteogo.WindSpeed10m,
+			openmeteogo.WindDirection10m,
 		})
 
 	if isSeasonal {
@@ -208,6 +214,12 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 		precip = weather.Daily.PrecipitationSum[0]
 	}
 
+	hourlyWind := weather.Hourly.WindSpeed10m
+	hourlyWindDir := make([]string, len(weather.Hourly.WindDirection10m))
+	for i, deg := range weather.Hourly.WindDirection10m {
+		hourlyWindDir[i] = DegreesToDirection(float64(deg))
+	}
+
 	return WeatherResult{
 		Date:          weather.Daily.Time[0],
 		Condition:     condition,
@@ -218,6 +230,8 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 		MaxGustsKts:   maxGusts,
 		WindDirDeg:    windDir,
 		WindDirection: DegreesToDirection(float64(windDir)),
+		HourlyWind:    hourlyWind,
+		HourlyWindDir: hourlyWindDir,
 		PrecipTotal:   precip,
 		WaveHeight:    waveHeight,
 		WaveDirection: waveDir,

@@ -68,14 +68,16 @@ type Stop struct {
 
 // WeatherSummary holds structured weather forecast data for a stop.
 type WeatherSummary struct {
-	Summary         string  `json:"summary"`
-	Condition       string  `json:"condition"`
-	TempMinF        float64 `json:"temp_min_f"`
-	TempMaxF        float64 `json:"temp_max_f"`
-	WindSpeedKt     float64 `json:"wind_speed_kt"`
-	WindDirection   string  `json:"wind_direction"`
-	WaveHeightFt    float64 `json:"wave_height_ft"`
-	DebugDurationMs int64   `json:"debug_duration_ms"`
+	Summary         string    `json:"summary"`
+	Condition       string    `json:"condition"`
+	TempMinF        float64   `json:"temp_min_f"`
+	TempMaxF        float64   `json:"temp_max_f"`
+	WindSpeedKt     float64   `json:"wind_speed_kt"`
+	WindDirection   string    `json:"wind_direction"`
+	HourlyWind      []float64 `json:"hourly_wind,omitempty"`
+	HourlyWindDir   []string  `json:"hourly_wind_dir,omitempty"`
+	WaveHeightFt    float64   `json:"wave_height_ft"`
+	DebugDurationMs int64     `json:"debug_duration_ms"`
 }
 
 // Briefing contains researched information about a stop, such as weather and tides.

@@ -70,6 +70,8 @@ CRITICAL RULES:
 		"temp_max_f": 0,
 		"wind_speed_kt": 0,
 		"wind_direction": "...",
+		"hourly_wind": [0, 0, ...],
+		"hourly_wind_dir": ["N", "N", ...],
 		"wave_height_ft": 0,
 		"debug_duration_ms": 0
 	},
