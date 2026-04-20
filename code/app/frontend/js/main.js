@@ -4956,6 +4956,16 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
     // ── Day by day grid ───────────────────────────────────────────────────────
     if (hasBriefings) {
+        const nmBetween = (a, b) => {
+            if (!a.latitude || !a.longitude || !b.latitude || !b.longitude) return null;
+            const toRad = d => d * Math.PI / 180;
+            const R = 3440.065;
+            const dLat = toRad(b.latitude - a.latitude);
+            const dLon = toRad(b.longitude - a.longitude);
+            const x = Math.sin(dLat/2)**2 + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLon/2)**2;
+            return Math.round(2 * R * Math.asin(Math.sqrt(x)));
+        };
+
         const dayGridClass = sortedStops.length < 5 ? 'np-day-grid np-day-grid--fill' : 'np-day-grid';
         html += `<span class="np-section-label">Day by Day</span>`;
         html += `<div class="${dayGridClass}" style="--day-count:${sortedStops.length}">`;
@@ -4966,6 +4976,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const w = briefing.weather_summary || {};
             const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '';
             const canvasId = `reportMiniTideChart_${idx}`;
+            const nextStop = sortedStops[idx + 1];
+            const distNm = nextStop ? nmBetween(stop, nextStop) : null;
             html += `
                 <div class="np-day-tile" style="--accent:var(--${accent})">
                     <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
@@ -4973,6 +4985,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     ${w.condition ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">${getIconForWeather(w.condition)}</span>${w.condition}</div>` : ''}
                     ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
                     ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">air</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    ${distNm !== null ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">sailing</span>${distNm} nm to next stop</div>` : '<div class="np-day-tile__meta np-day-tile__meta--placeholder">&nbsp;</div>'}
                     ${briefing.weather_last_updated ? `<div class="np-day-tile__meta" style="font-style:italic;opacity:0.7"><span class="material-symbols-outlined np-day-tile__icon">update</span>${new Date(briefing.weather_last_updated).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
                     <div class="np-day-tile__chart overview-chart">
                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
