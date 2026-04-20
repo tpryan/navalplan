@@ -158,12 +158,6 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RunLookoutAuditEndpoint(w http.ResponseWriter, r *http.Request) {
-	person := appcontext.GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
 	jobKey := "lookout:bulk"
 	if !h.tryClaimJob(jobKey) {
 		writeError(w, http.StatusConflict, "Bulk safety audit already in progress")
@@ -177,30 +171,41 @@ func (h *Handler) RunLookoutAuditEndpoint(w http.ResponseWriter, r *http.Request
 		defer h.releaseJob(jobKey)
 		ctx := context.Background()
 
+		slog.InfoContext(ctx, "[lookout:bulk] Starting bulk safety audit")
+
 		stops, err := h.DB.ListAllFutureStops(ctx)
 		if err != nil {
-			slog.ErrorContext(ctx, "Bulk lookout: failed to list future stops", "error", err)
+			slog.ErrorContext(ctx, "[lookout:bulk] Failed to list future stops", "error", err)
 			return
 		}
 
+		slog.InfoContext(ctx, "[lookout:bulk] Future stops found", "count", len(stops))
+
 		sort.Slice(stops, func(i, j int) bool { return stops[i].TargetDate.Before(stops[j].TargetDate) })
 
+		processed, skipped := 0, 0
 		for _, s := range stops {
 			briefing, err := h.DB.GetBriefing(ctx, s.ID)
 			if err != nil || briefing == nil {
+				slog.InfoContext(ctx, "[lookout:bulk] Skipping stop — no briefing", "stop_id", s.ID, "location", s.LocationName)
+				skipped++
 				continue
 			}
 			sessionID := fmt.Sprintf("lookout_%d_%d", s.ID, time.Now().Unix())
 			stopJobKey := fmt.Sprintf("lookout:%d", s.ID)
 			if !h.tryClaimJob(stopJobKey) {
+				slog.InfoContext(ctx, "[lookout:bulk] Skipping stop — audit already in progress", "stop_id", s.ID, "location", s.LocationName)
+				skipped++
 				continue
 			}
+			slog.InfoContext(ctx, "[lookout:bulk] Auditing stop", "stop_id", s.ID, "location", s.LocationName, "date", s.TargetDate.Format("2006-01-02"))
 			h.ResearchSem <- struct{}{}
 			h.performLookoutAuditLogic(&s, briefing, stops, sessionID)
 			<-h.ResearchSem
 			h.releaseJob(stopJobKey)
+			processed++
 		}
-		slog.InfoContext(ctx, "Bulk safety audit complete", "stop_count", len(stops))
+		slog.InfoContext(ctx, "[lookout:bulk] Bulk safety audit complete", "processed", processed, "skipped", skipped, "total", len(stops))
 	}()
 }
 
