@@ -24,3 +24,9 @@
 22. Done. In print view. Can we hide any refs or links since presumably these will be printed and can't be followed.    
 23. Done. In print view, Can charter info and airport info tile horizontally. So it doesn't look like /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.40.51 PM.png
 24. Done. In print view, can we avoid breaking in the middle of major hub items, like we do in this pic: /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-04-19 at 12.41.59 PM.png
+25. The Safety overview is not showing up in the print view of the voyage report.  We need to fix that. 
+26. I need to simplify and improve the behavior of the wind graph in each stop. Same data, better view. 
+27. I need to improve the mobile version of the app to make it actually useful.
+    * Navigation has to be improved.
+    * Discover interface has to work. 
+28. I'd like 503 from gemini to be reported to the frontend so the user knows the model is busy. 
