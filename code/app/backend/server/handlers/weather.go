@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
+	appcontext "app/context"
 	"app/models"
 )
 
@@ -236,6 +238,65 @@ func fetchWeatherForStop(ctx context.Context, stop models.Stop) (models.WeatherS
 	ws.DebugDurationMs = time.Since(start).Milliseconds()
 	slog.InfoContext(ctx, "[weather] Stop weather complete", "stop_id", stop.ID, "source", source, "duration_ms", ws.DebugDurationMs)
 	return ws, nil
+}
+
+func (h *Handler) UpdateVoyageWeather(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	voyageID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
+		return
+	}
+
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Voyage not found")
+		return
+	}
+	if voyage.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	ctx := r.Context()
+	stops, err := h.DB.ListStops(ctx, voyageID, 0, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list stops")
+		return
+	}
+
+	slog.InfoContext(ctx, "[weather] UpdateVoyageWeather started", "voyage_id", voyageID, "stop_count", len(stops))
+
+	updated, failed := 0, 0
+	for _, stop := range stops {
+		weather, err := fetchWeatherForStop(ctx, stop)
+		if err != nil {
+			slog.ErrorContext(ctx, "[weather] Failed to fetch weather", "stop_id", stop.ID, "error", err)
+			failed++
+			continue
+		}
+		if err := h.DB.UpsertWeatherBriefing(ctx, stop.ID, weather); err != nil {
+			slog.ErrorContext(ctx, "[weather] Failed to save weather", "stop_id", stop.ID, "error", err)
+			failed++
+			continue
+		}
+		updated++
+	}
+
+	slog.InfoContext(ctx, "[weather] UpdateVoyageWeather complete", "voyage_id", voyageID, "updated", updated, "failed", failed)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"total":   len(stops),
+		"updated": updated,
+		"failed":  failed,
+	})
 }
 
 func (h *Handler) UpdateAllFutureWeather(w http.ResponseWriter, r *http.Request) {

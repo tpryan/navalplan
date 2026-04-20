@@ -97,6 +97,7 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodGet, "/api/v1/stops/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
 		{http.MethodPost, "/api/v1/stops/{id}/lookout", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerLookoutAudit)), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/lookout", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerVoyageLookout)), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/weather", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.UpdateVoyageWeather)), 1},
 
 		// --- Admin ---
 		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},

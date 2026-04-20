@@ -125,6 +125,12 @@ export const API = {
     return res.json();
   },
 
+  async updateVoyageWeather(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/weather`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger weather update');
+    return res.json();
+  },
+
   async triggerVoyageLookout(voyageId) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/lookout`, { method: 'POST' });
     if (res.status === 409) { const e = new Error('Safety audit already in progress'); e.conflict = true; throw e; }
