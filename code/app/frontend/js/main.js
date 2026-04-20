@@ -3253,6 +3253,16 @@ async function redoBriefing(oldBriefing, btn) {
 async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined spin" aria-hidden="true">cloud_download</span>';
+
+    // Update weather for all stops first so the safety audit uses fresh data.
+    try {
+        await API.updateVoyageWeather(voyage.id);
+    } catch (e) {
+        // Non-fatal — proceed with the audit even if weather update fails.
+        console.warn('Weather update failed before safety audit:', e);
+    }
+
     btn.innerHTML = '<span class="material-symbols-outlined spin" aria-hidden="true">visibility</span>';
 
     let progressES = null;
@@ -5095,6 +5105,14 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         if (!v) return true;
         return ['n/a','unknown','not specified'].includes(String(v).toLowerCase().trim());
     };
+    const fmtSunTime = (t) => {
+        if (!t) return null;
+        try {
+            const d = new Date(t);
+            if (isNaN(d.getTime())) return t;
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return t; }
+    };
 
     let dateDisplay = 'Dates Pending';
     if (voyage.start_date && voyage.end_date) {
@@ -5204,7 +5222,10 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
             const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
             const w = briefing.weather_summary || {};
+            const sun = briefing.sun_phase || {};
             const temp = (w.temp_max_f && w.temp_min_f) ? `${Math.round(w.temp_max_f)}° / ${Math.round(w.temp_min_f)}°` : '';
+            const sunriseStr = fmtSunTime(sun.sunrise);
+            const sunsetStr  = fmtSunTime(sun.sunset);
             const canvasId = `reportMiniTideChart_${idx}`;
             const nextStop = sortedStops[idx + 1];
             const distNm = nextStop ? nmBetween(stop, nextStop) : null;
@@ -5215,6 +5236,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     ${w.condition ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">${getIconForWeather(w.condition)}</span>${w.condition}</div>` : ''}
                     ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
                     ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">air</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
+                    ${sunriseStr ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">wb_twilight</span>↑ ${sunriseStr}</div>` : ''}
+                    ${sunsetStr  ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">wb_twilight</span>↓ ${sunsetStr}</div>` : ''}
                     ${distNm !== null ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">sailing</span>${distNm} nm to next stop</div>` : '<div class="np-day-tile__meta np-day-tile__meta--placeholder">&nbsp;</div>'}
                     ${briefing.weather_last_updated ? `<div class="np-day-tile__meta" style="font-style:italic;opacity:0.7"><span class="material-symbols-outlined np-day-tile__icon">update</span>${new Date(briefing.weather_last_updated).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
                     <div class="np-day-tile__chart overview-chart">
@@ -5325,6 +5348,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
             const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'});
             const w = b.weather_summary || {};
+            const sun = b.sun_phase || {};
 
             html += `
                 <div class="np-report-stop" style="--accent:var(--${accent})">
@@ -5343,6 +5367,10 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
                 if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
+                const sunriseStr = fmtSunTime(sun.sunrise);
+                const sunsetStr  = fmtSunTime(sun.sunset);
+                if (sunriseStr) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Sunrise</div><div class="np-weather-tile__value">${sunriseStr}</div></div>`;
+                if (sunsetStr)  html += `<div class="np-weather-tile" style="--accent:var(--violet)"><div class="np-weather-tile__label">Sunset</div><div class="np-weather-tile__value">${sunsetStr}</div></div>`;
                 html += `</div>`;
                 if (b.weather_last_updated) {
                     const updatedAt = new Date(b.weather_last_updated);
