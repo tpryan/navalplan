@@ -1,6 +1,6 @@
 module github.com/tpryan/navalplan/services/researcher
 
-go 1.25.4
+go 1.26.2
 
 require (
 	cloud.google.com/go/maps v1.26.0
