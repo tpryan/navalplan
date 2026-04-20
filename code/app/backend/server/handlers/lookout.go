@@ -181,6 +181,18 @@ func (h *Handler) RunLookoutAuditEndpoint(w http.ResponseWriter, r *http.Request
 
 		slog.InfoContext(ctx, "[lookout:bulk] Future stops found", "count", len(stops))
 
+		// Group stops by voyage so next-stop distance calculations stay within the same voyage.
+		voyageStops := make(map[int64][]models.Stop)
+		for _, s := range stops {
+			voyageStops[s.VoyageID] = append(voyageStops[s.VoyageID], s)
+		}
+		for vid, vs := range voyageStops {
+			sort.Slice(vs, func(i, j int) bool { return vs[i].TargetDate.Before(vs[j].TargetDate) })
+			voyageStops[vid] = vs
+		}
+
+		slog.InfoContext(ctx, "[lookout:bulk] Voyages to audit", "voyage_count", len(voyageStops))
+
 		sort.Slice(stops, func(i, j int) bool { return stops[i].TargetDate.Before(stops[j].TargetDate) })
 
 		processed, skipped := 0, 0
@@ -200,7 +212,7 @@ func (h *Handler) RunLookoutAuditEndpoint(w http.ResponseWriter, r *http.Request
 			}
 			slog.InfoContext(ctx, "[lookout:bulk] Auditing stop", "stop_id", s.ID, "location", s.LocationName, "date", s.TargetDate.Format("2006-01-02"))
 			h.ResearchSem <- struct{}{}
-			h.performLookoutAuditLogic(&s, briefing, stops, sessionID)
+			h.performLookoutAuditLogic(&s, briefing, voyageStops[s.VoyageID], sessionID)
 			<-h.ResearchSem
 			h.releaseJob(stopJobKey)
 			processed++
