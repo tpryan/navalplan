@@ -7,6 +7,7 @@ import { MapPin } from './ui/MapPin.js';
 import { DataTile } from './ui/DataTile.js';
 import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
+import { LookoutBox } from './ui/LookoutBox.js';
 
 import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather } from './tokens.js';
@@ -3135,11 +3136,25 @@ async function showBriefing(briefing, doPushState = true) {
 
     // ── Render into modal ─────────────────────────────────────────────────────
     content.innerHTML = '';
+
+    // Safety alerts at the top if present
+    const safetyAlerts = briefing.safety_alerts;
+    if (Array.isArray(safetyAlerts) && safetyAlerts.length > 0) {
+        const box = LookoutBox(safetyAlerts);
+        if (box) content.appendChild(box);
+    }
+
     content.appendChild(sections);
 
     // Redo Handler
     if (btnRedo) {
         btnRedo.onclick = () => redoBriefing(briefing, btnRedo);
+    }
+
+    // Safety Audit Handler
+    const btnLookout = document.getElementById('btn-lookout');
+    if (btnLookout) {
+        btnLookout.onclick = () => runLookoutAudit(briefing, btnLookout);
     }
 
     // Show Modal
@@ -3152,7 +3167,7 @@ async function showBriefing(briefing, doPushState = true) {
     };
 
     btnClose.onclick = hide;
-    modalOverlay.onclick = hide; 
+    modalOverlay.onclick = hide;
 }
 
 async function redoBriefing(oldBriefing, btn) {
@@ -3234,6 +3249,190 @@ async function redoBriefing(oldBriefing, btn) {
     }
 }
 
+
+async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined spin" aria-hidden="true">visibility</span>';
+
+    let progressES = null;
+
+    const finish = async () => {
+        if (progressES) { progressES.close(); progressES = null; }
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+        // Fetch fresh briefings and update the page
+        const briefings = await Promise.all(sortedStops.map(s => API.getBriefing(s.id).catch(() => null)));
+        refreshSafetyOverview(reportContent, sortedStops, briefings);
+    };
+
+    // Safety-net timeout (5 min) in case SSE drops
+    const timeout = setTimeout(finish, 300_000);
+
+    try {
+        const res = await API.triggerVoyageLookout(voyage.id);
+
+        if (res && res.session_id) {
+            progressES = API.streamProgress(res.session_id, async (evt) => {
+                if (evt.stage === 'done') {
+                    clearTimeout(timeout);
+                    await finish();
+                } else if (evt.stage === 'error') {
+                    clearTimeout(timeout);
+                    if (progressES) { progressES.close(); progressES = null; }
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                    showNotification('Safety Audit', 'Safety audit encountered an error.');
+                }
+            });
+        } else {
+            // No session_id — fall back to a single delayed fetch
+            clearTimeout(timeout);
+            setTimeout(finish, 10_000);
+        }
+    } catch (err) {
+        clearTimeout(timeout);
+        if (progressES) { progressES.close(); progressES = null; }
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+        if (err.conflict) {
+            showNotification('Safety Audit', 'A safety audit is already in progress for this voyage.');
+        } else {
+            showNotification('Safety Audit', 'Failed to start safety audit. Please try again.');
+        }
+    }
+}
+
+function refreshSafetyOverview(reportContent, sortedStops, briefings) {
+    // Remove any existing safety overview
+    const existing = reportContent.querySelector('#np-safety-overview');
+    if (existing) existing.remove();
+
+    const stopsWithAlerts = sortedStops
+        .map((stop, idx) => ({ stop, briefing: briefings.find(br => br && br.stop_id === stop.id), idx }))
+        .filter(({ briefing }) => briefing && Array.isArray(briefing.safety_alerts) && briefing.safety_alerts.length > 0);
+
+    if (stopsWithAlerts.length === 0) {
+        showNotification('Safety Audit', 'Safety audit complete. No alerts found.');
+        return;
+    }
+
+    const box = document.createElement('div');
+    box.className = 'lookout-box np-safety-overview';
+    box.id = 'np-safety-overview';
+
+    const header = document.createElement('div');
+    header.className = 'lookout-header';
+    header.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">visibility</span><h3>Safety Overview</h3>';
+    box.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'lookout-alert-list';
+
+    stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
+        const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+        const stopName = displayLocationName(stop.location_name).split(',')[0].trim();
+
+        const stopHeader = document.createElement('div');
+        stopHeader.className = 'np-safety-overview__stop-header';
+        stopHeader.innerHTML = `<span class="np-safety-overview__day">Day ${idx + 1}</span>
+            <span class="np-safety-overview__name">${DOMPurify.sanitize(stopName)}</span>
+            <span class="np-safety-overview__date">${dateStr}</span>`;
+        list.appendChild(stopHeader);
+
+        briefing.safety_alerts.forEach(a => {
+            const alertEl = document.createElement('div');
+            alertEl.className = `lookout-alert lookout-alert--${a.severity || 'info'}`;
+            alertEl.innerHTML = `<span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${DOMPurify.sanitize(a.icon || 'warning')}</span>
+                <div class="lookout-alert__text">
+                    <span class="lookout-alert__msg">${DOMPurify.sanitize(a.message || '')}</span>
+                    ${a.action ? `<span class="lookout-alert__action">${DOMPurify.sanitize(a.action)}</span>` : ''}
+                </div>`;
+            list.appendChild(alertEl);
+        });
+    });
+
+    box.appendChild(list);
+
+    const oldestAudit = stopsWithAlerts
+        .map(({ briefing }) => briefing.safety_alerts_updated_at)
+        .filter(Boolean)
+        .map(t => new Date(t))
+        .sort((a, b) => a - b)[0];
+    if (oldestAudit) {
+        const updated = document.createElement('p');
+        updated.className = 'np-safety-overview__updated';
+        updated.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">update</span> Audited ${oldestAudit.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        box.appendChild(updated);
+    }
+
+    // Insert after the day-grid section (find it by the section label before it)
+    const dayGridEl = reportContent.querySelector('.np-day-grid, .np-day-grid--fill');
+    if (dayGridEl && dayGridEl.parentNode) {
+        dayGridEl.parentNode.insertBefore(box, dayGridEl.nextSibling);
+    } else {
+        // Fallback: prepend to report
+        reportContent.insertBefore(box, reportContent.firstChild);
+    }
+
+    // Also update per-stop alerts in the report
+    stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
+        const stopSection = reportContent.querySelectorAll('.np-report-stop')[idx];
+        if (!stopSection) return;
+        const existingBox = stopSection.querySelector('.lookout-box');
+        if (existingBox) existingBox.remove();
+
+        const perStopBox = LookoutBox(briefing.safety_alerts);
+        if (perStopBox) {
+            const weatherGrid = stopSection.querySelector('.np-weather-grid');
+            if (weatherGrid) {
+                stopSection.insertBefore(perStopBox, weatherGrid);
+            }
+        }
+    });
+}
+
+async function runLookoutAudit(oldBriefing, btn) {
+    btn.disabled = true;
+    const originalLabel = btn.innerHTML;
+    btn.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align spin" aria-hidden="true">visibility</span> Auditing…';
+
+    try {
+        const res = await API.triggerLookoutAudit(oldBriefing.stop_id);
+        const startTime = Date.now();
+        const TIMEOUT_MS = 120000;
+
+        const poll = setInterval(async () => {
+            if (Date.now() - startTime > TIMEOUT_MS) {
+                clearInterval(poll);
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+                showNotification('Safety Audit', 'The audit is taking longer than expected. Try again in a moment.');
+                return;
+            }
+            try {
+                const b = await API.getBriefing(oldBriefing.stop_id);
+                if (b && b.safety_alerts !== null && b.safety_alerts !== undefined) {
+                    clearInterval(poll);
+                    btn.disabled = false;
+                    btn.innerHTML = originalLabel;
+                    briefingCache.set(b.stop_id, b);
+                    showBriefing(b, false);
+                }
+            } catch (ignore) { }
+        }, 3000);
+    } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = originalLabel;
+        if (err.noBriefing) {
+            showNotification('Safety Audit', 'Run stop research first before running a safety audit.');
+        } else if (err.conflict) {
+            showNotification('Safety Audit', 'A safety audit is already in progress for this stop.');
+        } else {
+            showNotification('Safety Audit', 'Failed to start safety audit. Please try again.');
+        }
+    }
+}
 
 function selectDate(dateStr) {
     if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
@@ -3941,6 +4140,12 @@ async function captureAndUploadMap(voyageId) {
                 headerControls.insertBefore(btnShare, headerControls.firstChild);
             }
             btnShare.onclick = () => handleShareClick(guide);
+
+            // Wire Safety Audit button
+            const btnVoyageLookout = document.getElementById('btn-voyage-lookout');
+            if (btnVoyageLookout) {
+                btnVoyageLookout.onclick = () => runVoyageLookout(currentVoyage, sortedStops, content, btnVoyageLookout);
+            }
 
             // 7. Render charts if stop briefings are included
             if (hasBriefings) {
@@ -4857,6 +5062,31 @@ function generateGuideHTML(guide) {
     `;
 }
 
+function alertToHTML(a) {
+    const hasTbl = Array.isArray(a.travel_table) && a.travel_table.length > 0;
+    const hasDep = hasTbl && a.travel_table.some(r => r.depart_by);
+    const tblHTML = hasTbl ? `
+        <table class="lookout-travel-table">
+            <thead><tr>
+                <th>Speed</th><th>Travel time</th>${hasDep ? '<th>Depart by</th>' : ''}
+            </tr></thead>
+            <tbody>${a.travel_table.map(r => `<tr>
+                <td>${esc(String(r.speed_kt))} kt</td>
+                <td>${esc(r.travel_time || '')}</td>
+                ${hasDep ? `<td>${esc(r.depart_by || '—')}</td>` : ''}
+            </tr>`).join('')}</tbody>
+        </table>` : '';
+    const travelClass = hasTbl ? 'lookout-alert--travel' : `lookout-alert--${esc(a.severity || 'info')}`;
+    return `<div class="lookout-alert ${travelClass}">
+        <span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${esc(a.icon || 'warning')}</span>
+        <div class="lookout-alert__text">
+            <span class="lookout-alert__msg">${esc(a.message || '')}</span>
+            ${tblHTML}
+            ${a.action ? `<span class="lookout-alert__action">${esc(a.action)}</span>` : ''}
+        </div>
+    </div>`;
+}
+
 function generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL) {
     const sortedStops = [...stops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
@@ -4993,6 +5223,52 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 </div>`;
         });
         html += `</div>`;
+
+        // ── Safety Overview ───────────────────────────────────────────────────
+        const stopsWithAlerts = sortedStops
+            .map((stop, idx) => ({ stop, briefing: briefings.find(br => br && br.stop_id === stop.id), idx }))
+            .filter(({ briefing }) => briefing && Array.isArray(briefing.safety_alerts) && briefing.safety_alerts.length > 0);
+
+        if (stopsWithAlerts.length > 0) {
+            const severityOrder = { danger: 0, warning: 1, info: 2 };
+            const topSeverity = stopsWithAlerts.reduce((top, { briefing }) => {
+                const s = briefing.safety_alerts.reduce((t, a) =>
+                    (severityOrder[a.severity] ?? 2) < (severityOrder[t] ?? 2) ? a.severity : t, 'info');
+                return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
+            }, 'info');
+
+            html += `<div class="lookout-box np-safety-overview" id="np-safety-overview">
+                <div class="lookout-header">
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    <h3>Safety Overview</h3>
+                </div>
+                <div class="lookout-alert-list">`;
+
+            stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
+                const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+                const stopName = displayLocationName(stop.location_name).split(',')[0].trim();
+                html += `<div class="np-safety-overview__stop-header">
+                    <span class="np-safety-overview__day">Day ${idx + 1}</span>
+                    <span class="np-safety-overview__name">${esc(stopName)}</span>
+                    <span class="np-safety-overview__date">${dateStr}</span>
+                </div>`;
+                briefing.safety_alerts.forEach(a => { html += alertToHTML(a); });
+            });
+
+            const oldestAudit = stopsWithAlerts
+                .map(({ briefing }) => briefing.safety_alerts_updated_at)
+                .filter(Boolean)
+                .map(t => new Date(t))
+                .sort((a, b) => a - b)[0];
+            if (oldestAudit) {
+                html += `<p class="np-safety-overview__updated">
+                    <span class="material-symbols-outlined" aria-hidden="true">update</span>
+                    Audited ${oldestAudit.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </p>`;
+            }
+
+            html += `</div></div>`;
+        }
     }
 
     // ── Full Destination Guide ────────────────────────────────────────────────
@@ -5073,6 +5349,18 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     const label = updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
                     html += `<p style="margin:4px 0 8px;font-size:11px;color:var(--muted);font-style:italic">Forecast as of ${label}</p>`;
                 }
+            }
+
+            // Safety alerts
+            if (Array.isArray(b.safety_alerts) && b.safety_alerts.length > 0) {
+                const alertsHtml = b.safety_alerts.map(alertToHTML).join('');
+                html += `<div class="lookout-box" style="margin-bottom:16px">
+                    <div class="lookout-header">
+                        <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                        <h3>Safety Lookout</h3>
+                    </div>
+                    <div class="lookout-alert-list">${alertsHtml}</div>
+                </div>`;
             }
 
             // Wind forecast tiles (AM / Mid / PM / Eve)

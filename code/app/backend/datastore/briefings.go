@@ -95,6 +95,19 @@ func (db *DB) ListAllFutureStops(ctx context.Context) ([]models.Stop, error) {
 	return stops, nil
 }
 
+func (db *DB) UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts models.RawJSON) error {
+	now := time.Now().UTC()
+	query := `
+		INSERT INTO briefing (stop_id, safety_alerts, safety_alerts_updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (stop_id) DO UPDATE SET
+			safety_alerts = EXCLUDED.safety_alerts,
+			safety_alerts_updated_at = EXCLUDED.safety_alerts_updated_at
+	`
+	_, err := db.ExecContext(ctx, query, stopID, string(alerts), now)
+	return err
+}
+
 func (db *DB) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error {
 	data, err := json.Marshal(weather)
 	if err != nil {

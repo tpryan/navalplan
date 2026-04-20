@@ -1573,3 +1573,153 @@
 .np-qr-wrap canvas {
     border-radius: 4px;
 }
+
+/* ─── Lookout safety alert box ───────────────────────────────────────────── */
+.lookout-box {
+    margin: 0 0 20px 0;
+    padding: 16px;
+    background: var(--surface-2, var(--surface));
+    border-radius: var(--radius-card);
+    border: 1px solid var(--outline-variant, var(--hair));
+}
+
+.lookout-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--primary);
+}
+.lookout-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+.lookout-header .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.lookout-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.lookout-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    border-radius: var(--radius-tile);
+    border-left: 4px solid transparent;
+}
+.lookout-alert--danger {
+    background: var(--error-container, #fde8e8);
+    color: var(--on-error-container, #5c0a0a);
+    border-left-color: var(--error, #d32f2f);
+}
+.lookout-alert--warning {
+    background: #fff8e1;
+    color: #6d4c00;
+    border-left-color: #f59f00;
+}
+.lookout-alert--info {
+    background: var(--secondary-container, #e8f0fe);
+    color: var(--on-secondary-container, #1a2a4a);
+    border-left-color: var(--secondary, #5c7cfa);
+}
+.lookout-alert--travel {
+    background: color-mix(in oklab, var(--teal) 12%, var(--surface));
+    color: color-mix(in oklab, var(--teal) 60%, var(--on-surface));
+    border-left-color: var(--teal);
+}
+
+.lookout-alert__icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.lookout-alert__text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.lookout-alert__msg {
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.4;
+}
+.lookout-alert__action {
+    font-size: 12px;
+    opacity: 0.85;
+    line-height: 1.4;
+}
+
+.lookout-travel-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 4px 0;
+    font-size: 12px;
+}
+.lookout-travel-table th,
+.lookout-travel-table td {
+    text-align: left;
+    padding: 3px 8px 3px 0;
+    white-space: nowrap;
+}
+.lookout-travel-table th {
+    font-weight: 600;
+    opacity: 0.7;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+}
+.lookout-travel-table td:first-child {
+    font-weight: 600;
+    min-width: 44px;
+}
+
+/* Stop header rows inside the Safety Overview */
+.np-safety-overview__stop-header {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 10px 0 4px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--hair);
+}
+.np-safety-overview__stop-header:first-child {
+    margin-top: 0;
+}
+.np-safety-overview__day {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+}
+.np-safety-overview__name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-surface);
+}
+.np-safety-overview__date {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+}
+.np-safety-overview__updated {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 12px 0 0 0;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--muted);
+    opacity: 0.8;
+}
+.np-safety-overview__updated .material-symbols-outlined {
+    font-size: 14px;
+}
+

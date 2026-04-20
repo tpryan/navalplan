@@ -30,6 +30,7 @@ type Store interface {
 	ListVoyageBriefings(ctx context.Context, voyageID int64) ([]models.Briefing, error)
 	CreateBriefing(ctx context.Context, b *models.Briefing) error
 	ListAllFutureStops(ctx context.Context) ([]models.Stop, error)
+	UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts models.RawJSON) error
 	UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error
 
 	// Voyage Guide

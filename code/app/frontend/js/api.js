@@ -125,6 +125,21 @@ export const API = {
     return res.json();
   },
 
+  async triggerVoyageLookout(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/lookout`, { method: 'POST' });
+    if (res.status === 409) { const e = new Error('Safety audit already in progress'); e.conflict = true; throw e; }
+    if (!res.ok) throw new Error('Failed to trigger voyage safety audit');
+    return res.json();
+  },
+
+  async triggerLookoutAudit(stopId) {
+    const res = await apiFetch(`${API_BASE}/stops/${stopId}/lookout`, { method: 'POST' });
+    if (res.status === 404) { const e = new Error('No briefing found — run research first'); e.noBriefing = true; throw e; }
+    if (res.status === 409) { const e = new Error('Safety audit already in progress'); e.conflict = true; throw e; }
+    if (!res.ok) throw new Error('Failed to trigger safety audit');
+    return res.json();
+  },
+
 	async getBriefing(stopId) {
 		const res = await apiFetch(`${API_BASE}/stops/${stopId}/briefing`);
 		if (res.status === 404) return null;

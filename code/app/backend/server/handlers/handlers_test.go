@@ -307,6 +307,11 @@ func (m *MockStore) ListAllFutureStops(ctx context.Context) ([]models.Stop, erro
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
 
+func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts models.RawJSON) error {
+	args := m.Called(stopID, alerts)
+	return args.Error(0)
+}
+
 func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather models.WeatherSummary) error {
 	args := m.Called(stopID, weather)
 	return args.Error(0)
