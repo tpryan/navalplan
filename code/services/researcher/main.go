@@ -54,6 +54,9 @@ var _commodorePrompt string
 //go:embed prompts/specialist.md
 var _specialistPrompt string
 
+//go:embed prompts/lookout.md
+var _lookoutPrompt string
+
 const maxOutputTokens = 65536
 
 type Provider interface {
@@ -226,6 +229,7 @@ func (s *Server) run(ctx context.Context) error {
 		"commodore":         _commodorePrompt,
 		"specialist":        _specialistPrompt,
 		"search_specialist": _searchSpecialistPrompt,
+		"lookout":           _lookoutPrompt,
 	}
 	for name, p := range prompts {
 		if len(strings.TrimSpace(p)) == 0 {
@@ -263,7 +267,12 @@ func (s *Server) run(ctx context.Context) error {
 		return fmt.Errorf("creating specialist agent: %w", err)
 	}
 
-	loader, err := agent.NewMultiLoader(harbourmasterAgent, pilotAgent, commodoreAgent, specialistAgent)
+	lookoutAgent, err := s.createLookoutAgent(initCtx)
+	if err != nil {
+		return fmt.Errorf("creating lookout agent: %w", err)
+	}
+
+	loader, err := agent.NewMultiLoader(harbourmasterAgent, pilotAgent, commodoreAgent, specialistAgent, lookoutAgent)
 	if err != nil {
 		return fmt.Errorf("creating multi loader: %w", err)
 	}
@@ -282,6 +291,7 @@ func (s *Server) run(ctx context.Context) error {
 	s.registerAgentA2A(mux, pilotAgent, "/invoke/pilot", config.SessionService)
 	s.registerAgentA2A(mux, commodoreAgent, "/invoke/commodore", config.SessionService)
 	s.registerAgentA2A(mux, specialistAgent, "/invoke/specialist", config.SessionService)
+	s.registerAgentA2A(mux, lookoutAgent, "/invoke/lookout", config.SessionService)
 
 	// Special case: The root Agent Card at .well-known usually points to the main agent.
 	// We'll point it to harbourmasterAgent for now.
@@ -538,6 +548,16 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 	}
 
 	return []tool.Tool{individualTool, batchTool}, nil
+}
+
+func (s *Server) createLookoutAgent(ctx context.Context) (agent.Agent, error) {
+	return s.createAgent(ctx, &agentConfig{
+		name:        "lookout",
+		description: "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
+		instruction: _lookoutPrompt,
+		tools:       nil,
+		temperature: 0.1,
+	})
 }
 
 func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
