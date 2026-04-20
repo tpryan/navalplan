@@ -63,6 +63,35 @@ export function getIconForWeather(description) {
     return 'cloud';
 }
 
+/** Convert cardinal direction to degrees for rotation (pointing in wind direction). */
+export function directionToDegrees(dir) {
+    const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+    const index = directions.indexOf(dir);
+    if (index === -1) return 0;
+    const deg = index * 22.5;
+    // Arrow points where it blows (e.g. N blows South)
+    return (deg + 180) % 360;
+}
+
+/** Get a scale multiplier for wind arrow based on speed in knots. */
+export function getWindScale(kt) {
+    if (kt < 11) return 0.8;
+    if (kt < 22) return 1.0;
+    return 1.2;
+}
+
+/** Return an SVG string for a long-stemmed, small-headed wind arrow. */
+export function getWindArrowSVG(deg, scale = 1, className = '') {
+    // Center of 24x24 is 12,12. 
+    // We extend the paths slightly outside the box and use overflow:visible 
+    // to ensure the arrow looks long and the head is far from the center.
+    return `
+    <svg viewBox="0 0 24 24" class="${className}" style="transform: rotate(${deg}deg) scale(${scale}); width:100%; height:100%; overflow:visible;">
+        <path d="M12 27V-3M10.5 -1L12 -2.5L13.5 -1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    `;
+}
+
 /**
  * Build a round accent dot with an optional white Material Symbol icon.
  * Used as content for Google Maps AdvancedMarkerElement.

@@ -643,41 +643,90 @@
     margin-top: 8px;
 }
 .np-wind-forecast__tile {
-    padding: 8px 6px;
+    padding: 8px 4px;
     border-radius: var(--radius-tile);
-    background: color-mix(in oklab, var(--sky) 10%, var(--surface));
+    background: color-mix(in oklab, var(--sky) 5%, var(--surface));
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
+.np-wind-forecast__tile--light    { color: var(--teal); }
+.np-wind-forecast__tile--moderate { color: var(--amber); }
+.np-wind-forecast__tile--strong   { color: var(--coral); }
+
 .np-wind-forecast__period {
     font-size: 9px;
     font-weight: 800;
     text-transform: uppercase;
     color: var(--sky);
     letter-spacing: .05em;
-}
-.np-wind-forecast__value {
-    font-size: 18px;
-    font-weight: 800;
-    color: var(--ink);
-    line-height: 1.2;
-}
-.np-wind-forecast__unit {
-    font-size: 9px;
-    color: var(--muted);
     margin-bottom: 4px;
 }
-.np-wind-forecast__icons {
+
+.np-wind-forecast__visual-wrap {
+    position: relative;
+    width: 64px;
+    height: 64px;
     display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 1px;
+    margin: 2px 0;
 }
-.np-wind-forecast__icon {
-    font-size: 28px;
-    line-height: 1;
+
+.np-wind-forecast__arrow-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
 }
-.np-wind-forecast__icon--light    { color: var(--teal); }
-.np-wind-forecast__icon--moderate { color: var(--amber); }
-.np-wind-forecast__icon--strong   { color: var(--coral); }
+
+.np-wind-forecast__arrow-svg {
+    width: 72px;
+    height: 72px;
+    color: currentColor;
+    opacity: 0.6;
+    display: block;
+}
+
+.np-wind-forecast__circle {
+    position: relative;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    border: 3px solid currentColor;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.np-wind-forecast__value {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--ink);
+}
+
+.np-wind-forecast__dir {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.np-wind-forecast__unit {
+    display: none; /* knots label implied or in circle if needed, but let's hide to keep it clean */
+}
 
 /* ─── Sun phase card (briefing) ──────────────────────────────────────────── */
 .np-sun-card {
