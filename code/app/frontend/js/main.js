@@ -536,11 +536,13 @@ function initMobileMenuListeners() {
     document.getElementById('tab-map')?.addEventListener('click', () => {
         appContainer.classList.remove('menu-open');
         setActiveTab('map');
+        document.getElementById('auth-container')?.classList.remove('mobile-hidden');
     });
 
     document.getElementById('tab-plan')?.addEventListener('click', () => {
         appContainer.classList.add('menu-open');
-        setActiveTab('plan');
+        setActiveTab('list');
+        document.getElementById('auth-container')?.classList.add('mobile-hidden');
     });
 
     document.getElementById('tab-guide')?.addEventListener('click', () => {
@@ -563,11 +565,17 @@ function initMobileMenuListeners() {
     // Sync active tab when sidebar opens/closes via other means
     const observer = new MutationObserver(() => {
         const isOpen = appContainer.classList.contains('menu-open');
-        if (isOpen) setActiveTab('plan');
-        else {
+        const authContainer = document.getElementById('auth-container');
+        if (isOpen) {
+            setActiveTab('list');
+            authContainer?.classList.add('mobile-hidden');
+        } else {
             // Only reset if no modal is open
             const anyModal = document.querySelector('.modal:not(.hidden)');
-            if (!anyModal) setActiveTab('map');
+            if (!anyModal) {
+                setActiveTab('map');
+                authContainer?.classList.remove('mobile-hidden');
+            }
         }
     });
     observer.observe(appContainer, { attributes: true, attributeFilter: ['class'] });
@@ -3090,7 +3098,7 @@ async function showBriefing(briefing, doPushState = true) {
     // Tide events table
     if (displayEvents.length > 0) {
         const tbl = document.createElement('table');
-        tbl.className = 'briefing-table';
+        tbl.className = 'briefing-table np-tides-table';
         tbl.style.marginTop = '10px';
         tbl.innerHTML = `<thead><tr>
             <th class="briefing-th">Time</th>

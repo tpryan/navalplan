@@ -547,19 +547,30 @@
     padding-right: 0 !important;
   }
 
-  .briefing-table, 
-  .briefing-table tbody, 
-  .briefing-table tr, 
-  .briefing-table th, 
-  .briefing-table td {
+  .briefing-table:not(.np-tides-table),
+  .briefing-table:not(.np-tides-table) tbody,
+  .briefing-table:not(.np-tides-table) tr,
+  .briefing-table:not(.np-tides-table) th,
+  .briefing-table:not(.np-tides-table) td {
       display: block;
       width: 100% !important;
       box-sizing: border-box;
   }
 
-  .briefing-table tr {
+  .briefing-table:not(.np-tides-table) tr {
       padding: 0.5rem 0;
       border-bottom: 1px solid var(--border-color);
+  }
+
+  /* Tide table: keep as a real table, just ensure it fits */
+  .np-tides-table {
+      width: 100%;
+      border-collapse: collapse;
+  }
+  .np-tides-table th,
+  .np-tides-table td {
+      padding: 6px 10px;
+      text-align: left;
   }
 
   .briefing-th {
@@ -657,13 +668,13 @@
 
   /* Sidebar as bottom sheet: lift from bottom, not slide from left */
   #sidebar {
-    top: auto;
+    top: 0;
     left: 0;
     right: 0;
     bottom: calc(56px + env(safe-area-inset-bottom, 0px));
     width: 100%;
-    height: 75vh;
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    height: auto;
+    border-radius: 0;
     transform: translateY(100%);
     transition: transform .3s cubic-bezier(.4,0,.2,1);
     z-index: 200;
@@ -671,12 +682,19 @@
 
   #app.menu-open #sidebar {
     transform: translateY(0);
+    bottom: 0;
+    z-index: 400;
   }
 
   /* Auth container: top-right stays, but nudge down a bit on mobile */
   #auth-container {
     top: 12px;
     right: 12px;
+  }
+
+  /* Hide auth container when list view is active */
+  #auth-container.mobile-hidden {
+    display: none;
   }
 
   /* Floating controls above tab bar */
@@ -694,10 +712,6 @@
 
 /* ─── 375px tight-viewport fixes ────────────────────────────────────────── */
 @media (max-width: 400px) {
-  /* Sidebar fills full height minus tab bar */
-  #sidebar {
-    height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
-  }
 
   /* Stop cards: tighten padding */
   .np-stop-card {

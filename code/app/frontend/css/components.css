@@ -1789,6 +1789,30 @@
     .np-facility-briefing-item__tiles .np-data-tile--compact {
         flex: 1;
     }
+
+    /* Prevent any report content from blowing out the viewport */
+    #report-content {
+        max-width: 100%;
+        overflow-x: hidden;
+        box-sizing: border-box;
+    }
+    #report-content * {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Travel time table: scrollable horizontally rather than overflowing */
+    .lookout-travel-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Report map: never wider than viewport */
+    .np-report-map {
+        max-width: 100%;
+        height: auto;
+    }
 }
 
 /* ─── ≤ 480px (small phones) ─────────────────────────────────────────────── */
@@ -1810,10 +1834,10 @@
         font-size: 11px;
     }
 
-    /* Day tiles: 2 across on tiny screens */
+    /* Day tiles: single column on small phones */
     .np-day-grid,
     .np-day-grid--fill {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
     }
 
     /* Weather tiles: 2 across */
