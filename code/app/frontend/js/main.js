@@ -5593,8 +5593,40 @@ function renderSharedReport(data, container) {
 
     const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL);
 
+    // Create shared report container with header
+    const headerHTML = `
+        <div class="shared-report-header">
+            <div class="shared-report-header__inner">
+                <div class="shared-report-header__brand">NavalPlan</div>
+                <div class="flex gap-sm align-center">
+                    <button id="btn-shared-toggle-sailing" class="btn-icon icon-xl" title="Sailing Mode: Focus on essential data" aria-label="Toggle sailing mode">
+                        <span class="material-symbols-outlined">sailing</span>
+                    </button>
+                    <div class="header-divider"></div>
+                    <button onclick="window.print()" class="btn-icon icon-xl" title="Print Report" aria-label="Print report">
+                        <span class="material-symbols-outlined">print</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
     // Inject and Render - Wrapped in a container for styling (max-width etc)
-    container.innerHTML = DOMPurify.sanitize(`<div class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
+    container.innerHTML = headerHTML + DOMPurify.sanitize(`<div id="shared-report-body" class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
+
+    // Wire up Sailing Mode for Shared View
+    const btnSailing = document.getElementById('btn-shared-toggle-sailing');
+    const reportBody = document.getElementById('shared-report-body');
+    if (btnSailing && reportBody) {
+        btnSailing.onclick = () => {
+            const active = btnSailing.classList.toggle('active');
+            if (active) {
+                reportBody.classList.add('np-report--sailing-only');
+            } else {
+                reportBody.classList.remove('np-report--sailing-only');
+            }
+        };
+    }
 
     // ... (Chart rendering logic preserved below) ...
     setTimeout(() => {
