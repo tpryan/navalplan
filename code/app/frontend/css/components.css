@@ -691,7 +691,7 @@
     width: 72px;
     height: 72px;
     color: currentColor;
-    opacity: 0.6;
+    opacity: 0.8;
     display: block;
 }
 
@@ -714,7 +714,7 @@
     font-size: 14px;
     font-weight: 800;
     line-height: 1.1;
-    color: var(--ink);
+    color: inherit;
 }
 
 .np-wind-forecast__dir {
@@ -728,7 +728,220 @@
     display: none; /* knots label implied or in circle if needed, but let's hide to keep it clean */
 }
 
-/* ─── Sun phase card (briefing) ──────────────────────────────────────────── */
+/* ─── Sailing Mode ────────────────────────────────────────────────────────── */
+.np-report--sailing-only .np-report-item--non-sailing {
+    display: none !important;
+}
+
+#btn-toggle-sailing-mode.active {
+    background: var(--sky);
+    color: #fff;
+    border-color: var(--sky);
+}
+
+/* ─── Hourly Timeline ────────────────────────────────────────────────────── */
+.np-hourly-timeline {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 24px;
+    background: var(--surface);
+    border-radius: var(--radius-card);
+}
+
+.np-hourly-track {
+    display: flex;
+    gap: 0;
+    min-width: max-content;
+}
+
+.np-hour-col {
+    width: 84px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 0 4px;
+    border-right: 1px dotted var(--hair); /* Use --hair */
+    background: color-mix(in oklab, var(--sky) 40%, var(--surface)); /* High contrast Day Blue */
+}
+
+.np-hour-col:first-child {
+    border-right: none;
+    border-top-left-radius: var(--radius-card);
+    border-bottom-left-radius: var(--radius-card);
+}
+
+.np-hour-col:last-child {
+    border-right: none;
+    border-top-right-radius: var(--radius-card);
+    border-bottom-right-radius: var(--radius-card);
+}
+
+.np-hour-col--celestial {
+    width: 84px; /* Same as other cols */
+}
+
+.np-hour-col--sunrise {
+    /* Night (Left) to Day (Right) */
+    background: linear-gradient(90deg, 
+        color-mix(in oklab, var(--violet) 50%, var(--surface)) 20%, 
+        color-mix(in oklab, var(--sky) 40%, var(--surface)) 80%) !important;
+}
+
+.np-hour-col--sunset {
+    /* Day (Left) to Night (Right) */
+    background: linear-gradient(90deg, 
+        color-mix(in oklab, var(--sky) 40%, var(--surface)) 20%, 
+        color-mix(in oklab, var(--violet) 50%, var(--surface)) 80%) !important;
+}
+
+.np-hour-col--celestial .np-hour-icon {
+    color: var(--amber);
+    filter: drop-shadow(0 0 4px var(--amber));
+}
+
+.np-hour-col--night {
+    background: color-mix(in oklab, var(--violet) 50%, var(--surface)) !important; /* High contrast Night Purple */
+    border-right-color: rgba(255, 255, 255, 0.6); /* Lighter border for dark background */
+}
+
+.np-hour-col--night .np-hour-time {
+    color: var(--sky);
+}
+
+.np-hour-col--night .np-hour-time {
+    color: var(--sky);
+}
+
+.np-hour-col--night .np-hour-icon {
+    color: var(--sky);
+}
+
+.np-hour-col--night .np-hour-temp {
+    color: var(--ink2);
+}
+
+.np-hour-time {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.np-hour-icon {
+    font-size: 24px;
+    color: var(--sky);
+}
+
+.np-hour-temp {
+    font-size: 16px;
+    font-weight: 800;
+}
+
+/* ─── Compact Wind Circle (Hourly) ────────────────────────────────────────── */
+.np-hour-wind-visual {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+.np-hour-wind-visual .np-wind-forecast__arrow-bg {
+    width: 60px;
+    height: 60px;
+}
+
+.np-hour-wind-visual .np-wind-forecast__circle {
+    width: 34px;
+    height: 34px;
+    border-width: 2.5px;
+}
+
+.np-hour-wind-visual .np-wind-forecast__value {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.np-hour-wind-gust-inner {
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--coral);
+    line-height: 1;
+}
+
+.np-hour-wind-dir-label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: -6px;
+}
+
+.np-hour-precip {
+    font-size: 11px;
+    color: inherit; /* Match temperature color */
+    font-weight: 800;
+    display: flex;
+    flex-direction: row; /* Single line */
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+}
+
+.np-hour-precip .material-symbols-outlined {
+    font-size: 16px; /* Slightly smaller for single line fit */
+}
+
+.np-hour-wind-visual--light    { color: var(--teal); }
+.np-hour-wind-visual--moderate { color: var(--amber); }
+.np-hour-wind-visual--strong   { color: var(--coral); }
+
+/* ─── Compact Wave Circle (Hourly) ────────────────────────────────────────── */
+.np-hour-wave-visual {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+    color: var(--teal);
+}
+
+.np-hour-wave-visual .np-wind-forecast__arrow-bg {
+    width: 56px;
+    height: 56px;
+}
+
+.np-hour-wave-visual .np-wind-forecast__circle {
+    width: 32px;
+    height: 32px;
+    border-width: 2px;
+    background: color-mix(in oklab, var(--teal) 5%, #fff);
+}
+
+.np-hour-wave-visual .np-wind-forecast__value {
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.np-hour-wave-visual .np-wind-forecast__dir {
+    font-size: 7px;
+    opacity: 0.7;
+}
+
+.np-hour-wave-period {
+    font-size: 9px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-top: 2px;
+}
 .np-sun-card {
     display: flex;
     gap: 8px;

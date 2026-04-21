@@ -32,6 +32,13 @@ type WeatherResult struct {
 	WindDirection   string    `json:"wind_direction"`
 	HourlyWind      []float64 `json:"hourly_wind"`
 	HourlyWindDir   []string  `json:"hourly_wind_dir"`
+	HourlyConditions []string  `json:"hourly_conditions"`
+	HourlyTemp      []float64 `json:"hourly_temp"`
+	HourlyGusts     []float64 `json:"hourly_gusts"`
+	HourlyPrecip    []float64 `json:"hourly_precip"`
+	HourlyWaveHeight []float64 `json:"hourly_wave_height"`
+	HourlyWavePeriod []float64 `json:"hourly_wave_period"`
+	HourlyWaveDir    []float64 `json:"hourly_wave_dir"`
 	PrecipTotal     float64   `json:"precip_total"`
 	WaveHeight      float64   `json:"wave_height"`
 	WaveDirection   float64   `json:"wave_direction"`
@@ -145,6 +152,10 @@ func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time,
 		HourlyMetrics(openmeteogo.Metrics{
 			openmeteogo.WindSpeed10m,
 			openmeteogo.WindDirection10m,
+			openmeteogo.WeatherCode,
+			openmeteogo.Temperature2m,
+			openmeteogo.WindGusts10m,
+			openmeteogo.Precipitation,
 		})
 
 	if isSeasonal {
@@ -164,6 +175,11 @@ func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) 
 			openmeteogo.WaveHeightMax,
 			openmeteogo.WaveDirectionDominant,
 			openmeteogo.WavePeriodMax,
+		}).
+		HourlyMetrics(openmeteogo.Metrics{
+			openmeteogo.WaveHeight,
+			openmeteogo.WaveDirection,
+			openmeteogo.WavePeriod,
 		}).
 		Build()
 }
@@ -220,6 +236,21 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 		hourlyWindDir[i] = DegreesToDirection(float64(deg))
 	}
 
+	hourlyConditions := make([]string, len(weather.Hourly.WeatherCode))
+	for i, code := range weather.Hourly.WeatherCode {
+		hourlyConditions[i] = openmeteogo.DescribeCode(int(code))
+	}
+
+	var hourlyWaveHeight, hourlyWaveDir, hourlyWavePeriod []float64
+	if marineErr == nil && marine != nil && marine.Hourly.Time != nil && len(marine.Hourly.Time) > 0 {
+		hourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))
+		for i, h := range marine.Hourly.WaveHeight {
+			hourlyWaveHeight[i] = h * metersToFeet
+		}
+		hourlyWaveDir = marine.Hourly.WaveDirection
+		hourlyWavePeriod = marine.Hourly.WavePeriod
+	}
+
 	return WeatherResult{
 		Date:          weather.Daily.Time[0],
 		Condition:     condition,
@@ -232,6 +263,13 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 		WindDirection: DegreesToDirection(float64(windDir)),
 		HourlyWind:    hourlyWind,
 		HourlyWindDir: hourlyWindDir,
+		HourlyConditions: hourlyConditions,
+		HourlyTemp:    weather.Hourly.Temperature2m,
+		HourlyGusts:   weather.Hourly.WindGusts10m,
+		HourlyPrecip:  weather.Hourly.Precipitation,
+		HourlyWaveHeight: hourlyWaveHeight,
+		HourlyWaveDir:    hourlyWaveDir,
+		HourlyWavePeriod: hourlyWavePeriod,
 		PrecipTotal:   precip,
 		WaveHeight:    waveHeight,
 		WaveDirection: waveDir,

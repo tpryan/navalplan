@@ -76,6 +76,13 @@ type WeatherSummary struct {
 	WindDirection   string    `json:"wind_direction"`
 	HourlyWind      []float64 `json:"hourly_wind,omitempty"`
 	HourlyWindDir   []string  `json:"hourly_wind_dir,omitempty"`
+	HourlyConditions []string  `json:"hourly_conditions,omitempty"`
+	HourlyTemp      []float64 `json:"hourly_temp,omitempty"`
+	HourlyGusts     []float64 `json:"hourly_gusts,omitempty"`
+	HourlyPrecip    []float64 `json:"hourly_precip,omitempty"`
+	HourlyWaveHeight []float64 `json:"hourly_wave_height,omitempty"`
+	HourlyWavePeriod []float64 `json:"hourly_wave_period,omitempty"`
+	HourlyWaveDir    []float64 `json:"hourly_wave_dir,omitempty"`
 	WaveHeightFt    float64   `json:"wave_height_ft"`
 	DebugDurationMs int64     `json:"debug_duration_ms"`
 }

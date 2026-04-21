@@ -72,6 +72,13 @@ CRITICAL RULES:
 		"wind_direction": "...",
 		"hourly_wind": [0, 0, ...],
 		"hourly_wind_dir": ["N", "N", ...],
+		"hourly_conditions": ["Sunny", "Cloudy", ...],
+		"hourly_temp": [0, 0, ...],
+		"hourly_gusts": [0, 0, ...],
+		"hourly_precip": [0, 0, ...],
+		"hourly_wave_height": [0, 0, ...],
+		"hourly_wave_period": [0, 0, ...],
+		"hourly_wave_dir": [0, 0, ...],
 		"wave_height_ft": 0,
 		"debug_duration_ms": 0
 	},

@@ -2764,12 +2764,13 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
                     callbacks: {
                         title: (context) => {
                             const val = context[0].parsed.x;
-                            const h = Math.floor(val);
-                            const m = Math.round((val - h) * 60);
+                            const hour = Math.floor(val);
+                            const m = Math.round((val - hour) * 60);
                             // Handle day overflow for label
-                            let label = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
-                            if (h < 0) label += " (Prev Day)";
-                            if (h >= 24) label += " (Next Day)";
+                            let label = `${hour.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+                            if (hour < 0) label += " (Prev Day)";
+                            if (hour >= 24) label += " (Next Day)";
+
                             return `Local Time: ${label}`;
                         }
                     }
@@ -2811,6 +2812,116 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
             }
         }
     }));
+}
+
+function generateHourlyTimelineHTML(weather, sun = {}) {
+    const hw = weather.hourly_wind || [];
+    const hwd = weather.hourly_wind_dir || [];
+    const hc = weather.hourly_conditions || [];
+    const ht = weather.hourly_temp || [];
+    const hg = weather.hourly_gusts || [];
+    const hp = weather.hourly_precip || [];
+    const hwh = weather.hourly_wave_height || [];
+    const hwp = weather.hourly_wave_period || [];
+    const hwd_deg = weather.hourly_wave_dir || [];
+
+    if (hw.length < 24) return '';
+
+    // Helper: Parse HH:MM AM/PM into hour (0-23) and minute (0-59)
+    const parseSunTime = (s) => {
+        if (!s || typeof s !== 'string') return null;
+        const parts = s.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!parts) return null;
+        let hour = parseInt(parts[1]), m = parseInt(parts[2]), ap = parts[3].toUpperCase();
+        if (ap === 'PM' && hour < 12) hour += 12;
+        if (ap === 'AM' && hour === 12) hour = 0;
+        return { hour, min: m, total: hour + m/60, display: s };
+    };
+
+    const sunrise = parseSunTime(sun.sunrise);
+    const sunset  = parseSunTime(sun.sunset);
+    const celestialEvents = [
+        sunrise ? { ...sunrise, icon: 'wb_twilight', label: 'Sunrise', type: 'sunrise' } : null,
+        sunset ? { ...sunset, icon: 'wb_twilight', label: 'Sunset', type: 'sunset' } : null
+    ].filter(Boolean).sort((a,b) => a.total - b.total);
+
+    let nextEventIdx = 0;
+    let html = '<div class="np-hourly-track">';
+
+    for (let i = 0; i < 24; i++) {
+        const hourLabel = i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i-12} PM`;
+        
+        // Determine if it's night
+        const isNight = (sunrise && sunset) ? (i < sunrise.total || i > sunset.total) : (i < 6 || i > 18);
+        const colClass = 'np-hour-col' + (isNight ? ' np-hour-col--night' : '');
+
+        const kt = Math.round(hw[i]);
+        const deg = directionToDegrees(hwd[i]);
+        const scale = getWindScale(kt) * 0.7;
+        const strengthClass = kt < 11 ? 'light' : kt < 22 ? 'moderate' : 'strong';
+        
+        let waveHTML = '';
+        if (hwh[i] > 0) {
+            const waveDeg = hwd_deg[i] || 0;
+            waveHTML = `
+                <div class="np-hour-wave-visual">
+                    <div class="np-wind-forecast__arrow-bg">
+                        ${getWindArrowSVG(waveDeg, 0.65, 'np-wind-forecast__arrow-svg')}
+                    </div>
+                    <div class="np-wind-forecast__circle">
+                        <div class="np-wind-forecast__value">${hwh[i].toFixed(1)}</div>
+                        <div class="np-wind-forecast__dir">ft</div>
+                    </div>
+                </div>
+                <div class="np-hour-wave-period">${hwp[i] ? hwp[i].toFixed(0) : '-'}s</div>
+            `;
+        }
+
+        html += `
+            <div class="${colClass}">
+                <div class="np-hour-time">${hourLabel}</div>
+                <span class="material-symbols-outlined np-hour-icon">${getIconForWeather(hc[i], isNight)}</span>
+                <div class="np-hour-temp">${Math.round(ht[i])}°</div>
+                <div class="np-hour-wind-visual np-hour-wind-visual--${strengthClass}">
+                    <div class="np-wind-forecast__arrow-bg">
+                        ${getWindArrowSVG(deg, scale, 'np-wind-forecast__arrow-svg')}
+                    </div>
+                    <div class="np-wind-forecast__circle">
+                        <div class="np-wind-forecast__value">${kt}</div>
+                        ${hg[i] ? `<div class="np-hour-wind-gust-inner">${Math.round(hg[i])}</div>` : ''}
+                    </div>
+                </div>
+                <div class="np-hour-wind-dir-label">${hwd[i] || '--'}</div>
+                ${hp[i] > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${hp[i].toFixed(1).replace(/^0/, '')}"</div>` : '<div style="height:16px"></div>'}
+                <div style="margin-top:auto">${waveHTML}</div>
+            </div>
+        `;
+
+        // Insert celestial events that happen in this hour AFTER the hour column
+        while (nextEventIdx < celestialEvents.length && celestialEvents[nextEventIdx].hour === i) {
+            const ev = celestialEvents[nextEventIdx];
+            html += `
+                <div class="np-hour-col np-hour-col--celestial np-hour-col--${ev.type}">
+                    <div class="np-hour-time">${ev.display}</div>
+                    <span class="material-symbols-outlined np-hour-icon">${ev.icon}</span>
+                    <div class="np-hour-temp" style="font-size:10px">${ev.label}</div>
+                </div>
+            `;
+            nextEventIdx++;
+        }
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderHourlyTimeline(weather, sun = {}) {
+    const html = generateHourlyTimelineHTML(weather, sun);
+    if (!html) return null;
+    const timeline = document.createElement('div');
+    timeline.className = 'np-hourly-timeline';
+    timeline.innerHTML = html;
+    return timeline;
 }
 
 async function showBriefing(briefing, doPushState = true) {
@@ -2866,8 +2977,10 @@ async function showBriefing(briefing, doPushState = true) {
     // §5.6 Signal briefing sections — built as DOM nodes
     const sections = document.createDocumentFragment();
 
-    // ── Weather ──────────────────────────────────────────────────────────────
     const weather = briefing.weather_summary || {};
+    const sun = briefing.sun_phase || {};
+
+    // ── Weather ──────────────────────────────────────────────────────────────
     const weatherSec = document.createElement('div');
     weatherSec.className = 'briefing-section';
 
@@ -2883,26 +2996,13 @@ async function showBriefing(briefing, doPushState = true) {
         wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, icon: getIconForWeather(weather.condition), accent: 'sky' }));
     }
     if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
-        const deg = directionToDegrees(weather.wind_direction);
-        const scale = getWindScale(weather.wind_speed_kt);
         wxTiles.appendChild(DataTile({
             label: 'Wind',
             value: `${weather.wind_speed_kt || 0} kt`,
             sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction,
-            icon: weather.wind_direction ? '' : 'air',
-            iconStyle: '',
+            icon: 'air',
             accent: 'sky'
         }));
-        
-        // Manual override for the DataTile icon if we have direction
-        if (weather.wind_direction) {
-            const lastTile = wxTiles.lastElementChild;
-            const iconPlaceholder = lastTile.querySelector('.np-data-tile__icon');
-            if (iconPlaceholder) {
-                iconPlaceholder.innerHTML = getWindArrowSVG(deg, scale * 0.8);
-                iconPlaceholder.style.cssText = 'width:28px;height:28px;display:flex;align-items:center;justify-content:center';
-            }
-        }
     }
     if (weather.temp_max_f || weather.temp_min_f) {
         wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
@@ -2919,6 +3019,12 @@ async function showBriefing(briefing, doPushState = true) {
         weatherSec.appendChild(wxSum);
     }
 
+    // Replace old wind tiles with the 24h timeline
+    const timeline = renderHourlyTimeline(weather, sun);
+    if (timeline) {
+        weatherSec.appendChild(timeline);
+    }
+
     if (briefing.weather_last_updated) {
         const wxAge = document.createElement('p');
         wxAge.style.cssText = 'margin-top:6px;font-size:11px;color:var(--muted);font-style:italic';
@@ -2927,54 +3033,9 @@ async function showBriefing(briefing, doPushState = true) {
         weatherSec.appendChild(wxAge);
     }
 
-    // Wind forecast tiles — AM / Mid / PM / Eve estimated or real hourly speeds
-    if (weather.wind_speed_kt) {
-        const getSpeeds = () => {
-            if (Array.isArray(weather.hourly_wind) && weather.hourly_wind.length >= 24) {
-                // Map AM (9), Mid (13), PM (17), Eve (21)
-                return [weather.hourly_wind[9], weather.hourly_wind[13], weather.hourly_wind[17], weather.hourly_wind[21]];
-            }
-            const speed = parseFloat(weather.wind_speed_kt) || 0;
-            return [0.8, 1.0, 0.9, 0.7].map(m => Math.round(speed * m));
-        };
-        const getDirs = () => {
-            if (Array.isArray(weather.hourly_wind_dir) && weather.hourly_wind_dir.length >= 24) {
-                return [weather.hourly_wind_dir[9], weather.hourly_wind_dir[13], weather.hourly_wind_dir[17], weather.hourly_wind_dir[21]];
-            }
-            return Array(4).fill(weather.wind_direction);
-        };
-
-        const speeds = getSpeeds();
-        const dirs = getDirs();
-        const windForecast = document.createElement('div');
-        windForecast.className = 'np-wind-forecast';
-        ['AM', 'Mid', 'PM', 'Eve'].forEach((lbl, i) => {
-            const kt = Math.round(speeds[i]);
-            const dir = dirs[i];
-            const strengthClass = kt < 11 ? 'light' : kt < 22 ? 'moderate' : 'strong';
-            const deg = directionToDegrees(dir);
-            const scale = getWindScale(kt);
-            const tile = document.createElement('div');
-            tile.className = `np-wind-forecast__tile np-wind-forecast__tile--${strengthClass}`;
-            tile.innerHTML =
-                `<div class="np-wind-forecast__period">${lbl}</div>` +
-                `<div class="np-wind-forecast__visual-wrap">` +
-                    `<div class="np-wind-forecast__arrow-bg">` +
-                        getWindArrowSVG(deg, scale, 'np-wind-forecast__arrow-svg') +
-                    `</div>` +
-                    `<div class="np-wind-forecast__circle">` +
-                        `<div class="np-wind-forecast__value">${kt}</div>` +
-                        `<div class="np-wind-forecast__dir">${dir || '--'}</div>` +
-                    `</div>` +
-                `</div>`;
-            windForecast.appendChild(tile);
-        });
-        weatherSec.appendChild(windForecast);
-    }
     sections.appendChild(weatherSec);
 
     // ── Sun Phase ─────────────────────────────────────────────────────────────
-    const sun = briefing.sun_phase || {};
     if (sun.sunrise || sun.sunset) {
         const sunSec = document.createElement('div');
         sunSec.className = 'briefing-section';
@@ -3042,10 +3103,10 @@ async function showBriefing(briefing, doPushState = true) {
             try {
                 const dt = new Date(e.time.replace(' ', 'T'));
                 if (!isNaN(dt.getTime())) {
-                    let h = dt.getHours(), min = String(dt.getMinutes()).padStart(2,'0');
-                    const ap = h >= 12 ? 'pm' : 'am';
-                    h = h % 12 || 12;
-                    timeStr = `${h}:${min} ${ap}`;
+                    let hour = dt.getHours(), min = String(dt.getMinutes()).padStart(2,'0');
+                    const ap = hour >= 12 ? 'pm' : 'am';
+                    hour = hour % 12 || 12;
+                    timeStr = `${hour}:${min} ${ap}`;
                 }
             } catch (_) {}
             const tr = document.createElement('tr');
@@ -4198,6 +4259,23 @@ async function captureAndUploadMap(voyageId) {
             }
             btnShare.onclick = () => handleShareClick(guide);
 
+            // Wire Sailing Mode toggle
+            const btnSailingMode = document.getElementById('btn-toggle-sailing-mode');
+            if (btnSailingMode) {
+                // Ensure initial state is inactive
+                btnSailingMode.classList.remove('active');
+                modal.classList.remove('np-report--sailing-only');
+                
+                btnSailingMode.onclick = () => {
+                    const active = btnSailingMode.classList.toggle('active');
+                    if (active) {
+                        modal.classList.add('np-report--sailing-only');
+                    } else {
+                        modal.classList.remove('np-report--sailing-only');
+                    }
+                };
+            }
+
             // Wire Safety Audit button
             const btnVoyageLookout = document.getElementById('btn-voyage-lookout');
             if (btnVoyageLookout) {
@@ -4964,8 +5042,10 @@ function generateGuideHTML(guide) {
         </div>`;
 
     // Overview + Hazards (left col)
-    let leftCol = sectionChip('Overview', 'coral');
+    let leftCol = `<div class="np-report-item--non-sailing">`;
+    leftCol += sectionChip('Overview', 'coral');
     leftCol += `<p class="np-overview-summary">${guide.summary || 'No summary available.'}</p>`;
+    leftCol += `</div>`;
 
     if (guide.hazards && guide.hazards.length > 0) {
         leftCol += sectionChip('Regional Hazards', 'amber');
@@ -4978,6 +5058,7 @@ function generateGuideHTML(guide) {
     }
 
     if (guide.security_safety && (guide.security_safety.summary || guide.security_safety.crime_report)) {
+        leftCol += `<div class="np-report-item--non-sailing">`;
         const s = guide.security_safety;
         const riskAccent = (s.risk_level || '').toLowerCase() === 'high' ? 'coral' : (s.risk_level || '').toLowerCase() === 'medium' ? 'amber' : 'teal';
         leftCol += sectionChip('Security & Safety', riskAccent);
@@ -4992,11 +5073,13 @@ function generateGuideHTML(guide) {
             leftCol += `<ul class="np-safety-tips">` +
                 s.safety_tips.map(t => `<li>${t}</li>`).join('') + `</ul>`;
         }
+        leftCol += `</div>`;
     }
 
     // Major Hubs moved to full-width section below the 2-col grid
     let hubsSection = '';
     if (guide.hubs && guide.hubs.length > 0) {
+        hubsSection += `<div class="np-report-item--non-sailing">`;
         hubsSection += sectionChip('Major Hubs', 'amber');
         hubsSection += `<div class="np-hub-grid">`;
         guide.hubs.forEach(h => {
@@ -5006,10 +5089,11 @@ function generateGuideHTML(guide) {
                 ${h.references && h.references.length ? renderReferences(h.references) : ''}
             </div>`;
         });
-        hubsSection += `</div>`;
+        hubsSection += `</div></div>`;
     }
 
     if (guide.points_of_interest && guide.points_of_interest.length > 0) {
+        leftCol += `<div class="np-report-item--non-sailing">`;
         leftCol += sectionChip('Points of Interest', 'violet');
         guide.points_of_interest.forEach(poi => {
             leftCol += `<div class="np-poi-item">
@@ -5018,6 +5102,7 @@ function generateGuideHTML(guide) {
                 ${poi.references && poi.references.length ? renderReferences(poi.references) : ''}
             </div>`;
         });
+        leftCol += `</div>`;
     }
 
     // Sailing Season + At a Glance (right col)
@@ -5027,6 +5112,7 @@ function generateGuideHTML(guide) {
         const s = guide.sailing_season;
         const bestMonths = s.primary_season_months || [];
         const stormMonths = s.storm_season_months || [];
+        rightCol += `<div class="np-report-item--non-sailing">`;
         rightCol += sectionChip('Sailing Season', 'teal');
         rightCol += `<div class="np-season-card">`;
         rightCol += `<div class="np-season-month-grid">`;
@@ -5045,7 +5131,7 @@ function generateGuideHTML(guide) {
         if (s.notes) {
             rightCol += `<p class="np-caption" style="margin-top:8px">${s.notes}</p>`;
         }
-        rightCol += `${s.references && s.references.length ? renderReferences(s.references) : ''}</div>`;
+        rightCol += `${s.references && s.references.length ? renderReferences(s.references) : ''}</div></div>`;
     }
 
     // At a glance data tiles
@@ -5061,6 +5147,7 @@ function generateGuideHTML(guide) {
         glanceTiles.push({ label: 'Currency', value: `${cur.symbol || ''} ${cur.code}`.trim(), accent: 'amber' });
     }
     if (glanceTiles.length > 0) {
+        rightCol += `<div class="np-report-item--non-sailing">`;
         rightCol += sectionChip('At a Glance', 'sky');
         rightCol += `<div class="np-glance-grid">`;
         glanceTiles.forEach(({ label, value, accent }) => {
@@ -5069,14 +5156,14 @@ function generateGuideHTML(guide) {
                 <div class="np-glance-tile__value">${value}</div>
             </div>`;
         });
-        rightCol += `</div>`;
+        rightCol += `</div></div>`;
     }
 
     let charterAirportsHTML = '';
 
     if (guide.charter_info) {
         const c = guide.charter_info;
-        charterAirportsHTML += `<div class="np-charter-airports-col">`;
+        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing">`;
         charterAirportsHTML += sectionChip('Charter Info', 'amber');
         charterAirportsHTML += `<div class="np-charter-card">
             <div>Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
@@ -5091,7 +5178,7 @@ function generateGuideHTML(guide) {
     }
 
     if (guide.airports && guide.airports.length > 0) {
-        charterAirportsHTML += `<div class="np-charter-airports-col">`;
+        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing">`;
         charterAirportsHTML += sectionChip('Nearest Airports', 'sky');
         guide.airports.forEach(a => {
             const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
@@ -5187,7 +5274,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     const poiCount       = (guide && Array.isArray(guide.points_of_interest)) ? guide.points_of_interest.length : 0;
 
     const overviewCol = (guide && guide.summary) ? `
-        <div class="np-destination-overview">
+        <div class="np-destination-overview np-report-item--non-sailing">
             <span class="np-destination-overview__eyebrow">Destination Overview</span>
             <blockquote class="np-destination-overview__quote">${DOMPurify.sanitize(guide.summary)}</blockquote>
             <span class="np-destination-overview__cta">↓ Full guide below</span>
@@ -5202,7 +5289,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     <h1 class="np-report-header__title">${DOMPurify.sanitize(voyage.title)}</h1>
                     <p class="np-report-header__meta">${dateDisplay} · ${DOMPurify.sanitize(displayLocationName(voyage.location_name))}</p>
                 </div>
-                <div class="np-metric-grid">
+                <div class="np-metric-grid np-report-item--non-sailing">
                     ${isDated ? `
                     <div class="np-metric-tile" style="--accent:var(--sky)">
                         <div class="np-metric-tile__label">Stops</div>
@@ -5246,7 +5333,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     if (mapURL) {
         const sep = mapURL.includes('?') ? '&' : '?';
         const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `<img src="${url}" alt="Voyage Map" class="np-report-map" />`;
+        html += `<img src="${url}" alt="Voyage Map" class="np-report-map np-report-item--non-sailing" />`;
     }
 
     // ── Day by day grid ───────────────────────────────────────────────────────
@@ -5307,7 +5394,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
             }, 'info');
 
-            html += `<div class="lookout-box np-safety-overview" id="np-safety-overview">
+            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview">
                 <div class="lookout-header">
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                     <h3>Safety Overview</h3>
@@ -5412,23 +5499,20 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (!isInvalidVal(w.condition)) {
                 html += `<div class="np-weather-grid">`;
                 if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
-                if (w.wind_speed_kt) {
-                    const deg = directionToDegrees(w.wind_direction);
-                    const scale = getWindScale(w.wind_speed_kt) * 0.7;
-                    html += `<div class="np-weather-tile" style="--accent:var(--teal)">
-                        <div class="np-weather-tile__label">Wind</div>
-                        <div class="np-weather-tile__value">
-                            ${w.wind_speed_kt} kt 
-                            ${w.wind_direction ? `<span style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-left:2px">${getWindArrowSVG(deg, scale)}</span>` : ''}
-                        </div>
-                    </div>`;
-                }
+                if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 const sunriseStr = fmtSunTime(sun.sunrise);
                 const sunsetStr  = fmtSunTime(sun.sunset);
                 if (sunriseStr) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Sunrise</div><div class="np-weather-tile__value">${sunriseStr}</div></div>`;
                 if (sunsetStr)  html += `<div class="np-weather-tile" style="--accent:var(--violet)"><div class="np-weather-tile__label">Sunset</div><div class="np-weather-tile__value">${sunsetStr}</div></div>`;
                 html += `</div>`;
+
+                // Add 24h Hourly Timeline
+                const timelineHTML = generateHourlyTimelineHTML(w, sun);
+                if (timelineHTML) {
+                    html += `<div class="np-hourly-timeline">${timelineHTML}</div>`;
+                }
+
                 if (b.weather_last_updated) {
                     const updatedAt = new Date(b.weather_last_updated);
                     const label = updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -5446,46 +5530,6 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     </div>
                     <div class="lookout-alert-list">${alertsHtml}</div>
                 </div>`;
-            }
-
-            // Wind forecast tiles (AM / Mid / PM / Eve)
-            if (w.wind_speed_kt) {
-                const getSpeeds = () => {
-                    if (Array.isArray(w.hourly_wind) && w.hourly_wind.length >= 24) {
-                        return [w.hourly_wind[9], w.hourly_wind[13], w.hourly_wind[17], w.hourly_wind[21]];
-                    }
-                    const speed = parseFloat(w.wind_speed_kt) || 0;
-                    return [0.8, 1.0, 0.9, 0.7].map(m => Math.round(speed * m));
-                };
-                const getDirs = () => {
-                    if (Array.isArray(w.hourly_wind_dir) && w.hourly_wind_dir.length >= 24) {
-                        return [w.hourly_wind_dir[9], w.hourly_wind_dir[13], w.hourly_wind_dir[17], w.hourly_wind_dir[21]];
-                    }
-                    return Array(4).fill(w.wind_direction);
-                };
-
-                const speeds = getSpeeds();
-                const dirs = getDirs();
-                const tilesHtml = ['AM', 'Mid', 'PM', 'Eve'].map((lbl, i) => {
-                    const kt = Math.round(speeds[i]);
-                    const dir = dirs[i];
-                    const strengthClass = kt < 11 ? 'light' : kt < 22 ? 'moderate' : 'strong';
-                    const deg = directionToDegrees(dir);
-                    const scale = getWindScale(kt);
-                    return `<div class="np-wind-forecast__tile np-wind-forecast__tile--${strengthClass}">
-                        <div class="np-wind-forecast__period">${lbl}</div>
-                        <div class="np-wind-forecast__visual-wrap">
-                            <div class="np-wind-forecast__arrow-bg">
-                                ${getWindArrowSVG(deg, scale, 'np-wind-forecast__arrow-svg')}
-                            </div>
-                            <div class="np-wind-forecast__circle">
-                                <div class="np-wind-forecast__value">${kt}</div>
-                                <div class="np-wind-forecast__dir">${dir || '--'}</div>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
-                html += `<div class="np-wind-forecast">${tilesHtml}</div>`;
             }
 
             // Tide chart canvas (preserved for Chart.js rendering)
@@ -5508,6 +5552,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (isReturnStop) {
                 html += `<p class="np-caption" style="font-style:italic">Facilities omitted — return to starting area.</p>`;
             } else if (b.facilities && b.facilities.length > 0) {
+                html += `<div class="np-report-item--non-sailing">`;
                 html += `<span class="np-facilities-header">Facilities</span>`;
                 b.facilities.forEach(f => {
                     const fa = markerAccent(f.type);
@@ -5525,6 +5570,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         ${renderReferences(f.references)}
                     </div>`;
                 });
+                html += `</div>`;
             }
 
             html += `</div>`;
