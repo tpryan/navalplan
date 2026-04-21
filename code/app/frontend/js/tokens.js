@@ -48,10 +48,10 @@ export function markerColor(type) {
 }
 
 /** Map a weather description string to a Material Symbol icon name. */
-export function getIconForWeather(description) {
+export function getIconForWeather(description, isNight = false) {
     const d = (description || '').toLowerCase();
-    if (d.includes('clear'))              return 'clear_day';
-    if (d.includes('partly cloudy'))      return 'partly_cloudy_day';
+    if (d.includes('clear'))              return isNight ? 'nightlight' : 'clear_day';
+    if (d.includes('partly cloudy'))      return isNight ? 'partly_cloudy_night' : 'partly_cloudy_day';
     if (d.includes('overcast'))           return 'cloud';
     if (d.includes('thunderstorm'))       return 'thunderstorm';
     if (d.includes('snow'))               return 'weather_snowy';
