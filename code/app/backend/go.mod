@@ -11,6 +11,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/paulmach/orb v0.12.0
 	github.com/stretchr/testify v1.11.1
+	github.com/tpryan/openmeteogo v1.2.0
 	golang.org/x/oauth2 v0.34.0
 	google.golang.org/api v0.258.0
 )
