@@ -33,4 +33,6 @@
 29. Done. The travel times table is awesome, but it doesn't really need to be calculated by an agent, can we write deterministic code that will handle it? 
 30. Done. Let's add a method for use by an hourly scheduled task that updates the weather every hour and runs the alert agent every hour for trips that are happening or soon to happen (2 days.)
 31. Done. When in mobile view the discovery picker should break into two 6 months rows. 
+32. Done. Actually schdeule task from 30. 
+
  
