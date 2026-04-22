@@ -79,6 +79,24 @@ func (db *DB) CreateBriefing(ctx context.Context, b *models.Briefing) error {
 	return nil
 }
 
+func (db *DB) ListStopsInWindow(ctx context.Context, days int) ([]models.Stop, error) {
+	stops := []models.Stop{}
+	// Postgres interval syntax for the next N days
+	query := `
+		SELECT s.*
+		FROM stop s
+		JOIN voyage v ON s.voyage_id = v.id
+		WHERE s.target_date >= CURRENT_DATE 
+		  AND s.target_date <= CURRENT_DATE + ($1 || ' days')::interval
+		ORDER BY s.target_date ASC
+	`
+	err := db.SelectContext(ctx, &stops, query, days)
+	if err != nil {
+		return nil, err
+	}
+	return stops, nil
+}
+
 func (db *DB) ListAllFutureStops(ctx context.Context) ([]models.Stop, error) {
 	stops := []models.Stop{}
 	query := `

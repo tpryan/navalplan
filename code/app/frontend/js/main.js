@@ -204,9 +204,22 @@ let last503Alert = 0;
 document.addEventListener('DOMContentLoaded', () => {
   set503Callback((count) => {
     const now = Date.now();
-    if (count >= 2 && now - last503Alert > 30000) {
+    const warning = document.getElementById('health-warning');
+    if (!warning) return;
+
+    if (count >= 2) {
       last503Alert = now;
-      showNotification('High Demand', 'Our AI models are currently experiencing high demand. Some research tasks may take longer or require a retry. We recommend waiting a few minutes if errors persist.');
+      warning.classList.add('warning');
+      warning.innerHTML = `<span class="material-symbols-outlined">warning</span> AI Models are Busy — retrying...`;
+      warning.classList.remove('hidden');
+
+      // Automatically hide after 15 seconds of no more errors
+      setTimeout(() => {
+          if (Date.now() - last503Alert >= 15000) {
+              warning.classList.add('hidden');
+              warning.classList.remove('warning');
+          }
+      }, 15500);
     }
   });
   initApp();
@@ -299,20 +312,37 @@ function closeAllModals() {
     document.getElementById('modal-overlay').classList.add('hidden');
 }
 
-function startHealthCheck() {    const warning = document.getElementById('health-warning');
+function startHealthCheck() {
+    const warning = document.getElementById('health-warning');
     if (!warning) return;
 
     const check = async () => {
         const result = await API.checkHealth();
         if (result.ok) {
             warning.classList.add('hidden');
+            warning.classList.remove('warning');
         } else {
             // Differentiate text
             let text = 'Backend Connection Lost';
-            if (result.status === 503 && result.message.includes('Agent')) {
-                text = 'Agent Service Unavailable';
+            let isWarning = false;
+
+            if (result.status === 503) {
+                isWarning = true;
+                if (result.message.includes('Agent')) {
+                    text = 'AI Model Service Busy';
+                } else {
+                    text = 'Service Temporarily Unavailable';
+                }
+            } else if (result.status === 500) {
+                 text = 'Internal Server Error';
             }
             
+            if (isWarning) {
+                warning.classList.add('warning');
+            } else {
+                warning.classList.remove('warning');
+            }
+
             warning.innerHTML = `<span class="material-symbols-outlined">warning</span> ${text}`;
             warning.classList.remove('hidden');
         }

@@ -499,6 +499,14 @@
     gap: 4px;
 }
 
+@media (max-width: 480px) {
+    #month-squares {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        justify-items: center;
+    }
+}
+
 .np-month-sq {
     position: relative;
     width: 28px;
@@ -896,7 +904,7 @@ html:has(.print-view) {
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
-    background-color: #d32f2f;
+    background-color: var(--danger, #d32f2f);
     color: white;
     padding: 10px 20px;
     border-radius: 20px;
@@ -908,6 +916,13 @@ html:has(.print-view) {
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     pointer-events: none;
     animation: flash-warning 2s infinite;
+    transition: background-color 0.3s ease;
+}
+
+#health-warning.warning {
+    background-color: var(--amber, #f59e0b);
+    color: var(--surface);
+    animation: none;
 }
 
 @keyframes flash-warning {
