@@ -307,6 +307,14 @@ func (m *MockStore) ListAllFutureStops(ctx context.Context) ([]models.Stop, erro
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
 
+func (m *MockStore) ListStopsInWindow(ctx context.Context, days int) ([]models.Stop, error) {
+	args := m.Called(days)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Stop), args.Error(1)
+}
+
 func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts models.RawJSON) error {
 	args := m.Called(stopID, alerts)
 	return args.Error(0)
