@@ -87,7 +87,7 @@ func (db *DB) ListStopsInWindow(ctx context.Context, days int) ([]models.Stop, e
 		FROM stop s
 		JOIN voyage v ON s.voyage_id = v.id
 		WHERE s.target_date >= CURRENT_DATE 
-		  AND s.target_date <= CURRENT_DATE + ($1 || ' days')::interval
+		  AND s.target_date <= CURRENT_DATE + ($1 * interval '1 day')
 		ORDER BY s.target_date ASC
 	`
 	err := db.SelectContext(ctx, &stops, query, days)
