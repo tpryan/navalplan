@@ -3041,35 +3041,7 @@ async function showBriefing(briefing, doPushState = true) {
         weatherSec.appendChild(wxAge);
     }
 
-    sections.appendChild(weatherSec);
-
-    // ── Sun Phase ─────────────────────────────────────────────────────────────
-    if (sun.sunrise || sun.sunset) {
-        const sunSec = document.createElement('div');
-        sunSec.className = 'briefing-section';
-
-        const sunHeader = document.createElement('h3');
-        sunHeader.className = 'briefing-header-icon';
-        sunHeader.innerHTML = '<span class="material-symbols-outlined">wb_twilight</span> Sun Phase';
-        sunSec.appendChild(sunHeader);
-
-        const sunCard = document.createElement('div');
-        sunCard.style.cssText = [
-            'display:flex',
-            'gap:8px',
-            'margin-top:8px',
-            'padding:14px',
-            'border-radius:var(--radius-tile)',
-            'background:linear-gradient(120deg,color-mix(in oklab,var(--amber) 10%,var(--surface)),color-mix(in oklab,var(--violet) 8%,var(--surface)))',
-        ].join(';');
-
-        if (sun.sunrise) sunCard.appendChild(DataTile({ label: 'Sunrise', value: formatTime(sun.sunrise), accent: 'amber' }));
-        if (sun.sunset)  sunCard.appendChild(DataTile({ label: 'Sunset',  value: formatTime(sun.sunset),  accent: 'violet' }));
-        sunSec.appendChild(sunCard);
-        sections.appendChild(sunSec);
-    }
-
-    // ── Tides ─────────────────────────────────────────────────────────────────
+    // ── Tides (Injected under Weather) ────────────────────────────────────────
     const tides = briefing.tides || {};
     const allEvents = tides.events || [];
     const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
@@ -3078,13 +3050,13 @@ async function showBriefing(briefing, doPushState = true) {
 
     const tidesSec = document.createElement('div');
     tidesSec.className = 'briefing-section';
+    tidesSec.style.marginTop = '16px'; // Add some spacing
 
     const tidesHeader = document.createElement('h3');
     tidesHeader.className = 'briefing-header-icon';
     tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span class="np-tides-meta">${displayDateHeader}</span>`;
     tidesSec.appendChild(tidesHeader);
 
-    // Chart.js tide chart — same renderer used in the Voyage Report
     const tideCanvasId = `briefingTideChart_${stop.id}`;
     const tideWrap = document.createElement('div');
     tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
@@ -3092,10 +3064,8 @@ async function showBriefing(briefing, doPushState = true) {
     tideCanvas.id = tideCanvasId;
     tideWrap.appendChild(tideCanvas);
     tidesSec.appendChild(tideWrap);
-    // Render after element is in DOM
     requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
 
-    // Tide events table
     if (displayEvents.length > 0) {
         const tbl = document.createElement('table');
         tbl.className = 'briefing-table np-tides-table';
@@ -3129,7 +3099,45 @@ async function showBriefing(briefing, doPushState = true) {
         noData.textContent = 'No tide events for this date';
         tidesSec.appendChild(noData);
     }
-    sections.appendChild(tidesSec);
+    weatherSec.appendChild(tidesSec);
+
+    // ── Safety Lookout (Injected under Tides) ─────────────────────────────────
+    const safetyAlerts = briefing.safety_alerts;
+    if (Array.isArray(safetyAlerts) && safetyAlerts.length > 0) {
+        const box = LookoutBox(safetyAlerts);
+        if (box) {
+            box.style.marginTop = '16px';
+            weatherSec.appendChild(box);
+        }
+    }
+
+    sections.appendChild(weatherSec);
+
+    // ── Sun Phase ─────────────────────────────────────────────────────────────
+    if (sun.sunrise || sun.sunset) {
+        const sunSec = document.createElement('div');
+        sunSec.className = 'briefing-section';
+
+        const sunHeader = document.createElement('h3');
+        sunHeader.className = 'briefing-header-icon';
+        sunHeader.innerHTML = '<span class="material-symbols-outlined">wb_twilight</span> Sun Phase';
+        sunSec.appendChild(sunHeader);
+
+        const sunCard = document.createElement('div');
+        sunCard.style.cssText = [
+            'display:flex',
+            'gap:8px',
+            'margin-top:8px',
+            'padding:14px',
+            'border-radius:var(--radius-tile)',
+            'background:linear-gradient(120deg,color-mix(in oklab,var(--amber) 10%,var(--surface)),color-mix(in oklab,var(--violet) 8%,var(--surface)))',
+        ].join(';');
+
+        if (sun.sunrise) sunCard.appendChild(DataTile({ label: 'Sunrise', value: formatTime(sun.sunrise), accent: 'amber' }));
+        if (sun.sunset)  sunCard.appendChild(DataTile({ label: 'Sunset',  value: formatTime(sun.sunset),  accent: 'violet' }));
+        sunSec.appendChild(sunCard);
+        sections.appendChild(sunSec);
+    }
 
     // ── Facilities ────────────────────────────────────────────────────────────
     const facilities = briefing.facilities || [];
@@ -3252,14 +3260,6 @@ async function showBriefing(briefing, doPushState = true) {
 
     // ── Render into modal ─────────────────────────────────────────────────────
     content.innerHTML = '';
-
-    // Safety alerts at the top if present
-    const safetyAlerts = briefing.safety_alerts;
-    if (Array.isArray(safetyAlerts) && safetyAlerts.length > 0) {
-        const box = LookoutBox(safetyAlerts);
-        if (box) content.appendChild(box);
-    }
-
     content.appendChild(sections);
 
     // Redo Handler
@@ -3510,9 +3510,16 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
 
         const perStopBox = LookoutBox(briefing.safety_alerts);
         if (perStopBox) {
-            const weatherGrid = stopSection.querySelector('.np-weather-grid');
-            if (weatherGrid) {
-                stopSection.insertBefore(perStopBox, weatherGrid);
+            perStopBox.style.marginTop = '16px';
+            const tideChart = stopSection.querySelector('.np-tide-chart-wrap');
+            if (tideChart) {
+                tideChart.parentNode.insertBefore(perStopBox, tideChart.nextSibling);
+            } else {
+                // Fallback: insert before weather grid if no tide chart
+                const weatherGrid = stopSection.querySelector('.np-weather-grid');
+                if (weatherGrid) {
+                    stopSection.insertBefore(perStopBox, weatherGrid);
+                }
             }
         }
     });
@@ -5528,21 +5535,21 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 }
             }
 
-            // Safety alerts
+            // Tide chart canvas (preserved for Chart.js rendering)
+            if (b.tides && b.tides.events) {
+                html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
+            }
+
+            // Safety alerts (Moved after tides)
             if (Array.isArray(b.safety_alerts) && b.safety_alerts.length > 0) {
                 const alertsHtml = b.safety_alerts.map(alertToHTML).join('');
-                html += `<div class="lookout-box" style="margin-bottom:16px">
+                html += `<div class="lookout-box" style="margin:16px 0">
                     <div class="lookout-header">
                         <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                         <h3>Safety Lookout</h3>
                     </div>
                     <div class="lookout-alert-list">${alertsHtml}</div>
                 </div>`;
-            }
-
-            // Tide chart canvas (preserved for Chart.js rendering)
-            if (b.tides && b.tides.events) {
-                html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
             }
 
             // Facilities

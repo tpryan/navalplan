@@ -232,12 +232,13 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 	// Determine stop position (1-based) and distance to the next stop.
 	// The last stop has no next stop, so distNM stays 0 and no navigation alerts are generated.
 	var distNM float64
+	var next *models.Stop
 	stopPosition, totalStops := 1, len(allStops)
 	for i, s := range allStops {
 		if s.ID == stop.ID {
 			stopPosition = i + 1
 			if i < totalStops-1 {
-				next := allStops[i+1]
+				next = &allStops[i+1]
 				distNM = lookoutHaversineNM(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
 			}
 			break
@@ -263,13 +264,26 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 
 	responseText = cleanJSON(responseText)
 
-	var alerts json.RawMessage
+	var alerts []map[string]any
 	if err := json.Unmarshal([]byte(responseText), &alerts); err != nil {
 		slog.ErrorContext(ctx, "[lookout] Failed to parse agent response", "error", err, "raw", responseText)
 		return
 	}
 
-	if err := h.DB.UpsertSafetyAlerts(ctx, stop.ID, models.RawJSON(alerts)); err != nil {
+	// Always add travel plan alert if there's a next stop
+	if distNM > 0 && next != nil {
+		rows := buildTravelTable(distNM, briefing.SunPhase)
+		alerts = append(alerts, map[string]any{
+			"severity":     "info",
+			"category":     "navigation",
+			"message":      fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, next.LocationName),
+			"icon":         "explore",
+			"travel_table": rows,
+		})
+	}
+
+	alertsJSON, _ := json.Marshal(alerts)
+	if err := h.DB.UpsertSafetyAlerts(ctx, stop.ID, models.RawJSON(alertsJSON)); err != nil {
 		slog.ErrorContext(ctx, "[lookout] Failed to save safety alerts", "error", err)
 		return
 	}
@@ -279,11 +293,21 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 
 func buildLookoutPrompt(stop *models.Stop, briefing *models.Briefing, distNM float64, stopPosition, totalStops int) string {
 	distInfo := "none — this is the last stop, no departure planned (do not generate navigation or arrival-time alerts)"
-	var travelTable string
+	var travelTableInfo string
 
 	if distNM > 0 {
 		distInfo = fmt.Sprintf("%.1f nautical miles", distNM)
-		travelTable = buildTravelTable(distNM, briefing.SunPhase)
+		rows := buildTravelTable(distNM, briefing.SunPhase)
+		var sb strings.Builder
+		sb.WriteString("\nTravel time at various speeds (for your analysis of arrival/departure times):\n")
+		for _, r := range rows {
+			if r.DepartBy != "" {
+				sb.WriteString(fmt.Sprintf("  %.0f kt: %s travel time (must depart by %s for safe arrival)\n", r.SpeedKt, r.TravelTime, r.DepartBy))
+			} else {
+				sb.WriteString(fmt.Sprintf("  %.0f kt: %s travel time\n", r.SpeedKt, r.TravelTime))
+			}
+		}
+		travelTableInfo = sb.String()
 	}
 
 	weatherJSON := "{}"
@@ -299,43 +323,44 @@ func buildLookoutPrompt(stop *models.Stop, briefing *models.Briefing, distNM flo
 		tidesJSON = string(briefing.Tides)
 	}
 
-	travelSection := ""
-	if travelTable != "" {
-		travelSection = "\nTravel time at various speeds (include this table in any navigation alert message):\n" + travelTable
-	}
-
 	return fmt.Sprintf(`Analyze the following stop data for maritime safety concerns and return a JSON array of alerts.
 
 Location: %s
-Date: %s
+Date: %s (Note: Weather and Tide data covers 48 hours starting from this date)
 Stop position: %d of %d
 Distance to next stop: %s%s
 
-Weather:
+Weather (48h hourly forecast):
 %s
 
 Sun Phase:
 %s
 
-Tides:
+Tides (48h hourly forecast):
 %s
 
-Return ONLY the JSON array of alerts. If no concerns, return [].`,
+Return ONLY the JSON array of alerts. If no concerns or significant trends, return [].`,
 		stop.LocationName,
 		stop.TargetDate.Format("January 2, 2006"),
 		stopPosition,
 		totalStops,
 		distInfo,
-		travelSection,
+		travelTableInfo,
 		weatherJSON,
 		sunJSON,
 		tidesJSON,
 	)
 }
 
+type TravelTableRow struct {
+	SpeedKt    float64 `json:"speed_kt"`
+	TravelTime string  `json:"travel_time"`
+	DepartBy   string  `json:"depart_by,omitempty"`
+}
+
 // buildTravelTable generates a multi-speed travel time breakdown.
 // If sunset can be parsed from sunPhaseJSON, it also shows the latest safe departure time per speed.
-func buildTravelTable(distNM float64, sunPhaseJSON []byte) string {
+func buildTravelTable(distNM float64, sunPhaseJSON []byte) []TravelTableRow {
 	speeds := []float64{4, 5, 6, 7, 8}
 
 	// Try to extract sunset time from sun_phase JSON
@@ -355,31 +380,26 @@ func buildTravelTable(distNM float64, sunPhaseJSON []byte) string {
 		}
 	}
 
-	var lines []string
+	var rows []TravelTableRow
 	for _, kt := range speeds {
 		hours := distNM / kt
 		h := int(hours)
 		m := int((hours - float64(h)) * 60)
-		line := fmt.Sprintf("  %.0f kt: %dh %02dm travel time", kt, h, m)
+		row := TravelTableRow{
+			SpeedKt:    kt,
+			TravelTime: fmt.Sprintf("%dh %02dm", h, m),
+		}
 
 		if !sunsetTime.IsZero() {
 			// Latest departure to arrive 30 min before sunset
 			safeArrival := sunsetTime.Add(-30 * time.Minute)
 			depart := safeArrival.Add(-time.Duration(hours * float64(time.Hour)))
-			line += fmt.Sprintf(" → depart by %s to arrive 30 min before sunset (%s)",
-				depart.Format("15:04"),
-				sunsetTime.Format("15:04"),
-			)
+			row.DepartBy = depart.Format("15:04")
 		}
-		lines = append(lines, line)
+		rows = append(rows, row)
 	}
 
-	var sb strings.Builder
-	for _, l := range lines {
-		sb.WriteString(l)
-		sb.WriteByte('\n')
-	}
-	return sb.String()
+	return rows
 }
 
 func lookoutHaversineNM(lat1, lon1, lat2, lon2 float64) float64 {
