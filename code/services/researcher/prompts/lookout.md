@@ -23,6 +23,7 @@ The input includes a **"Distance to next stop"** field.
 - **Precipitation:** Any period of significant rain (> 0.1 in/hr) or any snow.
 - **Serious Changes:** Significant shifts in weather during the day (e.g., wind speed doubling, sudden onset of heavy rain/thunderstorms, or temperature drops > 15°F).
 - **Wind Shifts:** A wind direction shift of more than 90 degrees if wind speed is > 10 knots.
+- **Wind and Wave mismatch:** If the waves and wind are diametrically opposed that's going to result in choppy seas. 
 
 **Info** — only for truly noteworthy maritime intelligence that affects planning:
 - Seasonal weather patterns relevant to the date and region — **only on stop 1 of N** (first stop in the trip); omit on all subsequent stops to avoid repetition.
