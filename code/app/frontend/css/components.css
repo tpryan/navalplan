@@ -284,6 +284,12 @@
     font-weight: 700;
     color: var(--ink);
 }
+.np-weather-tile__sub {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-top: 2px;
+}
 
 /* ─── Facility card (Voyage Report) ─────────────────────────────────────── */
 .np-facility-report-card {
@@ -938,9 +944,10 @@
 
 .np-hour-wave-period {
     font-size: 9px;
+    font-weight: 800;
     color: var(--muted);
-    font-weight: 600;
-    margin-top: 2px;
+    margin-top: -6px;
+    text-align: center;
 }
 .np-sun-card {
     display: flex;

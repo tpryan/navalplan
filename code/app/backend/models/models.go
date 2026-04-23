@@ -41,14 +41,14 @@ type Voyage struct {
 	StartDate        *time.Time `json:"start_date" db:"start_date"`
 	EndDate          *time.Time `json:"end_date" db:"end_date"`
 	LocationName     *string    `json:"location_name" db:"location_name"`
-	PreciseLocation  *string   `json:"precise_location" db:"precise_location"`
-	Latitude         *float64  `json:"latitude" db:"latitude"`
-	Longitude        *float64  `json:"longitude" db:"longitude"`
-	SearchRadius     int       `json:"search_radius" db:"search_radius"`
-	SearchRadiusUnit string    `json:"search_radius_unit" db:"search_radius_unit"`
-	ShareToken       *string   `json:"share_token" db:"share_token"`
-	IsPublic         bool      `json:"is_public" db:"is_public"`
-	CreatedAt        time.Time `json:"created_at" db:"created_at"`
+	PreciseLocation  *string    `json:"precise_location" db:"precise_location"`
+	Latitude         *float64   `json:"latitude" db:"latitude"`
+	Longitude        *float64   `json:"longitude" db:"longitude"`
+	SearchRadius     int        `json:"search_radius" db:"search_radius"`
+	SearchRadiusUnit string     `json:"search_radius_unit" db:"search_radius_unit"`
+	ShareToken       *string    `json:"share_token" db:"share_token"`
+	IsPublic         bool       `json:"is_public" db:"is_public"`
+	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
 // Stop represents a specific stop or waypoint within a voyage.
@@ -68,37 +68,39 @@ type Stop struct {
 
 // WeatherSummary holds structured weather forecast data for a stop.
 type WeatherSummary struct {
-	Summary         string    `json:"summary"`
-	Condition       string    `json:"condition"`
-	TempMinF        float64   `json:"temp_min_f"`
-	TempMaxF        float64   `json:"temp_max_f"`
-	WindSpeedKt     float64   `json:"wind_speed_kt"`
-	WindDirection   string    `json:"wind_direction"`
-	HourlyWind      []float64 `json:"hourly_wind,omitempty"`
-	HourlyWindDir   []string  `json:"hourly_wind_dir,omitempty"`
+	Summary          string    `json:"summary"`
+	Condition        string    `json:"condition"`
+	TempMinF         float64   `json:"temp_min_f"`
+	TempMaxF         float64   `json:"temp_max_f"`
+	WindSpeedKt      float64   `json:"wind_speed_kt"`
+	WindDirection    string    `json:"wind_direction"`
+	HourlyWind       []float64 `json:"hourly_wind,omitempty"`
+	HourlyWindDir    []string  `json:"hourly_wind_dir,omitempty"`
 	HourlyConditions []string  `json:"hourly_conditions,omitempty"`
-	HourlyTemp      []float64 `json:"hourly_temp,omitempty"`
-	HourlyGusts     []float64 `json:"hourly_gusts,omitempty"`
-	HourlyPrecip    []float64 `json:"hourly_precip,omitempty"`
+	HourlyTemp       []float64 `json:"hourly_temp,omitempty"`
+	HourlyGusts      []float64 `json:"hourly_gusts,omitempty"`
+	HourlyPrecip     []float64 `json:"hourly_precip,omitempty"`
 	HourlyWaveHeight []float64 `json:"hourly_wave_height,omitempty"`
 	HourlyWavePeriod []float64 `json:"hourly_wave_period,omitempty"`
 	HourlyWaveDir    []float64 `json:"hourly_wave_dir,omitempty"`
-	WaveHeightFt    float64   `json:"wave_height_ft"`
-	DebugDurationMs int64     `json:"debug_duration_ms"`
+	WaveHeightFt     float64   `json:"wave_height_ft"`
+	WaveDirection    float64   `json:"wave_direction"`
+	WavePeriod       float64   `json:"wave_period"`
+	DebugDurationMs  int64     `json:"debug_duration_ms"`
 }
 
 // Briefing contains researched information about a stop, such as weather and tides.
 type Briefing struct {
-	ID                 int64      `json:"id" db:"id"`
-	StopID             int64      `json:"stop_id" db:"stop_id"`
-	WeatherSummary     RawJSON    `json:"weather_summary" db:"weather_summary"`
-	SunPhase           RawJSON    `json:"sun_phase" db:"sun_phase"`
-	Tides              RawJSON    `json:"tides" db:"tides"`
-	Facilities         RawJSON    `json:"facilities" db:"facilities"`
+	ID                    int64      `json:"id" db:"id"`
+	StopID                int64      `json:"stop_id" db:"stop_id"`
+	WeatherSummary        RawJSON    `json:"weather_summary" db:"weather_summary"`
+	SunPhase              RawJSON    `json:"sun_phase" db:"sun_phase"`
+	Tides                 RawJSON    `json:"tides" db:"tides"`
+	Facilities            RawJSON    `json:"facilities" db:"facilities"`
 	SafetyAlerts          RawJSON    `json:"safety_alerts" db:"safety_alerts"`
 	SafetyAlertsUpdatedAt *time.Time `json:"safety_alerts_updated_at" db:"safety_alerts_updated_at"`
 	WeatherLastUpdated    *time.Time `json:"weather_last_updated" db:"weather_last_updated"`
-	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
+	CreatedAt             time.Time  `json:"created_at" db:"created_at"`
 }
 
 // VoyageGuide contains comprehensive researched information about the entire voyage.
@@ -179,7 +181,7 @@ type VoyageRecommendation struct {
 	URL         string    `json:"url" db:"url"`
 	Geometry    RawJSON   `json:"geometry" db:"geometry"` // GeoJSON Polygon for "blob" visualization
 	Description string    `json:"description" db:"description"`
-	Reasoning   string    `json:"reasoning" db:"reasoning"` // Why the agent chose this
+	Reasoning   string    `json:"reasoning" db:"reasoning"`             // Why the agent chose this
 	References  RawJSON   `json:"reference_links" db:"reference_links"` // Links to more information
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
