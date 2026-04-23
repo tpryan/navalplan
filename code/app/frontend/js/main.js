@@ -145,6 +145,15 @@ const briefingCache = new Map();
 let healthCheckInterval = null;
 // Chart.js instance registry — keyed by canvas ID so we can destroy before re-render.
 const chartInstances = new Map();
+
+/** Convert degrees to cardinal compass direction. */
+function degreesToCompass(deg) {
+    if (deg === undefined || deg === null) return '';
+    const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+    const val = Math.floor((deg / 22.5) + 0.5);
+    return directions[(val % 16)];
+}
+
 let editingVoyageId = null;
 let currentMode = 'planner'; // 'planner' or 'discovery'
 let discoveryRegions = [];
@@ -232,9 +241,11 @@ function initApp() {
 
   // Shared/Public View Handler
   if (path.startsWith('/shared/')) {
-      const token = path.replace('/shared/', '');
+      const parts = path.split('/').filter(p => p !== '');
+      const token = parts[1];
+      const sailing = parts[2] === 'sailing';
       if (token) {
-          initSharedMode(token);
+          initSharedMode(token, sailing);
           return;
       }
   }
@@ -288,7 +299,8 @@ async function handleRoute(path, doPushState = true) {
             const btn = document.getElementById('btn-view-guide');
             handleGuideClick(currentVoyage, btn, doPushState);
         } else if (parts[2] === 'report') {
-            handleShowReport(doPushState);
+            const sailing = parts[3] === 'sailing';
+            handleShowReport(doPushState, sailing);
         } else if (parts[2] === 'stops' && parts[3]) {
             const stopId = parseInt(parts[3]);
             if (!isNaN(stopId)) {
@@ -2901,6 +2913,8 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
         let waveHTML = '';
         if (hwh[i] > 0) {
             const waveDeg = hwd_deg[i] || 0;
+            const waveCompass = degreesToCompass(waveDeg);
+
             waveHTML = `
                 <div class="np-hour-wave-visual">
                     <div class="np-wind-forecast__arrow-bg">
@@ -2911,7 +2925,7 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
                         <div class="np-wind-forecast__dir">ft</div>
                     </div>
                 </div>
-                <div class="np-hour-wave-period">${hwp[i] ? hwp[i].toFixed(0) : '-'}s</div>
+                <div class="np-hour-wave-period">${hwp[i] ? Math.round(hwp[i]) : '-'}s</div>
             `;
         }
 
@@ -2931,7 +2945,7 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
                 </div>
                 <div class="np-hour-wind-dir-label">${hwd[i] || '--'}</div>
                 ${hp[i] > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${hp[i].toFixed(1).replace(/^0/, '')}"</div>` : '<div style="height:16px"></div>'}
-                <div style="margin-top:auto">${waveHTML}</div>
+                <div style="margin-top:auto; display: flex; flex-direction: column; align-items: center;">${waveHTML}</div>
             </div>
         `;
 
@@ -3046,7 +3060,14 @@ async function showBriefing(briefing, doPushState = true) {
         wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
     }
     if (weather.wave_height_ft > 0) {
-        wxTiles.appendChild(DataTile({ label: 'Waves', value: `${weather.wave_height_ft} ft`, icon: 'waves', accent: 'teal' }));
+        const waveCompass = degreesToCompass(weather.wave_direction);
+        wxTiles.appendChild(DataTile({ 
+            label: 'Waves', 
+            value: `${weather.wave_height_ft.toFixed(1)} ft`, 
+            sub: `${waveCompass} ${weather.wave_period ? Math.round(weather.wave_period) + 's' : ''}`.trim(),
+            icon: 'waves', 
+            accent: 'teal' 
+        }));
     }
     weatherSec.appendChild(wxTiles);
 
@@ -4227,10 +4248,11 @@ async function captureAndUploadMap(voyageId) {
     }
 }
 
-    async function handleShowReport(doPushState = true) {
+    async function handleShowReport(doPushState = true, sailing = false) {
         if (!currentVoyage) return;
         if (doPushState) {
-            window.history.pushState({}, '', `/voyages/${currentVoyage.id}/report`);
+            const path = `/voyages/${currentVoyage.id}/report${sailing ? '/sailing' : ''}`;
+            window.history.pushState({}, '', path);
         }
 
         const btn = document.getElementById("btn-export-voyage");
@@ -4307,9 +4329,14 @@ async function captureAndUploadMap(voyageId) {
             // Wire Sailing Mode toggle
             const btnSailingMode = document.getElementById('btn-toggle-sailing-mode');
             if (btnSailingMode) {
-                // Ensure initial state is inactive
-                btnSailingMode.classList.remove('active');
-                modal.classList.remove('np-report--sailing-only');
+                // Set initial state
+                if (sailing) {
+                    btnSailingMode.classList.add('active');
+                    modal.classList.add('np-report--sailing-only');
+                } else {
+                    btnSailingMode.classList.remove('active');
+                    modal.classList.remove('np-report--sailing-only');
+                }
                 
                 btnSailingMode.onclick = () => {
                     const active = btnSailingMode.classList.toggle('active');
@@ -4317,6 +4344,11 @@ async function captureAndUploadMap(voyageId) {
                         modal.classList.add('np-report--sailing-only');
                     } else {
                         modal.classList.remove('np-report--sailing-only');
+                    }
+                    // Update URL when toggling
+                    if (currentVoyage) {
+                        const newPath = `/voyages/${currentVoyage.id}/report${active ? '/sailing' : ''}`;
+                        window.history.replaceState({}, '', newPath);
                     }
                 };
             }
@@ -4929,7 +4961,7 @@ async function showRegionBriefing(props, month) {
     overlay.onclick = hide;
 }
 
-async function initSharedMode(token) {
+async function initSharedMode(token, sailing = false) {
     document.body.classList.add('shared-view');
     document.documentElement.classList.add('shared-view');
     const app = document.getElementById('app');
@@ -4938,7 +4970,7 @@ async function initSharedMode(token) {
 
     try {
         const resp = await API.getPublicVoyageGuide(token);
-        renderSharedReport(resp, app);
+        renderSharedReport(resp, app, sailing, token);
     } catch (err) {
         console.error(err);
         app.innerHTML = '<div class="error-state text-center p-xl"><h2 class="text-dark">Report Not Found</h2><p>This link may have expired or is invalid.</p></div>';
@@ -5550,6 +5582,11 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 const sunsetStr  = fmtSunTime(sun.sunset);
                 if (sunriseStr) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Sunrise</div><div class="np-weather-tile__value">${sunriseStr}</div></div>`;
                 if (sunsetStr)  html += `<div class="np-weather-tile" style="--accent:var(--violet)"><div class="np-weather-tile__label">Sunset</div><div class="np-weather-tile__value">${sunsetStr}</div></div>`;
+                if (w.wave_height_ft) {
+                    const waveCompass = degreesToCompass(w.wave_direction);
+                    const waveSub = `${waveCompass} ${w.wave_period ? Math.round(w.wave_period) + 's' : ''}`.trim();
+                    html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Waves</div><div class="np-weather-tile__value">${w.wave_height_ft.toFixed(1)} ft</div><div class="np-weather-tile__sub">${waveSub}</div></div>`;
+                }
                 html += `</div>`;
 
                 // Add 24h Hourly Timeline
@@ -5626,7 +5663,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     return html;
 }
 
-function renderSharedReport(data, container) {
+function renderSharedReport(data, container, sailing = false, token = '') {
     const guide = data.guide || {};
     const voyage = data.voyage || {};
     const stops = data.stops || [];
@@ -5663,12 +5700,23 @@ function renderSharedReport(data, container) {
     const btnSailing = document.getElementById('btn-shared-toggle-sailing');
     const reportBody = document.getElementById('shared-report-body');
     if (btnSailing && reportBody) {
+        // Set initial state
+        if (sailing) {
+            btnSailing.classList.add('active');
+            reportBody.classList.add('np-report--sailing-only');
+        }
+
         btnSailing.onclick = () => {
             const active = btnSailing.classList.toggle('active');
             if (active) {
                 reportBody.classList.add('np-report--sailing-only');
             } else {
                 reportBody.classList.remove('np-report--sailing-only');
+            }
+            // Update URL when toggling
+            if (token) {
+                const newPath = `/shared/${token}${active ? '/sailing' : ''}`;
+                window.history.replaceState({}, '', newPath);
             }
         };
     }

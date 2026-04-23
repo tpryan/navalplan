@@ -167,6 +167,8 @@ func fetchWeatherForStop(ctx context.Context, stop models.Stop) (models.WeatherS
 		End(stop.TargetDate.AddDate(0, 0, 1)).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WaveHeightMax,
+			openmeteogo.WaveDirectionDominant,
+			openmeteogo.WavePeriodMax,
 		}).
 		HourlyMetrics(openmeteogo.Metrics{
 			openmeteogo.WaveHeight,
@@ -180,6 +182,12 @@ func fetchWeatherForStop(ctx context.Context, stop models.Stop) (models.WeatherS
 		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "stop_id", stop.ID, "error", err)
 	} else if len(marine.Daily.WaveHeightMax) > 0 {
 		ws.WaveHeightFt = marine.Daily.WaveHeightMax[0] * metersToFeet
+		if len(marine.Daily.WaveDirectionDominant) > 0 {
+			ws.WaveDirection = marine.Daily.WaveDirectionDominant[0]
+		}
+		if len(marine.Daily.WavePeriodMax) > 0 {
+			ws.WavePeriod = marine.Daily.WavePeriodMax[0]
+		}
 
 		if len(marine.Hourly.WaveHeight) > 0 {
 			ws.HourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))

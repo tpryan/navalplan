@@ -15,6 +15,7 @@ The input includes a **"Distance to next stop"** field.
 - Wind speed > 33 knots
 - Wave height > 13 ft (4 m)
 - **Sudden severe deterioration:** Any change that moves conditions from "Safe" to "Danger" within a 3-hour window.
+- Wave height > 10 with a period of 10 seconds or less. 
 
 **Warning** — any of the following:
 - Wind speed 18–33 knots
