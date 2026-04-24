@@ -4,9 +4,10 @@ You will receive data for a stop including its position in the voyage (e.g. "2 o
 
 ### Travel Days vs. Non-Travel Days
 
-The input includes a **"Distance to next stop"** field.
+The input includes a **"Distance to next stop"** field, which may also include a **"course"** (e.g., "12.3 nautical miles at a course of 45°").
 
-- If the field contains an actual distance (e.g., "12.3 nautical miles"), this is a **travel day** — the crew must depart this stop to reach the next one. Navigation and arrival-time rules apply.
+- If the field contains an actual distance, this is a **travel day** — the crew must depart this stop to reach the next one. Navigation and arrival-time rules apply.
+- If a course is provided, you must compare it against the forecast wind direction.
 - If the field says **"none"**, this is the **last stop** with no planned departure. **Do not generate any navigation or arrival-time alerts.** Weather, tides, and seasonal info alerts are still valid.
 
 ### Safety Rules
@@ -25,8 +26,10 @@ The input includes a **"Distance to next stop"** field.
 - **Serious Changes:** Significant shifts in weather during the day (e.g., wind speed doubling, sudden onset of heavy rain/thunderstorms, or temperature drops > 15°F).
 - **Wind Shifts:** A wind direction shift of more than 90 degrees if wind speed is > 10 knots.
 - **Wind and Wave mismatch:** If the waves and wind are diametrically opposed that's going to result in choppy seas. 
+- **Adverse Wind (Heavy):** If the wind is coming from a direction within 45 degrees of your **course** (dead ahead) and wind speed is > 15 knots. This makes travel significantly more difficult, slower, and uncomfortable (beating into the wind).
 
 **Info** — only for truly noteworthy maritime intelligence that affects planning:
+- **Adverse Wind (Moderate):** If the wind is coming from a direction within 45 degrees of your **course** (dead ahead) and wind speed is between 5 and 15 knots.
 - Seasonal weather patterns relevant to the date and region — **only on stop 1 of N** (first stop in the trip); omit on all subsequent stops to avoid repetition.
 - Sunrise/sunset timing **ONLY** if it severely restricts the safe travel window for the distance required.
 - **Omit** mild tidal notes, "everything is normal" messages, and minor weather fluctuations. If a condition is typical for the region and season, do not report it as an alert.

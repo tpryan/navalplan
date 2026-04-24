@@ -232,6 +232,8 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 	// Determine stop position (1-based) and distance to the next stop.
 	// The last stop has no next stop, so distNM stays 0 and no navigation alerts are generated.
 	var distNM float64
+	var course float64
+	var hasCourse bool
 	var next *models.Stop
 	stopPosition, totalStops := 1, len(allStops)
 	for i, s := range allStops {
@@ -240,12 +242,14 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 			if i < totalStops-1 {
 				next = &allStops[i+1]
 				distNM = lookoutHaversineNM(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
+				course = calculateBearing(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
+				hasCourse = true
 			}
 			break
 		}
 	}
 
-	prompt := buildLookoutPrompt(stop, briefing, distNM, stopPosition, totalStops)
+	prompt := buildLookoutPrompt(stop, briefing, distNM, course, hasCourse, stopPosition, totalStops)
 
 	const appName = "lookout"
 	const userID = "system"
@@ -291,12 +295,16 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
 }
 
-func buildLookoutPrompt(stop *models.Stop, briefing *models.Briefing, distNM float64, stopPosition, totalStops int) string {
+func buildLookoutPrompt(stop *models.Stop, briefing *models.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int) string {
 	distInfo := "none — this is the last stop, no departure planned (do not generate navigation or arrival-time alerts)"
 	var travelTableInfo string
 
 	if distNM > 0 {
-		distInfo = fmt.Sprintf("%.1f nautical miles", distNM)
+		courseInfo := ""
+		if hasCourse {
+			courseInfo = fmt.Sprintf(" at a course of %.0f°", course)
+		}
+		distInfo = fmt.Sprintf("%.1f nautical miles%s", distNM, courseInfo)
 		rows := buildTravelTable(distNM, briefing.SunPhase)
 		var sb strings.Builder
 		sb.WriteString("\nTravel time at various speeds (for your analysis of arrival/departure times):\n")
@@ -350,6 +358,22 @@ Return ONLY the JSON array of alerts. If no concerns or significant trends, retu
 		sunJSON,
 		tidesJSON,
 	)
+}
+
+func calculateBearing(lat1, lon1, lat2, lon2 float64) float64 {
+	toRad := func(d float64) float64 { return d * math.Pi / 180 }
+	toDeg := func(r float64) float64 { return r * 180 / math.Pi }
+
+	phi1 := toRad(lat1)
+	phi2 := toRad(lat2)
+	deltaLambda := toRad(lon2 - lon1)
+
+	y := math.Sin(deltaLambda) * math.Cos(phi2)
+	x := math.Cos(phi1)*math.Sin(phi2) - math.Sin(phi1)*math.Cos(phi2)*math.Cos(deltaLambda)
+	theta := math.Atan2(y, x)
+
+	bearing := math.Mod(toDeg(theta)+360, 360)
+	return bearing
 }
 
 type TravelTableRow struct {
