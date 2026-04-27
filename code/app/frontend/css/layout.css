@@ -15,6 +15,7 @@
   top: 20px;
   left: 20px;
   width: 380px;
+  max-width: calc(100% - 40px);
   max-height: calc(100vh - 40px);
   z-index: 10;
 
@@ -25,6 +26,14 @@
   display: flex;
   flex-direction: column;
   transition: transform 0.3s ease-in-out;
+}
+
+@media (max-width: 480px) {
+  #sidebar {
+    left: 12px;
+    width: calc(100% - 24px);
+    max-width: none;
+  }
 }
 
 /* Mobile Menu Button */
@@ -296,6 +305,12 @@
   width: 90%;
   max-width: 400px;
   z-index: 101;
+}
+
+@media (max-width: 400px) {
+  .modal {
+    padding: 1.25rem;
+  }
 }
 
 #modal-region-briefing {
@@ -690,6 +705,8 @@
   #auth-container {
     top: 12px;
     right: 12px;
+    max-width: calc(100vw - 24px);
+    overflow: hidden;
   }
 
   /* Hide auth container when list view is active */

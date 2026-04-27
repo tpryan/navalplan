@@ -2944,8 +2944,14 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
                     </div>
                 </div>
                 <div class="np-hour-wind-dir-label">${hwd[i] || '--'}</div>
-                ${hp[i] > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${hp[i].toFixed(1).replace(/^0/, '')}"</div>` : '<div style="height:16px"></div>'}
-                <div style="margin-top:auto; display: flex; flex-direction: column; align-items: center;">${waveHTML}</div>
+                <div style="margin-top:auto; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 4px;">
+                    <div style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        ${waveHTML}
+                    </div>
+                    <div style="height: 20px; display: flex; align-items: center; justify-content: center;">
+                        ${hp[i] > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${hp[i].toFixed(1).replace(/^0/, '')}"</div>` : ''}
+                    </div>
+                </div>
             </div>
         `;
 
@@ -5576,17 +5582,17 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (!isInvalidVal(w.condition)) {
                 html += `<div class="np-weather-grid">`;
                 if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
-                if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
-                const sunriseStr = fmtSunTime(sun.sunrise);
-                const sunsetStr  = fmtSunTime(sun.sunset);
-                if (sunriseStr) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Sunrise</div><div class="np-weather-tile__value">${sunriseStr}</div></div>`;
-                if (sunsetStr)  html += `<div class="np-weather-tile" style="--accent:var(--violet)"><div class="np-weather-tile__label">Sunset</div><div class="np-weather-tile__value">${sunsetStr}</div></div>`;
+                if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
                 if (w.wave_height_ft) {
                     const waveCompass = degreesToCompass(w.wave_direction);
                     const waveSub = `${waveCompass} ${w.wave_period ? Math.round(w.wave_period) + 's' : ''}`.trim();
                     html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Waves</div><div class="np-weather-tile__value">${w.wave_height_ft.toFixed(1)} ft</div><div class="np-weather-tile__sub">${waveSub}</div></div>`;
                 }
+                const sunriseStr = fmtSunTime(sun.sunrise);
+                const sunsetStr  = fmtSunTime(sun.sunset);
+                if (sunriseStr) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Sunrise</div><div class="np-weather-tile__value">${sunriseStr}</div></div>`;
+                if (sunsetStr)  html += `<div class="np-weather-tile" style="--accent:var(--violet)"><div class="np-weather-tile__label">Sunset</div><div class="np-weather-tile__value">${sunsetStr}</div></div>`;
                 html += `</div>`;
 
                 // Add 24h Hourly Timeline
