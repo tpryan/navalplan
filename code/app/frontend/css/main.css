@@ -474,7 +474,7 @@
     align-items: center;
     gap: 20px;
     z-index: 10;
-    min-width: min(340px, calc(100vw - 24px));
+    min-width: min(300px, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
 }
 

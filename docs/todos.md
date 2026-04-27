@@ -34,5 +34,6 @@
 30. Done. Let's add a method for use by an hourly scheduled task that updates the weather every hour and runs the alert agent every hour for trips that are happening or soon to happen (2 days.)
 31. Done. When in mobile view the discovery picker should break into two 6 months rows. 
 32. Done. Actually schdeule task from 30. 
-
- 
+33. Done. Change the order of np-weather-tile: Conditions, temp, wind, waves, sunrise, sunset. 
+34. Done. make buildImprove display of precipitation in hourly_track. It should be at bottom. it should be easier to read.
+35. Done. In really narrow screens, the whole content spills out the viewport. I'd like it to look right even when teh viewport is <390 px.  

@@ -263,7 +263,7 @@
 /* ─── Weather condition tiles ────────────────────────────────────────────── */
 .np-weather-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
     gap: 8px;
     margin-bottom: 12px;
 }
@@ -694,8 +694,10 @@
 }
 
 .np-wind-forecast__arrow-svg {
-    width: 72px;
-    height: 72px;
+    width: 100%;
+    max-width: 72px;
+    height: auto;
+    aspect-ratio: 1/1;
     color: currentColor;
     opacity: 0.8;
     display: block;
@@ -891,13 +893,15 @@
 
 .np-hour-precip {
     font-size: 11px;
-    color: inherit; /* Match temperature color */
+    color: var(--sky);
     font-weight: 800;
     display: flex;
-    flex-direction: row; /* Single line */
+    flex-direction: row;
     align-items: center;
     gap: 2px;
-    margin-top: 2px;
+    padding: 2px 6px;
+    background: color-mix(in oklab, var(--sky) 12%, transparent);
+    border-radius: 8px;
 }
 
 .np-hour-precip .material-symbols-outlined {
@@ -1154,10 +1158,10 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: var(--radius-tile);
     background: color-mix(in oklab, var(--accent) 10%, var(--surface));
-    min-width: 80px;
+    min-width: 70px;
 }
 .np-data-tile__icon {
     font-size: 18px;
@@ -1677,7 +1681,7 @@
 #modal-new-voyage      { max-width: 440px; padding: 26px; }
 #modal-discovery-intro,
 #modal-first-trip      { max-width: 500px; }
-#modal-admin           { min-width: 600px; }
+#modal-admin           { max-width: 600px; width: 95%; }
 
 .modal-form-header {
     display: flex;
@@ -1787,6 +1791,20 @@
         grid-template-columns: repeat(2, 1fr);
     }
 
+    @media (max-width: 400px) {
+    .np-weather-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .np-metric-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .np-wind-forecast {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+    }
+    }
     /* Report stop header: tighter */
     .np-report-stop {
         padding: 14px 16px;
