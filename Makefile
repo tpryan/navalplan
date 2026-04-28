@@ -22,11 +22,19 @@ DB_URL=postgres://$(DB_USER):$(DB_PASS)@localhost:$(DB_PORT)/$(DB_NAME)?sslmode=
 
 # Production DB Config
 PROD_INSTANCE=wakelogdb
+PROD_CONN_NAME=$(shell gcloud config get-value project 2>/dev/null):$(REGION):$(PROD_INSTANCE)
 PROD_DB_NAME=navalplan
 PROD_DB_USER=navalplan_user
 STORAGE_BUCKET=navallog-system
-# PROD_DB_USER and PROD_DB_PASS should be set in your environment
-# for the migrate-prod target.
+# PROD_DB_USER and PROD_DB_PASS must be set in your environment for migrate-prod targets.
+
+# Cloud SQL Auth Proxy binary (downloaded on demand to .bin/)
+CLOUD_SQL_PROXY_VERSION=v2.14.1
+CLOUD_SQL_PROXY=.bin/cloud-sql-proxy
+
+# golang-migrate binary for prod targets — avoids Podman VM networking issues
+MIGRATE_BIN_VERSION=v4.18.1
+MIGRATE_BIN=.bin/migrate
 
 # Go
 GO_FILES=$(shell find . -name '*.go')
@@ -34,7 +42,7 @@ GO_FILES=$(shell find . -name '*.go')
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version deploy-sql migrate-prod-gcs tidy setup-adk
+.PHONY: run db-start db-stop db-reset test eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -199,40 +207,102 @@ migrate-force:
 	@read -p "Force version: " version; \
 	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) -path=/migrations/ -database "$(DB_URL)" force $$version
 
-migrate-prod:
-	@echo "Applying migrations to PRODUCTION ($(PROD_INSTANCE)) via Cloud SQL Auth Proxy..."
-	@if [ -z "$(PROD_DB_USER)" ] || [ -z "$(PROD_DB_PASS)" ]; then \
-		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set."; \
+migrate-prod-force: .bin/cloud-sql-proxy .bin/migrate
+	@echo "Force-setting PRODUCTION schema version (use this to mark existing schema as migrated)..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$$PROD_DB_USER" ] || [ -z "$$PROD_DB_PASS" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set in .env or environment."; \
 		exit 1; \
-	fi
-	@echo -n "Are you sure you want to migrate PRODUCTION? [y/N] "; \
+	fi; \
+	read -p "Force version: " version; \
+	PROXY_LOG=$$(mktemp); \
+	$(CLOUD_SQL_PROXY) --port 5434 $(PROD_CONN_NAME) > $$PROXY_LOG 2>&1 & PID=$$!; \
+	echo "Waiting for Cloud SQL Auth Proxy (PID: $$PID)..."; \
+	for i in $$(seq 1 15); do \
+		kill -0 $$PID 2>/dev/null || { echo "Proxy crashed. Output:"; cat $$PROXY_LOG; rm -f $$PROXY_LOG; exit 1; }; \
+		bash -c "echo > /dev/tcp/127.0.0.1/5434" 2>/dev/null && { echo "Proxy ready."; break; }; \
+		[ $$i -eq 15 ] && { echo "Proxy not ready after 15s. Output:"; cat $$PROXY_LOG; kill $$PID; rm -f $$PROXY_LOG; exit 1; }; \
+		sleep 1; \
+	done; \
+	rm -f $$PROXY_LOG; \
+	$(MIGRATE_BIN) -path=$(MIGRATE_PATH) \
+		-database "postgres://$$PROD_DB_USER:$$PROD_DB_PASS@127.0.0.1:5434/$(PROD_DB_NAME)?sslmode=disable" force $$version; \
+	kill $$PID
+
+# Downloads the Cloud SQL Auth Proxy binary for the current OS/arch if not already present.
+# Override with: CLOUD_SQL_PROXY=/usr/local/bin/cloud-sql-proxy make migrate-prod
+.bin/cloud-sql-proxy:
+	@mkdir -p .bin
+	@echo "Downloading Cloud SQL Auth Proxy $(CLOUD_SQL_PROXY_VERSION)..."
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	ARCH=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'); \
+	curl -fsSL -o .bin/cloud-sql-proxy \
+		"https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/$(CLOUD_SQL_PROXY_VERSION)/cloud-sql-proxy.$${OS}.$${ARCH}"
+	@chmod +x .bin/cloud-sql-proxy
+
+install-cloud-sql-proxy: .bin/cloud-sql-proxy
+
+.bin/migrate:
+	@mkdir -p .bin
+	@echo "Downloading golang-migrate $(MIGRATE_BIN_VERSION)..."
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	ARCH=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'); \
+	curl -fsSL -o /tmp/migrate.tar.gz \
+		"https://github.com/golang-migrate/migrate/releases/download/$(MIGRATE_BIN_VERSION)/migrate.$${OS}-$${ARCH}.tar.gz"; \
+	tar -xzf /tmp/migrate.tar.gz -C .bin migrate; \
+	rm /tmp/migrate.tar.gz
+	@chmod +x .bin/migrate
+
+install-migrate: .bin/migrate
+
+migrate-prod: .bin/cloud-sql-proxy .bin/migrate
+	@echo "Applying migrations to PRODUCTION ($(PROD_INSTANCE)) via Cloud SQL Auth Proxy..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$$PROD_DB_USER" ] || [ -z "$$PROD_DB_PASS" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set in .env or environment."; \
+		exit 1; \
+	fi; \
+	echo -n "Are you sure you want to migrate PRODUCTION? [y/N] "; \
 	read ans; \
 	if [ "$$ans" != "y" ]; then \
 		echo "Aborting."; \
 		exit 1; \
-	fi
-	@# Start proxy in background (using port 5434 to avoid conflict with local DB)
-	@gcloud sql auth-proxy --port 5434 $(PROD_INSTANCE) > /dev/null 2>&1 & PID=$$!; \
+	fi; \
+	PROXY_LOG=$$(mktemp); \
+	$(CLOUD_SQL_PROXY) --port 5434 $(PROD_CONN_NAME) > $$PROXY_LOG 2>&1 & PID=$$!; \
 	echo "Waiting for Cloud SQL Auth Proxy (PID: $$PID)..."; \
-	sleep 5; \
-	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) \
-		-path=/migrations/ \
-		-database "postgres://$(PROD_DB_USER):$(PROD_DB_PASS)@localhost:5434/$(PROD_DB_NAME)?sslmode=disable" up; \
+	for i in $$(seq 1 15); do \
+		kill -0 $$PID 2>/dev/null || { echo "Proxy crashed. Output:"; cat $$PROXY_LOG; rm -f $$PROXY_LOG; exit 1; }; \
+		bash -c "echo > /dev/tcp/127.0.0.1/5434" 2>/dev/null && { echo "Proxy ready."; break; }; \
+		[ $$i -eq 15 ] && { echo "Proxy not ready after 15s. Output:"; cat $$PROXY_LOG; kill $$PID; rm -f $$PROXY_LOG; exit 1; }; \
+		sleep 1; \
+	done; \
+	rm -f $$PROXY_LOG; \
+	$(MIGRATE_BIN) -path=$(MIGRATE_PATH) \
+		-database "postgres://$$PROD_DB_USER:$$PROD_DB_PASS@127.0.0.1:5434/$(PROD_DB_NAME)?sslmode=disable" up; \
 	status=$$?; \
 	kill $$PID; \
 	exit $$status
 
-migrate-prod-version:
+migrate-prod-version: .bin/cloud-sql-proxy .bin/migrate
 	@echo "Checking PRODUCTION schema version..."
-	@if [ -z "$(PROD_DB_USER)" ] || [ -z "$(PROD_DB_PASS)" ]; then \
-		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set."; \
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$$PROD_DB_USER" ] || [ -z "$$PROD_DB_PASS" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set in .env or environment."; \
 		exit 1; \
-	fi
-	@gcloud sql auth-proxy --port 5434 $(PROD_INSTANCE) > /dev/null 2>&1 & PID=$$!; \
-	sleep 5; \
-	podman run --rm -v $(PWD)/$(MIGRATE_PATH):/migrations:Z --network host $(MIGRATE_IMAGE) \
-		-path=/migrations/ \
-		-database "postgres://$(PROD_DB_USER):$(PROD_DB_PASS)@localhost:5434/$(PROD_DB_NAME)?sslmode=disable" version; \
+	fi; \
+	PROXY_LOG=$$(mktemp); \
+	$(CLOUD_SQL_PROXY) --port 5434 $(PROD_CONN_NAME) > $$PROXY_LOG 2>&1 & PID=$$!; \
+	echo "Waiting for Cloud SQL Auth Proxy (PID: $$PID)..."; \
+	for i in $$(seq 1 15); do \
+		kill -0 $$PID 2>/dev/null || { echo "Proxy crashed. Output:"; cat $$PROXY_LOG; rm -f $$PROXY_LOG; exit 1; }; \
+		bash -c "echo > /dev/tcp/127.0.0.1/5434" 2>/dev/null && { echo "Proxy ready."; break; }; \
+		[ $$i -eq 15 ] && { echo "Proxy not ready after 15s. Output:"; cat $$PROXY_LOG; kill $$PID; rm -f $$PROXY_LOG; exit 1; }; \
+		sleep 1; \
+	done; \
+	rm -f $$PROXY_LOG; \
+	$(MIGRATE_BIN) -path=$(MIGRATE_PATH) \
+		-database "postgres://$$PROD_DB_USER:$$PROD_DB_PASS@127.0.0.1:5434/$(PROD_DB_NAME)?sslmode=disable" version; \
 	kill $$PID
 
 # --- Testing ---
