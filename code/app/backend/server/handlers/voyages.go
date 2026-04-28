@@ -363,3 +363,49 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report)
 }
+
+// Checkin updates the current GPS position of the voyage owner.
+func (h *Handler) Checkin(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	// Check ownership
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if v.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	var pos struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+		Location  string  `json:"location_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&pos); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid position data")
+		return
+	}
+
+	if err := h.DB.UpdateVoyageCheckin(r.Context(), id, pos.Latitude, pos.Longitude, pos.Location); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to update check-in", "voyage_id", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+

@@ -75,3 +75,27 @@ export function getCirclePolygon(center, radiusMiles, numPoints = 24, jitter = 0
     if (coords.length) coords.push([coords[0][0], coords[0][1]]);
     return coords;
 }
+
+/**
+ * Haversine distance between two points in Nautical Miles.
+ */
+export function nmBetween(a, b) {
+    if (!a || !b) return null;
+    const lat1 = a.latitude !== undefined ? a.latitude : a.lat;
+    const lng1 = a.longitude !== undefined ? a.longitude : a.lng;
+    const lat2 = b.latitude !== undefined ? b.latitude : b.lat;
+    const lng2 = b.longitude !== undefined ? b.longitude : b.lng;
+
+    if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+
+    const toRad = d => d * Math.PI / 180;
+    const R = 3440.065; // Nautical miles
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lng2 - lng1);
+    const haversine = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+    return R * c;
+}
+

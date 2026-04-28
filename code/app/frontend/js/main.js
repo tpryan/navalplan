@@ -11,7 +11,7 @@ import { LookoutBox } from './ui/LookoutBox.js';
 
 import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
-import { hashString, smoothPolygon, chaikin, getCirclePolygon } from './geometry.js';
+import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
 import { getSearchRingClass } from './animations/SearchRing.js';
 import { showNotification } from './notifications.js';
@@ -405,6 +405,96 @@ async function reverseGeocode(latLng) {
     return { locationName, preciseLocation };
 }
 
+async function handleCheckin() {
+    if (!currentVoyage) return;
+    
+    if (!navigator.geolocation) {
+        showNotification('Error', 'Geolocation is not supported by your browser.');
+        return;
+    }
+
+    const btn = document.getElementById('btn-checkin');
+    const icon = btn.querySelector('.material-symbols-outlined');
+    const originalIcon = icon.textContent;
+    
+    icon.textContent = 'hourglass_empty';
+    btn.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            let locationName = "At Sea";
+            
+            try {
+                const { Geocoder } = await importLibrary("geocoding");
+                const geocoder = new Geocoder();
+                const response = await geocoder.geocode({ location: { lat, lng } });
+                
+                if (response.results && response.results.length > 0) {
+                    // Look for a result that isn't just a Plus Code or generic
+                    // Prefer: locality, sublocality, natural_feature, point_of_interest
+                    const preferred = response.results.find(r => 
+                        r.types.includes('locality') || 
+                        r.types.includes('sublocality') || 
+                        r.types.includes('natural_feature') ||
+                        r.types.includes('point_of_interest') ||
+                        r.types.includes('neighborhood')
+                    );
+                    
+                    if (preferred) {
+                        locationName = preferred.formatted_address.split(',')[0];
+                    } else {
+                        // Check if the top result is very generic (like a country or postal code only)
+                        const top = response.results[0];
+                        const isGeneric = top.types.every(t => ['country', 'postal_code', 'administrative_area_level_1'].includes(t));
+                        if (!isGeneric) {
+                            locationName = top.formatted_address.split(',')[0];
+                        }
+                    }
+                    
+                    // If it's a plus code (has a + and is short), it's likely open water
+                    if (locationName.includes('+') && locationName.length < 15) {
+                        locationName = "At Sea";
+                    }
+                }
+            } catch (geoErr) {
+                console.warn("Reverse geocoding failed, defaulting to 'At Sea'", geoErr);
+            }
+
+            await API.postCheckin(currentVoyage.id, lat, lng, locationName);
+            
+            // Update local state and map
+            currentVoyage.checkin_latitude = lat;
+            currentVoyage.checkin_longitude = lng;
+            currentVoyage.checkin_location = locationName;
+            currentVoyage.checkin_at = new Date().toISOString();
+            renderMapStops();
+            
+            // Update the static map screenshot for the report
+            captureAndUploadMap(currentVoyage.id).catch(err => console.warn("Failed to update report map after check-in", err));
+
+            showNotification('Success', `Checked in at ${locationName}!`);
+        } catch (err) {
+            console.error('Check-in failed', err);
+            showNotification('Error', 'Check-in failed. Try again.');
+        } finally {
+            icon.textContent = originalIcon;
+            btn.disabled = false;
+        }
+    }, (err) => {
+        console.error('Geolocation error', err);
+        showNotification('Error', `Location access denied or failed: ${err.message}`);
+        icon.textContent = originalIcon;
+        btn.disabled = false;
+    }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    });
+}
+
 function initUI() {
     loadTheme();
     initThemeToggle();
@@ -763,6 +853,11 @@ function initNavigationListeners() {
 
     if (btnEditVoyage) {
         btnEditVoyage.addEventListener('click', () => { if (currentVoyage) openEditModal(currentVoyage); });
+    }
+
+    const btnCheckin = document.getElementById('btn-checkin');
+    if (btnCheckin) {
+        btnCheckin.addEventListener('click', handleCheckin);
     }
 
     const btnViewGuide = document.getElementById('btn-view-guide');
@@ -1345,6 +1440,7 @@ function showVoyageList(doPushState = true) {
     document.getElementById('voyage-list').classList.remove('hidden');
     document.getElementById('itinerary-view').classList.add('hidden');
     document.querySelector('.sidebar-actions').classList.remove('hidden');
+    document.getElementById('btn-checkin')?.classList.add('hidden');
     // On mobile keep sidebar open on voyage list view
     document.querySelectorAll('#mobile-tab-bar .np-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'plan'));
 
@@ -1398,6 +1494,7 @@ async function selectVoyage(voyage, doPushState = true) {
     document.getElementById('voyage-list').classList.add('hidden');
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
+    document.getElementById('btn-checkin')?.classList.remove('hidden');
     
     // For mobile — show sidebar (itinerary), activate Plan tab
     document.getElementById('app').classList.add('menu-open');
@@ -3669,7 +3766,7 @@ async function initMap() {
     return;
   }
 
-  const { Map } = await importLibrary('maps');
+  const { Map, InfoWindow, Polyline } = await importLibrary('maps');
   const { Geocoder } = await importLibrary("geocoding");
 
   const theme = currentTheme();
@@ -3842,21 +3939,69 @@ async function initMap() {
   }
   
   async function renderMapStops() {
-    clearMap();
-    if (!map) return;
+    try {
+        if (!map || !currentVoyage) return;
 
-    const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
-    const { InfoWindow } = await importLibrary("maps");
-    const { Polyline } = await importLibrary("maps");
+        // Ensure libraries are loaded
+        const [{ AdvancedMarkerElement }, { InfoWindow, Polyline }] = await Promise.all([
+            importLibrary("marker"),
+            importLibrary("maps")
+        ]);
 
-    // Sort stops by date
-    const sortedStops = [...currentStops].sort((a, b) => 
-        new Date(a.target_date) - new Date(b.target_date)
-    );
+        clearMap();
 
-    // Add Markers — Signal numbered teardrop pins with rotating accents
-    sortedStops.forEach((stop, index) => {
-        const accent = VOYAGE_ACCENTS[index % VOYAGE_ACCENTS.length];
+        // Sort stops by date
+        const sortedStops = [...currentStops].sort((a, b) => 
+            new Date(a.target_date) - new Date(b.target_date)
+        );
+
+        // Draw Check-in Marker if it exists
+        if (currentVoyage.checkin_latitude != null && currentVoyage.checkin_longitude != null) {
+        const dot = accentDot('muted', 36);
+        
+        // Add custom animation layers
+        const pulse = document.createElement('div');
+        pulse.className = 'np-checkin-marker-pulse';
+        dot.appendChild(pulse);
+
+        const ring = document.createElement('div');
+        ring.className = 'np-checkin-marker-ring';
+        dot.appendChild(ring);
+
+        const icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined';
+        icon.style.cssText = 'font-size:22px;color:#fff;line-height:1;pointer-events:none;user-select:none;z-index:2';
+        icon.textContent = 'my_location';
+        dot.appendChild(icon);
+
+        const cMarker = new AdvancedMarkerElement({
+            map: map,
+            position: { lat: currentVoyage.checkin_latitude, lng: currentVoyage.checkin_longitude },
+            content: dot,
+            title: 'Last Captain Check-in',
+            zIndex: 1000
+        });
+
+        cMarker.addListener('gmp-click', () => {
+            if (activeInfoWindow) activeInfoWindow.close();
+            const date = new Date(currentVoyage.checkin_at).toLocaleString();
+            const locName = currentVoyage.checkin_location || 'Position';
+            const ink = tokenColor('ink');
+            const surface = tokenColor('surface');
+            const muted = tokenColor('muted');
+            activeInfoWindow = new InfoWindow({
+                content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>Captain Check-in: ${locName}</b><br><span style="color:${muted}">${date}</span></div>`
+            });
+            activeInfoWindow.open(map, cMarker);
+        });
+        markers.push(cMarker);
+    }
+
+        // Add Markers — Signal numbered teardrop pins with rotating accents
+        sortedStops.forEach((stop, index) => {
+            if (!stop.latitude || !stop.longitude) return;
+            
+            const accent = VOYAGE_ACCENTS[index % VOYAGE_ACCENTS.length];
         const pinEl = MapPin({ accent, n: index + 1, label: `Stop ${index + 1}: ${displayLocationName(stop.location_name)}` });
 
         const marker = new AdvancedMarkerElement({
@@ -3925,20 +4070,25 @@ async function initMap() {
 
     // Draw route — dashed marching-ants polyline in --ink color
     const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
-    const routeLineColor = tokenColor('ink') || '#0B1220';
+    if (coords.length > 1) {
+        const routeLineColor = tokenColor('ink') || '#0B1220';
 
-    routePolyline = new Polyline({
-      path: coords,
-      geodesic: true,
-      strokeColor: routeLineColor,
-      strokeOpacity: 0,
-      icons: [{
-        icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
-        offset: '0',
-        repeat: '14px'
-      }],
-      map: map
-    });
+        routePolyline = new Polyline({
+          path: coords,
+          geodesic: true,
+          strokeColor: routeLineColor,
+          strokeOpacity: 0,
+          icons: [{
+            icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
+            offset: '0',
+            repeat: '14px'
+          }],
+          map: map
+        });
+    }
+    } catch (err) {
+        console.error("Error in renderMapStops:", err);
+    }
 }
   
   function clearMap() {
@@ -4197,6 +4347,19 @@ async function captureAndUploadMap(voyageId) {
 
     if (sortedStops.length > 0) {
         const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
+        
+        // Add Check-in marker if it exists and is near the voyage
+        if (currentVoyage && currentVoyage.checkin_latitude && currentVoyage.checkin_longitude) {
+            // Always show check-in if it exists? Or only if near?
+            // User said "properly handle things when I am not geographically in the area"
+            // For static map, if it's far, it will zoom out too much.
+            // Let's only show it if it's within, say, 500 miles of the first stop.
+            const first = stopsToDraw[0];
+            const dist = nmBetween(first, { latitude: currentVoyage.checkin_latitude, longitude: currentVoyage.checkin_longitude });
+            if (dist !== null && dist < 500) {
+                markersParam += `&markers=color:orange%7Clabel:X%7C${currentVoyage.checkin_latitude},${currentVoyage.checkin_longitude}`;
+            }
+        }
 
         // Draw path first so stop markers render on top
         pathParam = "&path=color:0x999999ff|weight:1";
@@ -5419,18 +5582,23 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         html += `<img src="${url}" alt="Voyage Map" class="np-report-map np-report-item--non-sailing" />`;
     }
 
+    // ── Check-in status ───────────────────────────────────────────────────────
+    if (voyage.checkin_latitude && voyage.checkin_longitude && voyage.checkin_at) {
+        const checkinDate = new Date(voyage.checkin_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const locName = voyage.checkin_location || 'Position';
+        html += `
+            <div class="np-checkin-badge np-report-item--non-sailing" id="np-checkin-badge">
+                <span class="material-symbols-outlined">my_location</span>
+                <span><strong>Last Captain Check-in:</strong> ${locName} · ${checkinDate}</span>
+                <div class="flex gap-sm align-center" style="margin-left:auto">
+                    <a href="https://www.google.com/maps/search/?api=1&query=${voyage.checkin_latitude},${voyage.checkin_longitude}" target="_blank" class="np-checkin-link">View on Google Maps</a>
+                </div>
+            </div>
+        `;
+    }
+
     // ── Day by day grid ───────────────────────────────────────────────────────
     if (hasBriefings) {
-        const nmBetween = (a, b) => {
-            if (!a.latitude || !a.longitude || !b.latitude || !b.longitude) return null;
-            const toRad = d => d * Math.PI / 180;
-            const R = 3440.065;
-            const dLat = toRad(b.latitude - a.latitude);
-            const dLon = toRad(b.longitude - a.longitude);
-            const x = Math.sin(dLat/2)**2 + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLon/2)**2;
-            return Math.round(2 * R * Math.asin(Math.sqrt(x)));
-        };
-
         const dayGridClass = sortedStops.length < 5 ? 'np-day-grid np-day-grid--fill' : 'np-day-grid';
         html += `<span class="np-section-label">Day by Day</span>`;
         html += `<div class="${dayGridClass}" style="--day-count:${sortedStops.length}">`;

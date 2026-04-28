@@ -12,7 +12,7 @@ func (db *DB) ListVoyages(ctx context.Context, personID int64, limit, offset int
 	// Explicit selection for performance (Issue #5)
 	query := `
 		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
-		       search_radius, search_radius_unit, share_token, is_public, created_at
+		       search_radius, search_radius_unit, share_token, is_public, checkin_latitude, checkin_longitude, checkin_location, checkin_at, created_at
 		FROM voyage 
 		WHERE person_id = $1 
 		ORDER BY created_at DESC`
@@ -80,7 +80,7 @@ func (db *DB) GetVoyageByToken(ctx context.Context, token string) (*models.Voyag
 	var v models.Voyage
 	query := `
 		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
-		       search_radius, search_radius_unit, share_token, is_public, created_at
+		       search_radius, search_radius_unit, share_token, is_public, checkin_latitude, checkin_longitude, checkin_location, checkin_at, created_at
 		FROM voyage 
 		WHERE share_token = $1 AND is_public = true`
 	err := db.GetContext(ctx, &v, query, token)
@@ -95,7 +95,7 @@ func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 	var v models.Voyage
 	query := `
 		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
-		       search_radius, search_radius_unit, share_token, is_public, created_at
+		       search_radius, search_radius_unit, share_token, is_public, checkin_latitude, checkin_longitude, checkin_at, created_at
 		FROM voyage 
 		WHERE id = $1`
 	err := db.GetContext(ctx, &v, query, id)
@@ -103,6 +103,13 @@ func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 		return nil, err
 	}
 	return &v, nil
+}
+
+// UpdateVoyageCheckin updates the check-in location and timestamp for a voyage.
+func (db *DB) UpdateVoyageCheckin(ctx context.Context, id int64, lat, lng float64, location string) error {
+	query := `UPDATE voyage SET checkin_latitude = $1, checkin_longitude = $2, checkin_location = $3, checkin_at = NOW() WHERE id = $4`
+	_, err := db.ExecContext(ctx, query, lat, lng, location, id)
+	return err
 }
 
 // DeleteVoyage removes a voyage from the database.
