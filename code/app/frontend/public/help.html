@@ -532,8 +532,10 @@
         <a href="#voyages"><span class="material-symbols-outlined">map</span>Voyages</a>
         <a href="#pilot"><span class="material-symbols-outlined">auto_awesome</span>Pilot Research</a>
         <a href="#stops"><span class="material-symbols-outlined">location_on</span>Stops</a>
+        <a href="#checkin"><span class="material-symbols-outlined">my_location</span>GPS Check-in</a>
         <a href="#briefings"><span class="material-symbols-outlined">article</span>Briefings</a>
         <a href="#research-all"><span class="material-symbols-outlined">travel_explore</span>Stop Research</a>
+        <a href="#lookout"><span class="material-symbols-outlined">visibility</span>Safety Audit</a>
         <a href="#guide"><span class="material-symbols-outlined">menu_book</span>Voyage Guide</a>
         <a href="#report"><span class="material-symbols-outlined">description</span>Report</a>
         <a href="#sharing"><span class="material-symbols-outlined">share</span>Sharing</a>
@@ -796,6 +798,43 @@
             </div>
         </section>
 
+        <!-- GPS Check-in -->
+        <section class="doc-section" id="checkin">
+            <div class="section-header">
+                <span class="material-symbols-outlined">my_location</span>
+                <h2>GPS Check-in</h2>
+            </div>
+            <div class="section-body">
+                <p><strong>GPS Check-in</strong> lets you record your vessel's current position against the voyage while underway. The check-in appears as a pulsing marker on the map and is included in the Voyage Report so your crew always knows your last known location.</p>
+                <ol class="steps">
+                    <li class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-text">Open a voyage — the <span class="ui-icon"><span class="material-symbols-outlined">my_location</span></span> check-in button appears in the voyage header next to the edit button.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-text">Click the button. Your browser will request location permission — approve it to continue.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-text">NavalPlan captures your coordinates and reverse-geocodes them to a readable location name. If you're in open water with no nearby place name, it records <strong>At Sea</strong>.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-text">A <strong>pulsing marker</strong> appears on the map at your position. Click it to see the location name, coordinates, and timestamp.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">5</div>
+                        <div class="step-text">The check-in is recorded in the <strong>Voyage Report</strong> as <em>Last Captain Check-in</em> with a link to view the position on Google Maps.</div>
+                    </li>
+                </ol>
+                <div class="tip">
+                    <span class="material-symbols-outlined">lightbulb</span>
+                    Each new check-in overwrites the previous one — only the most recent position is stored. Check in regularly on a long passage to keep the report position current.
+                </div>
+            </div>
+        </section>
+
         <!-- Briefings -->
         <section class="doc-section" id="briefings">
             <div class="section-header">
@@ -876,6 +915,48 @@
                 <div class="tip">
                     <span class="material-symbols-outlined">schedule</span>
                     Full research can take a few minutes depending on the number of stops. The app polls in the background — you can keep browsing while it works. Once done, use <span class="btn-ref">Re-run Stop Research</span> at the bottom of the sidebar to refresh any time.
+                </div>
+            </div>
+        </section>
+
+        <!-- Safety Audit -->
+        <section class="doc-section" id="lookout">
+            <div class="section-header">
+                <span class="material-symbols-outlined">visibility</span>
+                <h2>Safety Audit</h2>
+            </div>
+            <div class="section-body">
+                <p>The <strong>Safety Audit</strong> runs a voyage-wide AI analysis across all your researched stops. It checks weather, sea state, and local conditions for each day and surfaces severity-coded alerts with recommended actions — giving you a single safety overview before departure.</p>
+                <ol class="steps">
+                    <li class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-text"><strong>Run Stop Research first</strong> — the Safety Audit works from your existing stop briefings. Make sure all stops have been researched before running the audit.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-text">Trigger the audit from either location:
+                            <ul style="margin-top:6px;padding-left:1.2em;font-size:0.9rem;color:var(--ink2)">
+                                <li>Open any <strong>stop briefing</strong> and click <span class="btn-ref">Safety Audit</span> in the modal header.</li>
+                                <li>Open the <strong>Voyage Report</strong> and click the <span class="ui-icon"><span class="material-symbols-outlined">visibility</span></span> eye icon in the toolbar.</li>
+                            </ul>
+                        </div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-text">NavalPlan refreshes the weather for all stops, then the AI analyzes each one. A spinner indicates the audit is in progress.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-text">Results appear as a <strong>Safety Overview</strong> block in the Voyage Report, grouped by stop. Each alert shows an icon, a description of the condition, and a recommended action where applicable.</div>
+                    </li>
+                    <li class="step">
+                        <div class="step-num">5</div>
+                        <div class="step-text">If no issues are found across any stop, a <em>Safety audit complete. No alerts found.</em> notification confirms the all-clear.</div>
+                    </li>
+                </ol>
+                <div class="tip">
+                    <span class="material-symbols-outlined">warning</span>
+                    Alerts are severity-coded — pay close attention to any flagged as high severity. Re-run the audit after updating stop dates or re-researching a stop to keep the overview current.
                 </div>
             </div>
         </section>
