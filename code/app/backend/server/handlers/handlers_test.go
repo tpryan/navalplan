@@ -50,6 +50,11 @@ func (m *MockStore) UpdateVoyageSharing(ctx context.Context, id int64, enable bo
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockStore) UpdateVoyageCheckin(ctx context.Context, id int64, lat, lng float64, location string) error {
+	args := m.Called(id, lat, lng, location)
+	return args.Error(0)
+}
+
 func (m *MockStore) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	args := m.Called(token)
 	if args.Get(0) == nil {

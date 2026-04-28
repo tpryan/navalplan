@@ -208,6 +208,12 @@
   right: 16px;
 }
 
+.voyage-header__checkin {
+  position: absolute;
+  top: 12px;
+  right: 48px;
+}
+
 .voyage-header h2 {
   margin: 0;
   font-family: var(--font, var(--font-primary));
@@ -820,6 +826,30 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+@keyframes radarSpinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.np-checkin-marker-pulse {
+  position: absolute;
+  inset: -150%;
+  border-radius: 50%;
+  background: conic-gradient(from 90deg, color-mix(in srgb, var(--muted) 15%, transparent), transparent 60%);
+  animation: radarSpinSlow 8s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.np-checkin-marker-ring {
+  position: absolute;
+  inset: -150%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--muted) 10%, transparent);
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* --- Search Ring (Voyage Radius Animation) — uses --sky to match pilot circle --- */

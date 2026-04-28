@@ -48,6 +48,10 @@ type Voyage struct {
 	SearchRadiusUnit string     `json:"search_radius_unit" db:"search_radius_unit"`
 	ShareToken       *string    `json:"share_token" db:"share_token"`
 	IsPublic         bool       `json:"is_public" db:"is_public"`
+	CheckinLatitude  *float64   `json:"checkin_latitude" db:"checkin_latitude"`
+	CheckinLongitude *float64   `json:"checkin_longitude" db:"checkin_longitude"`
+	CheckinLocation  *string    `json:"checkin_location" db:"checkin_location"`
+	CheckinAt        *time.Time `json:"checkin_at" db:"checkin_at"`
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 

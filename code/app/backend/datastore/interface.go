@@ -14,6 +14,7 @@ type Store interface {
 	GetVoyage(ctx context.Context, id int64) (*models.Voyage, error)
 	UpdateVoyage(ctx context.Context, v *models.Voyage) error
 	UpdateVoyageSharing(ctx context.Context, id int64, enable bool) (string, error)
+	UpdateVoyageCheckin(ctx context.Context, id int64, lat, lng float64, location string) error
 	GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error)
 	DeleteVoyage(ctx context.Context, id int64) error
 

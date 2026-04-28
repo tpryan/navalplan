@@ -1221,6 +1221,37 @@
     padding: 16px;
 }
 
+/* ─── Check-in Badge ─────────────────────────────────────────────────────── */
+.np-checkin-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: color-mix(in oklab, var(--amber) 10%, var(--surface));
+    border: 1.5px solid var(--amber);
+    border-radius: var(--radius-card);
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.np-checkin-badge .material-symbols-outlined {
+    color: var(--amber);
+}
+
+.np-checkin-link {
+    margin-left: auto;
+    color: var(--sky);
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.np-checkin-link:hover {
+    text-decoration: underline;
+}
+
+
 /* ─── Region Briefing ────────────────────────────────────────────────────── */
 .np-region-header {
     display: grid;

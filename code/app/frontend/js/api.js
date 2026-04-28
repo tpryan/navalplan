@@ -246,6 +246,16 @@ export const API = {
     return res.json();
   },
 
+  async postCheckin(id, latitude, longitude, location_name) {
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude, location_name }),
+    });
+    if (!res.ok) throw new Error('Failed to post check-in');
+    return true;
+  },
+
   async disableSharing(id) {
     const res = await apiFetch(`${API_BASE}/voyages/${id}/share`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to disable sharing');
