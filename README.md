@@ -62,8 +62,8 @@ Before you begin, ensure you have the following installed:
 *   `make run-frontend`: Runs the frontend in dev mode (Vite).
 *   `make run-agent`: Runs the Researcher Agent.
 *   `make db-reset`: Stops, restarts, and reseeds the database.
-*   `migrate-up`: Applies pending database migrations.
-*   `migrate-create`: Creates a new migration file.
+*   `make migrate-up`: Applies pending database migrations.
+*   `make migrate-create`: Creates a new migration file.
 
 ## Agent Evaluation (ADK)
 
