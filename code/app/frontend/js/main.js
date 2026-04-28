@@ -3986,11 +3986,13 @@ async function initMap() {
             if (activeInfoWindow) activeInfoWindow.close();
             const date = new Date(currentVoyage.checkin_at).toLocaleString();
             const locName = currentVoyage.checkin_location || 'Position';
+            const lat = currentVoyage.checkin_latitude.toFixed(4);
+            const lng = currentVoyage.checkin_longitude.toFixed(4);
             const ink = tokenColor('ink');
             const surface = tokenColor('surface');
             const muted = tokenColor('muted');
             activeInfoWindow = new InfoWindow({
-                content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>Captain Check-in: ${locName}</b><br><span style="color:${muted}">${date}</span></div>`
+                content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>Captain Check-in: ${locName}</b><br><span style="color:${muted}">${lat}, ${lng} · ${date}</span></div>`
             });
             activeInfoWindow.open(map, cMarker);
         });
@@ -5586,10 +5588,12 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     if (voyage.checkin_latitude && voyage.checkin_longitude && voyage.checkin_at) {
         const checkinDate = new Date(voyage.checkin_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const locName = voyage.checkin_location || 'Position';
+        const lat = voyage.checkin_latitude.toFixed(4);
+        const lng = voyage.checkin_longitude.toFixed(4);
         html += `
             <div class="np-checkin-badge np-report-item--non-sailing" id="np-checkin-badge">
                 <span class="material-symbols-outlined">my_location</span>
-                <span><strong>Last Captain Check-in:</strong> ${locName} · ${checkinDate}</span>
+                <span><strong>Last Captain Check-in:</strong> ${locName} (${lat}, ${lng}) · ${checkinDate}</span>
                 <div class="flex gap-sm align-center" style="margin-left:auto">
                     <a href="https://www.google.com/maps/search/?api=1&query=${voyage.checkin_latitude},${voyage.checkin_longitude}" target="_blank" class="np-checkin-link">View on Google Maps</a>
                 </div>

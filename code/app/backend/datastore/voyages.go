@@ -95,7 +95,7 @@ func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 	var v models.Voyage
 	query := `
 		SELECT id, person_id, title, start_date, end_date, location_name, precise_location, latitude, longitude, 
-		       search_radius, search_radius_unit, share_token, is_public, checkin_latitude, checkin_longitude, checkin_at, created_at
+		       search_radius, search_radius_unit, share_token, is_public, checkin_latitude, checkin_longitude, checkin_location, checkin_at, created_at
 		FROM voyage 
 		WHERE id = $1`
 	err := db.GetContext(ctx, &v, query, id)
