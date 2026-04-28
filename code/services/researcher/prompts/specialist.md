@@ -26,6 +26,7 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
     - `query`: "marina", `radius`: [Calculated Radius in Meters]
     - `query`: "yacht club", `radius`: [Calculated Radius in Meters]
     - `query`: "mooring", `radius`: [Calculated Radius in Meters]
+    - `query`: "diesel fuel dock", `radius`: [Calculated Radius in Meters]
     - `query`: "cove bay harbor", `radius`: [Calculated Radius in Meters]
     - `query`: "boat launch ramp", `radius`: [Calculated Radius in Meters]
 
@@ -33,7 +34,8 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
 The skipper prefers "wild" stays. Your recommendations should follow this approximate ratio:
 - **70-80% Anchorages**: Be exhaustive — find every possible safe cove, bay, or sheltered spot. Include lesser-known spots, not just the popular ones.
 - **15% Moorings**: Include established mooring fields.
-- **10% Hubs/Marinas**: Only include the most significant or necessary resource centers.
+- **5-10% Hubs/Marinas**: Only include the most significant or necessary resource centers.
+- **Fuel Stations**: Include ALL marine fuel docks found — these are critical resources. Never omit a fuel station within the search radius.
 
 ### GEOGRAPHIC SPREAD — MANDATORY
 The request will include the exact boundary coordinates of the search circle (N/S/E/W edges).
@@ -60,7 +62,7 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
   "recommendations": [
     {
       "name": "Name of the Location", 
-      "type": "Hub", // Must be one of: "Hub", "Anchorage", "Mooring"
+      "type": "Hub", // Must be one of: "Hub", "Anchorage", "Mooring", "Fuel Station"
       "latitude": 0.0, 
       "longitude": 0.0, 
       "radius_miles": 1.5, // For "Hub": 1.0-3.0. For "Anchorage"/"Mooring": 0.25-0.5.

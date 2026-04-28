@@ -40,9 +40,9 @@ let map = null;
 let markers = [];
 let routePolyline = null;
 let facilityMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
-const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'other']);
+const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
-const activeFilters = new Set(['anchorage', 'mooring', 'hub']);
+const activeFilters = new Set(['anchorage', 'mooring', 'hub', 'fuel']);
 let voyageRecommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
@@ -2089,12 +2089,12 @@ async function renderRecommendations() {
         const { AdvancedMarkerElement } = await importLibrary("marker");
 
         const recLabels = {
-            hub: 'Resource Hub', anchorage: 'Anchorage', mooring: 'Mooring',
+            hub: 'Resource Hub', anchorage: 'Anchorage', mooring: 'Mooring', fuel: 'Fuel Station',
         };
 
         voyageRecommendations.forEach((rec) => {
             const type = (rec.type || '').toLowerCase();
-            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : 'hub';
+            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : type.includes('fuel') ? 'fuel' : 'hub';
             const accent = markerAccent(rec.type);
             const dot = accentDot(accent, 28, filterKey);
 
@@ -4041,6 +4041,7 @@ async function initMap() {
                                  : type.includes('moor') ? 'mooring'
                                  : type.includes('restaurant') ? 'restaurant'
                                  : type.includes('bar') ? 'bar'
+                                 : type.includes('fuel') ? 'fuel'
                                  : 'other';
 
                              const accent = markerAccent(f.type);

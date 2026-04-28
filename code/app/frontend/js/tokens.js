@@ -10,6 +10,7 @@ export const MARKER_ACCENTS = {
     'yacht club': 'amber',
     restaurant:   'green',
     bar:          'coral',
+    fuel:         'sky',
     default:      'sky',
 };
 
@@ -21,6 +22,7 @@ export const MARKER_ICONS = {
     restaurant: 'restaurant',
     bar:        'local_bar',
     hub:        'build',
+    fuel:       'local_gas_station',
 };
 
 /** Return the Signal accent token for a facility/recommendation type string. */
@@ -34,6 +36,7 @@ export function markerAccent(type) {
     if (t.includes('yacht'))      return MARKER_ACCENTS['yacht club'];
     if (t.includes('restaurant')) return MARKER_ACCENTS.restaurant;
     if (t.includes('bar'))        return MARKER_ACCENTS.bar;
+    if (t.includes('fuel'))       return MARKER_ACCENTS.fuel;
     return MARKER_ACCENTS.default;
 }
 
