@@ -8,6 +8,10 @@ steps:
 #   - secretmanager.secretAccessor on NAVALPLAN_DB_USER and NAVALPLAN_DB_PASS
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'run-migrations'
+  env:
+    - 'REGION=${_REGION}'
+    - 'INSTANCE=${_INSTANCE}'
+    - 'DB_NAME=${_DB_NAME}'
   secretEnv:
     - 'NAVALPLAN_DB_USER'
     - 'NAVALPLAN_DB_PASS'
@@ -30,7 +34,7 @@ steps:
 
     # --- Start Cloud SQL Auth Proxy ---
     # Uses Application Default Credentials provided by the Cloud Build service account.
-    cloud-sql-proxy --port=5434 "${PROJECT_ID}:${_REGION}:${_INSTANCE}" &
+    cloud-sql-proxy --port=5434 "${PROJECT_ID}:${REGION}:${INSTANCE}" &
     PROXY_PID=$!
     trap "kill $PROXY_PID 2>/dev/null || true; wait $PROXY_PID 2>/dev/null || true" EXIT
 
@@ -42,7 +46,7 @@ steps:
       sleep 2
     done
 
-    DB_URL="postgres://$NAVALPLAN_DB_USER:$NAVALPLAN_DB_PASS@127.0.0.1:5434/${_DB_NAME}?sslmode=disable"
+    DB_URL="postgres://$NAVALPLAN_DB_USER:$NAVALPLAN_DB_PASS@127.0.0.1:5434/${DB_NAME}?sslmode=disable"
 
     # --- Check schema version before migrating ---
     # A version of 0 or an error here means this is a fresh database.
