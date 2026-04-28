@@ -1,0 +1,74 @@
+steps:
+# Run database migrations against Cloud SQL via Cloud SQL Auth Proxy.
+# The step checks the current schema version before migrating so logs
+# clearly show whether this build introduced new migrations or was a no-op.
+#
+# Required IAM on the Cloud Build service account:
+#   - roles/cloudsql.client      (connect to the instance)
+#   - secretmanager.secretAccessor on NAVALPLAN_DB_USER and NAVALPLAN_DB_PASS
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'run-migrations'
+  secretEnv:
+    - 'NAVALPLAN_DB_USER'
+    - 'NAVALPLAN_DB_PASS'
+  script: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # --- Install Cloud SQL Auth Proxy ---
+    curl -fsSL -o /usr/local/bin/cloud-sql-proxy \
+      https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+    chmod +x /usr/local/bin/cloud-sql-proxy
+
+    # --- Install golang-migrate ---
+    curl -fsSL -o /tmp/migrate.tar.gz \
+      https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz
+    tar -xzf /tmp/migrate.tar.gz -C /usr/local/bin migrate
+    chmod +x /usr/local/bin/migrate
+
+    # --- Start Cloud SQL Auth Proxy ---
+    # Uses Application Default Credentials provided by the Cloud Build service account.
+    cloud-sql-proxy --port=5434 "${PROJECT_ID}:${_REGION}:${_INSTANCE}" &
+    PROXY_PID=$!
+    trap "kill $PROXY_PID 2>/dev/null || true; wait $PROXY_PID 2>/dev/null || true" EXIT
+
+    # --- Wait for proxy to accept TCP connections ---
+    echo "Waiting for Cloud SQL Auth Proxy on 127.0.0.1:5434..."
+    for i in $(seq 1 15); do
+      bash -c "echo > /dev/tcp/127.0.0.1/5434" 2>/dev/null && { echo "Proxy ready."; break; }
+      [ "$i" -eq 15 ] && { echo "ERROR: proxy did not become ready within 30s."; exit 1; }
+      sleep 2
+    done
+
+    DB_URL="postgres://$NAVALPLAN_DB_USER:$NAVALPLAN_DB_PASS@127.0.0.1:5434/${_DB_NAME}?sslmode=disable"
+
+    # --- Check schema version before migrating ---
+    # A version of 0 or an error here means this is a fresh database.
+    echo ""
+    echo "=== Schema version before migration ==="
+    migrate -path=code/app/db/migrations/ -database "$DB_URL" version 2>&1 \
+      || echo "(no migrations applied yet)"
+
+    # --- Apply all pending migrations ---
+    echo ""
+    echo "=== Applying pending migrations ==="
+    migrate -path=code/app/db/migrations/ -database "$DB_URL" up
+
+    # --- Report final state ---
+    echo ""
+    echo "=== Schema version after migration ==="
+    migrate -path=code/app/db/migrations/ -database "$DB_URL" version
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_DB_USER/versions/latest
+    env: 'NAVALPLAN_DB_USER'
+  - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_DB_PASS/versions/latest
+    env: 'NAVALPLAN_DB_PASS'
+
+substitutions:
+  _REGION: 'us-central1'
+  _INSTANCE: 'wakelogdb'
+  _DB_NAME: 'navalplan'
+
+logsBucket: gs://navalplan-logging-bucket
