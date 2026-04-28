@@ -22,6 +22,7 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
    - Query: "Anchorages"
    - Query: "Marinas"
    - Query: "Moorings"
+   - Query: "Diesel fuel dock"
    - Query: "Waterfront restaurants"
    - Query: "Bars"
 5. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
@@ -45,9 +46,9 @@ CRITICAL RULES:
    - If a facility is a specific business or marina, try to find its actual 
    	location.
 7. **Prioritize Nautical Facilities:** Ensure that ALL discovered Anchorages, 
-	Marinas, and Moorings are included in the 'facilities' list. You may limit 
-	Bars and Restaurants to the top 5-10 most relevant to sailors (e.g. 
-	waterfront/dinghy access) to avoid clutter, but NEVER omit a nautical 
+	Marinas, Moorings, and Fuel Stations are included in the 'facilities' list. 
+	You may limit Bars and Restaurants to the top 5-10 most relevant to sailors 
+	(e.g. waterfront/dinghy access) to avoid clutter, but NEVER omit a nautical 
 	facility found within the radius.
 8. **Websites:** Populate the "website" field using the 'website_uri' returned 
 	by the 'find_places_nearby' tool whenever available. **MANDATORY**: Do not omit this field if a URL is provided by the tool.
@@ -95,7 +96,7 @@ CRITICAL RULES:
 	"facilities": [
 		{
 			"name": "...",
-			"type": "Anchorage" | "Marina" | "Mooring" | "Bar" | "Restaurant",
+			"type": "Anchorage" | "Marina" | "Mooring" | "Fuel Station" | "Bar" | "Restaurant",
 			"website": "...",
 			"address": "...",
 			"latitude": 0.0,

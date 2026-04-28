@@ -4,7 +4,7 @@ Use the provided Latitude/Longitude to refine your search for the exact area.
 
 ### CRITICAL: PARALLEL EXECUTION MANDATE
 To minimize latency and ensure a complete guide, you MUST gather all necessary data in your VERY FIRST TURN. 
-- You MUST execute a minimum of 12-14 tool calls in PARALLEL.
+- You MUST execute a minimum of 13-15 tool calls in PARALLEL.
 - Do NOT wait for the result of one search to start another.
 - Do NOT perform sequential "search -> analyze -> search again" loops.
 - Over-search in the first turn to ensure you have high-quality results immediately.
@@ -24,6 +24,7 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
     - `query`: "anchorage", `radius`: 50000
     - `query`: "yacht club", `radius`: 50000
     - `query`: "harbor", `radius`: 50000
+    - `query`: "diesel fuel dock", `radius`: 50000
     - `query`: "attraction", `radius`: 50000
     - `query`: "park", `radius`: 50000
     - `query`: "airport", `radius`: 100000

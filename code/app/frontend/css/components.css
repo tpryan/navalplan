@@ -1705,7 +1705,7 @@
 [data-type="mooring"]    .pilot-dot { background: var(--violet); }
 [data-type="restaurant"] .pilot-dot { background: var(--green); }
 [data-type="bar"]        .pilot-dot { background: var(--coral); }
-[data-type="other"]      .pilot-dot { background: var(--sky); }
+[data-type="fuel"]       .pilot-dot { background: var(--sky); }
 [data-type="hub"]        .pilot-dot { background: var(--amber); }
 
 /* ─── Voyage modal form ──────────────────────────────────────────────────── */
