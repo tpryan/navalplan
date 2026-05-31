@@ -225,7 +225,17 @@ func (h *Handler) performGuideResearchLogic(voyage *models.Voyage, sessionID str
 		voyage.Latitude != nil && voyage.Longitude != nil {
 		locDetail = fmt.Sprintf("%s (Lat: %f, Lng: %f)", locName, *voyage.Latitude, *voyage.Longitude)
 	}
-	prompt := fmt.Sprintf("Research sailing guide for location: %s. Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail)
+
+	// Convey the user's chosen search area so the guide covers the whole circle they
+	// drew on the map, not just the immediate vicinity of the named center point.
+	scope := ""
+	if voyage.Latitude != nil && voyage.Longitude != nil && voyage.SearchRadius > 0 {
+		radiusNM := radiusToNM(voyage.SearchRadius, voyage.SearchRadiusUnit)
+		boundary := searchBoundaryHint(*voyage.Latitude, *voyage.Longitude, radiusNM)
+		scope = fmt.Sprintf(" Cover the entire cruising area within a %d %s (~%.0f nm) radius of this center point, not just the immediate vicinity of the named location. %s", voyage.SearchRadius, voyage.SearchRadiusUnit, radiusNM, boundary)
+	}
+
+	prompt := fmt.Sprintf("Research sailing guide for location: %s.%s Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail, scope)
 
 	// 3. Run Agent
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)

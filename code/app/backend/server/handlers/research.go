@@ -223,9 +223,15 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 	// to ensure a fresh session and avoid 500 errors if the session already exists.
 	agentSessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
 
-	// Check for nearby existing research to reuse facilities
-	nearbyBriefing, nearbyErr := h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
+	isPassage := stop.StopType == models.StopTypePassagePoint
+
+	// Facility reuse only applies to landfalls. Open-water passage points have no dockage to look up.
+	var nearbyBriefing *models.Briefing
+	var nearbyErr error
 	var reusableFacilities json.RawMessage
+	if !isPassage {
+		nearbyBriefing, nearbyErr = h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
+	}
 
 	// 1. Create Session
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
@@ -237,20 +243,32 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 	h.broadcastProgress(sessionID, "agent", fmt.Sprintf("Consulting the Harbourmaster for %s", stop.LocationName))
 
 	// 2. Build prompt
-	var locInfo string
-	if stop.PreciseLocation != "" {
-		locInfo = fmt.Sprintf("%s (Lat: %f, Lng: %f)", stop.LocationName, stop.Latitude, stop.Longitude)
+	var prompt string
+	if isPassage {
+		// At-sea transit: skip facility/dockage lookups entirely, but still pull the full
+		// underway picture — weather, sea state, tides/tidal currents, and sun phase (for
+		// night-passage planning) — plus any safety or navigational alerts.
+		prompt = fmt.Sprintf("This is an open-ocean passage position with no landfall. Do NOT research anchorages, marinas, moorings, or any shore facilities. "+
+			"Report the underway conditions for %f N, %f W on %s: weather (wind speed and direction, wave height, swell period), "+
+			"tides and tidal currents, sun phase (sunrise/sunset), and any safety or navigational alerts. "+
+			"Populate weather_summary, tides, and sun_phase, and return an empty array for facilities.",
+			stop.Latitude, stop.Longitude, stop.TargetDate.Format("January 2, 2006"))
 	} else {
-		locInfo = stop.LocationName
-	}
+		var locInfo string
+		if stop.PreciseLocation != "" {
+			locInfo = fmt.Sprintf("%s (Lat: %f, Lng: %f)", stop.LocationName, stop.Latitude, stop.Longitude)
+		} else {
+			locInfo = stop.LocationName
+		}
 
-	prompt := fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
-		stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+		prompt = fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
+			stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
-	if nearbyErr == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
-		slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
-		reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
-		prompt += " Do not research facilities; I will provide those separately."
+		if nearbyErr == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
+			slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
+			reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
+			prompt += " Do not research facilities; I will provide those separately."
+		}
 	}
 
 	// 3. Run Agent
@@ -283,9 +301,14 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 		output.Facilities = reusableFacilities
 	}
 
+	// Passage points have no facilities; force an empty list and skip geocoding entirely.
+	if isPassage {
+		output.Facilities = json.RawMessage(`[]`)
+	}
+
 	// Post-process facilities to fix missing or imprecise coordinates
 	var facilities []Facility
-	if err := json.Unmarshal(output.Facilities, &facilities); err == nil {
+	if err := json.Unmarshal(output.Facilities, &facilities); err == nil && !isPassage {
 		var wg sync.WaitGroup
 		// var mu sync.Mutex // Removed as we always re-marshal now for sorting
 

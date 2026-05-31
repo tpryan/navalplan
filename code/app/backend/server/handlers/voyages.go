@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	appcontext "app/context"
 	"app/models"
@@ -305,6 +306,167 @@ func (h *Handler) DeleteVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"msg": "Deleted"})
 }
 
+// ExtendVoyage lengthens a voyage's timeline to accommodate additional passage days.
+// It accepts either an explicit end_date or an additional_days count, updates the voyage,
+// then recomputes at-sea passage points and kicks off offshore weather research for them.
+func (h *Handler) ExtendVoyage(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if v.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	var req struct {
+		EndDate        *string `json:"end_date"`
+		AdditionalDays *int    `json:"additional_days"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var newEnd time.Time
+	switch {
+	case req.EndDate != nil && *req.EndDate != "":
+		parsed, perr := time.Parse("2006-01-02", *req.EndDate)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "Invalid end_date; expected YYYY-MM-DD")
+			return
+		}
+		newEnd = parsed
+	case req.AdditionalDays != nil:
+		if *req.AdditionalDays <= 0 {
+			writeError(w, http.StatusBadRequest, "additional_days must be positive")
+			return
+		}
+		base := v.EndDate
+		if base == nil {
+			base = v.StartDate
+		}
+		if base == nil {
+			writeError(w, http.StatusBadRequest, "Voyage has no dates to extend")
+			return
+		}
+		newEnd = base.AddDate(0, 0, *req.AdditionalDays)
+	default:
+		writeError(w, http.StatusBadRequest, "Provide end_date or additional_days")
+		return
+	}
+
+	if v.StartDate != nil && newEnd.Before(*v.StartDate) {
+		writeError(w, http.StatusBadRequest, "end_date cannot be before start_date")
+		return
+	}
+
+	if err := h.DB.UpdateVoyageDates(r.Context(), id, v.StartDate, &newEnd); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to extend voyage", "voyage_id", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	v.EndDate = &newEnd
+
+	// Recompute passage points for any multi-day gaps between landfalls and research them.
+	points, err := h.InterpolatePassagePoints(r.Context(), id)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to interpolate passage points", "voyage_id", id, "err", err)
+	} else if len(points) > 0 {
+		h.researchPassagePoints(points)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"voyage":         v,
+		"passage_points": len(points),
+	})
+}
+
+// UpdateVoyageConfig adjusts a voyage's search radius. Wide ocean transits may use a
+// radius up to 300 to reflect regional-scale forecasting.
+func (h *Handler) UpdateVoyageConfig(w http.ResponseWriter, r *http.Request) {
+	person := appcontext.GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	v, err := h.DB.GetVoyage(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if v.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	var req struct {
+		SearchRadius     *int    `json:"search_radius"`
+		SearchRadiusUnit *string `json:"search_radius_unit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	radius := v.SearchRadius
+	if req.SearchRadius != nil {
+		radius = *req.SearchRadius
+	}
+	if radius < 1 || radius > 300 {
+		writeError(w, http.StatusBadRequest, "search_radius must be between 1 and 300")
+		return
+	}
+
+	unit := v.SearchRadiusUnit
+	if req.SearchRadiusUnit != nil {
+		switch *req.SearchRadiusUnit {
+		case "nm", "km", "mi":
+			unit = *req.SearchRadiusUnit
+		default:
+			writeError(w, http.StatusBadRequest, "Invalid search radius unit")
+			return
+		}
+	}
+	if unit == "" {
+		unit = "nm"
+	}
+
+	if err := h.DB.UpdateVoyageConfig(r.Context(), id, radius, unit); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to update voyage config", "voyage_id", id, "err", err)
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	v.SearchRadius = radius
+	v.SearchRadiusUnit = unit
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
 // GetPilotReport aggregates voyage info, the voyage guide, and all area recommendations.
 func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 	person := appcontext.GetPersonFromContext(r.Context())
@@ -408,4 +570,3 @@ func (h *Handler) Checkin(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-

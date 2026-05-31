@@ -118,6 +118,35 @@ export const API = {
     return res.json();
   },
 
+  // extendVoyage lengthens the timeline (by an explicit end_date or additional_days) and
+  // triggers re-computation of at-sea passage points for any multi-day gaps between landfalls.
+  async extendVoyage(id, { endDate = null, additionalDays = null } = {}) {
+    const body = {};
+    if (endDate) body.end_date = endDate;
+    if (additionalDays != null) body.additional_days = additionalDays;
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/extend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('Failed to extend voyage');
+    return res.json();
+  },
+
+  // updateVoyageConfig adjusts the search radius (up to 300) for wide-region ocean transits.
+  async updateVoyageConfig(id, { searchRadius = null, searchRadiusUnit = null } = {}) {
+    const body = {};
+    if (searchRadius != null) body.search_radius = searchRadius;
+    if (searchRadiusUnit) body.search_radius_unit = searchRadiusUnit;
+    const res = await apiFetch(`${API_BASE}/voyages/${id}/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('Failed to update voyage config');
+    return res.json();
+  },
+
   async triggerResearch(stopId) {
     const res = await apiFetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
     if (res.status === 409) { const e = new Error('Research already in progress for this stop'); e.conflict = true; throw e; }

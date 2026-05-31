@@ -55,11 +55,18 @@ type Voyage struct {
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
+// Stop type constants distinguish stationary landfalls from at-sea passage points.
+const (
+	StopTypeLandfall     = "landfall"      // anchorage, mooring, or dock
+	StopTypePassagePoint = "passage_point" // at-sea tracking position (extrapolated)
+)
+
 // Stop represents a specific stop or waypoint within a voyage.
 type Stop struct {
 	ID               int64     `json:"id" db:"id"`
 	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
 	TargetDate       time.Time `json:"target_date" db:"target_date"`
+	StopType         string    `json:"stop_type" db:"stop_type"` // "landfall" or "passage_point"
 	LocationName     string    `json:"location_name" db:"location_name"`
 	PreciseLocation  string    `json:"precise_location" db:"precise_location"`
 	Latitude         float64   `json:"latitude" db:"latitude"`

@@ -362,6 +362,13 @@ func (s *Server) createAgent(ctx context.Context, acfg *agentConfig) (agent.Agen
 		Temperature:     genai.Ptr[float32](acfg.temperature),
 	}
 
+	// Cap reasoning tokens to keep latency bounded and protect the output budget.
+	// A negative budget means "leave dynamic/default" (don't send a ThinkingConfig).
+	if s.config.ThinkingBudget >= 0 {
+		budget := s.config.ThinkingBudget
+		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
+	}
+
 	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
 		APIKey: s.config.GeminiAPIKey,
 	})
@@ -509,6 +516,14 @@ func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Too
 	// Create the batch tool that uses the search agent in parallel
 	batchTool := &tools.BatchSearchTool{
 		Searcher: func(ctx context.Context, query string) (string, error) {
+			// Bound each grounded search so one slow query can't stall the whole
+			// parallel batch (and therefore the entire agent turn).
+			if s.config.SearchTimeoutMs > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(s.config.SearchTimeoutMs)*time.Millisecond)
+				defer cancel()
+			}
+
 			// Create a runner for the search agent
 			r, err := runner.New(runner.Config{
 				AppName:        name,
