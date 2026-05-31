@@ -2558,15 +2558,26 @@ function renderItinerary() {
         const dayNum = dayIndex + 1;
         const dateLabel = currentDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-        const el = document.createElement('div');
-        el.className = ['np-stop-card', isSelected && 'np-stop-card--selected'].filter(Boolean).join(' ');
-        el.style.setProperty('--accent', `var(--${accent})`);
+        // Passage points are at-sea transit days with no landfall — render them as a
+        // continuous dotted leg with a transit indicator rather than a harbour card.
+        const isPassage = stop && stop.stop_type === 'passage_point';
 
-        // Numbered accent circle
+        const el = document.createElement('div');
+        el.className = ['np-stop-card', isSelected && 'np-stop-card--selected', isPassage && 'np-stop-card--passage'].filter(Boolean).join(' ');
+        el.style.setProperty('--accent', isPassage ? 'var(--muted)' : `var(--${accent})`);
+
+        // Accent circle — numbered for landfalls, a transit/compass glyph for passages.
         const num = document.createElement('div');
         num.className = 'np-stop-card__num';
         num.setAttribute('aria-hidden', 'true');
-        num.textContent = dayNum;
+        if (isPassage) {
+            const icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined';
+            icon.textContent = 'explore';
+            num.appendChild(icon);
+        } else {
+            num.textContent = dayNum;
+        }
         el.appendChild(num);
 
         // Middle: date chip + location
@@ -2579,26 +2590,35 @@ function renderItinerary() {
         mid.appendChild(dateChip);
 
         const loc = document.createElement('span');
-        loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty'].filter(Boolean).join(' ');
-        loc.textContent = stop ? displayLocationName(stop.location_name).split(',')[0].trim() : 'No destination';
+        loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty', isPassage && 'np-stop-card__loc--passage'].filter(Boolean).join(' ');
+        if (isPassage) {
+            loc.textContent = 'At-sea passage';
+        } else {
+            loc.textContent = stop ? displayLocationName(stop.location_name).split(',')[0].trim() : 'No destination';
+        }
         mid.appendChild(loc);
         el.appendChild(mid);
 
-        // Action buttons (only for stops)
         if (stop) {
             const actions = document.createElement('div');
             actions.className = 'np-stop-card__actions';
 
+            // Briefing button — for passages this views the at-sea weather & tide report
+            // (or generates it on demand); for landfalls it's the usual stop research.
             const btnResearch = document.createElement('button');
             btnResearch.className = 'btn-icon research';
-            btnResearch.title = 'Research';
+            btnResearch.title = isPassage ? 'Passage weather & tides' : 'Research';
             btnResearch.dataset.stopId = stop.id;
-            btnResearch.innerHTML = '<span class="material-symbols-outlined">science</span>';
+            btnResearch.innerHTML = `<span class="material-symbols-outlined">${isPassage ? 'partly_cloudy_day' : 'science'}</span>`;
             btnResearch.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleResearchClick(stop, btnResearch);
             });
+            actions.appendChild(btnResearch);
 
+            // Delete only for landfall stops — passage points are auto-generated from the
+            // surrounding landfalls, so they aren't independently editable.
+            if (!isPassage) {
             const btnDelete = document.createElement('button');
             btnDelete.className = 'btn-icon delete-stop';
             btnDelete.title = 'Delete Stop';
@@ -2631,11 +2651,13 @@ function renderItinerary() {
                 ]);
             });
 
-            actions.appendChild(btnResearch);
             actions.appendChild(btnDelete);
+            }
+
             el.appendChild(actions);
 
-            // Weather + tide chips if briefing is cached
+            // Weather + tide chips if briefing is cached (shown for passages too —
+            // offshore wind/conditions are exactly what a transit day needs).
             const cached = briefingCache.get(stop.id);
             if (cached) {
                 const w = cached.weather_summary || {};
@@ -2734,6 +2756,44 @@ function renderItinerary() {
     researchAllContainer.appendChild(researchAllBtn);
     list.appendChild(researchAllContainer);
 
+    // Extend timeline — adds a day to the voyage and recomputes at-sea passage legs.
+    const extendContainer = document.createElement('div');
+    extendContainer.className = 'p-md text-center';
+    const extendBtn = document.createElement('button');
+    extendBtn.id = 'btn-extend-timeline';
+    extendBtn.className = 'btn secondary w-full';
+    extendBtn.type = 'button';
+    extendBtn.innerHTML = '<span class="material-symbols-outlined icon-align">explore</span> Add Day to Passage';
+    extendBtn.onclick = () => handleExtendTimeline(extendBtn);
+    extendContainer.appendChild(extendBtn);
+    list.appendChild(extendContainer);
+
+}
+
+// handleExtendTimeline lengthens the current voyage by one day and refreshes the itinerary,
+// which surfaces any newly interpolated at-sea passage points.
+async function handleExtendTimeline(button) {
+    if (!currentVoyage) return;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="material-symbols-outlined spin icon-align">explore</span> Extending…';
+    try {
+        const result = await API.extendVoyage(currentVoyage.id, { additionalDays: 1 });
+        if (result && result.voyage) {
+            currentVoyage = result.voyage;
+        }
+        await loadStops(); // refreshes both the itinerary list and the map
+        const added = result && result.passage_points ? result.passage_points : 0;
+        showNotification('Timeline extended', added > 0
+            ? `Added a day and generated ${added} at-sea passage point${added === 1 ? '' : 's'}.`
+            : 'Added a day to the voyage.');
+    } catch (err) {
+        console.error(err);
+        showNotification('Error', 'Failed to extend the timeline.');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+    }
 }
 
 async function handleResearchClick(stop, button) {
@@ -3999,10 +4059,44 @@ async function initMap() {
         markers.push(cMarker);
     }
 
-        // Add Markers — Signal numbered teardrop pins with rotating accents
-        sortedStops.forEach((stop, index) => {
+        // Add Markers — landfalls get Signal numbered teardrop pins with rotating accents;
+        // passage points get a muted transit dot so they read as "under way", not a harbour.
+        let landfallIndex = 0;
+        sortedStops.forEach((stop) => {
             if (!stop.latitude || !stop.longitude) return;
-            
+
+            if (stop.stop_type === 'passage_point') {
+                const dot = accentDot('muted', 20);
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined';
+                icon.style.cssText = 'font-size:13px;color:#fff;line-height:1;pointer-events:none;user-select:none';
+                icon.textContent = 'explore';
+                dot.appendChild(icon);
+
+                const pMarker = new AdvancedMarkerElement({
+                    map: map,
+                    position: { lat: stop.latitude, lng: stop.longitude },
+                    content: dot,
+                    title: 'At-sea passage (extrapolated position)',
+                    zIndex: 50
+                });
+
+                pMarker.addListener('gmp-click', () => {
+                    if (activeInfoWindow) activeInfoWindow.close();
+                    const ink = tokenColor('ink');
+                    const surface = tokenColor('surface');
+                    const date = new Date(stop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                    activeInfoWindow = new InfoWindow({
+                        content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>At-sea passage</b><br><span style="color:${tokenColor('muted')}">${date} · weather extrapolated from route</span></div>`
+                    });
+                    activeInfoWindow.open(map, pMarker);
+                });
+
+                markers.push(pMarker);
+                return;
+            }
+
+            const index = landfallIndex++;
             const accent = VOYAGE_ACCENTS[index % VOYAGE_ACCENTS.length];
         const pinEl = MapPin({ accent, n: index + 1, label: `Stop ${index + 1}: ${displayLocationName(stop.location_name)}` });
 

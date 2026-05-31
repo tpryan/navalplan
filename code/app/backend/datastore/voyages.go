@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"time"
 
 	"app/models"
 )
@@ -103,6 +104,22 @@ func (db *DB) GetVoyage(ctx context.Context, id int64) (*models.Voyage, error) {
 		return nil, err
 	}
 	return &v, nil
+}
+
+// UpdateVoyageDates updates the start and end dates for a voyage, used when extending
+// a timeline to accommodate additional passage days.
+func (db *DB) UpdateVoyageDates(ctx context.Context, id int64, start, end *time.Time) error {
+	query := `UPDATE voyage SET start_date = $1, end_date = $2 WHERE id = $3`
+	_, err := db.ExecContext(ctx, query, start, end, id)
+	return err
+}
+
+// UpdateVoyageConfig updates the search radius and unit for a voyage. Used to widen the
+// operational footprint for ocean transits.
+func (db *DB) UpdateVoyageConfig(ctx context.Context, id int64, radius int, unit string) error {
+	query := `UPDATE voyage SET search_radius = $1, search_radius_unit = $2 WHERE id = $3`
+	_, err := db.ExecContext(ctx, query, radius, unit, id)
+	return err
 }
 
 // UpdateVoyageCheckin updates the check-in location and timestamp for a voyage.

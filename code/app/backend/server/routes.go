@@ -75,6 +75,8 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPut, "/api/v1/voyages/{id}", http.HandlerFunc(s.Handler.UpdateVoyage), 1},
 		{http.MethodDelete, "/api/v1/voyages/{id}", http.HandlerFunc(s.Handler.DeleteVoyage), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/checkin", http.HandlerFunc(s.Handler.Checkin), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/extend", http.HandlerFunc(s.Handler.ExtendVoyage), 1},
+		{http.MethodPatch, "/api/v1/voyages/{id}/config", http.HandlerFunc(s.Handler.UpdateVoyageConfig), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/share", http.HandlerFunc(s.Handler.EnableSharing), 1},
 		{http.MethodDelete, "/api/v1/voyages/{id}/share", http.HandlerFunc(s.Handler.DisableSharing), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/research_guide", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerGuideResearch)), 1},

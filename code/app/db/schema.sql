@@ -46,6 +46,7 @@ CREATE TABLE stop (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     voyage_id INTEGER REFERENCES voyage(id) ON DELETE CASCADE,
     target_date DATE NOT NULL,
+    stop_type VARCHAR(30) DEFAULT 'landfall' NOT NULL,  -- 'landfall' (anchorage/marina/dock) or 'passage_point' (at-sea tracking position)
     location_name VARCHAR(255),
     latitude FLOAT NOT NULL,
     longitude FLOAT NOT NULL,

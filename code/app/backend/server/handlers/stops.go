@@ -88,6 +88,16 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 	}
 	s.VoyageID = voyageID
 
+	switch s.StopType {
+	case models.StopTypeLandfall, models.StopTypePassagePoint:
+		// ok
+	case "":
+		s.StopType = models.StopTypeLandfall
+	default:
+		writeError(w, http.StatusBadRequest, "Invalid stop type")
+		return
+	}
+
 	if s.Latitude < -90 || s.Latitude > 90 {
 		writeError(w, http.StatusBadRequest, "Invalid latitude")
 		return

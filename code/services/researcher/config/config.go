@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 )
 
 type Config struct {
@@ -14,6 +15,8 @@ type Config struct {
 	NIWAAPIKey      string
 	Port            string
 	BaseURL         string
+	ThinkingBudget  int32
+	SearchTimeoutMs int
 }
 
 func New(getEnv func(string) string) (*Config, error) {
@@ -61,16 +64,38 @@ func New(getEnv func(string) string) (*Config, error) {
 
 	project := getEnv("GOOGLE_CLOUD_PROJECT")
 
+	// Thinking budget caps the reasoning tokens the (thinking-capable) Gemini model spends
+	// per call. Unbounded "dynamic" thinking is the dominant source of agent latency and can
+	// truncate structured output. 0 disables thinking; -1 restores dynamic/default behavior.
+	// Default to a modest bound that keeps responses fast without starving synthesis quality.
+	thinkingBudget := int32(1024)
+	if v := getEnv("NAVALPLAN_AGENT_THINKING_BUDGET"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			thinkingBudget = int32(n)
+		}
+	}
+
+	// Per-query timeout for grounded web searches, so one slow query can't stall the whole
+	// parallel batch (and thus the agent turn). Default 45s; 0 disables the bound.
+	searchTimeoutMs := 45000
+	if v := getEnv("NAVALPLAN_AGENT_SEARCH_TIMEOUT_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			searchTimeoutMs = n
+		}
+	}
+
 	cfg := &Config{
-		Env:           env,
-		Project:       project,
-		ModelName:     modelName,
-		GeminiAPIKey:  geminiKey,
-		MapsAPIKey:    mapsKey,
-		UKTidalAPIKey: ukTidalKey,
-		NIWAAPIKey:    niwaKey,
-		Port:          port,
-		BaseURL:       baseURL,
+		Env:             env,
+		Project:         project,
+		ModelName:       modelName,
+		GeminiAPIKey:    geminiKey,
+		MapsAPIKey:      mapsKey,
+		UKTidalAPIKey:   ukTidalKey,
+		NIWAAPIKey:      niwaKey,
+		Port:            port,
+		BaseURL:         baseURL,
+		ThinkingBudget:  thinkingBudget,
+		SearchTimeoutMs: searchTimeoutMs,
 	}
 
 	return cfg, nil

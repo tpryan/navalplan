@@ -1435,6 +1435,30 @@
     color: var(--muted);
 }
 
+/* Passage point — at-sea transit day rendered as a dotted, muted leg. */
+.np-stop-card--passage {
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--muted);
+    opacity: .92;
+}
+
+.np-stop-card--passage .np-stop-card__num {
+    background: transparent;
+    border: 2px dashed var(--muted);
+    color: var(--muted);
+}
+
+.np-stop-card--passage .np-stop-card__num .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.np-stop-card__loc--passage {
+    font-weight: 600;
+    font-style: italic;
+    color: var(--muted);
+}
+
 .np-stop-card__actions {
     display: flex;
     gap: 4px;

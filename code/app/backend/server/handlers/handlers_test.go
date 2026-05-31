@@ -55,6 +55,16 @@ func (m *MockStore) UpdateVoyageCheckin(ctx context.Context, id int64, lat, lng 
 	return args.Error(0)
 }
 
+func (m *MockStore) UpdateVoyageDates(ctx context.Context, id int64, start, end *time.Time) error {
+	args := m.Called(id, start, end)
+	return args.Error(0)
+}
+
+func (m *MockStore) UpdateVoyageConfig(ctx context.Context, id int64, radius int, unit string) error {
+	args := m.Called(id, radius, unit)
+	return args.Error(0)
+}
+
 func (m *MockStore) GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error) {
 	args := m.Called(token)
 	if args.Get(0) == nil {
@@ -73,6 +83,11 @@ func (m *MockStore) ListStops(ctx context.Context, voyageID int64, limit, offset
 	return args.Get(0).([]models.Stop), args.Error(1)
 }
 
+func (m *MockStore) ListLandfallStops(ctx context.Context, voyageID int64) ([]models.Stop, error) {
+	args := m.Called(voyageID)
+	return args.Get(0).([]models.Stop), args.Error(1)
+}
+
 func (m *MockStore) CreateStop(ctx context.Context, s *models.Stop) error {
 	args := m.Called(s)
 	return args.Error(0)
@@ -84,6 +99,19 @@ func (m *MockStore) GetStop(ctx context.Context, id int64) (*models.Stop, error)
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.Stop), args.Error(1)
+}
+
+func (m *MockStore) GetStopByDate(ctx context.Context, voyageID int64, date time.Time) (*models.Stop, error) {
+	args := m.Called(voyageID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Stop), args.Error(1)
+}
+
+func (m *MockStore) DeletePassagePoints(ctx context.Context, voyageID int64) error {
+	args := m.Called(voyageID)
+	return args.Error(0)
 }
 
 func (m *MockStore) UpdateStop(ctx context.Context, s *models.Stop) error {

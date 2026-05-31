@@ -15,15 +15,20 @@ type Store interface {
 	UpdateVoyage(ctx context.Context, v *models.Voyage) error
 	UpdateVoyageSharing(ctx context.Context, id int64, enable bool) (string, error)
 	UpdateVoyageCheckin(ctx context.Context, id int64, lat, lng float64, location string) error
+	UpdateVoyageDates(ctx context.Context, id int64, start, end *time.Time) error
+	UpdateVoyageConfig(ctx context.Context, id int64, radius int, unit string) error
 	GetVoyageByToken(ctx context.Context, token string) (*models.Voyage, error)
 	DeleteVoyage(ctx context.Context, id int64) error
 
 	// Stops
 	ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]models.Stop, error)
+	ListLandfallStops(ctx context.Context, voyageID int64) ([]models.Stop, error)
 	CreateStop(ctx context.Context, s *models.Stop) error
 	GetStop(ctx context.Context, id int64) (*models.Stop, error)
+	GetStopByDate(ctx context.Context, voyageID int64, date time.Time) (*models.Stop, error)
 	UpdateStop(ctx context.Context, s *models.Stop) error
 	DeleteStop(ctx context.Context, id int64) error
+	DeletePassagePoints(ctx context.Context, voyageID int64) error
 
 	// Briefings
 	GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error)
