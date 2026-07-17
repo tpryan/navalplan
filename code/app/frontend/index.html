@@ -160,6 +160,13 @@
       </div>
       <h2 id="modal-new-voyage-title" class="modal-form-title">Plan a New Voyage</h2>
       <form id="form-new-voyage">
+        <div class="form-group voyage-mode-toggle-group">
+          <div class="voyage-mode-toggle" role="tablist" aria-label="Voyage type">
+            <button type="button" id="btn-mode-multiday" class="voyage-mode-btn active" role="tab" aria-selected="true">Multi-Day Voyage</button>
+            <button type="button" id="btn-mode-daytrip" class="voyage-mode-btn" role="tab" aria-selected="false">Day Trip</button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="voyage-title">Trip Title</label>
           <input type="text" id="voyage-title" name="title" required placeholder="e.g. Gulf Islands 2025" />
@@ -184,10 +191,10 @@
 
         <div id="voyage-date-fields" class="form-row">
           <div class="form-group">
-            <label for="voyage-start">Start Date (Optional)</label>
+            <label id="voyage-start-label" for="voyage-start">Start Date (Optional)</label>
             <input type="date" id="voyage-start" name="start_date" />
           </div>
-          <div class="form-group">
+          <div class="form-group" id="voyage-end-date-group">
             <label for="voyage-end">End Date (Optional)</label>
             <input type="date" id="voyage-end" name="end_date" />
           </div>

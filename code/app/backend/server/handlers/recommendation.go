@@ -320,6 +320,14 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 		count, v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, math.Abs(*v.Longitude), locInfo,
 		boundaryHint)
 
+	// Day trips (start_date == end_date) have no overnight stay — steer the
+	// specialist away from its default overnight-anchorage bias. See
+	// docs/features/day-trips.md §3 and prompts/specialist.md.
+	if v.StartDate != nil && v.EndDate != nil && v.StartDate.Equal(*v.EndDate) {
+		prompt += " This is a day trip — a single-day outing with no overnight stay. " +
+			"Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
+	}
+
 	// 3. Run Agent (streaming)
 	var parsedCount int
 	fullText, err := h.Agent.RunStreaming(ctx, appName, userID, sessionID, prompt)

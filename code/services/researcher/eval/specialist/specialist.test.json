@@ -57,6 +57,55 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "day_trip_anchorages",
+      "session_input": {
+        "app_name": "specialist",
+        "user_id": "test_user",
+        "state": {}
+      },
+      "rubrics": [
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON array of objects."
+          }
+        },
+        {
+          "rubric_id": "recommendations_have_urls",
+          "rubric_content": {
+            "text_property": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
+          }
+        },
+        {
+          "rubric_id": "day_trip_bias_adjusted",
+          "rubric_content": {
+            "text_property": "The recommendations favor moorings and easily reached day-use anchorages suited to a few hours, rather than secluded, hard-to-reach, overnight-only spots."
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "inv_1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Recommend 15 anchorages, moorings, and marinas within 15 nm of 41.2835°N, 70.0995°W (Nantucket, MA). This is a day trip — a single-day outing with no overnight stay. Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Nantucket Day Trip"
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

@@ -9,7 +9,7 @@ import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox } from './ui/LookoutBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -36,6 +36,8 @@ let voyages = [];
 let currentVoyage = null;
 let currentStops = [];
 let selectedDate = null;
+// 'multiday' | 'daytrip' — which mode the New/Edit Voyage modal is currently in.
+let voyageModalMode = 'multiday';
 let map = null;
 let markers = [];
 let routePolyline = null;
@@ -713,8 +715,53 @@ function initMobileMenuListeners() {
     observer.observe(appContainer, { attributes: true, attributeFilter: ['class'] });
 }
 
+/**
+ * Switches the New/Edit Voyage modal between "Multi-Day Voyage" and
+ * "Day Trip" mode: toggles the tab buttons, collapses the End Date field
+ * down to a single "Trip Date" field, and keeps the (still-present but
+ * hidden) end-date input in sync with the start date so the existing
+ * start_date/end_date payload shape needs no change.
+ */
+function applyVoyageModalMode(mode) {
+    voyageModalMode = mode;
+    const isDayTripMode = mode === 'daytrip';
+
+    const btnMulti = document.getElementById('btn-mode-multiday');
+    const btnDay = document.getElementById('btn-mode-daytrip');
+    const startLabel = document.getElementById('voyage-start-label');
+    const endGroup = document.getElementById('voyage-end-date-group');
+    const dateFields = document.getElementById('voyage-date-fields');
+    const pill = document.getElementById('modal-voyage-pill');
+    const inputStart = document.getElementById('voyage-start');
+    const inputEnd = document.getElementById('voyage-end');
+
+    if (btnMulti) {
+        btnMulti.classList.toggle('active', !isDayTripMode);
+        btnMulti.setAttribute('aria-selected', String(!isDayTripMode));
+    }
+    if (btnDay) {
+        btnDay.classList.toggle('active', isDayTripMode);
+        btnDay.setAttribute('aria-selected', String(isDayTripMode));
+    }
+
+    if (isDayTripMode) {
+        if (startLabel) startLabel.textContent = 'Trip Date';
+        if (endGroup) endGroup.classList.add('hidden');
+        // A day trip needs its date up front — skip the "Discovery First" hide.
+        if (dateFields) dateFields.classList.remove('hidden');
+        if (inputStart && inputEnd && inputStart.value) inputEnd.value = inputStart.value;
+        if (pill) pill.textContent = 'DAY TRIP';
+    } else {
+        if (startLabel) startLabel.textContent = 'Start Date (Optional)';
+        if (endGroup) endGroup.classList.remove('hidden');
+        if (pill) pill.textContent = editingVoyageId ? 'EDIT VOYAGE' : 'NEW VOYAGE';
+    }
+}
+
 function initVoyageModalListeners() {
     const btnNewVoyage = document.getElementById('btn-new-voyage');
+    const btnModeMultiday = document.getElementById('btn-mode-multiday');
+    const btnModeDaytrip = document.getElementById('btn-mode-daytrip');
     const modalOverlay = document.getElementById('modal-overlay');
     const modalNewVoyage = document.getElementById('modal-new-voyage');
     const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
@@ -735,11 +782,8 @@ function initVoyageModalListeners() {
         editingVoyageId = null;
         modalTitle.textContent = 'Plan a New Voyage';
         submitBtn.textContent = 'Create Voyage';
-        document.getElementById('modal-voyage-pill').textContent = 'NEW VOYAGE';
         modalOverlay.classList.remove('hidden');
         modalNewVoyage.classList.remove('hidden');
-        // Hide date fields for initial creation (Discovery First)
-        document.getElementById('voyage-date-fields').classList.add('hidden');
         document.getElementById('voyage-start').value = '';
         document.getElementById('voyage-end').value = '';
         document.getElementById('voyage-title').value = '';
@@ -749,7 +793,17 @@ function initVoyageModalListeners() {
         displayCoords.textContent = '';
         inputLat.value = '';
         inputLng.value = '';
+        // Default to Multi-Day mode with date fields hidden (Discovery First).
+        applyVoyageModalMode('multiday');
+        document.getElementById('voyage-date-fields').classList.add('hidden');
     });
+
+    if (btnModeMultiday) {
+        btnModeMultiday.addEventListener('click', () => applyVoyageModalMode('multiday'));
+    }
+    if (btnModeDaytrip) {
+        btnModeDaytrip.addEventListener('click', () => applyVoyageModalMode('daytrip'));
+    }
 
     const closeModal = () => {
         modalOverlay.classList.add('hidden');
@@ -765,11 +819,14 @@ function initVoyageModalListeners() {
     btnCancelVoyage.addEventListener('click', closeModal);
     modalOverlay.addEventListener('click', closeModal);
 
-    // Auto-set End Date
+    // Auto-set End Date (Multi-Day mode) / keep End Date synced (Day Trip mode)
     const inputStart = document.getElementById('voyage-start');
     const inputEnd = document.getElementById('voyage-end');
     inputStart.addEventListener('change', () => {
-        if (inputStart.value && !inputEnd.value) {
+        if (!inputStart.value) return;
+        if (voyageModalMode === 'daytrip') {
+            inputEnd.value = inputStart.value;
+        } else if (!inputEnd.value) {
             const d = new Date(inputStart.value);
             d.setUTCDate(d.getUTCDate() + 1);
             inputEnd.value = d.toISOString().split('T')[0];
@@ -813,7 +870,9 @@ function initVoyageModalListeners() {
         e.preventDefault();
         const formData = new FormData(formNewVoyage);
         const start = formData.get('start_date');
-        const end = formData.get('end_date');
+        // In Day Trip mode the End Date field is hidden — always force it to
+        // match the trip date, regardless of what's left in the input.
+        const end = voyageModalMode === 'daytrip' ? start : formData.get('end_date');
         const voyageData = {
             title: formData.get('title'),
             start_date: start ? start + 'T00:00:00Z' : null,
@@ -1267,7 +1326,7 @@ function renderVoyageList() {
     el.style.setProperty('--accent', `var(--${accent})`);
 
     const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
-    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
+    const dateRangeDisplay = formatVoyageDateRange(voyage.start_date, voyage.end_date);
 
     // Build info column
     const info = document.createElement('div');
@@ -1285,7 +1344,7 @@ function renderVoyageList() {
     if (startDate) {
       const dateChip = document.createElement('span');
       dateChip.className = 'np-chip np-chip--date';
-      dateChip.textContent = endDate ? `${startDate} – ${endDate}` : startDate;
+      dateChip.textContent = dateRangeDisplay;
       chipRow.appendChild(dateChip);
     } else {
       const dateChip = document.createElement('span');
@@ -1406,14 +1465,15 @@ function openEditModal(voyage) {
 
     modalTitle.textContent = 'Edit Voyage';
     submitBtn.textContent = 'Update Voyage';
-    document.getElementById('modal-voyage-pill').textContent = 'EDIT VOYAGE';
-    
-    // Show date fields in edit mode
-    document.getElementById('voyage-date-fields').classList.remove('hidden');
 
     document.getElementById('voyage-title').value = voyage.title;
     document.getElementById('voyage-start').value = voyage.start_date ? voyage.start_date.split('T')[0] : '';
     document.getElementById('voyage-end').value = voyage.end_date ? voyage.end_date.split('T')[0] : '';
+
+    // Show date fields in edit mode, and open in Day Trip mode if the
+    // voyage's start and end dates already match (sets the DAY TRIP pill).
+    applyVoyageModalMode(isDayTrip(voyage) ? 'daytrip' : 'multiday');
+    document.getElementById('voyage-date-fields').classList.remove('hidden');
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
     document.getElementById('voyage-radius').value = voyage.search_radius || 60;
     document.getElementById('voyage-radius-display').textContent = voyage.search_radius || 60;
@@ -1463,14 +1523,11 @@ function showVoyageList(doPushState = true) {
 function updateItineraryHeader(voyage) {
     document.getElementById('itinerary-title').textContent = voyage.title;
     
-    const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
-    const endDate = voyage.end_date ? new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
-    
     const datesEl = document.getElementById('itinerary-dates');
     const btnSetDates = document.getElementById('btn-set-dates');
 
-    if (startDate && endDate) {
-        datesEl.textContent = `${startDate} - ${endDate}`;
+    if (voyage.start_date && voyage.end_date) {
+        datesEl.textContent = formatVoyageDateRange(voyage.start_date, voyage.end_date, { separator: ' - ' });
         if (btnSetDates) btnSetDates.classList.add('hidden');
     } else {
         datesEl.textContent = 'No dates set for this voyage';
@@ -2561,12 +2618,17 @@ function renderItinerary() {
         // Passage points are at-sea transit days with no landfall — render them as a
         // continuous dotted leg with a transit indicator rather than a harbour card.
         const isPassage = stop && stop.stop_type === 'passage_point';
+        // A day trip has exactly one stop and no "Day N of M" concept — its
+        // one card gets a simpler treatment (no day number, no repeated date
+        // chip since the trip date is already shown in the itinerary header).
+        const isDayTripCard = isDayTrip(currentVoyage);
 
         const el = document.createElement('div');
         el.className = ['np-stop-card', isSelected && 'np-stop-card--selected', isPassage && 'np-stop-card--passage'].filter(Boolean).join(' ');
         el.style.setProperty('--accent', isPassage ? 'var(--muted)' : `var(--${accent})`);
 
-        // Accent circle — numbered for landfalls, a transit/compass glyph for passages.
+        // Accent circle — numbered for landfalls, a transit/compass glyph for
+        // passages, and a sailing glyph (no number) for a day trip's single stop.
         const num = document.createElement('div');
         num.className = 'np-stop-card__num';
         num.setAttribute('aria-hidden', 'true');
@@ -2575,19 +2637,27 @@ function renderItinerary() {
             icon.className = 'material-symbols-outlined';
             icon.textContent = 'explore';
             num.appendChild(icon);
+        } else if (isDayTripCard) {
+            const icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined';
+            icon.textContent = 'sailing';
+            num.appendChild(icon);
         } else {
             num.textContent = dayNum;
         }
         el.appendChild(num);
 
-        // Middle: date chip + location
+        // Middle: date chip (skipped for day trips — already shown in the
+        // itinerary header) + location
         const mid = document.createElement('div');
         mid.className = 'np-stop-card__info';
 
-        const dateChip = document.createElement('span');
-        dateChip.className = 'np-stop-card__date';
-        dateChip.textContent = dateLabel;
-        mid.appendChild(dateChip);
+        if (!isDayTripCard) {
+            const dateChip = document.createElement('span');
+            dateChip.className = 'np-stop-card__date';
+            dateChip.textContent = dateLabel;
+            mid.appendChild(dateChip);
+        }
 
         const loc = document.createElement('span');
         loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty', isPassage && 'np-stop-card__loc--passage'].filter(Boolean).join(' ');
@@ -5593,13 +5663,18 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
     let dateDisplay = 'Dates Pending';
     if (voyage.start_date && voyage.end_date) {
-        const s = new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric'});
-        const e = new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
-        dateDisplay = `${s} – ${e}`;
+        if (isDayTrip(voyage)) {
+            dateDisplay = new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
+        } else {
+            const s = new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric'});
+            const e = new Date(voyage.end_date).toLocaleDateString(undefined, {timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
+            dateDisplay = `${s} – ${e}`;
+        }
     }
 
     // ── Stat tiles ────────────────────────────────────────────────────────────
     const isDated = !!(voyage.start_date && voyage.end_date);
+    const isDayTripVoyage = isDated && isDayTrip(voyage);
     const researchedCount = briefings.filter(b => b !== null).length;
     const dayCount = isDated
         ? Math.round((new Date(voyage.end_date) - new Date(voyage.start_date)) / 86400000) + 1 : '--';
@@ -5638,10 +5713,11 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         <div class="np-metric-tile__label">Stops</div>
                         <div class="np-metric-tile__value">${sortedStops.length}</div>
                     </div>
+                    ${!isDayTripVoyage ? `
                     <div class="np-metric-tile" style="--accent:var(--teal)">
                         <div class="np-metric-tile__label">Days</div>
                         <div class="np-metric-tile__value">${dayCount}</div>
-                    </div>
+                    </div>` : ''}
                     <div class="np-metric-tile" style="--accent:var(--amber)">
                         <div class="np-metric-tile__label">Avg Wind</div>
                         <div class="np-metric-tile__value">${avgWind}</div>
