@@ -36,5 +36,5 @@
 32. Done. Actually schdeule task from 30. 
 33. Done. Change the order of np-weather-tile: Conditions, temp, wind, waves, sunrise, sunset. 
 34. Done. make buildImprove display of precipitation in hourly_track. It should be at bottom. it should be easier to read.
-- [x] 35. In really narrow screens, the whole content spills out the viewport. I'd like it to look right even when teh viewport is <390 px.
-- [x] 36. Add GPS check-in feature for voyage owners to show current position on map and shared report.
+35. Done. 35. In really narrow screens, the whole content spills out the viewport. I'd like it to look right even when teh viewport is <390 px.
+36. Done. 36. Add GPS check-in feature for voyage owners to show current position on map and shared report.
