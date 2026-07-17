@@ -18,6 +18,12 @@
           "rubric_content": {
             "text_property": "The response is a valid JSON array of objects."
           }
+        },
+        {
+          "rubric_id": "day_trip_bias_adjusted",
+          "rubric_content": {
+            "text_property": "For day trip requests, the recommendations favor moorings and easily reached day-use anchorages suited to a few hours, rather than secluded, hard-to-reach, overnight-only spots."
+          }
         }
       ]
     },

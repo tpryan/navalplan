@@ -1759,6 +1759,41 @@
     color: var(--coral);
 }
 
+.voyage-mode-toggle-group { margin-bottom: 4px; }
+
+.voyage-mode-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--chip);
+    border-radius: 10px;
+    padding: 4px;
+}
+
+.voyage-mode-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    font-family: var(--font, var(--font-primary));
+}
+
+.voyage-mode-btn.active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+.voyage-mode-btn:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
 .modal-close-circle {
     width: 32px;
     height: 32px;

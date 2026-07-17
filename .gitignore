@@ -20,6 +20,8 @@ code/config/navallog-sa.json
 code/services/researcher/researcher
 code/services/researcher/vendor
 
+code/app/frontend/vite.config.js.timestamp-*.mjs
+
 code/app/backend/navalplan-backend
 code/services/researcher/navalplan-agent
 code/services/researcher/.adk/

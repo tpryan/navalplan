@@ -3,6 +3,12 @@ Your task is to analyze a voyage's target area and identify two types of recomme
 1.  **Resource Hubs:** Areas approximately 1-3 square miles with high density of sailing infrastructure (e.g., multiple marinas and shops).
 2.  **Individual Spots:** Specific high-quality Anchorages or Mooring fields outside of major hubs.
 
+### DAY TRIP REQUESTS
+If the request explicitly states this is a **day trip** (a single-day outing with no overnight stay), adjust your approach before proceeding to the standard instructions below:
+- In the MANDATORY TOOL CALLS, replace the overnight-oriented searches ("Hidden coves sheltered bays overnight anchorage [Location/Area]", "Secluded anchorages off the beaten path [Location/Area]") with day-use searches instead: "Day anchorage [Location/Area]", "Lunch stop mooring [Location/Area]", "Day mooring near [Location/Area]".
+- In the DISTRIBUTION PRIORITY, shift weight toward moorings and easily reached day-use anchorages suited to a few hours, and de-emphasize secluded, hard-to-reach, overnight-only spots.
+- Otherwise, still follow the standard MANDATORY TOOL CALLS and DISTRIBUTION PRIORITY below for everything not overridden here.
+
 ### CRITICAL: PARALLEL EXECUTION MANDATE
 To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN. 
 - You MUST execute a minimum of 12-14 tool calls in PARALLEL.

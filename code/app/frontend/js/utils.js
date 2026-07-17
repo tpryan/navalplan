@@ -44,3 +44,35 @@ export function renderReferences(refs) {
         <strong>Refs:</strong> ${refs.map((r, i) => `<a href="${r}" target="_blank" class="ref-anchor">[${i + 1}]</a>`).join('')}
     </div>`;
 }
+
+/**
+ * True when a voyage is a day trip — dated, with the same start and end
+ * calendar date. Derived rather than stored, so it can never drift from
+ * the actual dates.
+ */
+export function isDayTrip(voyage) {
+    if (!voyage || !voyage.start_date || !voyage.end_date) return false;
+    return voyage.start_date.split('T')[0] === voyage.end_date.split('T')[0];
+}
+
+/**
+ * Formats a voyage's start/end dates for display, collapsing to a single
+ * date when the voyage is a day trip instead of showing a "Jul 16 – Jul 16"
+ * style range.
+ *
+ * @param {string|null} startDateStr - ISO date/datetime string, or null.
+ * @param {string|null} endDateStr - ISO date/datetime string, or null.
+ * @param {Object} [opts]
+ * @param {Intl.DateTimeFormatOptions} [opts.format] - options passed to toLocaleDateString.
+ * @param {string} [opts.separator] - separator used between start and end for multi-day ranges.
+ */
+export function formatVoyageDateRange(startDateStr, endDateStr, opts = {}) {
+    const format = opts.format || { timeZone: 'UTC' };
+    const separator = opts.separator ?? ' – ';
+    if (!startDateStr) return '';
+    const sameDay = endDateStr && startDateStr.split('T')[0] === endDateStr.split('T')[0];
+    const start = new Date(startDateStr).toLocaleDateString(undefined, { ...format, timeZone: 'UTC' });
+    if (!endDateStr || sameDay) return start;
+    const end = new Date(endDateStr).toLocaleDateString(undefined, { ...format, timeZone: 'UTC' });
+    return `${start}${separator}${end}`;
+}
