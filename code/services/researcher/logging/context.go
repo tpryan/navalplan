@@ -8,6 +8,7 @@ type key int
 
 const (
 	traceKey key = iota
+	spanKey
 )
 
 // AddTraceToContext adds the trace to the context
@@ -22,4 +23,18 @@ func GetTraceFromContext(ctx context.Context) string {
 		return ""
 	}
 	return trace
+}
+
+// AddSpanToContext adds the span ID to the context
+func AddSpanToContext(ctx context.Context, span string) context.Context {
+	return context.WithValue(ctx, spanKey, span)
+}
+
+// GetSpanFromContext returns the span ID from the context
+func GetSpanFromContext(ctx context.Context) string {
+	span, ok := ctx.Value(spanKey).(string)
+	if !ok {
+		return ""
+	}
+	return span
 }

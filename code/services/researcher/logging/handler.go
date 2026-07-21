@@ -22,8 +22,19 @@ func (h *CloudLoggingHandler) Enabled(ctx context.Context, level slog.Level) boo
 }
 
 func (h *CloudLoggingHandler) Handle(ctx context.Context, r slog.Record) error {
+	if !h.FormatMessage {
+		// Production/JSON path: Keep record as is, just add trace ID
+		if trace := GetTraceFromContext(ctx); trace != "" {
+			r.Add("logging.googleapis.com/trace", slog.StringValue(trace))
+		}
+		if span := GetSpanFromContext(ctx); span != "" {
+			r.Add("logging.googleapis.com/spanId", slog.StringValue(span))
+		}
+		return h.Handler.Handle(ctx, r)
+	}
+
+	// Development/Legacy path: Style duration and append attributes to message
 	var styledDur string
-	// Filter out the duration attribute if it exists, and style it.
 	newRecord := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
 	r.Attrs(func(a slog.Attr) bool {
 		if a.Key == "duration" {
@@ -49,33 +60,31 @@ func (h *CloudLoggingHandler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	// Format the message with optional styled duration.
 	var sb strings.Builder
 	sb.WriteString(newRecord.Message)
 
 	if styledDur != "" {
 		sb.WriteString(" ")
-		// Use a bold key for "duration" to match charm style
 		keyStyle := lipgloss.NewStyle().Bold(true)
 		sb.WriteString(keyStyle.Render("duration"))
 		sb.WriteString("=")
 		sb.WriteString(styledDur)
 	}
 
-	// Format Message if enabled (legacy behavior)
-	if h.FormatMessage {
-		newRecord.Attrs(func(a slog.Attr) bool {
-			sb.WriteString(" ")
-			sb.WriteString(a.Key)
-			sb.WriteString("=")
-			sb.WriteString(fmt.Sprintf("%v", a.Value.Any()))
-			return true
-		})
-	}
+	newRecord.Attrs(func(a slog.Attr) bool {
+		sb.WriteString(" ")
+		sb.WriteString(a.Key)
+		sb.WriteString("=")
+		sb.WriteString(fmt.Sprintf("%v", a.Value.Any()))
+		return true
+	})
 	newRecord.Message = sb.String()
 
 	if trace := GetTraceFromContext(ctx); trace != "" {
 		newRecord.Add("logging.googleapis.com/trace", slog.StringValue(trace))
+	}
+	if span := GetSpanFromContext(ctx); span != "" {
+		newRecord.Add("logging.googleapis.com/spanId", slog.StringValue(span))
 	}
 	return h.Handler.Handle(ctx, newRecord)
 }

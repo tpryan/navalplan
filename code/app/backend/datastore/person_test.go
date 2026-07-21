@@ -43,6 +43,23 @@ func TestGetPersonByID(t *testing.T) {
 	assert.Equal(t, id, person.ID)
 }
 
+func TestFindPersonByEmail(t *testing.T) {
+	db, mock := mockDB(t)
+	defer db.Close()
+
+	email := "test@example.com"
+	query := `SELECT * FROM "person" WHERE email = $1`
+	rows := sqlmock.NewRows([]string{"id", "google_id", "email", "name"}).
+		AddRow(1, "12345", email, "Test User")
+
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(email).WillReturnRows(rows)
+
+	person, err := db.FindPersonByEmail(context.Background(), email)
+	assert.NoError(t, err)
+	assert.NotNil(t, person)
+	assert.Equal(t, email, person.Email)
+}
+
 func TestCreatePerson(t *testing.T) {
 	db, mock := mockDB(t)
 	defer db.Close()
@@ -52,19 +69,21 @@ func TestCreatePerson(t *testing.T) {
 	name := "Tester"
 	pic := "http://pic.url"
 	var invitedBy *int64 = nil
+	isAdmin := true
 
-	query := `INSERT INTO "person" (google_id, email, name, picture_url, invited_by) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, is_admin`
-	rows := sqlmock.NewRows([]string{"id", "created_at", "is_admin"}).AddRow(1, time.Now(), false)
+	query := `INSERT INTO "person" (google_id, email, name, picture_url, invited_by, is_admin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at, is_admin`
+	rows := sqlmock.NewRows([]string{"id", "created_at", "is_admin"}).AddRow(1, time.Now(), isAdmin)
 
 	mock.ExpectQuery(regexp.QuoteMeta(query)).
-		WithArgs(googleID, email, name, &pic, invitedBy).
+		WithArgs(googleID, email, name, &pic, invitedBy, isAdmin).
 		WillReturnRows(rows)
 
-	person, err := db.CreatePerson(context.Background(), googleID, email, name, &pic, invitedBy)
+	person, err := db.CreatePerson(context.Background(), googleID, email, name, &pic, invitedBy, isAdmin)
 	assert.NoError(t, err)
 	assert.NotNil(t, person)
 	assert.Equal(t, int64(1), person.ID)
 	assert.Equal(t, email, person.Email)
+	assert.Equal(t, isAdmin, person.IsAdmin)
 }
 
 func TestUpdatePersonName(t *testing.T) {

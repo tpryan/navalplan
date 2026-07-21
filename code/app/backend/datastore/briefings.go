@@ -8,7 +8,6 @@ import (
 	"app/models"
 )
 
-
 func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*models.Briefing, error) {
 	var b models.Briefing
 	query := `SELECT * FROM briefing WHERE stop_id = $1`

@@ -23,9 +23,9 @@ import (
 type sessionTrackingStore struct {
 	datastore.Store // unimplemented methods panic intentionally
 
-	mu         sync.Mutex
-	briefings  []*models.Briefing
-	guides     []*models.VoyageGuide
+	mu        sync.Mutex
+	briefings []*models.Briefing
+	guides    []*models.VoyageGuide
 }
 
 func (s *sessionTrackingStore) ListStops(_ context.Context, _ int64, _, _ int) ([]models.Stop, error) {

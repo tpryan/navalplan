@@ -104,7 +104,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.CreateInvitation(r.Context(), req.Email, currentUser.ID); err != nil {
+	if err := h.DB.CreateInvitation(r.Context(), req.Email, currentUser.ID, false); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create invitation")
 		return
 	}

@@ -27,12 +27,12 @@ func InitLogging(env string) {
 				return a
 			},
 		})
-		handler = &CloudLoggingHandler{Handler: jsonHandler, FormatMessage: true}
+		handler = &CloudLoggingHandler{Handler: jsonHandler, FormatMessage: false}
 	} else {
 		// Development: Charmbracelet colorful slog
 		chOptions := charm.Options{Prefix: "agent", ReportTimestamp: true, Level: charm.DebugLevel}
 		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
-		handler = &CloudLoggingHandler{Handler: cbLogger}
+		handler = &CloudLoggingHandler{Handler: cbLogger, FormatMessage: true}
 	}
 
 	slog.SetDefault(slog.New(handler))

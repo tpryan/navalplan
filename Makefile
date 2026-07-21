@@ -185,6 +185,19 @@ db-seed:
 db-console:
 	@podman exec -it $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME)
 
+add-admin:
+	@if [ -z "$(EMAIL)" ]; then echo "Usage: make add-admin EMAIL=user@example.com"; exit 1; fi
+	@echo "Ensuring admin status for $(EMAIL)..."
+	@EXISTING_ID=$$(podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) -t -c "SELECT id FROM person WHERE email = '$(EMAIL)';" | xargs); \
+	if [ -n "$$EXISTING_ID" ]; then \
+		echo "User exists (ID: $$EXISTING_ID). Promoting to admin..."; \
+		podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) -c "UPDATE person SET is_admin = TRUE WHERE id = $$EXISTING_ID;"; \
+	else \
+		echo "User does not exist. Creating admin invitation..."; \
+		podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) -c "INSERT INTO invitation (email, is_admin) VALUES ('$(EMAIL)', TRUE) ON CONFLICT (email) DO UPDATE SET is_admin = TRUE;"; \
+	fi
+	@echo "Done."
+
 # --- Migrations ---
 
 migrate-create:

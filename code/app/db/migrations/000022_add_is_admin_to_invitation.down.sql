@@ -1,0 +1,1 @@
+ALTER TABLE invitation DROP COLUMN IF EXISTS is_admin;

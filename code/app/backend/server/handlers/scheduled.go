@@ -75,24 +75,24 @@ func (h *Handler) ScheduledMaintenance(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(allVoyageStops, func(i, j int) bool { return allVoyageStops[i].TargetDate.Before(allVoyageStops[j].TargetDate) })
 
 		sessionID := fmt.Sprintf("scheduled_lookout_%d_%d", stop.ID, time.Now().Unix())
-		
+
 		// Use a semaphore to limit concurrent agent calls
 		h.ResearchSem <- struct{}{}
 		h.performLookoutAuditLogic(&stop, briefing, allVoyageStops, sessionID)
 		<-h.ResearchSem
-		
+
 		processedLookout++
 	}
 
-	slog.InfoContext(ctx, "[scheduled] Maintenance complete", 
-		"weather_updated", processedWeather, 
+	slog.InfoContext(ctx, "[scheduled] Maintenance complete",
+		"weather_updated", processedWeather,
 		"lookout_audits", processedLookout,
 	)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"message": "maintenance complete",
+		"message":         "maintenance complete",
 		"weather_updated": processedWeather,
-		"lookout_audits": processedLookout,
+		"lookout_audits":  processedLookout,
 	})
 }

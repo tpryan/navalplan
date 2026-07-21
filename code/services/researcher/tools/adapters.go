@@ -16,7 +16,7 @@ type NauticalToolService struct {
 
 // TideRequest represents the input for the GetTides MCP tool.
 type TideRequest struct {
-	StationID string `json:"station_id"` // Note: In this adapter we map StationID to Lat/Lng for legacy support if needed
+	StationID string  `json:"station_id"` // Note: In this adapter we map StationID to Lat/Lng for legacy support if needed
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	Date      string  `json:"date"`

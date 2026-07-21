@@ -22,6 +22,7 @@ type Person struct {
 type Invitation struct {
 	Email     string    `json:"email" db:"email"`
 	InvitedBy *int64    `json:"invited_by" db:"invited_by"`
+	IsAdmin   bool      `json:"is_admin" db:"is_admin"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 

@@ -21,29 +21,29 @@ type WeatherArgs struct {
 
 // WeatherResult defines the response structure for the get_weather_forecast tool.
 type WeatherResult struct {
-	Date            string    `json:"date"`
-	Condition       string    `json:"condition"`
-	ForecastType    string    `json:"forecast_type"`
-	MaxTemp         float64   `json:"max_temp"`
-	MinTemp         float64   `json:"min_temp"`
-	MaxWindKts      float64   `json:"max_wind_kts"`
-	MaxGustsKts     float64   `json:"max_gusts_kts"`
-	WindDirDeg      int       `json:"wind_dir_deg"`
-	WindDirection   string    `json:"wind_direction"`
-	HourlyWind      []float64 `json:"hourly_wind"`
-	HourlyWindDir   []string  `json:"hourly_wind_dir"`
+	Date             string    `json:"date"`
+	Condition        string    `json:"condition"`
+	ForecastType     string    `json:"forecast_type"`
+	MaxTemp          float64   `json:"max_temp"`
+	MinTemp          float64   `json:"min_temp"`
+	MaxWindKts       float64   `json:"max_wind_kts"`
+	MaxGustsKts      float64   `json:"max_gusts_kts"`
+	WindDirDeg       int       `json:"wind_dir_deg"`
+	WindDirection    string    `json:"wind_direction"`
+	HourlyWind       []float64 `json:"hourly_wind"`
+	HourlyWindDir    []string  `json:"hourly_wind_dir"`
 	HourlyConditions []string  `json:"hourly_conditions"`
-	HourlyTemp      []float64 `json:"hourly_temp"`
-	HourlyGusts     []float64 `json:"hourly_gusts"`
-	HourlyPrecip    []float64 `json:"hourly_precip"`
+	HourlyTemp       []float64 `json:"hourly_temp"`
+	HourlyGusts      []float64 `json:"hourly_gusts"`
+	HourlyPrecip     []float64 `json:"hourly_precip"`
 	HourlyWaveHeight []float64 `json:"hourly_wave_height"`
 	HourlyWavePeriod []float64 `json:"hourly_wave_period"`
 	HourlyWaveDir    []float64 `json:"hourly_wave_dir"`
-	PrecipTotal     float64   `json:"precip_total"`
-	WaveHeight      float64   `json:"wave_height"`
-	WaveDirection   float64   `json:"wave_direction"`
-	WavePeriod      float64   `json:"wave_period"`
-	DebugDurationMS int64     `json:"debug_duration_ms"`
+	PrecipTotal      float64   `json:"precip_total"`
+	WaveHeight       float64   `json:"wave_height"`
+	WaveDirection    float64   `json:"wave_direction"`
+	WavePeriod       float64   `json:"wave_period"`
+	DebugDurationMS  int64     `json:"debug_duration_ms"`
 }
 
 // WeatherClient defines the interface for the Open-Meteo API client.
@@ -252,28 +252,28 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 	}
 
 	return WeatherResult{
-		Date:          weather.Daily.Time[0],
-		Condition:     condition,
-		ForecastType:  forecastType,
-		MaxTemp:       maxTemp,
-		MinTemp:       minTemp,
-		MaxWindKts:    maxWind,
-		MaxGustsKts:   maxGusts,
-		WindDirDeg:    windDir,
-		WindDirection: DegreesToDirection(float64(windDir)),
-		HourlyWind:    hourlyWind,
-		HourlyWindDir: hourlyWindDir,
+		Date:             weather.Daily.Time[0],
+		Condition:        condition,
+		ForecastType:     forecastType,
+		MaxTemp:          maxTemp,
+		MinTemp:          minTemp,
+		MaxWindKts:       maxWind,
+		MaxGustsKts:      maxGusts,
+		WindDirDeg:       windDir,
+		WindDirection:    DegreesToDirection(float64(windDir)),
+		HourlyWind:       hourlyWind,
+		HourlyWindDir:    hourlyWindDir,
 		HourlyConditions: hourlyConditions,
-		HourlyTemp:    weather.Hourly.Temperature2m,
-		HourlyGusts:   weather.Hourly.WindGusts10m,
-		HourlyPrecip:  weather.Hourly.Precipitation,
+		HourlyTemp:       weather.Hourly.Temperature2m,
+		HourlyGusts:      weather.Hourly.WindGusts10m,
+		HourlyPrecip:     weather.Hourly.Precipitation,
 		HourlyWaveHeight: hourlyWaveHeight,
 		HourlyWaveDir:    hourlyWaveDir,
 		HourlyWavePeriod: hourlyWavePeriod,
-		PrecipTotal:   precip,
-		WaveHeight:    waveHeight,
-		WaveDirection: waveDir,
-		WavePeriod:    wavePeriod,
+		PrecipTotal:      precip,
+		WaveHeight:       waveHeight,
+		WaveDirection:    waveDir,
+		WavePeriod:       wavePeriod,
 	}
 }
 
