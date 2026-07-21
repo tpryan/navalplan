@@ -33,6 +33,25 @@ steps:
   - '--set-secrets=NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
+  id: 'deploy-cloud-run'
+
+# 4. Deploy to Vertex AI Agent Runtime (Reasoning Engine)
+- name: 'python:3.11-slim'
+  id: 'deploy-reasoning-engine'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    export PATH="$$PATH:/root/.local/bin"
+    python3 -m pip install --user google-agents-cli
+    agents-cli deploy \
+      --project=${PROJECT_ID} \
+      --region=us-central1 \
+      --service-name=navalplan-researcher \
+      --secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
+      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV}" \
+      --no-confirm-project
+  dir: 'code/services/researcher'
 
 images:
 - 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}'
