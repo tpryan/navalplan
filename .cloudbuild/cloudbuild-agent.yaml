@@ -42,7 +42,7 @@ steps:
   args:
   - '-c'
   - |
-    export PATH="$$PATH:/root/.local/bin"
+    export PATH="$PATH:/builder/home/.local/bin"
     python3 -m pip install --user google-agents-cli
     agents-cli deploy \
       --project=${PROJECT_ID} \

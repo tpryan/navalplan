@@ -56,6 +56,19 @@ func main() {
 
 	slog.SetDefault(slog.New(handler))
 
+	// Initialize OpenTelemetry
+	tp, err := InitTelemetry(context.Background(), cfg.Project, cfg.Env)
+	if err != nil {
+		slog.Error("Failed to initialize telemetry", "error", err)
+	}
+	if tp != nil {
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				slog.Error("Failed to shutdown tracer provider", "error", err)
+			}
+		}()
+	}
+
 	slog.Info("config", "Env", cfg.Env)
 	slog.Info("config", "Port", cfg.Port)
 	slog.Info("config", "ContentDir", cfg.ContentDir)
