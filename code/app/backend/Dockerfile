@@ -10,22 +10,23 @@ COPY go.mod go.sum ./
 RUN go mod vendor
 
 # Copy the rest of the source code
+# Note: static.min should already be populated by the Cloud Build frontend steps
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o researcher .
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o navalplan-backend .
 
 # Final stage
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
-COPY --from=builder /app/researcher .
-COPY --from=builder /app/prompts ./prompts
+COPY --from=builder /app/navalplan-backend .
+COPY --from=builder /app/static.min ./static.min
 
-EXPOSE 8081
+EXPOSE 8080
 
 # Ensure the binary is executable
-RUN chmod +x ./researcher
+RUN chmod +x ./navalplan-backend
 
-CMD ["./researcher"]
+CMD ["./navalplan-backend"]
