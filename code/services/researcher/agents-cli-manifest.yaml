@@ -1,5 +1,5 @@
-agent_name: researcher
-agent_directory: .
-agent_type: adk
-deployment_target: agent_runtime
-region: us-central1
+agent_name: "researcher"
+agent_directory: "."
+agent_type: "adk"
+deployment_target: "agent_runtime"
+region: "us-central1"

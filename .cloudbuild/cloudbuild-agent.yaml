@@ -36,13 +36,16 @@ steps:
   id: 'deploy-cloud-run'
 
 # 4. Deploy to Vertex AI Agent Runtime (Reasoning Engine)
-- name: 'python:3.11-slim'
+- name: 'google/cloud-sdk:slim'
   id: 'deploy-reasoning-engine'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
+    apt-get update && apt-get install -y nodejs npm
     pip install uv google-agents-cli
+    ls -a
+    agents-cli info
     agents-cli deploy \
       --project=${PROJECT_ID} \
       --region=us-central1 \
