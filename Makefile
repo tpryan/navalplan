@@ -437,7 +437,7 @@ tidy-researcher:
 
 deploy-agent:
 	@echo "Deploying Agent..."
-	gcloud builds submit --config .cloudbuild/cloudbuild-agent.yaml .
+	gcloud builds submit --config .cloudbuild/cloudbuild-agent.yaml --substitutions=SHORT_SHA=$(shell git rev-parse --short HEAD) .
 
 deploy-agent-runtime:
 	@echo "Deploying Researcher Agent to Vertex AI Agent Runtime..."

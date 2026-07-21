@@ -42,13 +42,16 @@ steps:
   args:
   - '-c'
   - |
-    apt-get update && apt-get install -y nodejs npm
-    pip install uv google-agents-cli
-    ls -a
-    agents-cli info
+    apt-get update && apt-get install -y nodejs npm python3-venv
+    python3 -m venv /builder/venv
+    /builder/venv/bin/pip install uv google-agents-cli
+    export PATH="/builder/venv/bin:$$PATH"
+    rm -rf vendor researcher
+    du -sh .
     agents-cli deploy \
       --project=${PROJECT_ID} \
       --region=us-central1 \
+      --deployment-target=agent_runtime \
       --service-name=navalplan-researcher \
       --secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
       --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV}" \

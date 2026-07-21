@@ -1,5 +1,6 @@
-agent_name: "researcher"
+name: "researcher"
 agent_directory: "."
-agent_type: "adk"
-deployment_target: "agent_runtime"
-region: "us-central1"
+create_params:
+  agent_type: "adk"
+  deployment_target: "agent_runtime"
+  region: "us-central1"
