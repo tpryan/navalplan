@@ -414,14 +414,14 @@ tidy-researcher:
 
 deploy-agent:
 	@echo "Deploying Agent..."
-	gcloud builds submit --config cloudbuild-agent.yaml .
+	gcloud builds submit --config .cloudbuild/cloudbuild-agent.yaml .
 
 deploy-agent-runtime:
 	@echo "Deploying Researcher Agent to Vertex AI Agent Runtime..."
 	cd code/services/researcher && agents-cli deploy \
 		--project $(shell gcloud config get-value project) \
 		--region $(REGION) \
-		--service-name researcher \
+		--service-name navalplan-researcher \
 		--no-confirm-project
 
 deploy-backend:
