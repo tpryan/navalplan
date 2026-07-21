@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+node_modules
+.DS_Store
+*.pyc
+__pycache__
+.adk
+.gemini
+temp
+scaffold-ref
+**/vendor/
+code/services/researcher/researcher
+**/__pycache__/
