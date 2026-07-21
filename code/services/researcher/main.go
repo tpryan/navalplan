@@ -25,7 +25,7 @@ import (
 	"github.com/tpryan/navalplan/services/researcher/logging"
 	"github.com/tpryan/navalplan/services/researcher/mcp"
 	"github.com/tpryan/navalplan/services/researcher/tools"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
@@ -217,6 +217,7 @@ func main() {
 	}
 
 	logging.InitLogging(cfg.Env)
+	ctx := context.Background()
 
 	// Initialize OpenTelemetry
 	tp, err := InitTelemetry(ctx, cfg.Project, cfg.Env)
@@ -246,7 +247,6 @@ func main() {
 		slog.Info("config", "NIWAAPIKey", cfg.NIWAAPIKey[:5]+"...")
 	}
 
-	ctx := context.Background()
 	srv := &Server{
 		config:  cfg,
 		timings: make(map[string]toolTiming),
