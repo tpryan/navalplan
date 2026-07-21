@@ -458,6 +458,8 @@ func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, *tools.NauticalTo
 	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, &tools.NauticalToolService{
 		Tides:   tp,
 		Weather: wp,
+		Sunrise: sp,
+		Places:  pp,
 	}, nil
 }
 
@@ -472,12 +474,22 @@ func (s *Server) setupMCPTools(nautical *tools.NauticalToolService) []tool.Tool 
 		Description: "Fetches real-time NOAA offshore marine warnings and wind velocity vectors.",
 	}, nautical.FetchWeather)
 
+	sunriseTool, _ := functiontool.New(functiontool.Config{
+		Name:        "GetSunriseSunset",
+		Description: "Retrieves sunrise and sunset times for a specific location and date.",
+	}, nautical.FetchSunriseSunset)
+
+	placesTool, _ := functiontool.New(functiontool.Config{
+		Name:        "FindPlacesNearby",
+		Description: "Finds places (e.g. marinas, restaurants) near a location.",
+	}, nautical.FetchPlacesNearby)
+
 	safetyTool, _ := functiontool.New(functiontool.Config{
 		Name:        "GetSafetyAlerts",
 		Description: "Extracts active global navigational warnings and localized security alerts.",
 	}, nautical.FetchSafetyAlerts)
 
-	return []tool.Tool{tideTool, weatherTool, safetyTool}
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool}
 }
 
 func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {

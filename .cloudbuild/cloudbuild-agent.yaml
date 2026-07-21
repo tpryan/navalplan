@@ -1,24 +1,45 @@
 steps:
+# 1. Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest', '.']
+  dir: 'code/services/researcher'
+
+# 2. Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}']
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest']
+
+# 3. Deploy to Cloud Run with --no-traffic
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
   - 'run'
   - 'deploy'
-  - 'navalplan-researcher'          # Service Name
-  - '--source'
-  - '.'
+  - 'navalplan-researcher'
+  - '--image'
+  - 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}'
   - '--region'
   - 'us-central1'
   - '--project'
-  - '${PROJECT_ID}'                   # Your Google Cloud Project ID
-  - '--no-allow-unauthenticated'    # Security: Only backend can call this
+  - '${PROJECT_ID}'
+  - '--no-allow-unauthenticated'
+  - '--no-traffic' # Deploy as a new revision but don't route traffic yet
+  - '--tag'
+  - 'canary'     # Tag the revision for testing
   - '--set-secrets=NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY:latest'
   - '--set-secrets=GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY:latest'
   - '--set-secrets=NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY:latest'
   - '--set-secrets=NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
-  dir: 'code/services/researcher'        # Build context
+
+images:
+- 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}'
+- 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest'
+
 substitutions:
-  _NAVALPLAN_AGENT_MODEL: "gemini-2.5-flash"
+  _NAVALPLAN_AGENT_MODEL: "gemini-3.5-flash-lite"
   _ENV: "production"
+
 logsBucket: gs://navalplan-logging-bucket

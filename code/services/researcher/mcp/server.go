@@ -68,9 +68,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						"type": "object",
 						"properties": map[string]interface{}{
 							"station_id": map[string]string{"type": "string"},
+							"latitude":   map[string]string{"type": "number"},
+							"longitude":  map[string]string{"type": "number"},
 							"date":       map[string]string{"type": "string"},
 						},
-						"required": []string{"station_id", "date"},
+						"required": []string{"date"},
 					},
 				},
 				{
@@ -80,8 +82,36 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						"type": "object",
 						"properties": map[string]interface{}{
 							"coordinates": map[string]string{"type": "string"},
+							"date":        map[string]string{"type": "string"},
 						},
-						"required": []string{"coordinates"},
+						"required": []string{"coordinates", "date"},
+					},
+				},
+				{
+					"name":        "GetSunriseSunset",
+					"description": "Retrieves sunrise and sunset times for a specific location and date.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"latitude":  map[string]string{"type": "number"},
+							"longitude": map[string]string{"type": "number"},
+							"date":      map[string]string{"type": "string"},
+						},
+						"required": []string{"latitude", "longitude", "date"},
+					},
+				},
+				{
+					"name":        "FindPlacesNearby",
+					"description": "Finds places (e.g. marinas, restaurants) near a location.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"query":     map[string]string{"type": "string"},
+							"latitude":  map[string]string{"type": "number"},
+							"longitude": map[string]string{"type": "number"},
+							"radius":    map[string]string{"type": "number"},
+						},
+						"required": []string{"query", "latitude", "longitude", "radius"},
 					},
 				},
 				{
@@ -142,6 +172,18 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 			return nil, err
 		}
 		return h.Nautical.FetchWeather(nil, req)
+	case "GetSunriseSunset":
+		var req tools.SunriseRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchSunriseSunset(nil, req)
+	case "FindPlacesNearby":
+		var req tools.PlacesRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchPlacesNearby(nil, req)
 	case "GetSafetyAlerts":
 		var req tools.SafetyRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
