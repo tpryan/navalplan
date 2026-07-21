@@ -30,7 +30,7 @@ func New(getEnv func(string) string) (*Config, error) {
 
 	modelName := getEnv("NAVALPLAN_AGENT_MODEL")
 	if modelName == "" {
-		modelName = "gemini-2.0-flash-001"
+		modelName = "gemini-3.5-flash-lite"
 	}
 
 	geminiKey := getEnv("GEMINI_API_KEY")

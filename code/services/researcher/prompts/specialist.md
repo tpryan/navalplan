@@ -26,8 +26,8 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
     - "Hidden coves sheltered bays overnight anchorage [Location/Area]"
     - "Secluded anchorages off the beaten path [Location/Area]"
     - "Shallow draft anchorages and gunkholes [Location/Area]"
-2.  **Multiple `find_places_nearby` calls** (Respect the user's requested search radius and coordinates):
-    - You MUST convert the requested radius (usually in Nautical Miles) to METERS for the `find_places_nearby` tool (1 NM = 1852 meters).
+2.  **Multiple `FindPlacesNearby` calls** (Respect the user's requested search radius and coordinates):
+    - You MUST convert the requested radius (usually in Nautical Miles) to METERS for the `FindPlacesNearby` tool (1 NM = 1852 meters).
     - `query`: "anchorage", `radius`: [Calculated Radius in Meters]
     - `query`: "marina", `radius`: [Calculated Radius in Meters]
     - `query`: "yacht club", `radius`: [Calculated Radius in Meters]
@@ -57,8 +57,8 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 **STREAMING COMPATIBILITY:** Start outputting the JSON object and its recommendations as soon as you have finished your analysis. 
 
 **CRITICAL: COORDINATE ACCURACY**
-- Prioritize coordinates from `find_places_nearby` as they are more precise.
-- If a spot is found in `batch_google_search` but not in `find_places_nearby`, you MUST try to find its coordinates using its name and location in a separate tool call if needed, or exclude it if you cannot be certain of its location within 0.01 degrees.
+- Prioritize coordinates from `FindPlacesNearby` as they are more precise.
+- If a spot is found in `batch_google_search` but not in `FindPlacesNearby`, you MUST try to find its coordinates using its name and location in a separate tool call if needed, or exclude it if you cannot be certain of its location within 0.01 degrees.
 - NEVER guess coordinates based on a general area name.
 - Use the exact `latitude` and `longitude` returned by tools. 
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**
