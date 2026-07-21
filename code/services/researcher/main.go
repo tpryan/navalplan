@@ -25,6 +25,7 @@ import (
 	"github.com/tpryan/navalplan/services/researcher/logging"
 	"github.com/tpryan/navalplan/services/researcher/mcp"
 	"github.com/tpryan/navalplan/services/researcher/tools"
+	"go.opencensus.io/trace"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
@@ -34,6 +35,8 @@ import (
 	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/session"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
 	"google.golang.org/adk/tool/functiontool"
@@ -90,11 +93,16 @@ func (s *autoCreateSessionService) Get(ctx context.Context, req *session.GetRequ
 	return resp, nil
 }
 
+type toolTiming struct {
+	start time.Time
+	span  trace.Span
+}
+
 type Server struct {
 	config *config.Config
 	mu     sync.Mutex
-	// timings stores the start time of tool executions, keyed by function call ID.
-	timings map[string]time.Time
+	// timings stores the start time and OTel span of tool executions, keyed by function call ID.
+	timings map[string]toolTiming
 
 	providers []Provider
 
@@ -210,6 +218,20 @@ func main() {
 
 	logging.InitLogging(cfg.Env)
 
+	// Initialize OpenTelemetry
+	tp, err := InitTelemetry(ctx, cfg.Project, cfg.Env)
+	if err != nil {
+		slog.Error("Failed to initialize telemetry", "error", err)
+		// We continue anyway, as telemetry is not critical for service operation
+	}
+	if tp != nil {
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				slog.Error("Failed to shutdown tracer provider", "error", err)
+			}
+		}()
+	}
+
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
 	if len(cfg.MapsAPIKey) > 5 {
@@ -227,7 +249,7 @@ func main() {
 	ctx := context.Background()
 	srv := &Server{
 		config:  cfg,
-		timings: make(map[string]time.Time),
+		timings: make(map[string]toolTiming),
 	}
 	defer srv.Close()
 
@@ -349,9 +371,12 @@ func (s *Server) run(ctx context.Context) error {
 	// application-level auth is enforced here.
 	mux.HandleFunc("/telemetry", s.handleTelemetry)
 
+	// Wrap the entire handler with OpenTelemetry and logging middleware
+	handler := otelhttp.NewHandler(loggingMiddleware(mux), "navalplan-researcher")
+
 	httpSrv := &http.Server{
 		Addr:    ":" + s.config.Port,
-		Handler: traceMiddleware(s.config.Project, loggingMiddleware(mux)),
+		Handler: traceMiddleware(s.config.Project, handler),
 	}
 
 	// Listen for SIGTERM/SIGINT so Cloud Run scale-down drains in-flight requests.
@@ -653,9 +678,15 @@ func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []to
 }
 
 func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
+	// Start OTel span for the tool
+	_, span := otel.Tracer("navalplan-researcher").Start(ctx, "tool:"+t.Name())
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.timings[ctx.FunctionCallID()] = time.Now()
+	s.timings[ctx.FunctionCallID()] = toolTiming{
+		start: time.Now(),
+		span:  span,
+	}
 
 	slog.Log(ctx, slog.LevelInfo, "tool_start",
 		"tool", t.Name(),
@@ -675,7 +706,7 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 
 func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
 	s.mu.Lock()
-	startTime, ok := s.timings[ctx.FunctionCallID()]
+	timing, ok := s.timings[ctx.FunctionCallID()]
 	if ok {
 		delete(s.timings, ctx.FunctionCallID())
 	}
@@ -683,13 +714,16 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 
 	var duration string
 	if ok {
-		timesince := time.Since(startTime)
+		timesince := time.Since(timing.start)
 		duration = timesince.String()
 
 		status := "success"
 		if err != nil {
 			status = "error"
+			timing.span.RecordError(err)
 		}
+		timing.span.End()
+
 		slog.Log(ctx, slog.LevelInfo, "tool_end",
 			"tool", t.Name(),
 			"duration", duration,

@@ -9,6 +9,7 @@ import (
 	"app/datastore"
 	"app/server/handlers"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -66,6 +67,8 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 func (s *Server) Middleware(h http.Handler) http.Handler {
 	// Apply in reverse order (wrapping)
 	h = s.requestLoggingMiddleware(h)
+	// Wrap with OpenTelemetry
+	h = otelhttp.NewHandler(h, "navalplan-backend")
 	h = s.traceMiddleware(h)
 	h = s.corsMiddleware(h)
 	h = s.recoveryMiddleware(h)
