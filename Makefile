@@ -197,6 +197,29 @@ add-admin:
 		podman exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) -c "INSERT INTO invitation (email, is_admin) VALUES ('$(EMAIL)', TRUE) ON CONFLICT (email) DO UPDATE SET is_admin = TRUE;"; \
 	fi
 	@echo "Done."
+	
+add-admin-prod: .bin/cloud-sql-proxy
+	@if [ -z "$(EMAIL)" ]; then echo "Usage: make add-admin-prod EMAIL=user@example.com"; exit 1; fi
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -z "$$PROD_DB_USER" ] || [ -z "$$PROD_DB_PASS" ]; then \
+		echo "Error: PROD_DB_USER and PROD_DB_PASS must be set in .env or environment."; \
+		exit 1; \
+	fi; \
+	echo "Ensuring admin status for $(EMAIL) in PRODUCTION..."; \
+	PROXY_LOG=$$(mktemp); \
+	$(CLOUD_SQL_PROXY) --port 5434 $(PROD_CONN_NAME) > $$PROXY_LOG 2>&1 & PID=$$!; \
+	echo "Waiting for Cloud SQL Auth Proxy (PID: $$PID)..."; \
+	for i in $$(seq 1 15); do \
+		kill -0 $$PID 2>/dev/null || { echo "Proxy crashed. Output:"; cat $$PROXY_LOG; rm -f $$PROXY_LOG; exit 1; }; \
+		bash -c "echo > /dev/tcp/127.0.0.1/5434" 2>/dev/null && { echo "Proxy ready."; break; }; \
+		[ $$i -eq 15 ] && { echo "Proxy not ready after 15s. Output:"; cat $$PROXY_LOG; kill $$PID; rm -f $$PROXY_LOG; exit 1; }; \
+		sleep 1; \
+	done; \
+	rm -f $$PROXY_LOG; \
+	PGPASSWORD=$$PROD_DB_PASS psql -h 127.0.0.1 -p 5434 -U $$PROD_DB_USER -d $(PROD_DB_NAME) -c "UPDATE person SET is_admin = TRUE WHERE email = '$(EMAIL)';" | grep "UPDATE 1" || \
+	PGPASSWORD=$$PROD_DB_PASS psql -h 127.0.0.1 -p 5434 -U $$PROD_DB_USER -d $(PROD_DB_NAME) -c "INSERT INTO invitation (email, is_admin) VALUES ('$(EMAIL)', TRUE) ON CONFLICT (email) DO UPDATE SET is_admin = TRUE;"; \
+	kill $$PID; \
+	echo "Done."
 
 # --- Migrations ---
 

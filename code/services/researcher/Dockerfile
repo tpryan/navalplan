@@ -4,7 +4,12 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
-# We copy everything and use the vendor directory
+# We generate the vendor directory inside the container to ensure
+# it matches the builder's Go version exactly.
+COPY go.mod go.sum ./
+RUN go mod vendor
+
+# Copy the rest of the source code
 COPY . .
 
 # Build the binary

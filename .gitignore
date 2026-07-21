@@ -31,3 +31,4 @@ code/services/researcher/__init__.py
 code/services/researcher/agent.py
 .bin/cloud-sql-proxy
 .bin/migrate
+code/app/backend/app
