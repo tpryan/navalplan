@@ -628,8 +628,12 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 	defer s.mu.Unlock()
 	s.timings[ctx.FunctionCallID()] = time.Now()
 
-	argBytes, _ := json.Marshal(args)
-	slog.Info("tool_start", "tool", t.Name(), "args", string(argBytes))
+	slog.Log(ctx, slog.LevelInfo, "tool_start",
+		"tool", t.Name(),
+		"args", args,
+		"function_call_id", ctx.FunctionCallID(),
+		"session_id", ctx.SessionID(),
+	)
 
 	s.broadcast(TelemetryEvent{
 		SessionID: ctx.SessionID(),
@@ -657,7 +661,15 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 		if err != nil {
 			status = "error"
 		}
-		slog.Info("tool_end", "tool", t.Name(), "duration", duration, "status", status)
+		slog.Log(ctx, slog.LevelInfo, "tool_end",
+			"tool", t.Name(),
+			"duration", duration,
+			"status", status,
+			"result", result,
+			"error", err,
+			"function_call_id", ctx.FunctionCallID(),
+			"session_id", ctx.SessionID(),
+		)
 	}
 
 	s.broadcast(TelemetryEvent{
@@ -724,7 +736,14 @@ func loggingMiddleware(next http.Handler) http.Handler {
 func traceMiddleware(projectID string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-		traceParts := strings.Split(traceHeader, "/")
+		// Format: TRACE_ID/SPAN_ID;o=TRACE_TRUE
+		parts := strings.Split(traceHeader, ";")
+		if len(parts) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		traceParts := strings.Split(parts[0], "/")
 		if len(traceParts) > 0 && len(traceParts[0]) > 0 {
 			traceID := traceParts[0]
 			var trace string
@@ -734,6 +753,11 @@ func traceMiddleware(projectID string, next http.Handler) http.Handler {
 				trace = traceID
 			}
 			ctx := logging.AddTraceToContext(r.Context(), trace)
+
+			if len(traceParts) > 1 {
+				ctx = logging.AddSpanToContext(ctx, traceParts[1])
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}

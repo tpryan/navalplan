@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"app/server"
 	appcontext "app/context"
+	"app/server"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -48,7 +48,7 @@ func TestCloudLoggingHandler_FormatMessage(t *testing.T) {
 
 	// Verify
 	assert.Equal(t, "Test Message key1=value1 key2=123", capture.CapturedRecord.Message)
-	
+
 	// Verify attributes are still present (we don't remove them, just append to message)
 	var foundKey1 bool
 	capture.CapturedRecord.Attrs(func(a slog.Attr) bool {

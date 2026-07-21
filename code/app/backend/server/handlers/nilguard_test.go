@@ -150,4 +150,3 @@ func TestPerformRecommendationGeneration_WithLatLng_CallsRun(t *testing.T) {
 		t.Error("expected /api/run to be called when voyage has coordinates")
 	}
 }
-

@@ -12,14 +12,14 @@ func TestGetTides_ExpandingSearch(t *testing.T) {
 		FindStationsFunc: func(opts *noaago.StationOptions) (*noaago.StationResponse, error) {
 			callCount++
 			// Expect radius to increase: 50, 100, 150...
-			// In noaago.StationOptions, we don't have direct access to "Radius" field easily as it might be internal or not exported in the struct directly without looking at the library, 
+			// In noaago.StationOptions, we don't have direct access to "Radius" field easily as it might be internal or not exported in the struct directly without looking at the library,
 			// but we can simulate the behavior based on call count.
-			
+
 			// Let's say we find something on the 3rd try (Radius 150)
 			if callCount < 3 {
 				return &noaago.StationResponse{Count: 0, Stations: []noaago.Station{}}, nil
 			}
-			
+
 			return &noaago.StationResponse{
 				Count: 1,
 				Stations: []noaago.Station{

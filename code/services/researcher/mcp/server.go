@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/tpryan/navalplan/services/researcher/tools"
@@ -41,6 +42,7 @@ func NewHandler(ctx context.Context, nautical *tools.NauticalToolService) *Handl
 
 // ServeHTTP implements the http.Handler interface for the MCP server.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method must be POST", http.StatusMethodNotAllowed)
 		return
@@ -96,7 +98,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 	case "tools/call":
-		res, err = h.handleToolCall(msg.Params)
+		slog.Log(ctx, slog.LevelInfo, "MCP tools/call request", "params", string(msg.Params))
+		res, err = h.handleToolCall(ctx, msg.Params)
+		if err != nil {
+			slog.Log(ctx, slog.LevelError, "MCP tools/call error", "error", err)
+		} else {
+			slog.Log(ctx, slog.LevelInfo, "MCP tools/call success")
+		}
 	default:
 		err = fmt.Errorf("method not found: %s", msg.Method)
 	}
@@ -112,7 +120,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (h *Handler) handleToolCall(params json.RawMessage) (interface{}, error) {
+func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	var callReq struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`

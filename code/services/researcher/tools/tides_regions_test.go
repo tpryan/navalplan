@@ -45,8 +45,8 @@ func (m *mockNIWAClient) Fetch(p niwago.Params) (*niwago.Forecast, error) {
 func TestNOAAProvider_CanHandle(t *testing.T) {
 	p := &NOAAProvider{}
 	cases := []struct{ lat, lng float64 }{
-		{41.5, -71.3},   // Rhode Island
-		{51.5, -0.1},    // London
+		{41.5, -71.3},    // Rhode Island
+		{51.5, -0.1},     // London
 		{-36.85, 174.76}, // Auckland
 		{0, 0},
 	}
@@ -63,12 +63,12 @@ func TestUKProvider_CanHandle(t *testing.T) {
 		lat, lng float64
 		want     bool
 	}{
-		{51.5, -0.1, true},    // London
-		{55.8, -4.2, true},    // Glasgow
-		{50.1, -5.5, true},    // Cornwall
-		{41.5, -71.3, false},  // Rhode Island
+		{51.5, -0.1, true},      // London
+		{55.8, -4.2, true},      // Glasgow
+		{50.1, -5.5, true},      // Cornwall
+		{41.5, -71.3, false},    // Rhode Island
 		{-36.85, 174.76, false}, // Auckland
-		{48.0, 2.3, false},    // Paris (just south of UK box)
+		{48.0, 2.3, false},      // Paris (just south of UK box)
 	}
 	for _, c := range cases {
 		got := p.CanHandle(c.lat, c.lng)
@@ -84,12 +84,12 @@ func TestNIWAProvider_CanHandle(t *testing.T) {
 		lat, lng float64
 		want     bool
 	}{
-		{-36.85, 174.76, true},  // Auckland
-		{-41.28, 174.78, true},  // Wellington
-		{-45.87, 170.5, true},   // Dunedin area
-		{41.5, -71.3, false},    // Rhode Island
-		{51.5, -0.1, false},     // London
-		{-50.0, 170.0, false},   // south of NZ box
+		{-36.85, 174.76, true}, // Auckland
+		{-41.28, 174.78, true}, // Wellington
+		{-45.87, 170.5, true},  // Dunedin area
+		{41.5, -71.3, false},   // Rhode Island
+		{51.5, -0.1, false},    // London
+		{-50.0, 170.0, false},  // south of NZ box
 	}
 	for _, c := range cases {
 		got := p.CanHandle(c.lat, c.lng)

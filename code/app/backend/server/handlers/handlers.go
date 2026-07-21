@@ -59,15 +59,15 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 	}
 
 	return &Handler{
-		DB:          db,
-		ContentDir:  contentDir,
-		AgentURL:    agentURL,
-		AgentClient: client,
-		Agent:       &service.AgentRunner{Client: client, BaseURL: agentURL},
-		ResearchSem: make(chan struct{}, 10),
-		recStreams:       make(map[string]chan models.VoyageRecommendation),
-		progressStreams:   make(map[string]chan models.ProgressEvent),
-		activeJobs:        make(map[string]struct{}),
+		DB:              db,
+		ContentDir:      contentDir,
+		AgentURL:        agentURL,
+		AgentClient:     client,
+		Agent:           &service.AgentRunner{Client: client, BaseURL: agentURL},
+		ResearchSem:     make(chan struct{}, 10),
+		recStreams:      make(map[string]chan models.VoyageRecommendation),
+		progressStreams: make(map[string]chan models.ProgressEvent),
+		activeJobs:      make(map[string]struct{}),
 	}
 }
 

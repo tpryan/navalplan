@@ -53,15 +53,17 @@ type Store interface {
 
 	// Person
 	FindPersonByGoogleID(ctx context.Context, googleID string) (*models.Person, error)
+	FindPersonByEmail(ctx context.Context, email string) (*models.Person, error)
 	GetPersonByID(ctx context.Context, id int64) (*models.Person, error)
-	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64) (*models.Person, error)
+	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64, isAdmin bool) (*models.Person, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
+	SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error
 	ListPeople(ctx context.Context, limit, offset int) ([]models.Person, error)
 	CountPeople(ctx context.Context) (int, error)
 
 	// Invitations
 	GetInvitation(ctx context.Context, email string) (*models.Invitation, error)
-	CreateInvitation(ctx context.Context, email string, invitedBy int64) error
+	CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool) error
 	DeleteInvitation(ctx context.Context, email string) error
 	ListInvitations(ctx context.Context) ([]models.Invitation, error)
 

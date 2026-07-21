@@ -18,8 +18,8 @@ func TestGetInvitation(t *testing.T) {
 	invitedBy := int64(1)
 	createdAt := time.Now()
 
-	rows := sqlmock.NewRows([]string{"email", "invited_by", "created_at"}).
-		AddRow(email, invitedBy, createdAt)
+	rows := sqlmock.NewRows([]string{"email", "invited_by", "is_admin", "created_at"}).
+		AddRow(email, invitedBy, true, createdAt)
 
 	query := `SELECT * FROM invitation WHERE email = $1`
 
@@ -61,13 +61,13 @@ func TestCreateInvitation(t *testing.T) {
 	email := "test@example.com"
 	invitedBy := int64(1)
 
-	query := `INSERT INTO invitation (email, invited_by) VALUES ($1, $2)`
+	query := `INSERT INTO invitation (email, invited_by, is_admin) VALUES ($1, $2, $3)`
 
 	mock.ExpectExec(regexp.QuoteMeta(query)).
-		WithArgs(email, invitedBy).
+		WithArgs(email, invitedBy, true).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := db.CreateInvitation(context.Background(), email, invitedBy)
+	err := db.CreateInvitation(context.Background(), email, invitedBy, true)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -103,9 +103,9 @@ func TestListInvitations(t *testing.T) {
 	db, mock := mockDB(t)
 	defer db.Close()
 
-	rows := sqlmock.NewRows([]string{"email", "invited_by", "created_at"}).
-		AddRow("user1@example.com", 1, time.Now()).
-		AddRow("user2@example.com", 2, time.Now())
+	rows := sqlmock.NewRows([]string{"email", "invited_by", "is_admin", "created_at"}).
+		AddRow("user1@example.com", 1, false, time.Now()).
+		AddRow("user2@example.com", 2, true, time.Now())
 
 	query := `SELECT * FROM invitation ORDER BY created_at DESC`
 
@@ -132,7 +132,7 @@ func TestListPeople(t *testing.T) {
 
 	limit := 10
 	offset := 0
-	
+
 	rows := sqlmock.NewRows([]string{"id", "google_id", "email", "name", "picture_url", "is_admin", "created_at"}).
 		AddRow(1, "gid1", "p1@example.com", "Person 1", nil, false, time.Now()).
 		AddRow(2, "gid2", "p2@example.com", "Person 2", nil, true, time.Now())

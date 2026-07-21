@@ -17,7 +17,6 @@ const (
 	DefaultSearchRadius = 50
 	MaxSearchRadius     = 150 // beyond this distance tide data is not locally meaningful
 	MaxStationsToCheck  = 5
-
 )
 
 // TideArgs defines the arguments for the get_tides tool.

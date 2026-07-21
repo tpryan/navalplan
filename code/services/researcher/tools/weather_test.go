@@ -62,20 +62,20 @@ func TestGetWeatherForecast_Success(t *testing.T) {
 		GetFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
 			// Check if marine or weather request based on metrics
 			// This is a simplified check
-			
+
 			return &openmeteogo.WeatherData{
 				Daily: openmeteogo.Daily{
-					Time:                   []string{"2025-01-01"},
-					WeatherCode:            []int{1}, // Main Clear
-					Temperature2mMax:       []float64{75.0},
-					Temperature2mMin:       []float64{65.0},
-					WindSpeed10mMax:        []float64{15.0},
-					WindGusts10mMax:        []float64{20.0},
+					Time:                     []string{"2025-01-01"},
+					WeatherCode:              []int{1}, // Main Clear
+					Temperature2mMax:         []float64{75.0},
+					Temperature2mMin:         []float64{65.0},
+					WindSpeed10mMax:          []float64{15.0},
+					WindGusts10mMax:          []float64{20.0},
 					WindDirection10mDominant: []int{90},
-					PrecipitationSum:       []float64{0.1},
-					WaveHeightMax:          []float64{1.5}, // 1.5m ~ 4.9ft
-					WaveDirectionDominant:  []float64{180.0},
-					WavePeriodMax:          []float64{8.0},
+					PrecipitationSum:         []float64{0.1},
+					WaveHeightMax:            []float64{1.5}, // 1.5m ~ 4.9ft
+					WaveDirectionDominant:    []float64{180.0},
+					WavePeriodMax:            []float64{8.0},
 				},
 			}, nil
 		},
