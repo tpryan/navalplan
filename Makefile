@@ -416,6 +416,14 @@ deploy-agent:
 	@echo "Deploying Agent..."
 	gcloud builds submit --config cloudbuild-agent.yaml .
 
+deploy-agent-runtime:
+	@echo "Deploying Researcher Agent to Vertex AI Agent Runtime..."
+	cd code/services/researcher && agents-cli deploy \
+		--project $(shell gcloud config get-value project) \
+		--region $(REGION) \
+		--service-name researcher \
+		--no-confirm-project
+
 deploy-backend:
 	@echo "Deploying Backend..."
 	gcloud builds submit --config cloudbuild.yaml .

@@ -111,6 +111,16 @@ type TelemetryEvent struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
+// Reasoning Engine contract types
+type reasoningEngineRequest struct {
+	Input      map[string]any `json:"input"`
+	Parameters map[string]any `json:"parameters"`
+}
+
+type reasoningEngineResponse struct {
+	Output map[string]any `json:"output"`
+}
+
 func (s *Server) broadcast(event TelemetryEvent) {
 	s.muClients.RLock()
 	defer s.muClients.RUnlock()
@@ -128,6 +138,7 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	sessionID := r.URL.Query().Get("session_id")
 
 	f, ok := w.(http.Flusher)
 	if !ok {
@@ -162,8 +173,12 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "event: heartbeat\ndata: {}\n\n")
 			f.Flush()
 		case event := <-messageChan:
+			// If session_id is provided, only stream events for that session.
+			if sessionID != "" && event.SessionID != sessionID {
+				continue
+			}
 			jsonData, _ := json.Marshal(event)
-			fmt.Fprintf(w, "event: message\ndata: %s\n\n", jsonData)
+			fmt.Fprintf(w, "event: telemetry\ndata: %s\n\n", jsonData)
 			f.Flush()
 		}
 	}
@@ -244,14 +259,12 @@ func (s *Server) run(ctx context.Context) error {
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 
-	researcherTools, nauticalSvc, err := s.setupTools(initCtx)
+	nauticalSvc, err := s.setupNauticalService(initCtx)
 	if err != nil {
-		return fmt.Errorf("setting up tools: %w", err)
+		return fmt.Errorf("setting up nautical service: %w", err)
 	}
 
-	mcpTools := s.setupMCPTools(nauticalSvc)
-	// Combine legacy tools with new protocol-isolated tools for a gradual transition
-	allResearcherTools := append(researcherTools, mcpTools...)
+	allResearcherTools := s.setupMCPTools(nauticalSvc)
 
 	pilotAgent, err := s.createPilotAgent(initCtx, allResearcherTools)
 	if err != nil {
@@ -326,6 +339,10 @@ func (s *Server) run(ctx context.Context) error {
 
 	// Mount ADK under /api/
 	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
+
+	// Native Reasoning Engine contract endpoints
+	mux.HandleFunc("/api/reasoning_engine", s.handleReasoningEngine(config))
+	mux.HandleFunc("/api/stream_reasoning_engine", s.handleStreamReasoningEngine(config))
 
 	// Telemetry endpoint — streams internal tool execution events.
 	// In production this is protected by Cloud Run IAM; no additional
@@ -430,32 +447,32 @@ func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
 	}
 }
 
-func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, *tools.NauticalToolService, error) {
-	weatherTool, wp, err := tools.NewWeatherTool()
+func (s *Server) setupNauticalService(ctx context.Context) (*tools.NauticalToolService, error) {
+	_, wp, err := tools.NewWeatherTool()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	s.providers = append(s.providers, wp)
 
-	tideTool, tp, err := tools.NewTideTool(s.config.UKTidalAPIKey, s.config.NIWAAPIKey)
+	_, tp, err := tools.NewTideTool(s.config.UKTidalAPIKey, s.config.NIWAAPIKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	s.providers = append(s.providers, tp)
 
-	sunriseTool, sp, err := tools.NewSunriseTool(s.config.MapsAPIKey)
+	_, sp, err := tools.NewSunriseTool(s.config.MapsAPIKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	s.providers = append(s.providers, sp)
 
-	placesTool, pp, err := tools.NewPlacesTool(ctx, s.config.MapsAPIKey)
+	_, pp, err := tools.NewPlacesTool(ctx, s.config.MapsAPIKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	s.providers = append(s.providers, pp)
 
-	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, &tools.NauticalToolService{
+	return &tools.NauticalToolService{
 		Tides:   tp,
 		Weather: wp,
 		Sunrise: sp,
@@ -775,4 +792,160 @@ func traceMiddleware(projectID string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+func (s *Server) handleReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var reReq reasoningEngineRequest
+		if err := json.NewDecoder(r.Body).Decode(&reReq); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		// Map Reasoning Engine input to ADK message
+		inputMsg, _ := reReq.Input["message"].(string)
+		if inputMsg == "" {
+			// Fallback to "input" if "message" is not present
+			inputMsg, _ = reReq.Input["input"].(string)
+		}
+
+		userID, _ := reReq.Parameters["user_id"].(string)
+		if userID == "" {
+			userID = "default_user"
+		}
+		sessionID, _ := reReq.Parameters["session_id"].(string)
+		if sessionID == "" {
+			sessionID = "default_session"
+		}
+
+		// Use the default agent (harbourmaster) if not specified
+		appName := "harbourmaster"
+
+		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
+		if err != nil {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+
+		runr, err := runner.New(runner.Config{
+			AppName:        appName,
+			Agent:          curAgent,
+			SessionService: cfg.SessionService,
+		})
+		if err != nil {
+			http.Error(w, "failed to create runner", http.StatusInternalServerError)
+			return
+		}
+
+		resp := runr.Run(r.Context(), userID, sessionID, genai.NewContentFromText(inputMsg, "user"), agent.RunConfig{})
+
+		var finalContent string
+		for event, err := range resp {
+			if err != nil {
+				slog.Error("run error", "error", err)
+				continue
+			}
+			if event.Content != nil && event.Content.Role == "model" {
+				for _, part := range event.Content.Parts {
+					if part.Text != "" && !part.Thought {
+						finalContent += part.Text
+					}
+				}
+			}
+		}
+
+		res := reasoningEngineResponse{
+			Output: map[string]any{
+				"content":    finalContent,
+				"session_id": sessionID,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	}
+}
+
+func (s *Server) handleStreamReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var reReq reasoningEngineRequest
+		if err := json.NewDecoder(r.Body).Decode(&reReq); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		inputMsg, _ := reReq.Input["message"].(string)
+		if inputMsg == "" {
+			inputMsg, _ = reReq.Input["input"].(string)
+		}
+
+		userID, _ := reReq.Parameters["user_id"].(string)
+		if userID == "" {
+			userID = "default_user"
+		}
+		sessionID, _ := reReq.Parameters["session_id"].(string)
+		if sessionID == "" {
+			sessionID = "default_session"
+		}
+
+		appName := "harbourmaster"
+
+		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
+		if err != nil {
+			http.Error(w, "agent not found", http.StatusNotFound)
+			return
+		}
+
+		runr, err := runner.New(runner.Config{
+			AppName:        appName,
+			Agent:          curAgent,
+			SessionService: cfg.SessionService,
+		})
+		if err != nil {
+			http.Error(w, "failed to create runner", http.StatusInternalServerError)
+			return
+		}
+
+		resp := runr.Run(r.Context(), userID, sessionID, genai.NewContentFromText(inputMsg, "user"), agent.RunConfig{
+			StreamingMode: agent.StreamingModeSSE,
+		})
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		f, _ := w.(http.Flusher)
+
+		for event, err := range resp {
+			if err != nil {
+				fmt.Fprintf(w, "event: error\ndata: %v\n\n", err)
+				f.Flush()
+				continue
+			}
+
+			// Wrap ADK event in Reasoning Engine output format if needed,
+			// but usually we can just stream the ADK events directly if the
+			// client expects them, OR we wrap them.
+			// The native RE contract expects: data: {"output": {"content": "..."}}
+
+			var content string
+			if event.Content != nil && event.Content.Role == "model" {
+				for _, part := range event.Content.Parts {
+					if part.Text != "" && !part.Thought {
+						content += part.Text
+					}
+				}
+			}
+
+			if content != "" {
+				res := reasoningEngineResponse{
+					Output: map[string]any{
+						"content":    content,
+						"session_id": sessionID,
+					},
+				}
+				jsonData, _ := json.Marshal(res)
+				fmt.Fprintf(w, "data: %s\n\n", jsonData)
+				f.Flush()
+			}
+		}
+	}
 }
