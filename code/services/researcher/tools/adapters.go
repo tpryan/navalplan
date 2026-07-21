@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/adk/tool"
 )
@@ -24,17 +25,17 @@ type TideRequest struct {
 	Date      string  `json:"date"`
 }
 
-// TideEvent represents a single high or low tide event.
-type TideEvent struct {
+// McpTideEvent represents a single high or low tide event.
+type McpTideEvent struct {
 	Time     string  `json:"time"`
 	Type     string  `json:"type"`
 	HeightFt float64 `json:"height_ft"`
 }
 
-// TideResponse represents the output for the GetTides MCP tool.
-type TideResponse struct {
-	StationName string      `json:"station_name"`
-	Events      []TideEvent `json:"events"`
+// McpTideResponse represents the output for the GetTides MCP tool.
+type McpTideResponse struct {
+	StationName string         `json:"station_name"`
+	Events      []McpTideEvent `json:"events"`
 }
 
 // WeatherRequest represents the input for the GetWeather MCP tool.
@@ -105,8 +106,8 @@ type PlaceDetail struct {
 	References []string `json:"references"`
 }
 
-// PlacesResponse represents the output for the FindPlacesNearby MCP tool.
-type PlacesResponse struct {
+// McpPlacesResponse represents the output for the FindPlacesNearby MCP tool.
+type McpPlacesResponse struct {
 	Facilities []PlaceDetail `json:"facilities"`
 }
 
@@ -122,7 +123,7 @@ type SafetyResponse struct {
 }
 
 // FetchTides routes execution flow to the TideManager.
-func (s *NauticalToolService) FetchTides(ctx tool.Context, req TideRequest) (*TideResponse, error) {
+func (s *NauticalToolService) FetchTides(ctx tool.Context, req TideRequest) (*McpTideResponse, error) {
 	if s.Tides == nil {
 		return nil, fmt.Errorf("tide service unavailable")
 	}
@@ -136,12 +137,12 @@ func (s *NauticalToolService) FetchTides(ctx tool.Context, req TideRequest) (*Ti
 		return nil, err
 	}
 
-	res := &TideResponse{
+	res := &McpTideResponse{
 		StationName: result.StationName,
 	}
 
 	for _, e := range result.Tides {
-		res.Events = append(res.Events, TideEvent{
+		res.Events = append(res.Events, McpTideEvent{
 			Time:     e.Time,
 			Type:     e.Type,
 			HeightFt: e.Height,
@@ -233,7 +234,7 @@ func (s *NauticalToolService) FetchSunriseSunset(ctx tool.Context, req SunriseRe
 }
 
 // FetchPlacesNearby finds points of interest.
-func (s *NauticalToolService) FetchPlacesNearby(ctx tool.Context, req PlacesRequest) (*PlacesResponse, error) {
+func (s *NauticalToolService) FetchPlacesNearby(ctx tool.Context, req PlacesRequest) (*McpPlacesResponse, error) {
 	if s.Places == nil {
 		return nil, fmt.Errorf("places service unavailable")
 	}
@@ -248,7 +249,7 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx tool.Context, req PlacesRequ
 		return nil, err
 	}
 
-	res := &PlacesResponse{}
+	res := &McpPlacesResponse{}
 	for _, p := range result.Places {
 		detail := PlaceDetail{
 			Name:            p.Name,
