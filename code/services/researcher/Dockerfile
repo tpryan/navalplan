@@ -4,16 +4,14 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
-# We generate the vendor directory inside the container to ensure
-# it matches the builder's Go version exactly.
 COPY go.mod go.sum ./
-RUN go mod vendor
+RUN go mod download
 
 # Copy the rest of the source code
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o researcher .
+RUN CGO_ENABLED=0 GOOS=linux go build -o researcher .
 
 # Final stage
 FROM alpine:latest
