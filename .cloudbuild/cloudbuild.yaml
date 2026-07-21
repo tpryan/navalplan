@@ -16,7 +16,7 @@ steps:
     ls -la code/app/backend/static.min
   
 # 4. Test Backend
-- name: 'golang'
+- name: 'golang:1.26'
   args: ['test', './...']
   dir: 'code/app/backend'
   env:
