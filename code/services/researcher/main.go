@@ -23,6 +23,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/tpryan/navalplan/services/researcher/config"
 	"github.com/tpryan/navalplan/services/researcher/logging"
+	"github.com/tpryan/navalplan/services/researcher/mcp"
 	"github.com/tpryan/navalplan/services/researcher/tools"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -35,6 +36,7 @@ import (
 
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
+	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
 )
@@ -242,17 +244,21 @@ func (s *Server) run(ctx context.Context) error {
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 
-	researcherTools, err := s.setupTools(initCtx)
+	researcherTools, nauticalSvc, err := s.setupTools(initCtx)
 	if err != nil {
 		return fmt.Errorf("setting up tools: %w", err)
 	}
 
-	pilotAgent, err := s.createPilotAgent(initCtx, researcherTools)
+	mcpTools := s.setupMCPTools(nauticalSvc)
+	// Combine legacy tools with new protocol-isolated tools for a gradual transition
+	allResearcherTools := append(researcherTools, mcpTools...)
+
+	pilotAgent, err := s.createPilotAgent(initCtx, allResearcherTools)
 	if err != nil {
 		return fmt.Errorf("creating pilot agent: %w", err)
 	}
 
-	harbourmasterAgent, err := s.createHarbourmasterAgent(initCtx, researcherTools)
+	harbourmasterAgent, err := s.createHarbourmasterAgent(initCtx, allResearcherTools)
 	if err != nil {
 		return fmt.Errorf("creating harbourmaster agent: %w", err)
 	}
@@ -262,7 +268,7 @@ func (s *Server) run(ctx context.Context) error {
 		return fmt.Errorf("creating commodore agent: %w", err)
 	}
 
-	specialistAgent, err := s.createSpecialistAgent(initCtx, researcherTools)
+	specialistAgent, err := s.createSpecialistAgent(initCtx, allResearcherTools)
 	if err != nil {
 		return fmt.Errorf("creating specialist agent: %w", err)
 	}
@@ -284,6 +290,10 @@ func (s *Server) run(ctx context.Context) error {
 
 	// Start Custom Server
 	mux := http.NewServeMux()
+
+	// Mount the MCP server endpoint as recommended in geap.md
+	mcpHandler := mcp.NewHandler(ctx, nauticalSvc)
+	mux.Handle("/mcp/tools", mcpHandler)
 
 	// Expose to a2a for eval purposes
 	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke", config.SessionService)
@@ -420,32 +430,54 @@ func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
 	}
 }
 
-func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, error) {
+func (s *Server) setupTools(ctx context.Context) ([]tool.Tool, *tools.NauticalToolService, error) {
 	weatherTool, wp, err := tools.NewWeatherTool()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.providers = append(s.providers, wp)
 
 	tideTool, tp, err := tools.NewTideTool(s.config.UKTidalAPIKey, s.config.NIWAAPIKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.providers = append(s.providers, tp)
 
 	sunriseTool, sp, err := tools.NewSunriseTool(s.config.MapsAPIKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.providers = append(s.providers, sp)
 
 	placesTool, pp, err := tools.NewPlacesTool(ctx, s.config.MapsAPIKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.providers = append(s.providers, pp)
 
-	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, nil
+	return []tool.Tool{weatherTool, tideTool, sunriseTool, placesTool}, &tools.NauticalToolService{
+		Tides:   tp,
+		Weather: wp,
+	}, nil
+}
+
+func (s *Server) setupMCPTools(nautical *tools.NauticalToolService) []tool.Tool {
+	tideTool, _ := functiontool.New(functiontool.Config{
+		Name:        "GetTides",
+		Description: "Queries hydrographic station databases for current and historic tidal matrices.",
+	}, nautical.FetchTides)
+
+	weatherTool, _ := functiontool.New(functiontool.Config{
+		Name:        "GetWeather",
+		Description: "Fetches real-time NOAA offshore marine warnings and wind velocity vectors.",
+	}, nautical.FetchWeather)
+
+	safetyTool, _ := functiontool.New(functiontool.Config{
+		Name:        "GetSafetyAlerts",
+		Description: "Extracts active global navigational warnings and localized security alerts.",
+	}, nautical.FetchSafetyAlerts)
+
+	return []tool.Tool{tideTool, weatherTool, safetyTool}
 }
 
 func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
