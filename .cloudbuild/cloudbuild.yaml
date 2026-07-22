@@ -47,6 +47,7 @@ steps:
   - 'navalplan-backend'
   - '--source'
   - '.'
+  - '--clear-base-image'
   - '--region'
   - 'us-central1'
   - '--project'

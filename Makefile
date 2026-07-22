@@ -449,7 +449,7 @@ deploy-agent-runtime:
 
 deploy-backend:
 	@echo "Deploying Backend..."
-	gcloud builds submit --config cloudbuild.yaml .
+	gcloud builds submit --config .cloudbuild/cloudbuild.yaml .
 
 deploy-scheduler:
 	@echo "Deploying Cloud Scheduler Job..."
