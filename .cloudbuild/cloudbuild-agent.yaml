@@ -33,7 +33,8 @@ steps:
   - '--set-secrets=NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
-  - '--set-env-vars=NAVALPLAN_DISABLE_TRACING=true'
+  - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
+  - '--set-env-vars=NAVALPLAN_DISABLE_TRACING=false'
   id: 'deploy-cloud-run'
 
 # 4. Deploy to Vertex AI Agent Runtime (Reasoning Engine)
@@ -55,7 +56,7 @@ steps:
       --deployment-target=agent_runtime \
       --service-name=navalplan-researcher \
       --secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV},NAVALPLAN_DISABLE_TRACING=true" \
+      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},NAVALPLAN_DISABLE_TRACING=false" \
       --no-confirm-project
   dir: 'code/services/researcher'
 

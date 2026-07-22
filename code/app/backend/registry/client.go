@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"golang.org/x/oauth2/google"
 )
@@ -25,6 +26,12 @@ type Service struct {
 		ProtocolBinding string `json:"protocolBinding"`
 		URL             string `json:"url"`
 	} `json:"interfaces"`
+	AgentSpec *struct {
+		Type    string `json:"type"`
+		Content struct {
+			URL string `json:"url"`
+		} `json:"content"`
+	} `json:"agentSpec"`
 }
 
 // NewClient creates a new Agent Registry client.
@@ -69,13 +76,24 @@ func (c *Client) ResolveServiceURL(ctx context.Context, serviceID string) (strin
 		return "", err
 	}
 
-	if len(svc.Interfaces) == 0 {
-		return "", fmt.Errorf("service %s has no interfaces", serviceID)
+	// First check interfaces (for CUSTOM/legacy services)
+	if len(svc.Interfaces) > 0 {
+		return svc.Interfaces[0].URL, nil
 	}
 
-	// For now, just return the first URL.
-	// We might want to filter by ProtocolBinding (e.g., "HTTP_JSON" or "JSONRPC").
-	return svc.Interfaces[0].URL, nil
+	// Then fallback to AgentSpec (for A2A_AGENT_CARD services)
+	if svc.AgentSpec != nil && svc.AgentSpec.Content.URL != "" {
+		u := svc.AgentSpec.Content.URL
+		// A2A Agent Cards store the A2A endpoint URL (e.g., https://.../invoke).
+		// For the ADK REST API calls from the backend, we need the base URL
+		// as the runner appends "/api/..." to it.
+		if idx := strings.Index(u, "/invoke"); idx != -1 {
+			u = u[:idx]
+		}
+		return u, nil
+	}
+
+	return "", fmt.Errorf("service %s has no interfaces and no valid AgentSpec URL", serviceID)
 }
 
 // RegistryResolver resolves agent URLs by querying the Agent Registry for a base service.

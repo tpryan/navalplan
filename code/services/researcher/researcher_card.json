@@ -1,0 +1,21 @@
+{
+  "name": "researcher",
+  "description": "The base service for all NavalPlan agents.",
+  "capabilities": {
+    "streaming": true
+  },
+  "url": "https://navalplan-researcher-2azck273fq-uc.a.run.app/invoke",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "version": "1.0.0",
+  "defaultInputModes": [],
+  "defaultOutputModes": [],
+  "skills": [
+    {
+      "id": "harbourmaster",
+      "name": "model",
+      "description": "Main coordinator for nautical operations.",
+      "tags": ["llm"]
+    }
+  ]
+}

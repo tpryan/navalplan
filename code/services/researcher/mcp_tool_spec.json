@@ -1,0 +1,68 @@
+{
+  "tools": [
+    {
+      "name": "GetTides",
+      "description": "Queries hydrographic station databases for current and historic tidal matrices.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "station_id": {"type": "string"},
+          "latitude":   {"type": "number"},
+          "longitude":  {"type": "number"},
+          "date":       {"type": "string"}
+        },
+        "required": ["date"]
+      }
+    },
+    {
+      "name": "GetWeather",
+      "description": "Fetches real-time NOAA offshore marine warnings and wind velocity vectors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "coordinates": {"type": "string"},
+          "date":        {"type": "string"}
+        },
+        "required": ["coordinates", "date"]
+      }
+    },
+    {
+      "name": "GetSunriseSunset",
+      "description": "Retrieves sunrise and sunset times for a specific location and date.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "latitude":  {"type": "number"},
+          "longitude": {"type": "number"},
+          "date":      {"type": "string"}
+        },
+        "required": ["latitude", "longitude", "date"]
+      }
+    },
+    {
+      "name": "FindPlacesNearby",
+      "description": "Finds places (e.g. marinas, restaurants) near a location.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query":     {"type": "string"},
+          "latitude":  {"type": "number"},
+          "longitude": {"type": "number"},
+          "radius":    {"type": "number"}
+        },
+        "required": ["query", "latitude", "longitude", "radius"]
+      }
+    },
+    {
+      "name": "GetSafetyAlerts",
+      "description": "Extracts active global navigational warnings and localized security alerts.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "region": {"type": "string"}
+        },
+        "required": ["region"]
+      }
+    }
+  ]
+}
