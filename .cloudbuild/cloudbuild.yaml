@@ -72,6 +72,7 @@ steps:
   - '--set-env-vars=ENV=${_ENV}'
   - '--set-env-vars=NAVALPLAN_CONTENT_DIR=${_NAVALPLAN_CONTENT_DIR}'
   - '--set-env-vars=NAVALPLAN_DISABLE_TRACING=false'
+  - '--set-env-vars=NAVALPLAN_USE_AGENT_REGISTRY=true'
   dir: 'code/app/backend'
 availableSecrets:
   secretManager:

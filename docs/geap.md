@@ -6,6 +6,14 @@
 
 ---
 
+## Current Stack Overview
+
+- **Frontend**: React/Vite (Cloud Run)
+- **Backend**: Go (Cloud Run)
+- **Agent Service**: Go/ADK (Cloud Run + Agent Registry)
+- **MCP Server**: Integrated Tooling (Agent Registry)
+- **Database**: PostgreSQL (Cloud SQL)
+
 ## Component Layout Overview
 
 The harness must read, create, or overwrite the following file topology within the `navalplan` directory structure to execute the complete target state migration:
@@ -143,6 +151,30 @@ func (h *Handler ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res, err = h.handleToolCall(msg.Params)
 	default:
 		err = fmt.Errorf("method not found: %s", msg.Method)
+	}
+
+## Agent Registry Integration
+
+The NavalPlan agents and MCP tools are registered with the Gemini Enterprise Agent Registry for enterprise-wide discovery.
+
+### Registration Targets
+
+- **MCP Tools**: `navalplan-mcp` (Protocol: MCP, Binding: jsonrpc)
+- **Harbourmaster**: `navalplan-harbourmaster` (Protocol: A2A, Binding: http-json)
+- **Pilot**: `navalplan-pilot` (Protocol: A2A, Binding: http-json)
+- **Commodore**: `navalplan-commodore` (Protocol: A2A, Binding: http-json)
+- **Specialist**: `navalplan-specialist` (Protocol: A2A, Binding: http-json)
+- **Lookout**: `navalplan-lookout` (Protocol: A2A, Binding: http-json)
+
+### Management
+
+Registration is automated via the root `Makefile`:
+
+```bash
+make register-registry
+```
+
+This ensures that the Agent Registry always points to the latest Cloud Run service URL.
 	}
 
 	response := JSONRPCResponse{JSONRPC: "2.0", ID: msg.ID}

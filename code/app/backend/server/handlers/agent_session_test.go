@@ -91,7 +91,7 @@ func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 		DB:          store,
 		AgentURL:    agentSrv.URL,
 		AgentClient: client,
-		Agent:       &service.AgentRunner{Client: client, BaseURL: agentSrv.URL},
+		Agent:       &service.AgentRunner{Client: client, Resolver: &service.StaticResolver{BaseURL: agentSrv.URL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -133,7 +133,7 @@ func TestPerformGuideResearch_SessionFailure_SavesEmptyGuide(t *testing.T) {
 		DB:          store,
 		AgentURL:    agentSrv.URL,
 		AgentClient: client2,
-		Agent:       &service.AgentRunner{Client: client2, BaseURL: agentSrv.URL},
+		Agent:       &service.AgentRunner{Client: client2, Resolver: &service.StaticResolver{BaseURL: agentSrv.URL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -170,7 +170,7 @@ func TestPerformRecommendation_SessionFailure_DoesNotCallRun(t *testing.T) {
 		DB:          store,
 		AgentURL:    agentSrv.URL,
 		AgentClient: client3,
-		Agent:       &service.AgentRunner{Client: client3, BaseURL: agentSrv.URL},
+		Agent:       &service.AgentRunner{Client: client3, Resolver: &service.StaticResolver{BaseURL: agentSrv.URL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 

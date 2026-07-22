@@ -30,7 +30,7 @@ func TestPerformDiscoveryMining_SessionFailure_DoesNotCallRun(t *testing.T) {
 		DB:          &sessionTrackingStore{},
 		AgentURL:    srv.URL,
 		AgentClient: client,
-		Agent:       &service.AgentRunner{Client: client, BaseURL: srv.URL},
+		Agent:       &service.AgentRunner{Client: client, Resolver: &service.StaticResolver{BaseURL: srv.URL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -65,7 +65,7 @@ func TestPerformDiscoveryMining_ContextCancellation(t *testing.T) {
 		DB:          &sessionTrackingStore{},
 		AgentURL:    srv.URL,
 		AgentClient: client2,
-		Agent:       &service.AgentRunner{Client: client2, BaseURL: srv.URL},
+		Agent:       &service.AgentRunner{Client: client2, Resolver: &service.StaticResolver{BaseURL: srv.URL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -91,7 +91,7 @@ func TestDiscoveryMining_AllMonths_HTTPTrigger(t *testing.T) {
 		DB:          &sessionTrackingStore{},
 		AgentURL:    "http://127.0.0.1:0", // nothing listening — session creation fails fast
 		AgentClient: client3,
-		Agent:       &service.AgentRunner{Client: client3, BaseURL: "http://127.0.0.1:0"},
+		Agent:       &service.AgentRunner{Client: client3, Resolver: &service.StaticResolver{BaseURL: "http://127.0.0.1:0"}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 
@@ -114,7 +114,7 @@ func TestDiscoveryMining_SingleMonth_HTTPTrigger(t *testing.T) {
 		DB:          &sessionTrackingStore{},
 		AgentURL:    "http://127.0.0.1:0",
 		AgentClient: client4,
-		Agent:       &service.AgentRunner{Client: client4, BaseURL: "http://127.0.0.1:0"},
+		Agent:       &service.AgentRunner{Client: client4, Resolver: &service.StaticResolver{BaseURL: "http://127.0.0.1:0"}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 

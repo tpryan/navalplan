@@ -24,6 +24,7 @@ type Handler struct {
 	AgentURL    string
 	AgentClient *http.Client
 	Agent       *service.AgentRunner
+	Resolver    service.Resolver
 	ResearchSem chan struct{}
 
 	// recStreams holds active SSE channels keyed by session ID.
@@ -41,7 +42,7 @@ type Handler struct {
 }
 
 // New creates a new Handler with the given dependencies.
-func New(db datastore.Store, contentDir string, agentURL string) *Handler {
+func New(db datastore.Store, contentDir string, agentURL string, resolver service.Resolver) *Handler {
 	var client *http.Client
 	var err error
 
@@ -63,7 +64,8 @@ func New(db datastore.Store, contentDir string, agentURL string) *Handler {
 		ContentDir:      contentDir,
 		AgentURL:        agentURL,
 		AgentClient:     client,
-		Agent:           &service.AgentRunner{Client: client, BaseURL: agentURL},
+		Agent:           &service.AgentRunner{Client: client, Resolver: resolver},
+		Resolver:        resolver,
 		ResearchSem:     make(chan struct{}, 10),
 		recStreams:      make(map[string]chan models.VoyageRecommendation),
 		progressStreams: make(map[string]chan models.ProgressEvent),

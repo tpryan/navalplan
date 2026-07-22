@@ -16,6 +16,7 @@ import (
 
 	"app/models"
 	"app/server/handlers"
+	"app/service"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -23,7 +24,7 @@ import (
 
 func TestCreateVoyage_SameDayDayTrip(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent", &service.StaticResolver{BaseURL: "http://test-agent"})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/voyages", handler.CreateVoyage)
 
@@ -56,7 +57,7 @@ func TestCreateVoyage_SameDayDayTrip(t *testing.T) {
 
 func TestUpdateVoyage_SameDayDayTrip(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent", &service.StaticResolver{BaseURL: "http://test-agent"})
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /voyages/{id}", handler.UpdateVoyage)
 
@@ -86,7 +87,7 @@ func TestUpdateVoyage_SameDayDayTrip(t *testing.T) {
 // query nor create any passage points beyond the initial cleanup.
 func TestInterpolatePassagePoints_DayTripIsNoOp(t *testing.T) {
 	mockStore := new(MockStore)
-	handler := handlers.New(mockStore, "test_content", "http://test-agent")
+	handler := handlers.New(mockStore, "test_content", "http://test-agent", &service.StaticResolver{BaseURL: "http://test-agent"})
 
 	voyageID := int64(42)
 	tripDate := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)

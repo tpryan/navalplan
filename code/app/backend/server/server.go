@@ -1,13 +1,16 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"app/config"
 	"app/datastore"
+	"app/registry"
 	"app/server/handlers"
+	"app/service"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/oauth2"
@@ -41,7 +44,21 @@ func New(db datastore.Store, cfg *config.Config) (*Server, error) {
 		slog.Warn("Initializing server with EMPTY Google Client ID!")
 	}
 
-	h := handlers.New(db, cfg.ContentDir, cfg.NavalPlanAgentURL)
+	var res service.Resolver
+	if cfg.AgentRegistryEnabled {
+		slog.Info("Using Agent Registry for tool discovery", "project", cfg.Project)
+		regClient, err := registry.NewClient(context.Background(), cfg.Project, "global")
+		if err != nil {
+			slog.Error("Failed to initialize registry client, falling back to static URL", "error", err)
+			res = &service.StaticResolver{BaseURL: cfg.NavalPlanAgentURL}
+		} else {
+			res = &registry.RegistryResolver{Client: regClient}
+		}
+	} else {
+		res = &service.StaticResolver{BaseURL: cfg.NavalPlanAgentURL}
+	}
+
+	h := handlers.New(db, cfg.ContentDir, cfg.NavalPlanAgentURL, res)
 
 	s := &Server{
 		Mux:          http.NewServeMux(),

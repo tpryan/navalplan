@@ -34,6 +34,9 @@ type Config struct {
 	// Logging
 	ObscuredDSN    string
 	DisableTracing bool
+
+	// Agent Registry
+	AgentRegistryEnabled bool
 }
 
 // New reads configuration from environment variables using the provided getEnv function.
@@ -144,18 +147,19 @@ func New(getEnv func(string) string) (*Config, error) {
 	}
 
 	result := &Config{
-		Env:                getEnv("ENV"),
-		Project:            getEnv("GOOGLE_CLOUD_PROJECT"),
-		Port:               port,
-		ContentDir:         contentDir,
-		DatabaseDSN:        dsn,
-		GoogleClientID:     getEnv("NAVALPLAN_OA_CLIENT"),
-		GoogleClientSecret: getEnv("NAVALPLAN_OA_SECRET"),
-		BaseURL:            baseURL,
-		NavalPlanAgentURL:  agentURL,
-		SystemAPIKey:       getEnv("NAVALPLAN_SYSTEM_KEY"),
-		GoogleMapsAPIKey:   getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY"),
-		DisableTracing:     getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
+		Env:                  getEnv("ENV"),
+		Project:              getEnv("GOOGLE_CLOUD_PROJECT"),
+		Port:                 port,
+		ContentDir:           contentDir,
+		DatabaseDSN:          dsn,
+		GoogleClientID:       getEnv("NAVALPLAN_OA_CLIENT"),
+		GoogleClientSecret:   getEnv("NAVALPLAN_OA_SECRET"),
+		BaseURL:              baseURL,
+		NavalPlanAgentURL:    agentURL,
+		SystemAPIKey:         getEnv("NAVALPLAN_SYSTEM_KEY"),
+		GoogleMapsAPIKey:     getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY"),
+		DisableTracing:       getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
+		AgentRegistryEnabled: getEnv("NAVALPLAN_USE_AGENT_REGISTRY") == "true",
 	}
 
 	result.ObscuredDSN = ObscureString(dsn, dbPass)
