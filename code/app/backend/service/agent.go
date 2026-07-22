@@ -120,8 +120,12 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 	}
 
 	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+		slog.InfoContext(ctx, "invoking agent via Reasoning Engine", "target", target, "appName", appName)
 		return r.ReasoningEngine.RunSync(ctx, target, appName, userID, sessionID, prompt)
 	}
+
+	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
+
 
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, false)
 	if err != nil {
@@ -175,8 +179,12 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 	}
 
 	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+		slog.InfoContext(ctx, "invoking agent via Reasoning Engine", "target", target, "appName", appName)
 		return r.ReasoningEngine.RunStreaming(ctx, target, appName, userID, sessionID, prompt)
 	}
+
+	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
+
 
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, true)
 	if err != nil {

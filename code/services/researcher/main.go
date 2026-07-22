@@ -224,14 +224,17 @@ func main() {
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 		// We continue anyway, as telemetry is not critical for service operation
-	}
-	if tp != nil {
+	} else if tp != nil {
+		slog.Info("Telemetry initialized successfully")
 		defer func() {
 			if err := tp.Shutdown(context.Background()); err != nil {
 				slog.Error("Failed to shutdown tracer provider", "error", err)
 			}
 		}()
+	} else {
+		slog.Info("Telemetry was not initialized (likely disabled or not in production)")
 	}
+
 
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
