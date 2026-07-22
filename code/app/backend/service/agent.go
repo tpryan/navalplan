@@ -33,15 +33,20 @@ func (s *StaticResolver) Resolve(ctx context.Context, appName string) (string, e
 
 // AgentRunner handles communication with the AI agent service.
 type AgentRunner struct {
-	Client   *http.Client
-	Resolver Resolver
+	Client          *http.Client
+	Resolver        Resolver
+	ReasoningEngine *ReasoningEngineRunner
 }
 
-func (r *AgentRunner) getURL(ctx context.Context, appName string) (string, error) {
+func (r *AgentRunner) getTarget(ctx context.Context, appName string) (string, error) {
 	if r.Resolver == nil {
 		return defaultAgentBaseURL, nil
 	}
 	return r.Resolver.Resolve(ctx, appName)
+}
+
+func (r *AgentRunner) isReasoningEngine(target string) bool {
+	return strings.HasPrefix(target, "projects/") && strings.Contains(target, "/reasoningEngines/")
 }
 
 // agentRunRequest is the payload sent to /api/run.
@@ -71,11 +76,16 @@ type AgentEvent struct {
 // CreateSession creates an agent session. state is optional; pass nil for no
 // session state.
 func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessionID string, state map[string]any) error {
-	baseURL, err := r.getURL(ctx, appName)
+	target, err := r.getTarget(ctx, appName)
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", baseURL, appName, userID, sessionID)
+
+	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+		return r.ReasoningEngine.CreateSession(ctx, target, appName, userID, sessionID, state)
+	}
+
+	url := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", target, appName, userID, sessionID)
 
 	var body io.Reader
 	if state != nil {
@@ -104,17 +114,21 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 // RunSync calls the agent without streaming and returns concatenated text from
 // all model-role events. Use this for research/guide/discovery flows.
 func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, prompt string) (string, error) {
+	target, err := r.getTarget(ctx, appName)
+	if err != nil {
+		return "", err
+	}
+
+	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+		return r.ReasoningEngine.RunSync(ctx, target, appName, userID, sessionID, prompt)
+	}
+
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, false)
 	if err != nil {
 		return "", err
 	}
 
-	baseURL, err := r.getURL(ctx, appName)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/run", body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target+"/api/run", body)
 	if err != nil {
 		return "", fmt.Errorf("build run request: %w", err)
 	}
@@ -155,17 +169,21 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 // text from all event parts. It handles both NDJSON and JSON-array response
 // formats. Use this for recommendation flows.
 func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, sessionID, prompt string) (string, error) {
+	target, err := r.getTarget(ctx, appName)
+	if err != nil {
+		return "", err
+	}
+
+	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+		return r.ReasoningEngine.RunStreaming(ctx, target, appName, userID, sessionID, prompt)
+	}
+
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, true)
 	if err != nil {
 		return "", err
 	}
 
-	baseURL, err := r.getURL(ctx, appName)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/run", body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target+"/api/run", body)
 	if err != nil {
 		return "", fmt.Errorf("build run request: %w", err)
 	}
