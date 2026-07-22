@@ -17,9 +17,13 @@ import (
 
 // InitTelemetry sets up OpenTelemetry for the application.
 // In production, it exports traces to Google Cloud Trace.
-func InitTelemetry(ctx context.Context, projectID, env string) (*sdktrace.TracerProvider, error) {
-	if env != "production" {
-		slog.Info("OTel disabled in development environment")
+func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bool) (*sdktrace.TracerProvider, error) {
+	if env != "production" || disableTracing {
+		if disableTracing {
+			slog.Info("OTel tracing explicitly disabled")
+		} else {
+			slog.Info("OTel disabled in development environment")
+		}
 		return nil, nil
 	}
 

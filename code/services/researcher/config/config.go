@@ -17,6 +17,7 @@ type Config struct {
 	BaseURL         string
 	ThinkingBudget  int32
 	SearchTimeoutMs int
+	DisableTracing  bool
 }
 
 func New(getEnv func(string) string) (*Config, error) {
@@ -96,6 +97,7 @@ func New(getEnv func(string) string) (*Config, error) {
 		BaseURL:         baseURL,
 		ThinkingBudget:  thinkingBudget,
 		SearchTimeoutMs: searchTimeoutMs,
+		DisableTracing:  getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
 	}
 
 	return cfg, nil
