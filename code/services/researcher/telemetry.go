@@ -7,12 +7,14 @@ import (
 
 	"os"
 
+	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"google.golang.org/adk/telemetry"
 )
@@ -49,6 +51,14 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
 	}
 
+	// Initialize Cloud Trace exporter to ensure data reaches the BigQuery export table.
+	// ADK's default OtelToCloud sends to telemetry.googleapis.com, but standard BQ Trace export
+	// listens to trace.googleapis.com.
+	traceExporter, err := texporter.New(texporter.WithProjectID(projectID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
+	}
+
 	// Use ADK's official telemetry setup which hooks into telemetry.googleapis.com
 	// for Agent Platform metrics (Invocations, Sessions, Model Calls).
 	telemetryProviders, err := telemetry.New(ctx,
@@ -56,6 +66,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
 		telemetry.WithGenAICaptureMessageContent(true),
+		telemetry.WithSpanProcessors(sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
