@@ -50,7 +50,7 @@ func NewClient(ctx context.Context, projectID, location string) (*Client, error)
 	}, nil
 }
 
-// ResolveServiceURL finds the URL for a service by its ID (e.g., "navalplan-harbourmaster").
+// ResolveServiceURL finds the URL or resource name for a service by its ID (e.g., "navalplan-researcher").
 func (c *Client) ResolveServiceURL(ctx context.Context, serviceID string) (string, error) {
 	url := fmt.Sprintf("https://agentregistry.googleapis.com/v1alpha/projects/%s/locations/%s/services/%s",
 		c.ProjectID, c.Location, serviceID)
@@ -76,24 +76,30 @@ func (c *Client) ResolveServiceURL(ctx context.Context, serviceID string) (strin
 		return "", err
 	}
 
-	// First check interfaces (for CUSTOM/legacy services)
-	if len(svc.Interfaces) > 0 {
-		return svc.Interfaces[0].URL, nil
-	}
+	// 1. Check for Reasoning Engine resource name in attributes if present
+	// (Note: This is a placeholder as the exact attribute key might vary by registry version)
 
-	// Then fallback to AgentSpec (for A2A_AGENT_CARD services)
+	// 2. Check for AgentSpec (preferred for ADK agents)
 	if svc.AgentSpec != nil && svc.AgentSpec.Content.URL != "" {
 		u := svc.AgentSpec.Content.URL
-		// A2A Agent Cards store the A2A endpoint URL (e.g., https://.../invoke).
-		// For the ADK REST API calls from the backend, we need the base URL
-		// as the runner appends "/api/..." to it.
+		// If it's a Reasoning Engine resource name, return it as is.
+		if strings.HasPrefix(u, "projects/") && strings.Contains(u, "/reasoningEngines/") {
+			return u, nil
+		}
+
+		// If it's an A2A Agent Card URL, strip /invoke to get the base for ADK REST calls.
 		if idx := strings.Index(u, "/invoke"); idx != -1 {
 			u = u[:idx]
 		}
 		return u, nil
 	}
 
-	return "", fmt.Errorf("service %s has no interfaces and no valid AgentSpec URL", serviceID)
+	// 3. Fallback to interfaces
+	if len(svc.Interfaces) > 0 {
+		return svc.Interfaces[0].URL, nil
+	}
+
+	return "", fmt.Errorf("service %s has no valid endpoint or resource name", serviceID)
 }
 
 // RegistryResolver resolves agent URLs by querying the Agent Registry for a base service.

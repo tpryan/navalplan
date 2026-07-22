@@ -59,12 +59,23 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 		client = &http.Client{Timeout: 20 * time.Minute}
 	}
 
+	agentRunner := &service.AgentRunner{Client: client, Resolver: resolver}
+
+	// Initialize Reasoning Engine runner if in production (where auth is available)
+	// We'll try to initialize it; if it fails, we just don't set it and fall back to HTTP.
+	reRunner, err := service.NewReasoningEngineRunner(context.Background())
+	if err != nil {
+		slog.Warn("Failed to initialize Reasoning Engine runner (metrics will be disabled)", "error", err)
+	} else {
+		agentRunner.ReasoningEngine = reRunner
+	}
+
 	return &Handler{
 		DB:              db,
 		ContentDir:      contentDir,
 		AgentURL:        agentURL,
 		AgentClient:     client,
-		Agent:           &service.AgentRunner{Client: client, Resolver: resolver},
+		Agent:           agentRunner,
 		Resolver:        resolver,
 		ResearchSem:     make(chan struct{}, 10),
 		recStreams:      make(map[string]chan models.VoyageRecommendation),
