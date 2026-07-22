@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"google.golang.org/api/idtoken"
 )
 
 const defaultAgentBaseURL = "http://127.0.0.1:8081"
@@ -137,6 +139,9 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 		return "", fmt.Errorf("build run request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if strings.Contains(target, "run.app") {
+		r.addAuthHeader(req, target)
+	}
 
 	resp, err := r.Client.Do(req)
 	if err != nil {
@@ -196,6 +201,9 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 		return "", fmt.Errorf("build run request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if strings.Contains(target, "run.app") {
+		r.addAuthHeader(req, target)
+	}
 
 	resp, err := r.Client.Do(req)
 	if err != nil {
@@ -243,6 +251,21 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 	}
 
 	return sb.String(), nil
+}
+
+func (r *AgentRunner) addAuthHeader(req *http.Request, audience string) {
+	// The audience should be the base service URL for Cloud Run
+	tokenSource, err := idtoken.NewTokenSource(context.Background(), audience)
+	if err != nil {
+		slog.Error("Failed to create ID token source", "error", err)
+		return
+	}
+	token, err := tokenSource.Token()
+	if err != nil {
+		slog.Error("Failed to get ID token", "error", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 }
 
 func (r *AgentRunner) buildRunBody(appName, userID, sessionID, prompt string, stream bool) (io.Reader, error) {

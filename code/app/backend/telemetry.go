@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"log/slog"
 
+	"os"
+
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // InitTelemetry sets up OpenTelemetry for the application.
@@ -37,12 +40,19 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	}
 
 	// Use the GCP detector to automatically populate resource attributes (e.g. instance ID, region)
+	resAttrs := []attribute.KeyValue{
+		semconv.ServiceNameKey.String("navalplan-backend"),
+		semconv.DeploymentEnvironmentKey.String(env),
+	}
+
+	// Manually inject cloud.resource_id if provided
+	if resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID"); resourceID != "" {
+		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
+	}
+
 	res, err := resource.New(ctx,
 		resource.WithDetectors(gcp.NewDetector()),
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String("navalplan-backend"),
-			semconv.DeploymentEnvironmentKey.String(env),
-		),
+		resource.WithAttributes(resAttrs...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
