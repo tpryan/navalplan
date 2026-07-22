@@ -19,7 +19,7 @@ func newHandlerWithAgent(t *testing.T, agentURL string) *Handler {
 		DB:          &sessionTrackingStore{},
 		AgentURL:    agentURL,
 		AgentClient: client,
-		Agent:       &service.AgentRunner{Client: client, BaseURL: agentURL},
+		Agent:       &service.AgentRunner{Client: client, Resolver: &service.StaticResolver{BaseURL: agentURL}},
 		ResearchSem: make(chan struct{}, 10),
 	}
 }

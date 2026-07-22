@@ -503,3 +503,153 @@ deploy-sql:
 	gcloud storage rm gs://$(STORAGE_BUCKET)/schema.sql
 	gcloud storage rm gs://$(STORAGE_BUCKET)/seed.sql
 db-publish-prod: deploy-sql
+
+# --- Agent Registry ---
+
+NAVALPLAN_RESEARCHER_URL?=$(shell gcloud run services describe navalplan-researcher --region $(REGION) --format='value(status.url)' 2>/dev/null)
+
+register-registry: register-researcher register-mcp register-agents-all
+
+register-researcher:
+	@echo "Registering Base Researcher Service in Agent Registry..."
+	@if [ -z "$(NAVALPLAN_RESEARCHER_URL)" ]; then \
+		echo "Error: Could not determine researcher service URL. Is it deployed?"; \
+		exit 1; \
+	fi
+	gcloud alpha agent-registry services create navalplan-researcher \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Researcher Service" \
+		--description "The base service for all NavalPlan agents." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL),protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-researcher \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Researcher Service" \
+		--description "The base service for all NavalPlan agents." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL),protocolBinding=http-json"
+
+register-mcp:
+	@echo "Registering MCP Service in Agent Registry..."
+	@if [ -z "$(NAVALPLAN_RESEARCHER_URL)" ]; then \
+		echo "Error: Could not determine researcher service URL. Is it deployed?"; \
+		exit 1; \
+	fi
+	gcloud alpha agent-registry services create navalplan-mcp \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan MCP Tools" \
+		--description "Provides nautical tools for tides, weather, and safety alerts." \
+		--mcp-server-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/mcp/tools,protocolBinding=jsonrpc" || \
+	gcloud alpha agent-registry services update navalplan-mcp \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan MCP Tools" \
+		--description "Provides nautical tools for tides, weather, and safety alerts." \
+		--mcp-server-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/mcp/tools,protocolBinding=jsonrpc"
+
+register-agents-all: register-harbourmaster register-pilot register-commodore register-specialist register-lookout
+
+register-harbourmaster:
+	@echo "Registering Harbourmaster Agent..."
+	gcloud alpha agent-registry services create navalplan-harbourmaster \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Harbourmaster" \
+		--description "Main coordinator for nautical operations." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/harbourmaster,protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-harbourmaster \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Harbourmaster" \
+		--description "Main coordinator for nautical operations." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/harbourmaster,protocolBinding=http-json"
+
+register-pilot:
+	@echo "Registering Pilot Agent..."
+	gcloud alpha agent-registry services create navalplan-pilot \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Pilot" \
+		--description "Expert in local navigation and nautical rules." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/pilot,protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-pilot \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Pilot" \
+		--description "Expert in local navigation and nautical rules." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/pilot,protocolBinding=http-json"
+
+register-commodore:
+	@echo "Registering Commodore Agent..."
+	gcloud alpha agent-registry services create navalplan-commodore \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Commodore" \
+		--description "High-level strategic planning and fleet management." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/commodore,protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-commodore \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Commodore" \
+		--description "High-level strategic planning and fleet management." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/commodore,protocolBinding=http-json"
+
+register-specialist:
+	@echo "Registering Specialist Agent..."
+	gcloud alpha agent-registry services create navalplan-specialist \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Specialist" \
+		--description "Technical specialist for specific maritime tasks." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/specialist,protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-specialist \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Specialist" \
+		--description "Technical specialist for specific maritime tasks." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/specialist,protocolBinding=http-json"
+
+register-lookout:
+	@echo "Registering Lookout Agent..."
+	gcloud alpha agent-registry services create navalplan-lookout \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Lookout" \
+		--description "Monitoring and alerting for maritime safety." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/lookout,protocolBinding=http-json" || \
+	gcloud alpha agent-registry services update navalplan-lookout \
+		--project $(shell gcloud config get-value project) \
+		--location global \
+		--display-name "NavalPlan Lookout" \
+		--description "Monitoring and alerting for maritime safety." \
+		--agent-spec-type=no-spec \
+		--interfaces "url=$(NAVALPLAN_RESEARCHER_URL)/invoke/lookout,protocolBinding=http-json"
+
+register-agents:
+	@echo "Registering Agents in Gemini Enterprise..."
+	@if [ -z "$(GEMINI_ENTERPRISE_APP_ID)" ]; then \
+		echo "Error: GEMINI_ENTERPRISE_APP_ID is not set."; \
+		exit 1; \
+	fi
+	# Use agents-cli publish for agent registration if available
+	@if [ -f "./venv/bin/agents-cli" ]; then \
+		./venv/bin/agents-cli publish gemini-enterprise \
+			--gemini-enterprise-app-id $(GEMINI_ENTERPRISE_APP_ID) \
+			--interactive; \
+	else \
+		echo "Warning: agents-cli not found. Skipping Gemini Enterprise publishing."; \
+	fi

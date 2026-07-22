@@ -13,19 +13,35 @@ import (
 
 const defaultAgentBaseURL = "http://127.0.0.1:8081"
 
-// AgentRunner handles communication with the AI agent service.
-// It encapsulates session creation, agent invocation, and response parsing
-// so that handler-level functions can focus on domain logic.
-type AgentRunner struct {
-	Client  *http.Client
+// Resolver defines how to find the URL for a specific agent application.
+type Resolver interface {
+	Resolve(ctx context.Context, appName string) (string, error)
+}
+
+// StaticResolver returns a fixed base URL and appends the ADK API paths.
+type StaticResolver struct {
 	BaseURL string
 }
 
-func (r *AgentRunner) baseURL() string {
-	if r.BaseURL != "" {
-		return r.BaseURL
+func (s *StaticResolver) Resolve(ctx context.Context, appName string) (string, error) {
+	url := s.BaseURL
+	if url == "" {
+		url = defaultAgentBaseURL
 	}
-	return defaultAgentBaseURL
+	return url, nil
+}
+
+// AgentRunner handles communication with the AI agent service.
+type AgentRunner struct {
+	Client   *http.Client
+	Resolver Resolver
+}
+
+func (r *AgentRunner) getURL(ctx context.Context, appName string) (string, error) {
+	if r.Resolver == nil {
+		return defaultAgentBaseURL, nil
+	}
+	return r.Resolver.Resolve(ctx, appName)
 }
 
 // agentRunRequest is the payload sent to /api/run.
@@ -55,7 +71,11 @@ type AgentEvent struct {
 // CreateSession creates an agent session. state is optional; pass nil for no
 // session state.
 func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessionID string, state map[string]any) error {
-	url := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", r.baseURL(), appName, userID, sessionID)
+	baseURL, err := r.getURL(ctx, appName)
+	if err != nil {
+		return err
+	}
+	url := fmt.Sprintf("%s/api/apps/%s/users/%s/sessions/%s", baseURL, appName, userID, sessionID)
 
 	var body io.Reader
 	if state != nil {
@@ -89,7 +109,12 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL()+"/api/run", body)
+	baseURL, err := r.getURL(ctx, appName)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/run", body)
 	if err != nil {
 		return "", fmt.Errorf("build run request: %w", err)
 	}
@@ -135,7 +160,12 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL()+"/api/run", body)
+	baseURL, err := r.getURL(ctx, appName)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/run", body)
 	if err != nil {
 		return "", fmt.Errorf("build run request: %w", err)
 	}

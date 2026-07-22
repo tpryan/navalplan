@@ -31,8 +31,8 @@ func makeEvents(role, text string) []agentEvent {
 
 func newRunner(baseURL string) *service.AgentRunner {
 	return &service.AgentRunner{
-		Client:  &http.Client{},
-		BaseURL: baseURL,
+		Client:   &http.Client{},
+		Resolver: &service.StaticResolver{BaseURL: baseURL},
 	}
 }
 
