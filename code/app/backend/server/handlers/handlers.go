@@ -108,6 +108,11 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return nil // Agent not configured, skip check
 	}
 
+	// Skip health check if it's a Reasoning Engine resource name (not a URL)
+	if strings.HasPrefix(h.AgentURL, "projects/") && strings.Contains(h.AgentURL, "/reasoningEngines/") {
+		return nil
+	}
+
 	url := h.AgentURL + "/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
