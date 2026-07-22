@@ -25,6 +25,8 @@ import (
 	"github.com/tpryan/navalplan/services/researcher/logging"
 	"github.com/tpryan/navalplan/services/researcher/mcp"
 	"github.com/tpryan/navalplan/services/researcher/tools"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -36,7 +38,6 @@ import (
 	"google.golang.org/adk/session"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/agenttool"
 	"google.golang.org/adk/tool/functiontool"
@@ -234,7 +235,6 @@ func main() {
 	} else {
 		slog.Info("Telemetry was not initialized (likely disabled or not in production)")
 	}
-
 
 	slog.Info("config", "modelName", cfg.ModelName)
 	slog.Info("config", "port", cfg.Port)
@@ -801,33 +801,33 @@ func loggingMiddleware(next http.Handler) http.Handler {
 // ids are propegated so that you can get debugging and analysis.
 func traceMiddleware(projectID string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Use standard OTel propagator to extract context from headers (X-Cloud-Trace-Context, etc.)
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+
+		// Also extract for legacy logging if needed, but the primary goal is OTel linkage
 		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-		// Format: TRACE_ID/SPAN_ID;o=TRACE_TRUE
-		parts := strings.Split(traceHeader, ";")
-		if len(parts) == 0 {
-			next.ServeHTTP(w, r)
-			return
+		if traceHeader != "" {
+			parts := strings.Split(traceHeader, ";")
+			if len(parts) > 0 {
+				traceParts := strings.Split(parts[0], "/")
+				if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+					traceID := traceParts[0]
+					var traceStr string
+					if projectID != "" {
+						traceStr = fmt.Sprintf("projects/%s/traces/%s", projectID, traceID)
+					} else {
+						traceStr = traceID
+					}
+					ctx = logging.AddTraceToContext(ctx, traceStr)
+
+					if len(traceParts) > 1 {
+						ctx = logging.AddSpanToContext(ctx, traceParts[1])
+					}
+				}
+			}
 		}
 
-		traceParts := strings.Split(parts[0], "/")
-		if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-			traceID := traceParts[0]
-			var trace string
-			if projectID != "" {
-				trace = fmt.Sprintf("projects/%s/traces/%s", projectID, traceID)
-			} else {
-				trace = traceID
-			}
-			ctx := logging.AddTraceToContext(r.Context(), trace)
-
-			if len(traceParts) > 1 {
-				ctx = logging.AddSpanToContext(ctx, traceParts[1])
-			}
-
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 func (s *Server) handleReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
