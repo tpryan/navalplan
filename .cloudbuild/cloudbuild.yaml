@@ -71,6 +71,7 @@ steps:
   - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
   - '--set-env-vars=ENV=${_ENV}'
   - '--set-env-vars=NAVALPLAN_CONTENT_DIR=${_NAVALPLAN_CONTENT_DIR}'
+  - '--set-env-vars=NAVALPLAN_DISABLE_TRACING=false'
   dir: 'code/app/backend'
 availableSecrets:
   secretManager:

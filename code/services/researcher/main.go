@@ -220,7 +220,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize OpenTelemetry
-	tp, err := InitTelemetry(ctx, cfg.Project, cfg.Env)
+	tp, err := InitTelemetry(ctx, cfg.Project, cfg.Env, cfg.DisableTracing)
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 		// We continue anyway, as telemetry is not critical for service operation

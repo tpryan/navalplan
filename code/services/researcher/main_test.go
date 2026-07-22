@@ -30,16 +30,17 @@ func TestCreateResearcherAgent(t *testing.T) {
 			GeminiAPIKey: apiKey,
 			MapsAPIKey:   mapsKey,
 		},
-		timings: make(map[string]time.Time),
+		timings: make(map[string]toolTiming),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	researcherTools, err := srv.setupTools(ctx)
+	nauticalSvc, err := srv.setupNauticalService(ctx)
 	if err != nil {
-		t.Fatalf("Failed to setup tools: %v", err)
+		t.Fatalf("Failed to setup nautical service: %v", err)
 	}
+	researcherTools := srv.setupMCPTools(nauticalSvc)
 
 	a, err := srv.createHarbourmasterAgent(ctx, researcherTools)
 	if err != nil {
