@@ -1,0 +1,19 @@
+{
+  "name": "specialist",
+  "description": "NavalPlan specialist agent",
+  "capabilities": { "streaming": true },
+  "url": "https://navalplan-researcher-2azck273fq-uc.a.run.app/invoke/specialist",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "version": "1.0.0",
+  "defaultInputModes": [],
+  "defaultOutputModes": [],
+  "skills": [
+    {
+      "id": "specialist",
+      "name": "model",
+      "description": "NavalPlan specialist agent",
+      "tags": ["llm"]
+    }
+  ]
+}
