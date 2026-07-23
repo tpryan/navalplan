@@ -83,13 +83,22 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	resCtx, resCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer resCancel()
 
-	res, err := resource.New(resCtx,
-		resource.WithDetectors(detector),
+	// Detect GCP environment attributes (e.g. region, instance ID)
+	gcpRes, _ := resource.New(resCtx, resource.WithDetectors(detector))
+
+	// Define explicit overrides (Reasoning Engine resource_id, project_id, service.name)
+	overrideRes, err := resource.New(resCtx,
 		resource.WithFromEnv(),
 		resource.WithAttributes(resAttrs...),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
+		return nil, fmt.Errorf("failed to create OTel override resource: %w", err)
+	}
+
+	// Merge overrideRes OVER gcpRes so Reasoning Engine URI overrides Cloud Run revision ID!
+	res, err := resource.Merge(gcpRes, overrideRes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge OTel resources: %w", err)
 	}
 
 	for _, attr := range res.Attributes() {
