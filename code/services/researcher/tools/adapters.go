@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/adk/tool"
+	"google.golang.org/adk/v2/agent"
 )
 
 // NauticalToolService aggregates the robust domain logic providers.
@@ -89,15 +89,15 @@ type PlacesRequest struct {
 
 // PlaceDetail represents a single place found by the search.
 type PlaceDetail struct {
-	Name            string   `json:"name"`
-	Type            string   `json:"type"` // Mapped from query or business type
-	Website         string   `json:"website"`
-	Address         string   `json:"address"`
-	Latitude        float64  `json:"latitude"`
-	Longitude       float64  `json:"longitude"`
-	Rating          float64  `json:"rating"`
-	UserRatingCount int32    `json:"user_rating_count"`
-	BusinessStatus  string   `json:"business_status"`
+	Name            string  `json:"name"`
+	Type            string  `json:"type"` // Mapped from query or business type
+	Website         string  `json:"website"`
+	Address         string  `json:"address"`
+	Latitude        float64 `json:"latitude"`
+	Longitude       float64 `json:"longitude"`
+	Rating          float64 `json:"rating"`
+	UserRatingCount int32   `json:"user_rating_count"`
+	BusinessStatus  string  `json:"business_status"`
 	Details         struct {
 		Description string `json:"description"`
 		Protection  string `json:"protection"`
@@ -123,7 +123,7 @@ type SafetyResponse struct {
 }
 
 // FetchTides routes execution flow to the TideManager.
-func (s *NauticalToolService) FetchTides(ctx tool.Context, req TideRequest) (*McpTideResponse, error) {
+func (s *NauticalToolService) FetchTides(ctx agent.Context, req TideRequest) (*McpTideResponse, error) {
 	if s.Tides == nil {
 		return nil, fmt.Errorf("tide service unavailable")
 	}
@@ -153,7 +153,7 @@ func (s *NauticalToolService) FetchTides(ctx tool.Context, req TideRequest) (*Mc
 }
 
 // FetchWeather fetches real-time weather data.
-func (s *NauticalToolService) FetchWeather(ctx tool.Context, req WeatherRequest) (*WeatherResponse, error) {
+func (s *NauticalToolService) FetchWeather(ctx agent.Context, req WeatherRequest) (*WeatherResponse, error) {
 	if s.Weather == nil {
 		return nil, fmt.Errorf("weather service unavailable")
 	}
@@ -203,7 +203,7 @@ func (s *NauticalToolService) FetchWeather(ctx tool.Context, req WeatherRequest)
 }
 
 // FetchSunriseSunset calculates solar phases.
-func (s *NauticalToolService) FetchSunriseSunset(ctx tool.Context, req SunriseRequest) (*SunriseResponse, error) {
+func (s *NauticalToolService) FetchSunriseSunset(ctx agent.Context, req SunriseRequest) (*SunriseResponse, error) {
 	if s.Sunrise == nil {
 		return nil, fmt.Errorf("sunrise service unavailable")
 	}
@@ -234,7 +234,7 @@ func (s *NauticalToolService) FetchSunriseSunset(ctx tool.Context, req SunriseRe
 }
 
 // FetchPlacesNearby finds points of interest.
-func (s *NauticalToolService) FetchPlacesNearby(ctx tool.Context, req PlacesRequest) (*McpPlacesResponse, error) {
+func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesRequest) (*McpPlacesResponse, error) {
 	if s.Places == nil {
 		return nil, fmt.Errorf("places service unavailable")
 	}
@@ -285,7 +285,7 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx tool.Context, req PlacesRequ
 }
 
 // FetchSafetyAlerts extracts active global navigational warnings and localized security alerts.
-func (s *NauticalToolService) FetchSafetyAlerts(ctx tool.Context, req SafetyRequest) (*SafetyResponse, error) {
+func (s *NauticalToolService) FetchSafetyAlerts(ctx agent.Context, req SafetyRequest) (*SafetyResponse, error) {
 	// Initially provides mock data as per geap.md recommendations as we don't have a safety tool yet.
 	return &SafetyResponse{
 		ActiveHazards: []string{"Shoaling reported near channel marker 4"},

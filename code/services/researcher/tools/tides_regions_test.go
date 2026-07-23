@@ -253,7 +253,7 @@ func TestTideManager_DispatchesToFirstMatch(t *testing.T) {
 
 	tm := &TideManager{providers: []RegionalTideProvider{first, second, third}}
 
-	result, err := tm.GetTides(mockToolContext{}, TideArgs{Latitude: 51.5, Longitude: -0.1, Date: "2026-04-18"})
+	result, err := tm.GetTides(newMockContext(), TideArgs{Latitude: 51.5, Longitude: -0.1, Date: "2026-04-18"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestTideManager_FallsThroughOnError(t *testing.T) {
 	// Make failing return an error.
 	failing.returnErr = fmt.Errorf("date out of range")
 
-	result, err := tm.GetTides(mockToolContext{}, TideArgs{Latitude: 51.5, Longitude: -0.1, Date: "2030-01-01"})
+	result, err := tm.GetTides(newMockContext(), TideArgs{Latitude: 51.5, Longitude: -0.1, Date: "2030-01-01"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestTideManager_NoProviderMatch(t *testing.T) {
 		&captureProvider{canHandle: false},
 	}}
 
-	_, err := tm.GetTides(mockToolContext{}, TideArgs{Latitude: 0, Longitude: 0, Date: "2026-04-18"})
+	_, err := tm.GetTides(newMockContext(), TideArgs{Latitude: 0, Longitude: 0, Date: "2026-04-18"})
 	if err == nil {
 		t.Error("expected error when no provider matches")
 	}

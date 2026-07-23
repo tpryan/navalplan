@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/adk/model"
-	"google.golang.org/adk/tool"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
 
@@ -61,7 +61,7 @@ func (t *BatchSearchTool) Declaration() *genai.FunctionDeclaration {
 }
 
 // ProcessRequest satisfies toolinternal.RequestProcessor.
-func (t *BatchSearchTool) ProcessRequest(ctx tool.Context, req *model.LLMRequest) error {
+func (t *BatchSearchTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
 	if req.Tools == nil {
 		req.Tools = make(map[string]any)
 	}
@@ -94,7 +94,7 @@ func (t *BatchSearchTool) ProcessRequest(ctx tool.Context, req *model.LLMRequest
 }
 
 // Run satisfies toolinternal.FunctionTool.
-func (t *BatchSearchTool) Run(ctx tool.Context, args any) (map[string]any, error) {
+func (t *BatchSearchTool) Run(ctx agent.Context, args any) (map[string]any, error) {
 	m, ok := args.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected args type, got: %T", args)
@@ -128,7 +128,7 @@ func (t *BatchSearchTool) Run(ctx tool.Context, args any) (map[string]any, error
 	return resultMap, nil
 }
 
-func (t *BatchSearchTool) Execute(ctx tool.Context, args *BatchSearchArgs) (*BatchSearchResult, error) {
+func (t *BatchSearchTool) Execute(ctx agent.Context, args *BatchSearchArgs) (*BatchSearchResult, error) {
 	if len(args.Queries) == 0 {
 		return &BatchSearchResult{Results: make(map[string]string)}, nil
 	}

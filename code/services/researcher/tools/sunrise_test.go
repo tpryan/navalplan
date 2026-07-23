@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"google.golang.org/adk/v2/agent"
 	"googlemaps.github.io/maps"
 )
 
@@ -64,7 +65,7 @@ func TestGetSunriseSunset(t *testing.T) {
 			}
 
 			sp := &SunriseProvider{client: mockClient}
-			got, err := sp.GetSunriseSunset(nil, tt.args)
+			got, err := sp.GetSunriseSunset(newMockContext(), tt.args)
 
 			if tt.expectError {
 				if err == nil {
@@ -93,7 +94,7 @@ func TestGetSunriseSunset_ContextPropagated(t *testing.T) {
 	type ctxKey struct{}
 	sentinel := ctxKey{}
 	inner := context.WithValue(context.Background(), sentinel, "marker")
-	ctx := mockToolContext{Context: inner}
+	ctx := &mockToolContext{StrictContextMock: agent.NewStrictContextMock(inner)}
 
 	mockClient := &mockTimezoneClient{
 		res: &maps.TimezoneResult{

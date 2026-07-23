@@ -77,7 +77,7 @@ func TestFindPlaces_Success(t *testing.T) {
 		Longitude: 20.0,
 	}
 
-	resp, err := p.FindPlaces(mockToolContext{Context: context.Background()}, args)
+	resp, err := p.FindPlaces(newMockContext(), args)
 	if err != nil {
 		t.Fatalf("FindPlaces() error = %v", err)
 	}
@@ -100,7 +100,7 @@ func TestFindPlaces_APIError(t *testing.T) {
 	p := &PlacesProvider{client: mockClient}
 	args := PlacesArgs{Query: "marina"}
 
-	_, err := p.FindPlaces(mockToolContext{Context: context.Background()}, args)
+	_, err := p.FindPlaces(newMockContext(), args)
 	if err == nil {
 		t.Fatal("Expected error, got none")
 	}

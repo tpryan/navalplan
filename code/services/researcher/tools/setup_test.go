@@ -3,15 +3,21 @@ package tools
 import (
 	"context"
 
-	"google.golang.org/adk/agent"
-	"google.golang.org/adk/memory"
-	"google.golang.org/adk/session"
-	"google.golang.org/adk/tool/toolconfirmation"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/memory"
+	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/tool/toolconfirmation"
 	"google.golang.org/genai"
 )
 
 type mockToolContext struct {
-	context.Context
+	agent.StrictContextMock
+}
+
+func newMockContext() *mockToolContext {
+	return &mockToolContext{
+		StrictContextMock: agent.NewStrictContextMock(context.Background()),
+	}
 }
 
 func (m mockToolContext) Actions() *session.EventActions {
@@ -40,6 +46,14 @@ func (m mockToolContext) Branch() string {
 
 func (m mockToolContext) InvocationID() string {
 	return "test-invocation-id"
+}
+
+func (m mockToolContext) Agent() agent.Agent {
+	return nil
+}
+
+func (m mockToolContext) Session() session.Session {
+	return nil
 }
 
 func (m mockToolContext) ReadonlyState() session.ReadonlyState {

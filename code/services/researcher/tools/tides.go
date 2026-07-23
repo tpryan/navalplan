@@ -9,8 +9,9 @@ import (
 	"github.com/tpryan/niwago"
 	"github.com/tpryan/noaago"
 	"github.com/tpryan/uktidal"
-	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/tool"
+	"google.golang.org/adk/v2/tool/functiontool"
 )
 
 const (
@@ -472,7 +473,7 @@ func NewTideTool(ukKey, niwaKey string) (tool.Tool, *TideManager, error) {
 	return t, tm, err
 }
 
-func (tm *TideManager) GetTides(ctx tool.Context, args TideArgs) (TideResult, error) {
+func (tm *TideManager) GetTides(ctx agent.Context, args TideArgs) (TideResult, error) {
 	var lastErr error
 	for _, p := range tm.providers {
 		if !p.CanHandle(args.Latitude, args.Longitude) {
