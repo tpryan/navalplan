@@ -32,3 +32,4 @@ code/services/researcher/agent.py
 .bin/cloud-sql-proxy
 .bin/migrate
 code/app/backend/app
+code/app/backend/scratch/trigger_telemetry.py

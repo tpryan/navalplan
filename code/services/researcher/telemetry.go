@@ -29,19 +29,13 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	}
 
 	resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID")
-	slog.Info("Telemetry initialization",
+	slog.Info("Telemetry initialization started",
 		"projectID", projectID,
 		"env", env,
 		"NAVALPLAN_RESOURCE_ID", resourceID,
-		"OTEL_RESOURCE_ATTRIBUTES", os.Getenv("OTEL_RESOURCE_ATTRIBUTES"),
 	)
 
 	// 1. Create the resource with necessary attributes
-	// We also set the environment variable as a fallback for some OTel detectors
-	if resourceID != "" {
-		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "cloud.resource_id="+resourceID)
-	}
-
 	detector := gcp.NewDetector()
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-researcher"),
@@ -51,6 +45,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 
 	// Manually inject cloud.resource_id if provided (critical for BigQuery Agent Analytics)
 	if resourceID != "" {
+		slog.Info("Injecting cloud.resource_id into resource attributes", "id", resourceID)
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
 		// Also add it without dots as a fallback
 		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
@@ -64,35 +59,41 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
 	}
 
+	// Log the final resource attributes for verification in Cloud Logging
+	for _, attr := range res.Attributes() {
+		slog.Debug("Resource attribute", "key", string(attr.Key), "value", attr.Value.Emit())
+	}
+
 	// Initialize Cloud Trace exporter to ensure data reaches the BigQuery export table.
-	// ADK's default OtelToCloud sends to telemetry.googleapis.com, but standard BQ Trace export
-	// listens to trace.googleapis.com.
 	traceExporter, err := texporter.New(texporter.WithProjectID(projectID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
-	// Use ADK's official telemetry setup which hooks into telemetry.googleapis.com
-	// for Agent Platform metrics (Invocations, Sessions, Model Calls).
+	// Use ADK's official telemetry setup
 	telemetryProviders, err := telemetry.New(ctx,
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
 		telemetry.WithGenAICaptureMessageContent(true),
-		telemetry.WithSpanProcessors(sdktrace.NewBatchSpanProcessor(traceExporter)),
+		// We use a SimpleSpanProcessor for now to ensure spans are flushed immediately for debugging.
+		// In a high-traffic production app, BatchSpanProcessor is preferred.
+		telemetry.WithSpanProcessors(sdktrace.NewSimpleSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
 	}
 
-	// Register as global OTel providers and set the standard trace propagator
+	// Register as global OTel providers
 	telemetryProviders.SetGlobalOtelProviders()
+	
+	// Set the standard trace propagator with Cloud Trace support
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 		gcppropagator.CloudTraceFormatPropagator{},
 	))
 
-	slog.Info("Agent Platform telemetry initialized", "projectID", projectID)
+	slog.Info("Agent Platform and Cloud Trace telemetry initialized", "projectID", projectID)
 	return telemetryProviders, nil
 }

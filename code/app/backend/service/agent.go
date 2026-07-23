@@ -100,6 +100,9 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 		return fmt.Errorf("build session request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if strings.Contains(target, "run.app") {
+		r.addAuthHeader(req, target)
+	}
 
 	resp, err := r.Client.Do(req)
 	if err != nil {
