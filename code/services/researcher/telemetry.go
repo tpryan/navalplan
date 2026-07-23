@@ -15,23 +15,29 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"google.golang.org/adk/telemetry"
 )
 
-// InitTelemetry sets up OpenTelemetry for the application using the official ADK telemetry package.
-// This ensures that model calls and agent metrics are correctly reported to the Agent Platform dashboard.
+// InitTelemetry sets up OpenTelemetry for the researcher service.
+// It configures two exporters:
+// 1. The default ADK exporter (sends data to telemetry.googleapis.com)
+// 2. A custom Cloud Trace exporter (sends data to trace.googleapis.com for BQ Agent Analytics)
 func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bool) (*telemetry.Providers, error) {
-	if env != "production" || disableTracing {
-		if disableTracing {
-			slog.Info("OTel tracing explicitly disabled")
-		} else {
-			slog.Info("OTel disabled in development environment")
-		}
+	if disableTracing {
+		slog.Info("OTel tracing explicitly disabled")
 		return nil, nil
 	}
 
-	// Use GCP detector to automatically populate resource attributes (project, region, instance, etc.)
+	resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID")
+	slog.Info("Telemetry initialization",
+		"projectID", projectID,
+		"env", env,
+		"NAVALPLAN_RESOURCE_ID", resourceID,
+		"OTEL_RESOURCE_ATTRIBUTES", os.Getenv("OTEL_RESOURCE_ATTRIBUTES"),
+	)
+
+	// 1. Create the resource with necessary attributes
 	detector := gcp.NewDetector()
 	resAttrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String("navalplan-researcher"),
@@ -39,7 +45,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	}
 
 	// Manually inject cloud.resource_id if provided (critical for BigQuery Agent Analytics)
-	if resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID"); resourceID != "" {
+	if resourceID != "" {
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
 	}
 

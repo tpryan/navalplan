@@ -15,18 +15,26 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )
 
 // InitTelemetry sets up OpenTelemetry for the application.
 // In production, it exports traces to Google Cloud Trace.
 func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bool) (*sdktrace.TracerProvider, error) {
-	if env != "production" || disableTracing {
-		if disableTracing {
-			slog.Info("OTel tracing explicitly disabled")
-		} else {
-			slog.Info("OTel disabled in development environment")
-		}
+	if disableTracing {
+		slog.Info("OTel tracing explicitly disabled")
+		return nil, nil
+	}
+
+	resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID")
+	slog.Info("Telemetry initialization",
+		"projectID", projectID,
+		"env", env,
+		"NAVALPLAN_RESOURCE_ID", resourceID,
+	)
+
+	if env != "production" {
+		slog.Info("OTel disabled in development environment")
 		return nil, nil
 	}
 
