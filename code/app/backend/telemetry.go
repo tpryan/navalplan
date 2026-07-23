@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )
 
 // InitTelemetry sets up OpenTelemetry for the application.
@@ -49,8 +48,8 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 
 	// Use the GCP detector to automatically populate resource attributes (e.g. instance ID, region)
 	resAttrs := []attribute.KeyValue{
-		semconv.ServiceNameKey.String("navalplan-backend"),
-		semconv.DeploymentEnvironmentKey.String(env),
+		attribute.String("service.name", "navalplan-backend"),
+		attribute.String("deployment.environment", env),
 	}
 
 	// Manually inject cloud.resource_id if provided

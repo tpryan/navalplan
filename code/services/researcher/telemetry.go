@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"google.golang.org/adk/telemetry"
 )
 
@@ -40,8 +39,8 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	// 1. Create the resource with necessary attributes
 	detector := gcp.NewDetector()
 	resAttrs := []attribute.KeyValue{
-		semconv.ServiceNameKey.String("navalplan-researcher"),
-		semconv.DeploymentEnvironmentKey.String(env),
+		attribute.String("service.name", "navalplan-researcher"),
+		attribute.String("deployment.environment", env),
 	}
 
 	// Manually inject cloud.resource_id if provided (critical for BigQuery Agent Analytics)
