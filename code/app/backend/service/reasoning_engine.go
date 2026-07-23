@@ -10,6 +10,9 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -42,10 +45,21 @@ func (r *ReasoningEngineRunner) CreateSession(ctx context.Context, resourceName,
 }
 
 func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appName, userID, sessionID, prompt string) (string, error) {
+	ctx, span := otel.Tracer("navalplan-backend").Start(ctx, "reasoning_engine:"+appName,
+		trace.WithAttributes(
+			attribute.String("cloud.resource_id", resourceName),
+			attribute.String("cloud_resource_id", resourceName),
+			attribute.String("gen_ai.agent.name", appName),
+			attribute.String("gen_ai.operation.name", "reasoning_engine_query"),
+		),
+	)
+	defer span.End()
+
 	input, err := structpb.NewStruct(map[string]any{
 		"input": prompt,
 	})
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("failed to create input struct: %w", err)
 	}
 
@@ -60,6 +74,7 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 
 	resp, err := r.Client.QueryReasoningEngine(ctx, req)
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("reasoning engine query failed: %w", err)
 	}
 
@@ -67,7 +82,9 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 	// We need to extract the text from the response.
 	output := resp.GetOutput()
 	if output == nil {
-		return "", fmt.Errorf("reasoning engine returned empty output")
+		err := fmt.Errorf("reasoning engine returned empty output")
+		span.RecordError(err)
+		return "", err
 	}
 
 	// ADK response structure in Reasoning Engine is typically wrapped.
@@ -76,10 +93,21 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 }
 
 func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, appName, userID, sessionID, prompt string) (string, error) {
+	ctx, span := otel.Tracer("navalplan-backend").Start(ctx, "reasoning_engine:"+appName,
+		trace.WithAttributes(
+			attribute.String("cloud.resource_id", resourceName),
+			attribute.String("cloud_resource_id", resourceName),
+			attribute.String("gen_ai.agent.name", appName),
+			attribute.String("gen_ai.operation.name", "reasoning_engine_query"),
+		),
+	)
+	defer span.End()
+
 	input, err := structpb.NewStruct(map[string]any{
 		"input": prompt,
 	})
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("failed to create input struct: %w", err)
 	}
 
@@ -90,6 +118,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 
 	stream, err := r.Client.StreamQueryReasoningEngine(ctx, req)
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("reasoning engine stream query failed: %w", err)
 	}
 
@@ -102,6 +131,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 			break
 		}
 		if err != nil {
+			span.RecordError(err)
 			return sb.String(), fmt.Errorf("stream receive error: %w", err)
 		}
 
