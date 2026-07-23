@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
-
 	"os"
+	"strings"
+	"time"
 
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
@@ -26,11 +26,25 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, nil
 	}
 
-	resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID")
+	resourceID := strings.TrimSpace(os.Getenv("NAVALPLAN_RESOURCE_ID"))
+	if resourceID == "" {
+		otelAttrs := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
+		for _, kv := range strings.Split(otelAttrs, ",") {
+			parts := strings.SplitN(strings.TrimSpace(kv), "=", 2)
+			if len(parts) == 2 && parts[0] == "cloud.resource_id" {
+				resourceID = strings.TrimSpace(parts[1])
+				break
+			}
+		}
+	}
+	if resourceID == "" && projectID != "" && env == "production" {
+		resourceID = fmt.Sprintf("projects/%s/locations/us-central1/services/navalplan-backend", projectID)
+	}
+
 	slog.Info("Telemetry initialization started",
 		"projectID", projectID,
 		"env", env,
-		"NAVALPLAN_RESOURCE_ID", resourceID,
+		"resolved_resourceID", resourceID,
 	)
 
 	if env != "production" {
@@ -47,45 +61,39 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
-	// Use the GCP detector to automatically populate resource attributes (e.g. instance ID, region)
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-backend"),
 		attribute.String("deployment.environment", env),
 		attribute.String("gcp.project_id", projectID),
 	}
 
-	// Manually inject cloud.resource_id if provided
 	if resourceID != "" {
 		slog.Info("Injecting cloud.resource_id into resource attributes", "id", resourceID)
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
-		// Also add it without dots as a fallback
 		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
 	}
 
-	// 1.5 Add a timeout for resource detection to prevent hanging if GCP metadata is slow
 	resCtx, resCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer resCancel()
 
 	res, err := resource.New(resCtx,
 		resource.WithDetectors(gcp.NewDetector()),
+		resource.WithFromEnv(),
 		resource.WithAttributes(resAttrs...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
 	}
 
-	// Log the final resource attributes for verification
 	for _, attr := range res.Attributes() {
 		slog.Debug("Resource attribute", "key", string(attr.Key), "value", attr.Value.Emit())
 	}
 
 	tp := sdktrace.NewTracerProvider(
-		// Using BatchSpanProcessor for production to avoid blocking request threads
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
 	)
 
-	// Set global OTel providers.
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
@@ -93,6 +101,6 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		gcppropagator.CloudTraceFormatPropagator{},
 	))
 
-	slog.Info("OpenTelemetry initialized with Cloud Trace exporter and GCP propagator", "projectID", projectID)
+	slog.Info("OpenTelemetry initialized with Cloud Trace exporter and GCP propagator", "projectID", projectID, "resourceID", resourceID)
 	return tp, nil
 }
