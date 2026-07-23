@@ -26,7 +26,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	}
 
 	resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID")
-	slog.Info("Telemetry initialization",
+	slog.Info("Telemetry initialization started",
 		"projectID", projectID,
 		"env", env,
 		"NAVALPLAN_RESOURCE_ID", resourceID,
@@ -46,11 +46,6 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
-	// We also set the environment variable as a fallback for some OTel detectors
-	if resourceID != "" {
-		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "cloud.resource_id="+resourceID)
-	}
-
 	// Use the GCP detector to automatically populate resource attributes (e.g. instance ID, region)
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-backend"),
@@ -60,6 +55,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 
 	// Manually inject cloud.resource_id if provided
 	if resourceID != "" {
+		slog.Info("Injecting cloud.resource_id into resource attributes", "id", resourceID)
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
 		// Also add it without dots as a fallback
 		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
@@ -73,14 +69,18 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
 	}
 
+	// Log the final resource attributes for verification
+	for _, attr := range res.Attributes() {
+		slog.Debug("Resource attribute", "key", string(attr.Key), "value", attr.Value.Emit())
+	}
+
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		// Using SimpleSpanProcessor for immediate flushing during troubleshooting
+		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)),
 		sdktrace.WithResource(res),
 	)
 
 	// Set global OTel providers.
-	// We use a composite propagator that supports both standard W3C TraceContext
-	// and GCP's X-Cloud-Trace-Context.
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},

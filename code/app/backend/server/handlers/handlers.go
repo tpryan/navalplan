@@ -51,12 +51,28 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 		client, err = idtoken.NewClient(context.Background(), agentURL)
 		if err != nil {
 			slog.Error("Failed to create authenticated agent client", "error", err)
-			client = &http.Client{Timeout: 20 * time.Minute}
+			client = &http.Client{
+				Timeout: 5 * time.Minute,
+				Transport: &http.Transport{
+					MaxIdleConns:        100,
+					MaxIdleConnsPerHost: 20,
+				},
+			}
 		} else {
-			client.Timeout = 20 * time.Minute
+			client.Timeout = 5 * time.Minute
+			if transport, ok := client.Transport.(*http.Transport); ok {
+				transport.MaxIdleConns = 100
+				transport.MaxIdleConnsPerHost = 20
+			}
 		}
 	} else {
-		client = &http.Client{Timeout: 20 * time.Minute}
+		client = &http.Client{
+			Timeout: 5 * time.Minute,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 20,
+			},
+		}
 	}
 
 	agentRunner := &service.AgentRunner{Client: client, Resolver: resolver}
