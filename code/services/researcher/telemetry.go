@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"os"
 
@@ -51,7 +52,11 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
 	}
 
-	res, err := resource.New(ctx,
+	// 1.5 Add a timeout for resource detection to prevent hanging if GCP metadata is slow
+	resCtx, resCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer resCancel()
+
+	res, err := resource.New(resCtx,
 		resource.WithDetectors(detector),
 		resource.WithAttributes(resAttrs...),
 	)
@@ -76,9 +81,8 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
 		telemetry.WithGenAICaptureMessageContent(true),
-		// We use a SimpleSpanProcessor for now to ensure spans are flushed immediately for debugging.
-		// In a high-traffic production app, BatchSpanProcessor is preferred.
-		telemetry.WithSpanProcessors(sdktrace.NewSimpleSpanProcessor(traceExporter)),
+		// Using BatchSpanProcessor for production to avoid blocking request threads
+		telemetry.WithSpanProcessors(sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
@@ -86,7 +90,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 
 	// Register as global OTel providers
 	telemetryProviders.SetGlobalOtelProviders()
-	
+
 	// Set the standard trace propagator with Cloud Trace support
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},

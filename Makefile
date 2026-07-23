@@ -50,7 +50,7 @@ ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 run: build-js
 	@echo "Starting NavalPlan backend (Production Mode)..."
 	# Variables are automatically loaded from .env
-	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
+	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor .
 # 2. BUILD: The master build command
 build: build-js
 
@@ -58,7 +58,7 @@ build: build-js
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
 	mkdir -p code/app/backend/static.min
-	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor main.go
+	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor .
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
@@ -85,7 +85,7 @@ run-frontend:
 run-agent:
 	@echo "Starting NavalPlan Researcher Agent..."
 	# Requires GEMINI_API_KEY to be set
-	cd code/services/researcher && go run -mod=vendor main.go
+	cd code/services/researcher && go run -mod=vendor .
 
 setup-adk:
 	@echo "Setting up ADK..."
