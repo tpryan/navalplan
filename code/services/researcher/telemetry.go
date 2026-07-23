@@ -116,7 +116,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
-		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewBatchSpanProcessor(traceExporter)),
+		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewSimpleSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
