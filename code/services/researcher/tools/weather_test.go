@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -88,7 +87,7 @@ func TestGetWeatherForecast_Success(t *testing.T) {
 		Date:      "2025-01-01",
 	}
 
-	result, err := wp.GetWeatherForecast(mockToolContext{Context: context.Background()}, args)
+	result, err := wp.GetWeatherForecast(newMockContext(), args)
 	if err != nil {
 		t.Fatalf("GetWeatherForecast() error = %v", err)
 	}
@@ -110,7 +109,7 @@ func TestGetWeatherForecast_InvalidDate(t *testing.T) {
 	}
 
 	wp := &WeatherProvider{client: &mockWeatherClient{}}
-	_, err := wp.GetWeatherForecast(mockToolContext{Context: context.Background()}, args)
+	_, err := wp.GetWeatherForecast(newMockContext(), args)
 	if err == nil {
 		t.Error("Expected error for invalid date, got none")
 	}
@@ -130,7 +129,7 @@ func TestGetWeatherForecast_APIError(t *testing.T) {
 		Date:      "2025-01-01",
 	}
 
-	_, err := wp.GetWeatherForecast(mockToolContext{Context: context.Background()}, args)
+	_, err := wp.GetWeatherForecast(newMockContext(), args)
 	if err == nil {
 		t.Error("Expected error for API error, got none")
 	}

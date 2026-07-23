@@ -28,20 +28,20 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/adk/agent"
-	"google.golang.org/adk/agent/llmagent"
-	"google.golang.org/adk/cmd/launcher"
-	"google.golang.org/adk/model/gemini"
-	"google.golang.org/adk/runner"
-	"google.golang.org/adk/server/adka2a"
-	"google.golang.org/adk/server/adkrest"
-	"google.golang.org/adk/session"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/agent/llmagent"
+	"google.golang.org/adk/v2/cmd/launcher"
+	"google.golang.org/adk/v2/model/gemini"
+	"google.golang.org/adk/v2/runner"
+	"google.golang.org/adk/v2/server/adka2a"
+	"google.golang.org/adk/v2/server/adkrest"
+	"google.golang.org/adk/v2/session"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/agenttool"
-	"google.golang.org/adk/tool/functiontool"
-	"google.golang.org/adk/tool/geminitool"
+	"google.golang.org/adk/v2/tool"
+	"google.golang.org/adk/v2/tool/agenttool"
+	"google.golang.org/adk/v2/tool/functiontool"
+	"google.golang.org/adk/v2/tool/geminitool"
 	"google.golang.org/genai"
 )
 
@@ -356,7 +356,7 @@ func (s *Server) run(ctx context.Context) error {
 		AgentLoader:     config.AgentLoader,
 		SessionService:  config.SessionService,
 		SSEWriteTimeout: 300 * time.Second,
-		DebugConfig:     &adkrest.DebugTelemetryConfig{},
+		DebugConfig:     adkrest.DebugTelemetryConfig{},
 	})
 	if err != nil {
 		log.Fatalf("Failed to create ADK server: %v", err)
@@ -680,7 +680,7 @@ func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []to
 	})
 }
 
-func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
+func (s *Server) onBeforeTool(ctx agent.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
 	// Start OTel span for the tool
 	_, span := otel.Tracer("navalplan-researcher").Start(ctx, "tool:"+t.Name())
 
@@ -695,11 +695,11 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 		"tool", t.Name(),
 		"args", args,
 		"function_call_id", ctx.FunctionCallID(),
-		"session_id", ctx.SessionID(),
+		"session_id", ctx.Session().ID(),
 	)
 
 	s.broadcast(TelemetryEvent{
-		SessionID: ctx.SessionID(),
+		SessionID: ctx.Session().ID(),
 		Event:     "tool_start",
 		Tool:      t.Name(),
 		Timestamp: time.Now().UnixMilli(),
@@ -707,7 +707,7 @@ func (s *Server) onBeforeTool(ctx tool.Context, t tool.Tool, args map[string]any
 	return nil, nil
 }
 
-func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any, result map[string]any, err error) (map[string]any, error) {
+func (s *Server) onAfterTool(ctx agent.Context, t tool.Tool, args, result map[string]any, err error) (map[string]any, error) {
 	s.mu.Lock()
 	timing, ok := s.timings[ctx.FunctionCallID()]
 	if ok {
@@ -734,12 +734,12 @@ func (s *Server) onAfterTool(ctx tool.Context, t tool.Tool, args map[string]any,
 			"result", result,
 			"error", err,
 			"function_call_id", ctx.FunctionCallID(),
-			"session_id", ctx.SessionID(),
+			"session_id", ctx.Session().ID(),
 		)
 	}
 
 	s.broadcast(TelemetryEvent{
-		SessionID: ctx.SessionID(),
+		SessionID: ctx.Session().ID(),
 		Event:     "tool_end",
 		Tool:      t.Name(),
 		Duration:  duration,

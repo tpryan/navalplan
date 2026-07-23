@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"google.golang.org/adk/telemetry"
+	"google.golang.org/adk/v2/telemetry"
 )
 
 // InitTelemetry sets up OpenTelemetry for the researcher service.
@@ -80,7 +80,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
-		telemetry.WithGenAICaptureMessageContent(true),
+
 		// Using BatchSpanProcessor for production to avoid blocking request threads
 		telemetry.WithSpanProcessors(sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
