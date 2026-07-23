@@ -19,6 +19,23 @@ import (
 	"google.golang.org/adk/v2/telemetry"
 )
 
+type resourceIDSpanProcessor struct {
+	resourceID string
+}
+
+func (p *resourceIDSpanProcessor) OnStart(parent context.Context, s sdktrace.ReadWriteSpan) {
+	if p.resourceID != "" {
+		s.SetAttributes(
+			attribute.String("cloud.resource_id", p.resourceID),
+			attribute.String("cloud_resource_id", p.resourceID),
+		)
+	}
+}
+
+func (p *resourceIDSpanProcessor) OnEnd(s sdktrace.ReadOnlySpan)        {}
+func (p *resourceIDSpanProcessor) Shutdown(ctx context.Context) error   { return nil }
+func (p *resourceIDSpanProcessor) ForceFlush(ctx context.Context) error { return nil }
+
 // InitTelemetry sets up OpenTelemetry for the researcher service.
 // It configures two exporters:
 // 1. The default ADK exporter (sends data to telemetry.googleapis.com)
@@ -84,11 +101,13 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
+	spanProcessor := &resourceIDSpanProcessor{resourceID: resourceID}
+
 	telemetryProviders, err := telemetry.New(ctx,
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
-		telemetry.WithSpanProcessors(sdktrace.NewBatchSpanProcessor(traceExporter)),
+		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
