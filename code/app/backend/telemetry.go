@@ -46,15 +46,23 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
+	// We also set the environment variable as a fallback for some OTel detectors
+	if resourceID != "" {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "cloud.resource_id="+resourceID)
+	}
+
 	// Use the GCP detector to automatically populate resource attributes (e.g. instance ID, region)
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-backend"),
 		attribute.String("deployment.environment", env),
+		attribute.String("gcp.project_id", projectID),
 	}
 
 	// Manually inject cloud.resource_id if provided
-	if resourceID := os.Getenv("NAVALPLAN_RESOURCE_ID"); resourceID != "" {
+	if resourceID != "" {
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
+		// Also add it without dots as a fallback
+		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
 	}
 
 	res, err := resource.New(ctx,

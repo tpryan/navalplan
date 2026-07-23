@@ -37,6 +37,7 @@ steps:
   - '--set-env-vars=NAVALPLAN_DISABLE_TRACING=false'
   - '--set-env-vars=OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event'
   - '--set-env-vars=NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384'
+  - '--set-env-vars=OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384'
   id: 'deploy-cloud-run'
 
 # 4. Deploy to Vertex AI Agent Runtime (Reasoning Engine)
@@ -58,7 +59,7 @@ steps:
       --deployment-target=agent_runtime \
       --service-name=navalplan-researcher \
       --secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384" \
+      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384" \
       --no-confirm-project
   dir: 'code/services/researcher'
 
