@@ -37,15 +37,23 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	)
 
 	// 1. Create the resource with necessary attributes
+	// We also set the environment variable as a fallback for some OTel detectors
+	if resourceID != "" {
+		os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "cloud.resource_id="+resourceID)
+	}
+
 	detector := gcp.NewDetector()
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-researcher"),
 		attribute.String("deployment.environment", env),
+		attribute.String("gcp.project_id", projectID),
 	}
 
 	// Manually inject cloud.resource_id if provided (critical for BigQuery Agent Analytics)
 	if resourceID != "" {
 		resAttrs = append(resAttrs, attribute.String("cloud.resource_id", resourceID))
+		// Also add it without dots as a fallback
+		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
 	}
 
 	res, err := resource.New(ctx,
