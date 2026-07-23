@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"os"
 
@@ -61,7 +62,11 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		resAttrs = append(resAttrs, attribute.String("cloud_resource_id", resourceID))
 	}
 
-	res, err := resource.New(ctx,
+	// 1.5 Add a timeout for resource detection to prevent hanging if GCP metadata is slow
+	resCtx, resCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer resCancel()
+
+	res, err := resource.New(resCtx,
 		resource.WithDetectors(gcp.NewDetector()),
 		resource.WithAttributes(resAttrs...),
 	)
@@ -75,8 +80,8 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	}
 
 	tp := sdktrace.NewTracerProvider(
-		// Using SimpleSpanProcessor for immediate flushing during troubleshooting
-		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)),
+		// Using BatchSpanProcessor for production to avoid blocking request threads
+		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
 	)
 

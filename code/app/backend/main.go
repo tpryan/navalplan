@@ -57,7 +57,9 @@ func main() {
 	slog.SetDefault(slog.New(handler))
 
 	// Initialize OpenTelemetry
-	tp, err := InitTelemetry(context.Background(), cfg.Project, cfg.Env, cfg.DisableTracing)
+	telemetryCtx, telemetryCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer telemetryCancel()
+	tp, err := InitTelemetry(telemetryCtx, cfg.Project, cfg.Env, cfg.DisableTracing)
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 	}
