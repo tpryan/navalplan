@@ -881,3 +881,65 @@ func TestGetPilotReport(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 }
+
+func TestCheckAgentHealth(t *testing.T) {
+	tests := []struct {
+		name          string
+		agentStatus   int
+		agentDelay    time.Duration
+		emptyAgentURL bool
+		expectedError bool
+	}{
+		{
+			name:          "Empty Agent URL succeeds",
+			emptyAgentURL: true,
+			expectedError: false,
+		},
+		{
+			name:          "Healthy agent returns no error",
+			agentStatus:   http.StatusOK,
+			expectedError: false,
+		},
+		{
+			name:          "Unhealthy agent status returns error",
+			agentStatus:   http.StatusInternalServerError,
+			expectedError: true,
+		},
+		{
+			name:          "Slow agent times out fast",
+			agentDelay:    3 * time.Second,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			var agentURL string
+			if !tt.emptyAgentURL {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tt.agentDelay > 0 {
+						time.Sleep(tt.agentDelay)
+					}
+					status := tt.agentStatus
+					if status == 0 {
+						status = http.StatusOK
+					}
+					w.WriteHeader(status)
+				}))
+				defer srv.Close()
+				agentURL = srv.URL
+			}
+
+			h := handlers.New(mockStore, "test_content", agentURL, &service.StaticResolver{BaseURL: agentURL})
+			ctx := context.Background()
+
+			err := h.CheckAgentHealth(ctx)
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

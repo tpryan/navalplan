@@ -12,7 +12,8 @@ The project manages a complex tripartite stack: a React/Vite Frontend, a Go API 
     *   `make dev`: **The primary development command.** It orchestrates starting the Database container (using Podman), building the static frontend assets, and then concurrently running the Go backend, the Agent service, and the frontend development server. It uses `&` and `wait` to manage multiple long-running processes.
     *   `make setup`: Runs `npm install` and `go mod tidy` for both frontend and backend, ensuring all external dependencies are met before running development commands.
 *   **Testing**:
-    *   `make test`: Runs the full test suite, covering both unit tests (`go test`) for the backend/services and end-to-end tests (`npm test`) for the frontend.
+    *   `make test`: Runs unit tests (`go test`) for the backend/services and frontend tests (`npm test`).
+    *   `make test-all`: Runs unit tests and full ADK agent evaluations (`eval-all`).
 *   **Deployment**:
     *   **Frontend**: Build is handled by `make build-js` (triggers `npm run build` in `code/app/frontend`).
     *   **Backend**: Deployment uses `gcloud builds submit --config cloudbuild.yaml .`. Secrets are managed via `Makefile` variables (`PROD_DB_USER`, etc.).

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"google.golang.org/api/idtoken"
 )
@@ -66,11 +66,12 @@ type agentRunRequest struct {
 	} `json:"newMessage"`
 }
 
-// AgentEvent is a single event in the agent's response stream.
+// AgentEvent mirrors the ADK event structure.
 type AgentEvent struct {
 	Content struct {
 		Parts []struct {
-			Text string `json:"text"`
+			Text    string `json:"text"`
+			Thought bool   `json:"thought,omitempty"`
 		} `json:"parts"`
 		Role string `json:"role"`
 	} `json:"content"`
@@ -79,9 +80,6 @@ type AgentEvent struct {
 // CreateSession creates an agent session. state is optional; pass nil for no
 // session state.
 func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessionID string, state map[string]any) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
 		return err
@@ -95,7 +93,11 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 
 	var body io.Reader
 	if state != nil {
-		b, _ := json.Marshal(map[string]any{"state": state})
+		payload := map[string]any{"state": state}
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("marshal session state: %w", err)
+		}
 		body = bytes.NewReader(b)
 	}
 
@@ -103,7 +105,10 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 	if err != nil {
 		return fmt.Errorf("build session request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
 	if strings.Contains(target, "run.app") {
 		r.addAuthHeader(req, target)
 	}
@@ -112,16 +117,18 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusInternalServerError {
-		return fmt.Errorf("agent session returned %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("create session returned %d: %s", resp.StatusCode, string(b))
 	}
+
 	return nil
 }
 
-// RunSync calls the agent without streaming and returns concatenated text from
-// all model-role events. Use this for research/guide/discovery flows.
+// RunSync calls the agent and returns concatenated text from
+// all model-role events. It uses streaming under the hood to ensure continuous socket activity.
 func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, prompt string) (string, error) {
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
@@ -133,56 +140,13 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 		return r.ReasoningEngine.RunSync(ctx, target, appName, userID, sessionID, prompt)
 	}
 
-	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
-
-	body, err := r.buildRunBody(appName, userID, sessionID, prompt, false)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target+"/api/run", body)
-	if err != nil {
-		return "", fmt.Errorf("build run request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if strings.Contains(target, "run.app") {
-		r.addAuthHeader(req, target)
-	}
-
-	resp, err := r.Client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("run agent: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("agent returned %d: %s", resp.StatusCode, string(b))
-	}
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read agent response: %w", err)
-	}
-
-	var events []AgentEvent
-	if err := json.Unmarshal(raw, &events); err != nil {
-		slog.WarnContext(ctx, "Failed to decode agent response as JSON array", "error", err, "raw", string(raw))
-		return "", fmt.Errorf("decode agent events: %w", err)
-	}
-
-	var sb strings.Builder
-	for _, e := range events {
-		if e.Content.Role == "model" && len(e.Content.Parts) > 0 {
-			sb.WriteString(e.Content.Parts[0].Text)
-		}
-	}
-	return sb.String(), nil
+	// Default to RunStreaming for HTTP targets as well
+	return r.RunStreaming(ctx, appName, userID, sessionID, prompt)
 }
 
 // RunStreaming calls the agent with streaming enabled and returns concatenated
-// text from all event parts. It handles both NDJSON and JSON-array response
-// formats. Use this for recommendation flows.
+// text from all event parts. It handles SSE (data: ...), NDJSON, and JSON-array
+// response formats.
 func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, sessionID, prompt string) (string, error) {
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
@@ -221,7 +185,7 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 		return "", fmt.Errorf("agent returned %d: %s", resp.StatusCode, string(b))
 	}
 
-	// Peek at the first byte to detect format (JSON array vs NDJSON).
+	// Peek at the first byte to detect format (JSON array vs NDJSON / SSE).
 	firstByte := make([]byte, 1)
 	n, _ := resp.Body.Read(firstByte)
 
@@ -234,23 +198,63 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 			return "", fmt.Errorf("decode streaming events array: %w", err)
 		}
 		for _, e := range events {
-			if len(e.Content.Parts) > 0 {
-				sb.WriteString(e.Content.Parts[0].Text)
+			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {
+				for _, p := range e.Content.Parts {
+					if p.Text != "" && !p.Thought {
+						sb.WriteString(p.Text)
+					}
+				}
 			}
 		}
 	} else {
 		multi := io.MultiReader(bytes.NewReader(firstByte[:n]), resp.Body)
-		dec := json.NewDecoder(multi)
+		reader := bufio.NewReader(multi)
 		for {
-			var e AgentEvent
-			if err := dec.Decode(&e); err == io.EOF {
-				break
-			} else if err != nil {
-				slog.WarnContext(ctx, "Failed to decode streaming agent event", "error", err)
+			line, readErr := reader.ReadString('\n')
+			if readErr != nil && len(line) == 0 {
+				if readErr == io.EOF {
+					break
+				}
+				slog.WarnContext(ctx, "Failed to read streaming agent event line", "error", readErr)
 				break
 			}
-			if len(e.Content.Parts) > 0 {
-				sb.WriteString(e.Content.Parts[0].Text)
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
+				if readErr == io.EOF {
+					break
+				}
+				continue
+			}
+
+			if strings.HasPrefix(line, "data:") {
+				line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+				if line == "" || line == "[DONE]" {
+					if readErr == io.EOF {
+						break
+					}
+					continue
+				}
+			}
+
+			var e AgentEvent
+			if decodeErr := json.Unmarshal([]byte(line), &e); decodeErr != nil {
+				slog.WarnContext(ctx, "Failed to decode streaming agent event", "error", decodeErr, "line", line)
+				if readErr == io.EOF {
+					break
+				}
+				continue
+			}
+
+			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {
+				for _, p := range e.Content.Parts {
+					if p.Text != "" && !p.Thought {
+						sb.WriteString(p.Text)
+					}
+				}
+			}
+
+			if readErr == io.EOF {
+				break
 			}
 		}
 	}

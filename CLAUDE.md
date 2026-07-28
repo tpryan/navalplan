@@ -28,7 +28,8 @@ make setup
 make dev
 
 # Run tests
-make test               # all tests
+make test               # unit tests (backend + frontend)
+make test-all           # unit tests + ADK agent evaluations
 make test-backend       # Go tests only
 make test-frontend      # Jasmine tests only
 make eval-all           # ADK agent evaluations

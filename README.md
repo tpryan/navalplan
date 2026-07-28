@@ -82,9 +82,13 @@ make eval-harbourmaster VERBOSE=1
 
 ## Testing
 
-*   **Run all tests (including agent evaluations):**
+*   **Run unit tests (backend + frontend):**
     ```bash
     make test
+    ```
+*   **Run all tests (unit tests + agent evaluations):**
+    ```bash
+    make test-all
     ```
 *   **Backend tests only:**
     ```bash

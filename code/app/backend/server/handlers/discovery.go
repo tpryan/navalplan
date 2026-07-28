@@ -172,50 +172,54 @@ func getTierPriority(tier string, isHiddenGem bool) int {
 }
 
 func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
+	start := time.Now()
+	monthName := time.Month(month).String()
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "[discovery-mining] Panic", "recover", r)
+			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Panic during %s mining", month, monthName), "recover", r)
 		}
 	}()
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Starting mining for month %d", month))
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Starting mining for %s", month, monthName))
 
 	const appName = "commodore"
 	const userID = "system"
 	sessionID := fmt.Sprintf("discovery_%d_%d", month, time.Now().Unix())
 
-	monthName := time.Month(month).String()
-
 	// 1. Create Session with initial state
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Creating agent session for month %s", monthName))
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Creating agent session '%s'", month, sessionID))
 	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, map[string]any{"Month": monthName}); err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "error", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Failed to create agent session for %s", month, monthName), "error", err, "duration", time.Since(start))
 		return
 	}
 
 	// 2. Build prompt and run agent
 	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
 
-	slog.InfoContext(ctx, "[discovery-mining] Calling agent /api/run...")
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Invoking commodore agent for %s...", month, monthName))
+	agentStart := time.Now()
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
+	agentDuration := time.Since(agentStart)
 	if err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Agent run failed", "error", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Agent run failed for %s after %v", month, monthName, agentDuration), "error", err)
 		return
 	}
 
 	if responseText == "" {
-		slog.ErrorContext(ctx, "[discovery-mining] No response text from agent")
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] No response text from agent for %s after %v", month, monthName, agentDuration))
 		return
 	}
 
-	slog.InfoContext(ctx, "[discovery-mining] Raw agent response", "response", responseText)
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Agent returned %d bytes in %v for %s", month, len(responseText), agentDuration, monthName))
 
 	cleanedResponseText := cleanJSON(responseText)
 
 	var output []DiscoveryRegionOutput
 	if err := json.Unmarshal([]byte(cleanedResponseText), &output); err != nil {
-		slog.ErrorContext(ctx, "[discovery-mining] Failed to unmarshal discovery agent JSON", "error", err, "cleaned", cleanedResponseText, "raw", responseText)
+		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Failed to unmarshal discovery agent JSON for %s", month, monthName), "error", err, "cleaned", cleanedResponseText, "raw", responseText)
 		return
 	}
+
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Saving %d candidate regions for %s...", month, len(output), monthName))
 
 	// Load existing regions ACTIVE IN THIS MONTH for intelligent replacement
 	activeRegions, err := h.DB.ListRegionsByMonth(ctx, month)
@@ -348,5 +352,5 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		}
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Discovery mining complete for month %d. Processed %d regions.", month, len(output)))
+	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Completed %s mining in %v. Saved %d regions.", month, monthName, time.Since(start), len(output)))
 }

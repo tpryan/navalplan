@@ -256,8 +256,7 @@ func (h *Handler) performLookoutAuditLogic(stop *models.Stop, briefing *models.B
 	agentSessionID := fmt.Sprintf("lookout_%d_%d", stop.ID, time.Now().Unix())
 
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
-		slog.ErrorContext(ctx, "[lookout] Failed to create session", "error", err)
-		return
+		slog.WarnContext(ctx, "[lookout] CreateSession warning, proceeding with RunSync", "error", err)
 	}
 
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)

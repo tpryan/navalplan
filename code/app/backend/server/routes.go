@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -41,18 +43,18 @@ func (s *Server) Routes(staticPath string) {
 	routes := []route{
 		// --- System / Auth (Public) ---
 		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := s.Handler.CheckAgentHealth(r.Context()); err != nil {
-				http.Error(w, "Agent Health Check Failed: "+err.Error(), http.StatusServiceUnavailable)
-				return
-			}
+			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		}), 0},
 		{http.MethodGet, "/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			status := "ok"
 			if err := s.Handler.CheckAgentHealth(r.Context()); err != nil {
-				http.Error(w, "Agent Health Check Failed: "+err.Error(), http.StatusServiceUnavailable)
-				return
+				slog.WarnContext(r.Context(), "Agent health check failed", "error", err)
+				status = "degraded"
 			}
-			w.Write([]byte("OK"))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"status": status})
 		}), 0},
 		{http.MethodGet, "/auth/google/login", http.HandlerFunc(s.oauthGoogleLogin), 0},
 		{http.MethodGet, "/auth/google/callback", http.HandlerFunc(s.oauthGoogleCallback), 0},
