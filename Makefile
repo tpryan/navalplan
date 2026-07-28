@@ -137,6 +137,11 @@ dev-mine:
 		-H "Authorization: Bearer ${NAVALPLAN_SYSTEM_KEY}" \
 		-H "X-Requested-With: XMLHttpRequest"
 
+dev-prune:
+	curl -X POST "http://localhost:8080/api/v1/discovery/prune?month=all" \
+		-H "Authorization: Bearer ${NAVALPLAN_SYSTEM_KEY}" \
+		-H "X-Requested-With: XMLHttpRequest"
+
 
 # --- Database (Podman/Docker) ---
 
