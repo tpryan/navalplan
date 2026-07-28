@@ -52,14 +52,13 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 		if err != nil {
 			slog.Error("Failed to create authenticated agent client", "error", err)
 			client = &http.Client{
-				Timeout: 5 * time.Minute,
 				Transport: &http.Transport{
 					MaxIdleConns:        100,
 					MaxIdleConnsPerHost: 20,
 				},
 			}
 		} else {
-			client.Timeout = 5 * time.Minute
+			client.Timeout = 0
 			if transport, ok := client.Transport.(*http.Transport); ok {
 				transport.MaxIdleConns = 100
 				transport.MaxIdleConnsPerHost = 20
@@ -67,7 +66,6 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 		}
 	} else {
 		client = &http.Client{
-			Timeout: 5 * time.Minute,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 20,
@@ -128,6 +126,9 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 	if strings.HasPrefix(h.AgentURL, "projects/") && strings.Contains(h.AgentURL, "/reasoningEngines/") {
 		return nil
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	url := h.AgentURL + "/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
