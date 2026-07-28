@@ -22,7 +22,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
 	golang.org/x/sync v0.20.0
-	google.golang.org/adk v1.1.0
 	google.golang.org/adk/v2 v2.1.0
 	google.golang.org/api v0.280.0
 	google.golang.org/genai v1.63.0

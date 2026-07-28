@@ -72,8 +72,7 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 	} else {
 		client = &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 20,
+				DisableKeepAlives: true,
 			},
 		}
 	}
@@ -90,7 +89,7 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 	}
 
 	healthClient := &http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 5,
@@ -157,7 +156,7 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return h.lastHealthErr
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	url := h.AgentURL + "/health"

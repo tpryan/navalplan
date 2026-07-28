@@ -67,6 +67,11 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		"resolved_resourceID", resourceID,
 	)
 
+	if env != "production" {
+		slog.Info("OTel disabled in development environment")
+		return nil, nil
+	}
+
 	detector := gcp.NewDetector()
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-researcher"),
@@ -116,7 +121,7 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
 		telemetry.WithGcpResourceProject(projectID),
-		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewSimpleSpanProcessor(traceExporter)),
+		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewBatchSpanProcessor(traceExporter)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)

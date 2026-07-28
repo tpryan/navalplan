@@ -388,11 +388,15 @@ func (s *Server) run(ctx context.Context) error {
 	go func() {
 		<-quit
 		slog.Info("Shutdown signal received, draining requests...")
-		// Allow up to 5 minutes for in-flight LLM calls to finish.
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		timeout := 5 * time.Minute
+		if s.config.Env == "development" {
+			timeout = 5 * time.Second
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 			slog.Error("HTTP server shutdown error", "error", err)
+			httpSrv.Close()
 		}
 	}()
 
@@ -691,15 +695,20 @@ func (s *Server) onBeforeTool(ctx agent.Context, t tool.Tool, args map[string]an
 		span:  span,
 	}
 
+	var sessionID string
+	if sess := ctx.Session(); sess != nil {
+		sessionID = sess.ID()
+	}
+
 	slog.Log(ctx, slog.LevelInfo, "tool_start",
 		"tool", t.Name(),
 		"args", args,
 		"function_call_id", ctx.FunctionCallID(),
-		"session_id", ctx.Session().ID(),
+		"session_id", sessionID,
 	)
 
 	s.broadcast(TelemetryEvent{
-		SessionID: ctx.Session().ID(),
+		SessionID: sessionID,
 		Event:     "tool_start",
 		Tool:      t.Name(),
 		Timestamp: time.Now().UnixMilli(),
@@ -714,6 +723,11 @@ func (s *Server) onAfterTool(ctx agent.Context, t tool.Tool, args, result map[st
 		delete(s.timings, ctx.FunctionCallID())
 	}
 	s.mu.Unlock()
+
+	var sessionID string
+	if sess := ctx.Session(); sess != nil {
+		sessionID = sess.ID()
+	}
 
 	var duration string
 	if ok {
@@ -734,12 +748,12 @@ func (s *Server) onAfterTool(ctx agent.Context, t tool.Tool, args, result map[st
 			"result", result,
 			"error", err,
 			"function_call_id", ctx.FunctionCallID(),
-			"session_id", ctx.Session().ID(),
+			"session_id", sessionID,
 		)
 	}
 
 	s.broadcast(TelemetryEvent{
-		SessionID: ctx.Session().ID(),
+		SessionID: sessionID,
 		Event:     "tool_end",
 		Tool:      t.Name(),
 		Duration:  duration,
