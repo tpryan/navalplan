@@ -355,7 +355,7 @@ func (s *Server) run(ctx context.Context) error {
 	adkHandler, err := adkrest.NewServer(adkrest.ServerConfig{
 		AgentLoader:     config.AgentLoader,
 		SessionService:  config.SessionService,
-		SSEWriteTimeout: 300 * time.Second,
+		SSEWriteTimeout: 600 * time.Second,
 		DebugConfig:     adkrest.DebugTelemetryConfig{},
 	})
 	if err != nil {

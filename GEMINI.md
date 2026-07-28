@@ -1,4 +1,4 @@
-For this project, if you want to test, just run `make test` in the root. It will run all of the tests. 
+For this project, if you want to run unit tests, run `make test` in the root (it runs backend and frontend unit tests). To run agent evaluations as well, run `make test-all`. 
 
 Don't doublespace go code.  Keep logically joined sections of code together. 
 

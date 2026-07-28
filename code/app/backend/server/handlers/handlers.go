@@ -19,13 +19,18 @@ import (
 
 // Handler holds dependencies for HTTP handlers.
 type Handler struct {
-	DB          datastore.Store
-	ContentDir  string
-	AgentURL    string
-	AgentClient *http.Client
-	Agent       *service.AgentRunner
-	Resolver    service.Resolver
-	ResearchSem chan struct{}
+	DB           datastore.Store
+	ContentDir   string
+	AgentURL     string
+	AgentClient  *http.Client
+	HealthClient *http.Client
+	Agent        *service.AgentRunner
+	Resolver     service.Resolver
+	ResearchSem  chan struct{}
+
+	muHealth        sync.RWMutex
+	lastHealthCheck time.Time
+	lastHealthErr   error
 
 	// recStreams holds active SSE channels keyed by session ID.
 	// Moved from package-level globals to enable per-instance isolation and testing.
@@ -84,11 +89,20 @@ func New(db datastore.Store, contentDir string, agentURL string, resolver servic
 		agentRunner.ReasoningEngine = reRunner
 	}
 
+	healthClient := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+		},
+	}
+
 	return &Handler{
 		DB:              db,
 		ContentDir:      contentDir,
 		AgentURL:        agentURL,
 		AgentClient:     client,
+		HealthClient:    healthClient,
 		Agent:           agentRunner,
 		Resolver:        resolver,
 		ResearchSem:     make(chan struct{}, 10),
@@ -116,7 +130,7 @@ func (h *Handler) releaseJob(key string) {
 	delete(h.activeJobs, key)
 }
 
-// CheckAgentHealth pings the agent's /healthz endpoint.
+// CheckAgentHealth pings the agent's /health endpoint with 10-second caching.
 func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 	if h.AgentURL == "" {
 		return nil // Agent not configured, skip check
@@ -127,25 +141,55 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	h.muHealth.RLock()
+	if time.Since(h.lastHealthCheck) < 10*time.Second {
+		err := h.lastHealthErr
+		h.muHealth.RUnlock()
+		return err
+	}
+	h.muHealth.RUnlock()
+
+	h.muHealth.Lock()
+	defer h.muHealth.Unlock()
+
+	// Double-check under write lock
+	if time.Since(h.lastHealthCheck) < 10*time.Second {
+		return h.lastHealthErr
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	url := h.AgentURL + "/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		h.lastHealthCheck = time.Now()
+		h.lastHealthErr = err
 		return err
 	}
 
-	resp, err := h.AgentClient.Do(req)
+	client := h.HealthClient
+	if client == nil {
+		client = h.AgentClient
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
+		h.lastHealthCheck = time.Now()
+		h.lastHealthErr = err
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("agent returned non-200 status: %d", resp.StatusCode)
+		err := fmt.Errorf("agent returned non-200 status: %d", resp.StatusCode)
+		h.lastHealthCheck = time.Now()
+		h.lastHealthErr = err
+		return err
 	}
 
+	h.lastHealthCheck = time.Now()
+	h.lastHealthErr = nil
 	return nil
 }
 

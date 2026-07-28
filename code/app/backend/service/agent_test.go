@@ -174,3 +174,24 @@ func TestRunStreaming_NDJSON(t *testing.T) {
 		t.Errorf("got %q, want %q", text, "part one part two")
 	}
 }
+
+// TestRunStreaming_SSE verifies that RunStreaming handles Server-Sent Events (SSE) responses from adkrest.
+func TestRunStreaming_SSE(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("event: message\n"))
+		w.Write([]byte("data: {\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"sse part one \"}]}}\n\n"))
+		w.Write([]byte("data: {\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"sse part two\"}]}}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	runner := newRunner(srv.URL)
+	text, err := runner.RunStreaming(context.Background(), "app", "user", "sess1", "prompt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if text != "sse part one sse part two" {
+		t.Errorf("got %q, want %q", text, "sse part one sse part two")
+	}
+}
