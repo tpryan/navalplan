@@ -122,6 +122,10 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func isSpatialDuplicate(iou, containment float64) bool {
+	return iou > 0.40 || containment > 0.70
+}
+
 func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) {
 	// Intersect bounds
 	minX := max(b1.Min.X(), b2.Min.X())
@@ -169,6 +173,134 @@ func getTierPriority(tier string, isHiddenGem bool) int {
 	}
 	// Standard or unknown
 	return 1
+}
+
+func (h *Handler) DiscoveryPruning(w http.ResponseWriter, r *http.Request) {
+	monthStr := r.URL.Query().Get("month")
+	slog.InfoContext(r.Context(), fmt.Sprintf("DiscoveryPruning request received for month %s", monthStr))
+
+	var month int
+	if monthStr == "all" {
+		month = 0
+	} else if monthStr != "" {
+		m, err := strconv.Atoi(monthStr)
+		if err != nil || m < 1 || m > 12 {
+			writeError(w, http.StatusBadRequest, "Invalid month parameter")
+			return
+		}
+		month = m
+	} else {
+		month = int(time.Now().Month())
+	}
+
+	prunedCount, err := h.PruneDuplicateRegions(r.Context(), month)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to prune duplicate discovery regions", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to prune duplicate regions")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":       "ok",
+		"month":        monthStr,
+		"pruned_count": prunedCount,
+	})
+}
+
+func (h *Handler) PruneDuplicateRegions(ctx context.Context, month int) (int, error) {
+	if month == 0 {
+		totalPruned := 0
+		for m := 1; m <= 12; m++ {
+			n, err := h.PruneDuplicateRegions(ctx, m)
+			if err != nil {
+				slog.ErrorContext(ctx, fmt.Sprintf("[discovery-prune] Error pruning month %d", m), "error", err)
+			}
+			totalPruned += n
+		}
+		return totalPruned, nil
+	}
+
+	activeRegions, err := h.DB.ListRegionsByMonth(ctx, month)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list regions for month %d: %w", month, err)
+	}
+
+	type parsedItem struct {
+		region models.RegionWithSeasonality
+		geom   *geojson.Geometry
+	}
+
+	var items []parsedItem
+	for _, r := range activeRegions {
+		g, err := geojson.UnmarshalGeometry(r.Geometry)
+		if err == nil {
+			items = append(items, parsedItem{region: r, geom: g})
+		}
+	}
+
+	prunedCount := 0
+	removedIDs := make(map[int64]bool)
+
+	for i := 0; i < len(items); i++ {
+		if removedIDs[items[i].region.SailingRegion.ID] {
+			continue
+		}
+		for j := i + 1; j < len(items); j++ {
+			if removedIDs[items[j].region.SailingRegion.ID] {
+				continue
+			}
+
+			itemA := items[i]
+			itemB := items[j]
+
+			if itemA.region.SailingRegion.ID == itemB.region.SailingRegion.ID || itemA.region.Name == itemB.region.Name {
+				continue
+			}
+
+			b1 := itemA.geom.Geometry().Bound()
+			b2 := itemB.geom.Geometry().Bound()
+			iou, containment, _ := computeBoundsStats(b1, b2)
+
+			if isSpatialDuplicate(iou, containment) {
+				pA := getTierPriority(itemA.region.Tier, itemA.region.IsHiddenGem)
+				pB := getTierPriority(itemB.region.Tier, itemB.region.IsHiddenGem)
+
+				var removeTarget models.RegionWithSeasonality
+				var keepTarget models.RegionWithSeasonality
+
+				if pA > pB {
+					keepTarget = itemA.region
+					removeTarget = itemB.region
+				} else if pB > pA {
+					keepTarget = itemB.region
+					removeTarget = itemA.region
+				} else {
+					if itemA.region.SuitabilityScore >= itemB.region.SuitabilityScore {
+						keepTarget = itemA.region
+						removeTarget = itemB.region
+					} else {
+						keepTarget = itemB.region
+						removeTarget = itemA.region
+					}
+				}
+
+				slog.InfoContext(ctx, fmt.Sprintf("[discovery-prune] Removing duplicate region '%s' (ID: %d, Tier: %s, Score: %d) in favor of '%s' (ID: %d, Tier: %s, Score: %d) (IoU: %.2f, Cont: %.2f)",
+					removeTarget.Name, removeTarget.SailingRegion.ID, removeTarget.Tier, removeTarget.SuitabilityScore,
+					keepTarget.Name, keepTarget.SailingRegion.ID, keepTarget.Tier, keepTarget.SuitabilityScore, iou, containment))
+
+				if err := h.DB.DeleteSeasonality(ctx, int(removeTarget.SailingRegion.ID), month); err != nil {
+					slog.ErrorContext(ctx, fmt.Sprintf("[discovery-prune] Failed to delete seasonality for region %d", removeTarget.SailingRegion.ID), "error", err)
+				} else {
+					removedIDs[removeTarget.SailingRegion.ID] = true
+					prunedCount++
+				}
+			}
+		}
+	}
+
+	return prunedCount, nil
 }
 
 func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
@@ -258,6 +390,10 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 
 		shouldSkip := false
 		for i, ex := range parsedActive {
+			if ex.Name == "" {
+				continue
+			}
+
 			// If names match, we assume it's an update to the same region, so we proceed (UpsertRegion will handle it).
 			if ex.Name == reg.Name {
 				continue
@@ -266,27 +402,14 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 			// If names differ, check for spatial overlap.
 			b1 := newGeom.Geometry().Bound()
 			b2 := ex.Geom.Geometry().Bound()
-			iou, containment, sizeRatio := computeBoundsStats(b1, b2)
+			iou, containment, _ := computeBoundsStats(b1, b2)
 
-			// Conflict Criteria:
-			// 1. IoU > 0.5 (Significant direct overlap)
-			// 2. Containment > 0.8 (One is mostly inside other) AND SizeRatio > 0.3 (They are comparable in size, avoiding "St Lucia vs Caribbean")
-			isDuplicate := false
-			if iou > 0.5 {
-				isDuplicate = true
-			} else if containment > 0.8 && sizeRatio > 0.3 {
-				isDuplicate = true
-			}
+			isDuplicate := isSpatialDuplicate(iou, containment)
 
 			if isDuplicate {
 				// Conflict! Compare priorities.
 				newPriority := getTierPriority(reg.Tier, reg.IsHiddenGem)
 				oldPriority := getTierPriority(ex.Tier, ex.IsHidden)
-
-				// Resolution:
-				// If New is HIGHER priority, we replace Old.
-				// If New is EQUAL priority, we keep Old (stable).
-				// If New is LOWER priority, we keep Old.
 
 				if newPriority > oldPriority {
 					slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Replacing existing '%s' (Tier: %s) with new superior '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
@@ -349,7 +472,19 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 
 		if err := h.DB.UpsertSeasonality(ctx, seasonality); err != nil {
 			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to upsert seasonality for %s", reg.Name), "error", err)
+		} else {
+			parsedActive = append(parsedActive, activeReg{
+				ID:       region.ID,
+				Name:     region.Name,
+				Tier:     seasonality.Tier,
+				IsHidden: seasonality.IsHiddenGem,
+				Geom:     newGeom,
+			})
 		}
+	}
+
+	if pruned, err := h.PruneDuplicateRegions(ctx, month); err == nil && pruned > 0 {
+		slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Pruned %d duplicate regions for %s", month, pruned, monthName))
 	}
 
 	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Completed %s mining in %v. Saved %d regions.", month, monthName, time.Since(start), len(output)))

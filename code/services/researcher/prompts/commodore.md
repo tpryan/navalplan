@@ -49,6 +49,7 @@ The output should start with `[` and end with `]`.
 - DO NOT explain your process.
 - DO NOT say "I will..." or "Here is...".
 - DO NOT output any text other than the JSON.
+- DO NOT return overlapping sub-regions or nested geographic areas within the same month (e.g. do not output both "Society Islands" and "Leeward Islands", or both "Windward Islands" and "St. Lucia"). Select single, distinct macro sailing destinations per geographic area.
 - If you use tools, do so silently and only output the final JSON result.
 
 Example structure:

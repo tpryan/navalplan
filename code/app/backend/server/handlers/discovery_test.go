@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -137,4 +138,104 @@ func TestDiscoveryMining_SingleMonth_HTTPTrigger(t *testing.T) {
 // of these tests exercise.
 func (s *sessionTrackingStore) ListRegionsByMonth(_ context.Context, _ int) ([]models.RegionWithSeasonality, error) {
 	return nil, nil
+}
+
+func TestIsSpatialDuplicate(t *testing.T) {
+	tests := []struct {
+		name        string
+		iou         float64
+		containment float64
+		want        bool
+	}{
+		{"Low overlap", 0.1, 0.2, false},
+		{"High IoU", 0.5, 0.5, true},
+		{"High Containment sub-region", 0.2, 0.8, true},
+		{"Borderline IoU below threshold", 0.35, 0.65, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSpatialDuplicate(tt.iou, tt.containment)
+			if got != tt.want {
+				t.Errorf("isSpatialDuplicate(%v, %v) = %v; want %v", tt.iou, tt.containment, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDiscoveryPruning_HTTPTrigger(t *testing.T) {
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	h := &Handler{
+		DB:          &sessionTrackingStore{},
+		AgentURL:    "http://127.0.0.1:0",
+		AgentClient: client,
+		ResearchSem: make(chan struct{}, 10),
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/discovery/prune", h.DiscoveryPruning)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/prune?month=7", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", w.Code)
+	}
+}
+
+type pruneMockStore struct {
+	sessionTrackingStore
+	regions       map[int][]models.RegionWithSeasonality
+	deletedRegion map[int]int
+}
+
+func (p *pruneMockStore) ListRegionsByMonth(_ context.Context, month int) ([]models.RegionWithSeasonality, error) {
+	return p.regions[month], nil
+}
+
+func (p *pruneMockStore) DeleteSeasonality(_ context.Context, regionID int, month int) error {
+	if p.deletedRegion == nil {
+		p.deletedRegion = make(map[int]int)
+	}
+	p.deletedRegion[regionID] = month
+	return nil
+}
+
+func TestPruneDuplicateRegions(t *testing.T) {
+	geomA := json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,10],[0,0]]]}`)
+	geomB := json.RawMessage(`{"type":"Polygon","coordinates":[[[1,1],[9,1],[9,9],[1,9],[1,1]]]}`)
+
+	store := &pruneMockStore{
+		regions: map[int][]models.RegionWithSeasonality{
+			7: {
+				{
+					SailingRegion:    models.SailingRegion{ID: 1, Name: "Society Islands, French Polynesia", Geometry: models.RawJSON(geomA)},
+					SuitabilityScore: 95,
+					Tier:             "Standard",
+					IsHiddenGem:      false,
+				},
+				{
+					SailingRegion:    models.SailingRegion{ID: 2, Name: "French Polynesia (Leeward Islands)", Geometry: models.RawJSON(geomB)},
+					SuitabilityScore: 96,
+					Tier:             "Standard",
+					IsHiddenGem:      false,
+				},
+			},
+		},
+	}
+
+	h := &Handler{DB: store}
+	pruned, err := h.PruneDuplicateRegions(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("unexpected error during pruning: %v", err)
+	}
+
+	if pruned != 1 {
+		t.Errorf("expected 1 region pruned, got %d", pruned)
+	}
+
+	if _, ok := store.deletedRegion[1]; !ok {
+		t.Errorf("expected region 1 to be deleted during pruning")
+	}
 }

@@ -115,6 +115,8 @@ func (s *Server) Routes(staticPath string) {
 		// --- Discovery (The Commodore) ---
 		{http.MethodGet, "/api/v1/discovery/regions", http.HandlerFunc(s.Handler.GetDiscoveryRegions), 0}, // Public
 		{http.MethodPost, "/api/v1/discovery/mine", http.HandlerFunc(s.Handler.DiscoveryMining), 1},       // Protected
+		{http.MethodPost, "/api/v1/discovery/prune", http.HandlerFunc(s.Handler.DiscoveryPruning), 1},     // Protected
+		{http.MethodDelete, "/api/admin/discovery/regions/{regionID}/months/{month}", http.HandlerFunc(s.Handler.DeleteDiscoveryRegionSeasonality), 1},
 		{http.MethodDelete, "/api/v1/discovery/regions/{regionID}/months/{month}", http.HandlerFunc(s.Handler.DeleteDiscoveryRegionSeasonality), 1},
 
 		// --- Static Pages ---
