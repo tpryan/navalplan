@@ -77,8 +77,8 @@ func New(getEnv func(string) string) (*Config, error) {
 	}
 
 	// Per-query timeout for grounded web searches, so one slow query can't stall the whole
-	// parallel batch (and thus the agent turn). Default 45s; 0 disables the bound.
-	searchTimeoutMs := 45000
+	// parallel batch (and thus the agent turn). Default 15s; 0 disables the bound.
+	searchTimeoutMs := 15000
 	if v := getEnv("NAVALPLAN_AGENT_SEARCH_TIMEOUT_MS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			searchTimeoutMs = n

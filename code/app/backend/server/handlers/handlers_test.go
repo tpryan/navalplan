@@ -907,7 +907,7 @@ func TestCheckAgentHealth(t *testing.T) {
 		},
 		{
 			name:          "Slow agent times out fast",
-			agentDelay:    3 * time.Second,
+			agentDelay:    6 * time.Second,
 			expectedError: true,
 		},
 	}

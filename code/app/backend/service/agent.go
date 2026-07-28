@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/api/idtoken"
 )
@@ -57,7 +58,6 @@ type agentRunRequest struct {
 	AppName    string `json:"appName"`
 	UserID     string `json:"userId"`
 	SessionID  string `json:"sessionId"`
-	Stream     bool   `json:"stream"`
 	NewMessage struct {
 		Role  string `json:"role"`
 		Parts []struct {
@@ -80,6 +80,9 @@ type AgentEvent struct {
 // CreateSession creates an agent session. state is optional; pass nil for no
 // session state.
 func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessionID string, state map[string]any) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
 		return err
@@ -119,9 +122,10 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("create session returned %d: %s", resp.StatusCode, string(b))
+		return fmt.Errorf("create session returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
@@ -282,7 +286,6 @@ func (r *AgentRunner) buildRunBody(appName, userID, sessionID, prompt string, st
 	req.AppName = appName
 	req.UserID = userID
 	req.SessionID = sessionID
-	req.Stream = stream
 	req.NewMessage.Role = "user"
 	req.NewMessage.Parts = []struct {
 		Text string `json:"text"`
