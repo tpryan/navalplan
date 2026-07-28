@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/api/idtoken"
 )
@@ -78,6 +79,9 @@ type AgentEvent struct {
 // CreateSession creates an agent session. state is optional; pass nil for no
 // session state.
 func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessionID string, state map[string]any) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
 		return err
@@ -130,7 +134,6 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 	}
 
 	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
-
 
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, false)
 	if err != nil {
@@ -192,7 +195,6 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 	}
 
 	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
-
 
 	body, err := r.buildRunBody(appName, userID, sessionID, prompt, true)
 	if err != nil {
