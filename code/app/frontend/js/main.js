@@ -280,11 +280,34 @@ function initApp() {
 
 async function handleRoute(path, doPushState = true) {
     if (path === '/' || path === '/index.html' || path === '') {
-        showVoyageList(doPushState);
+        if (currentMode === 'discovery') {
+            toggleDiscoveryMode(false, null, false);
+        } else {
+            showVoyageList(doPushState);
+        }
         return;
     }
 
     const parts = path.split('/').filter(p => p !== '');
+
+    if (parts[0] === 'discover') {
+        const month = parseMonthSlug(parts[1]);
+        const canonicalSlug = MONTH_SLUGS[month - 1];
+        if (currentMode !== 'discovery') {
+            toggleDiscoveryMode(true, month, false);
+        } else {
+            setDiscoveryMonth(month, false);
+        }
+        if (window.location.pathname !== `/discover/${canonicalSlug}`) {
+            window.history.replaceState({ mode: 'discovery', month }, '', `/discover/${canonicalSlug}`);
+        }
+        return;
+    }
+
+    if (currentMode === 'discovery') {
+        toggleDiscoveryMode(false, null, false);
+    }
+
     // Expect: ['voyages', '{id}', ...]
     if (parts[0] === 'voyages' && parts[1]) {
         const id = parseInt(parts[1]);
@@ -601,6 +624,23 @@ function initPilotAndFilterListeners() {
     }
 }
 
+const MONTH_SLUGS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const FULL_MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+function parseMonthSlug(slug) {
+    if (!slug) return new Date().getMonth() + 1;
+    const lower = String(slug).toLowerCase().trim();
+    if (/^\d+$/.test(lower)) {
+        const num = parseInt(lower, 10);
+        if (num >= 1 && num <= 12) return num;
+    }
+    const abbrIndex = MONTH_SLUGS.indexOf(lower);
+    if (abbrIndex !== -1) return abbrIndex + 1;
+    const fullNameIndex = FULL_MONTH_NAMES.indexOf(lower);
+    if (fullNameIndex !== -1) return fullNameIndex + 1;
+    return new Date().getMonth() + 1;
+}
+
 // Track selected discovery month (1-based)
 let currentDiscoveryMonth = new Date().getMonth() + 1;
 
@@ -634,13 +674,7 @@ function initDiscoveryListeners() {
             sq.textContent = abbr;
             if (num === currentDiscoveryMonth) sq.classList.add('active');
             sq.addEventListener('click', () => {
-                currentDiscoveryMonth = num;
-                squaresContainer.querySelectorAll('.np-month-sq').forEach(b => {
-                    const active = parseInt(b.dataset.month) === num;
-                    b.classList.toggle('active', active);
-                    b.setAttribute('aria-pressed', String(active));
-                });
-                loadDiscoveryRegions(num);
+                setDiscoveryMonth(num, true);
             });
             squaresContainer.appendChild(sq);
         });
@@ -4987,7 +5021,27 @@ async function redoGuide(oldGuide, btn) {
 
 // ─── Discovery Mode ───────────────────────────────────────────────────────────
 
-async function toggleDiscoveryMode(active) {
+function setDiscoveryMonth(month, doPushState = true) {
+    if (!month || month < 1 || month > 12) return;
+    currentDiscoveryMonth = month;
+    const squaresContainer = document.getElementById('month-squares');
+    if (squaresContainer) {
+        squaresContainer.querySelectorAll('.np-month-sq').forEach(b => {
+            const active = parseInt(b.dataset.month) === month;
+            b.classList.toggle('active', active);
+            b.setAttribute('aria-pressed', String(active));
+        });
+    }
+    loadDiscoveryRegions(month);
+    if (doPushState) {
+        const slug = MONTH_SLUGS[month - 1];
+        if (window.location.pathname !== `/discover/${slug}`) {
+            window.history.pushState({ mode: 'discovery', month }, '', `/discover/${slug}`);
+        }
+    }
+}
+
+async function toggleDiscoveryMode(active, targetMonth, doPushState = true) {
     currentMode = active ? 'discovery' : 'planner';
     const discoveryControls = document.getElementById('discovery-controls');
     const sidebar = document.getElementById('sidebar');
@@ -4996,12 +5050,17 @@ async function toggleDiscoveryMode(active) {
         discoveryControls.classList.remove('hidden');
         sidebar.classList.add('hidden');
 
+        if (targetMonth && targetMonth >= 1 && targetMonth <= 12) {
+            currentDiscoveryMonth = targetMonth;
+        } else if (!currentDiscoveryMonth) {
+            currentDiscoveryMonth = new Date().getMonth() + 1;
+        }
+
         // Sync month squares to current month
-        currentDiscoveryMonth = new Date().getMonth() + 1;
         document.querySelectorAll('#month-squares .np-month-sq').forEach(b => {
-            const active = parseInt(b.dataset.month) === currentDiscoveryMonth;
-            b.classList.toggle('active', active);
-            b.setAttribute('aria-pressed', String(active));
+            const isActive = parseInt(b.dataset.month) === currentDiscoveryMonth;
+            b.classList.toggle('active', isActive);
+            b.setAttribute('aria-pressed', String(isActive));
         });
 
         clearRecommendations();
@@ -5013,6 +5072,13 @@ async function toggleDiscoveryMode(active) {
         if (map) {
              map.panTo({ lat: 20, lng: 0 });
              map.setZoom(3);
+        }
+
+        if (doPushState) {
+            const slug = MONTH_SLUGS[currentDiscoveryMonth - 1];
+            if (window.location.pathname !== `/discover/${slug}`) {
+                window.history.pushState({ mode: 'discovery', month: currentDiscoveryMonth }, '', `/discover/${slug}`);
+            }
         }
 
         // Show Intro Modal if first time
@@ -5034,6 +5100,18 @@ async function toggleDiscoveryMode(active) {
              map.data.forEach((feature) => {
                 map.data.remove(feature);
             });
+        }
+
+        if (doPushState) {
+            if (currentVoyage) {
+                if (window.location.pathname !== `/voyages/${currentVoyage.id}`) {
+                    window.history.pushState({ voyageId: currentVoyage.id }, '', `/voyages/${currentVoyage.id}`);
+                }
+            } else {
+                if (window.location.pathname !== '/') {
+                    window.history.pushState({}, '', '/');
+                }
+            }
         }
         
         if (currentVoyage) {
