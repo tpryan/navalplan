@@ -140,6 +140,7 @@ func (s *Server) Routes(staticPath string) {
 			// 2. SPA Fallback: If it's a known client-side route or has no extension
 			if strings.HasPrefix(r.URL.Path, "/voyages/") ||
 				strings.HasPrefix(r.URL.Path, "/shared/") ||
+				strings.HasPrefix(r.URL.Path, "/discover") ||
 				filepath.Ext(r.URL.Path) == "" {
 				http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
 				return
