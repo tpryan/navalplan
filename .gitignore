@@ -17,6 +17,8 @@ code/app/backend/static.min
 code/app/frontend/dist
 code/app/frontend/node_modules
 code/config/navallog-sa.json
+config/navallog-sa.json
+config/*.json
 code/services/researcher/researcher
 code/services/researcher/vendor
 

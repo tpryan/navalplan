@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +69,7 @@ func TestGeocodeFacility_MissingAPIKey(t *testing.T) {
 	// Unset the key so the early-return path is exercised.
 	t.Setenv("NAVALPLAN_BACKEND_MAPS_API_KEY", "")
 
-	_, _, err := geocodeFacility("Marina Bay", "San Francisco", 37.8, -122.4)
+	_, _, err := geocodeFacility(context.Background(), "Marina Bay", "San Francisco", 37.8, -122.4)
 	if err == nil {
 		t.Fatal("expected error when API key is missing, got nil")
 	}
@@ -100,7 +101,7 @@ func TestGetStaticMap_MissingAPIKey(t *testing.T) {
 	t.Setenv("NAVALPLAN_BACKEND_MAPS_API_KEY", "")
 
 	h := &Handler{}
-	_, err := h.getStaticMap(37.8, -122.4)
+	_, err := h.getStaticMap(context.Background(), 37.8, -122.4)
 	if err == nil {
 		t.Fatal("expected error when API key is missing, got nil")
 	}
