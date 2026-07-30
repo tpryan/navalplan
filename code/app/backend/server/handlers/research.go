@@ -42,7 +42,7 @@ type Facility struct {
 	References      []string        `json:"references"`
 }
 
-func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
+func (h *Handler) getStaticMap(ctx context.Context, lat, lng float64) ([]byte, error) {
 	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
@@ -51,15 +51,15 @@ func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
 	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=12&size=600x400&maptype=roadmap&markers=color:red%%7C%f,%f&key=%s",
 		lat, lng, lat, lng, apiKey)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create static map request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute static map request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -67,10 +67,14 @@ func (h *Handler) getStaticMap(lat, lng float64) ([]byte, error) {
 		return nil, fmt.Errorf("static map request failed with status: %s", resp.Status)
 	}
 
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read static map body: %w", err)
+	}
+	return data, nil
 }
 
-func geocodeFacility(name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
+func geocodeFacility(ctx context.Context, name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
 	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
 		return 0, 0, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
@@ -84,15 +88,15 @@ func geocodeFacility(name, vicinity string, centerLat, centerLng float64) (float
 	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/geocode/json?address=%s&bounds=%s&key=%s",
 		url.QueryEscape(query), url.QueryEscape(bounds), apiKey)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("create geocode request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("execute geocode request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -109,11 +113,11 @@ func geocodeFacility(name, vicinity string, centerLat, centerLng float64) (float
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("decode geocode response: %w", err)
 	}
 
 	if result.Status != "OK" || len(result.Results) == 0 {
-		return 0, 0, fmt.Errorf("geocoding failed: %s", result.Status)
+		return 0, 0, fmt.Errorf("geocoding failed with status: %s", result.Status)
 	}
 
 	return result.Results[0].Geometry.Location.Lat, result.Results[0].Geometry.Location.Lng, nil
@@ -318,7 +322,7 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 				defer wg.Done()
 				f := facilities[i]
 				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility: %s near %s", f.Name, stop.LocationName))
-				lat, lng, err := geocodeFacility(f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
+				lat, lng, err := geocodeFacility(ctx, f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
 				if err == nil {
 					facilities[i].Latitude = lat
 					facilities[i].Longitude = lng

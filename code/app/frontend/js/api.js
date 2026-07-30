@@ -1,3 +1,5 @@
+import { showNotification } from './notifications.js';
+
 export const API_BASE = '/api/v1';
 
 let error503Count = 0;
@@ -26,9 +28,6 @@ async function apiFetch(url, options = {}) {
       }
 
       if (res.status === 503 || (res.status === 500 && attempt < maxRetries)) {
-        // Check if it's a 503 or a 500 that might be a transient model error
-        // Note: The log showed 500 from agent, but the message was 503.
-        
         error503Count++;
         last503Time = Date.now();
         
@@ -45,6 +44,10 @@ async function apiFetch(url, options = {}) {
         }
       }
 
+      if (res.status >= 500) {
+        showNotification('Server Error', 'The server encountered an error processing your request. Please try again.');
+      }
+
       // Reset count on success if enough time has passed
       if (res.ok && Date.now() - last503Time > 30000) {
         error503Count = 0;
@@ -53,7 +56,12 @@ async function apiFetch(url, options = {}) {
       return res;
     } catch (err) {
       if (err.message === 'Unauthorized') throw err;
-      if (attempt >= maxRetries) throw err;
+      if (attempt >= maxRetries) {
+        if (err.name === 'TypeError' || err.message.includes('fetch')) {
+          showNotification('Network Error', 'Unable to connect to the server. Please check your connection.');
+        }
+        throw err;
+      }
       
       attempt++;
       await new Promise(r => setTimeout(r, 1000 * attempt));
