@@ -119,37 +119,48 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodDelete, "/api/v1/discovery/regions/{regionID}/months/{month}", http.HandlerFunc(s.Handler.DeleteDiscoveryRegionSeasonality), 1},
 
 		// --- Static Pages ---
-		{http.MethodGet, "/help", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(staticPath, "help.html"))
-		}), 0},
+		{http.MethodGet, "/help", s.helpHandler(staticPath), 0},
 
 		// --- Static Files Catch-All (Public) ---
-		{http.MethodGet, "/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
-			http.ServeFile(w, r, fpath)
-		}), 0},
-
-		{http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 1. API Guard
-			if strings.HasPrefix(r.URL.Path, "/api/") {
-				http.NotFound(w, r)
-				return
-			}
-
-			// 2. SPA Fallback: If it's a known client-side route or has no extension
-			if strings.HasPrefix(r.URL.Path, "/voyages/") ||
-				strings.HasPrefix(r.URL.Path, "/shared/") ||
-				strings.HasPrefix(r.URL.Path, "/discover") ||
-				filepath.Ext(r.URL.Path) == "" {
-				http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
-				return
-			}
-
-			// 3. Static Files
-			fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
-			http.ServeFile(w, r, fpath)
-		}), 0},
+		{http.MethodGet, "/assets/", s.assetsHandler(staticPath), 0},
+		{http.MethodGet, "/", s.spaHandler(staticPath), 0},
 	}
 
 	s.Register(routes...)
+}
+
+func (s *Server) helpHandler(staticPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(staticPath, "help.html"))
+	}
+}
+
+func (s *Server) assetsHandler(staticPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
+		http.ServeFile(w, r, fpath)
+	}
+}
+
+func (s *Server) spaHandler(staticPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. API Guard
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		// 2. SPA Fallback: If it's a known client-side route or has no extension
+		if strings.HasPrefix(r.URL.Path, "/voyages/") ||
+			strings.HasPrefix(r.URL.Path, "/shared/") ||
+			strings.HasPrefix(r.URL.Path, "/discover") ||
+			filepath.Ext(r.URL.Path) == "" {
+			http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
+			return
+		}
+
+		// 3. Static Files
+		fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
+		http.ServeFile(w, r, fpath)
+	}
 }
