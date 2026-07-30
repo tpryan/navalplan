@@ -360,16 +360,39 @@ func TestServerHealth(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, srv)
 
-	// Register routes
 	srv.Routes(cfg.ContentDir)
 
-	req := httptest.NewRequest("GET", "/healthz", nil)
-	w := httptest.NewRecorder()
+	tests := []struct {
+		name         string
+		endpoint     string
+		expectedCode int
+		expectedJSON string
+	}{
+		{
+			name:         "healthz endpoint",
+			endpoint:     "/healthz",
+			expectedCode: http.StatusOK,
+			expectedJSON: `{"status":"ok"}` + "\n",
+		},
+		{
+			name:         "health endpoint",
+			endpoint:     "/health",
+			expectedCode: http.StatusOK,
+			expectedJSON: `{"status":"ok"}` + "\n",
+		},
+	}
 
-	srv.Mux.ServeHTTP(w, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tt.endpoint, nil)
+			w := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "OK", w.Body.String())
+			srv.Mux.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+			assert.Equal(t, tt.expectedJSON, w.Body.String())
+		})
+	}
 }
 
 func TestServerRoutes(t *testing.T) {

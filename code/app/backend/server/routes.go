@@ -38,24 +38,23 @@ func (s *Server) Register(r ...route) {
 	}
 }
 
+func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
+	status := "ok"
+	if err := s.Handler.CheckAgentHealth(r.Context()); err != nil {
+		slog.WarnContext(r.Context(), "Agent health check failed", "error", err)
+		status = "degraded"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
 func (s *Server) Routes(staticPath string) {
 	// 1. Define the Route Table
 	routes := []route{
 		// --- System / Auth (Public) ---
-		{http.MethodGet, "/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
-		}), 0},
-		{http.MethodGet, "/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			status := "ok"
-			if err := s.Handler.CheckAgentHealth(r.Context()); err != nil {
-				slog.WarnContext(r.Context(), "Agent health check failed", "error", err)
-				status = "degraded"
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": status})
-		}), 0},
+		{http.MethodGet, "/healthz", http.HandlerFunc(s.healthCheck), 0},
+		{http.MethodGet, "/health", http.HandlerFunc(s.healthCheck), 0},
 		{http.MethodGet, "/auth/google/login", http.HandlerFunc(s.oauthGoogleLogin), 0},
 		{http.MethodGet, "/auth/google/callback", http.HandlerFunc(s.oauthGoogleCallback), 0},
 		{http.MethodPost, "/auth/logout", http.HandlerFunc(s.oauthLogout), 1},
