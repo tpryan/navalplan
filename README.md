@@ -2,123 +2,163 @@
 
 ![NavalPlan Screenshot](images/screenshot.png)
 
-NavalPlan is a web application for planning sailing voyages, researching stops, and discovering new destinations using AI agents.
+NavalPlan is a modern web application for planning sailing voyages, researching maritime stops, and discovering new destinations using a suite of AI agents.
 
-## Prerequisites
+---
 
-Before you begin, ensure you have the following installed:
+## 🛠️ Prerequisites
 
-*   **Go** (1.21 or later)
-*   **Node.js** (20 or later) & **npm**
-*   **Python** (3.10 or later) & `venv` (for ADK agent evaluations)
-*   **Podman** (for running the PostgreSQL database). *Note: You can replace `podman` with `docker` in the Makefile if you prefer Docker.*
-*   **Google Cloud SDK** (`gcloud`) - Optional, for deployment and cloud-specific tasks.
+Before getting started, ensure you have the following installed:
 
-## Getting Started
+* **Go** (1.22 or later)
+* **Node.js** (20 or later) & **npm**
+* **Python** (3.10 or later) & `venv` (for ADK agent evaluations)
+* **Podman** or **Docker** (for running the local PostgreSQL container)
+* **Google Cloud SDK** (`gcloud`) - Optional, for deployment and Cloud SQL management
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/navalplan.git
-    cd navalplan
-    ```
+---
 
-2.  **Run Setup:**
-    This command will create your `.env` file from the example and install all Go and Node.js dependencies.
-    ```bash
-    make setup
-    ```
+## 🚀 Getting Started
 
-3.  **Setup Agent Evaluation (ADK):**
-    Install the Agent Developer Kit (ADK) and its Python dependencies. It is recommended to use a virtual environment.
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    make setup-adk
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/navalplan.git
+   cd navalplan
+   ```
 
-4.  **Configure Environment:**
-    Open the newly created `.env` file and fill in the required values:
-    *   `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: Create these in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-    *   `NAVALPLAN_FRONTEND_MAPS_API_KEY` & `NAVALPLAN_BACKEND_MAPS_API_KEY`: Get API keys from [Google Maps Platform](https://developers.google.com/maps).
-    *   `NAVALPLAN_MAP_ID`: Create a Map ID in Google Maps Platform (for vector maps/styling).
-    *   `NAVALPLAN_SYSTEM_KEY`: Generate a secure random string for system-level API access.
+2. **Run Setup:**
+   Installs Go dependencies (vendored) and Node.js packages, and creates `.env` from `.env.example`:
+   ```bash
+   make setup
+   ```
 
-4.  **Start the Database:**
-    This uses Podman to start a PostgreSQL container and applies migrations/seeds.
-    ```bash
-    make db-start
-    ```
+3. **Setup Agent Evaluation Environment (ADK):**
+   Install the Google Agent Developer Kit (ADK) in a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   make setup-adk
+   ```
 
-5.  **Run the Application:**
-    This starts the Backend, Frontend (build), and the Researcher Agent.
-    ```bash
-    make dev
-    ```
-    Access the application at `http://localhost:8080`.
+4. **Configure Environment:**
+   Edit `.env` and fill in required keys:
+   * `GEMINI_API_KEY`: Required for Gemini model access in agent services.
+   * `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+   * `NAVALPLAN_FRONTEND_MAPS_API_KEY` & `NAVALPLAN_BACKEND_MAPS_API_KEY`: API keys from [Google Maps Platform](https://developers.google.com/maps).
+   * `NAVALPLAN_MAP_ID`: Google Maps Vector Map ID.
+   * `NAVALPLAN_SYSTEM_KEY`: Secure token for internal system/scheduler API endpoints.
 
-## Development Commands
+5. **Start the Database:**
+   Launches a PostgreSQL 15 container via Podman/Docker, runs database migrations, and applies seeds:
+   ```bash
+   make db-start
+   ```
 
-*   `make run-backend`: Runs only the Go backend (requires `static.min` to exist).
-*   `make run-frontend`: Runs the frontend in dev mode (Vite).
-*   `make run-agent`: Runs the Researcher Agent.
-*   `make db-reset`: Stops, restarts, and reseeds the database.
-*   `make migrate-up`: Applies pending database migrations.
-*   `make migrate-create`: Creates a new migration file.
+6. **Start Development Stack:**
+   Concurrently runs the Go API backend, frontend Vite build/proxy, and Researcher Agent service:
+   ```bash
+   make dev
+   ```
+   Open `http://localhost:8080` in your browser.
 
-## Agent Evaluation (ADK)
+---
 
-NavalPlan uses the **Agent Developer Kit (ADK)** to evaluate the performance of its AI agents.
+## 🧰 Development & Operations Commands
 
-*   `make eval-all`: Runs evaluations for all agents (Harbourmaster, Pilot, Commodore, Specialist).
-*   `make eval-harbourmaster`: Evaluates only the Harbourmaster agent.
-*   `make eval-pilot`: Evaluates only the Pilot agent.
-*   `make eval-commodore`: Evaluates only the Commodore agent.
-*   `make eval-specialist`: Evaluates only the Specialist agent.
+### Application Lifecycle
 
-By default, evaluations provide a summary. Set `VERBOSE=1` to see detailed logs and trace information:
+| Command | Description |
+| :--- | :--- |
+| `make dev` | Starts local database, builds frontend assets, and launches Backend & Agent services concurrently. |
+| `make run-backend` | Runs only the Go backend server (port 8080). |
+| `make run-frontend` | Runs the frontend development server via Vite. |
+| `make run-agent` | Runs the Go Researcher Agent microservice (port 8081). |
+| `make build-js` | Installs frontend dependencies and builds production JS bundles into `static.min`. |
+
+### Database & Migrations
+
+| Command | Description |
+| :--- | :--- |
+| `make db-start` | Starts PostgreSQL container, applies migrations (`migrate-up`), and seeds data. |
+| `make db-stop` | Stops and removes the local database container. |
+| `make db-reset` | Wipes, restarts, and re-seeds the local database. |
+| `make db-console` | Opens interactive `psql` shell into the local database container. |
+| `make migrate-up` | Applies pending database schema migrations from `code/app/db/migrations`. |
+| `make migrate-create` | Interactive prompt to generate a new timestamped SQL migration pair (`.up.sql` / `.down.sql`). |
+| `make add-admin EMAIL=user@example.com` | Promotes an existing user or creates an invitation with admin privileges. |
+
+### Utilities & Discovery
+
+| Command | Description |
+| :--- | :--- |
+| `make dev-mine` | Triggers discovery mining for all months via system API. |
+| `make dev-prune` | Triggers seasonal data pruning via system API. |
+
+---
+
+## 🧪 Testing & Agent Evaluations
+
+### Unit Tests
+* **Backend + Frontend Unit Tests:**
+  ```bash
+  make test
+  ```
+* **Backend Tests Only:** `make test-backend`
+* **Frontend Tests Only:** `make test-frontend`
+
+### Agent Trajectory Evaluations (ADK)
+NavalPlan uses Google's **Agent Developer Kit (ADK)** evaluation framework to test AI agent trajectories against golden test datasets:
+
 ```bash
+# Run all agent evaluations
+make eval-all
+
+# Run specific agent evaluation
+make eval-harbourmaster
+make eval-pilot
+make eval-commodore
+make eval-specialist
+
+# Verbose evaluation output with detailed trace logs
 make eval-harbourmaster VERBOSE=1
 ```
 
-## Testing
+---
 
-*   **Run unit tests (backend + frontend):**
-    ```bash
-    make test
-    ```
-*   **Run all tests (unit tests + agent evaluations):**
-    ```bash
-    make test-all
-    ```
-*   **Backend tests only:**
-    ```bash
-    make test-backend
-    ```
-*   **Frontend tests only:**
-    ```bash
-    make test-frontend
-    ```
-*   **Agent evaluations only:**
-    ```bash
-    make eval-all
-    ```
-
-## Architecture
+## 🏗️ Architecture Overview
 
 ![Architecture Diagram](images/architecture.png)
 
-*   **Backend**: Go (Standard Library + `chi`-style routing without the framework).
-*   **Frontend**: Vanilla JS / ES Modules (no framework) bundled with Vite.
-*   **Database**: PostgreSQL.
-*   **Agents**: Go-based agents using Google Gemini models.
+NavalPlan follows a decoupled, performance-first architecture:
 
-## Deployment
+* **Backend (`code/app/backend`)**:
+  * Written in **Go 1.22+** using the standard library `http.ServeMux` with method matching and modular middleware.
+  * Structured into strict layers: `server/` (router/middleware), `handlers/` (HTTP orchestration), `datastore/` (SQL execution), and `models/` (domain structs).
+  * Uses `pgx` driver and raw SQL with `golang-migrate` versioning.
 
-For detailed instructions on setting up Google Cloud infrastructure and deploying the application, see the [Deployment Guide](docs/DEPLOYMENT.md).
+* **Frontend (`code/app/frontend`)**:
+  * Single Page Application (SPA) built with Vanilla JavaScript (ES Modules) and modern CSS design tokens.
+  * Bundled with **Vite**; proxies API calls to Go backend during development.
 
-Quick commands:
-*   `make setup-infra`: Provision GCP resources (APIs, SQL, Buckets).
-*   `make setup-secrets`: Configure application secrets.
-*   `make deploy-backend`: Deploys the main application.
-*   `make deploy-agent`: Deploys the researcher agent.
-*   `make deploy-sql`: Initializes the production database.
+* **AI Agent Services (`code/services/researcher`)**:
+  * Microservice in Go orchestrating Gemini LLM models across specialized agents:
+    * **Harbourmaster**: Central coordinator for nautical operations.
+    * **Pilot**: Navigation, route planning, and local maritime rules expert.
+    * **Commodore**: High-level strategic planning and regional discovery.
+    * **Specialist**: Technical maritime task execution and weather/tide analysis.
+    * **Lookout**: Continuous safety monitoring and audit agent.
+  * Exposes App-to-Agent (A2A) HTTP endpoints, Model Context Protocol (MCP) tool bindings, and Google Agent Registry integration.
+
+---
+
+## 🚀 Deployment
+
+For cloud infrastructure setup and deployment instructions on Google Cloud Platform, see the [Deployment Guide](docs/DEPLOYMENT.md).
+
+Quick cloud deployment targets:
+* `make setup-infra`: Provisions GCP services (Cloud Run, Cloud SQL, Storage, APIs).
+* `make setup-secrets`: Configures secret keys in Secret Manager.
+* `make deploy-backend`: Submits Cloud Build job for main application deployment.
+* `make deploy-agent`: Submits Cloud Build job for researcher agent deployment.
+* `make deploy-agent-runtime`: Deploys agent service to Vertex AI Agent Runtime.
+* `make register-registry`: Registers all agent services with Google Agent Registry.
