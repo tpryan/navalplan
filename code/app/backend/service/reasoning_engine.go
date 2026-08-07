@@ -136,22 +136,36 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 		}
 
 		if resp != nil && len(resp.Data) > 0 {
-			// Try to parse the chunk as an AgentEvent (ADK format).
-			// Since it might be multiple NDJSON events or a partial event,
-			// we'll use a scanner-like approach or just try to unmarshal.
-			// For simplicity and matching AgentRunner logic, we'll collect the data
-			// and parse it. Note: Real streaming would parse per event.
 			var event AgentEvent
-			if err := json.Unmarshal(resp.Data, &event); err == nil {
-				if len(event.Content.Parts) > 0 {
-					sb.WriteString(event.Content.Parts[0].Text)
+			if err := json.Unmarshal(resp.Data, &event); err == nil && len(event.Content.Parts) > 0 {
+				for _, p := range event.Content.Parts {
+					if p.Text != "" && !p.Thought {
+						sb.WriteString(p.Text)
+					}
 				}
 			} else {
-				// Fallback: if it's not a full JSON, it might be a raw text chunk
-				// or part of a larger stream. We'll append it for now.
-				// In a production scenario, we'd use a json.Decoder on a pipe.
-				slog.DebugContext(ctx, "Failed to unmarshal stream chunk", "data", string(resp.Data))
-				sb.Write(resp.Data)
+				var generic struct {
+					Content string `json:"content"`
+					Text    string `json:"text"`
+					Output  struct {
+						Content string `json:"content"`
+						Text    string `json:"text"`
+					} `json:"output"`
+				}
+				if err := json.Unmarshal(resp.Data, &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
+					if generic.Content != "" {
+						sb.WriteString(generic.Content)
+					} else if generic.Text != "" {
+						sb.WriteString(generic.Text)
+					} else if generic.Output.Content != "" {
+						sb.WriteString(generic.Output.Content)
+					} else if generic.Output.Text != "" {
+						sb.WriteString(generic.Output.Text)
+					}
+				} else {
+					slog.DebugContext(ctx, "Failed to unmarshal stream chunk, writing raw", "data", string(resp.Data))
+					sb.Write(resp.Data)
+				}
 			}
 		}
 	}
@@ -168,26 +182,51 @@ func extractTextFromValue(v *structpb.Value) string {
 	case *structpb.Value_StringValue:
 		return val.StringValue
 	case *structpb.Value_StructValue:
-		// Check for ADK response format: { "content": { "parts": [ { "text": "..." } ] } }
+		if val.StructValue == nil {
+			return ""
+		}
+
+		// 1. Check for "content" key
 		if content := val.StructValue.Fields["content"]; content != nil {
+			if str := content.GetStringValue(); str != "" {
+				return str
+			}
 			if contentStruct := content.GetStructValue(); contentStruct != nil {
 				if parts := contentStruct.Fields["parts"]; parts != nil {
-					if partsList := parts.GetListValue(); partsList != nil && len(partsList.Values) > 0 {
-						if firstPart := partsList.Values[0].GetStructValue(); firstPart != nil {
-							if text := firstPart.Fields["text"]; text != nil {
-								return text.GetStringValue()
+					if partsList := parts.GetListValue(); partsList != nil {
+						var sb strings.Builder
+						for _, item := range partsList.Values {
+							if partStruct := item.GetStructValue(); partStruct != nil {
+								if text := partStruct.Fields["text"]; text != nil {
+									sb.WriteString(text.GetStringValue())
+								}
 							}
+						}
+						if sb.Len() > 0 {
+							return sb.String()
 						}
 					}
 				}
 			}
 		}
-		// Fallback: search for "text" key anywhere in the struct
+
+		// 2. Check for "output" wrapper
+		if output := val.StructValue.Fields["output"]; output != nil {
+			if res := extractTextFromValue(output); res != "" {
+				return res
+			}
+		}
+
+		// 3. Check for "text" key
 		if text := val.StructValue.Fields["text"]; text != nil {
-			return text.GetStringValue()
+			if str := text.GetStringValue(); str != "" {
+				return str
+			}
 		}
 	case *structpb.Value_ListValue:
-		// If it's a list, concatenate strings
+		if val.ListValue == nil {
+			return ""
+		}
 		var sb strings.Builder
 		for _, item := range val.ListValue.Values {
 			sb.WriteString(extractTextFromValue(item))
