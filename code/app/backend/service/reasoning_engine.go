@@ -56,7 +56,10 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 	defer span.End()
 
 	input, err := structpb.NewStruct(map[string]any{
-		"input": prompt,
+		"input":     prompt,
+		"appName":   appName,
+		"userID":    userID,
+		"sessionID": sessionID,
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -104,7 +107,10 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 	defer span.End()
 
 	input, err := structpb.NewStruct(map[string]any{
-		"input": prompt,
+		"input":     prompt,
+		"appName":   appName,
+		"userID":    userID,
+		"sessionID": sessionID,
 	})
 	if err != nil {
 		span.RecordError(err)

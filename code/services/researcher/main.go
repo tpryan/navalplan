@@ -855,21 +855,37 @@ func (s *Server) handleReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
 		// Map Reasoning Engine input to ADK message
 		inputMsg, _ := reReq.Input["message"].(string)
 		if inputMsg == "" {
-			// Fallback to "input" if "message" is not present
 			inputMsg, _ = reReq.Input["input"].(string)
 		}
 
-		userID, _ := reReq.Parameters["user_id"].(string)
-		if userID == "" {
-			userID = "default_user"
-		}
-		sessionID, _ := reReq.Parameters["session_id"].(string)
-		if sessionID == "" {
-			sessionID = "default_session"
+		appName := "harbourmaster"
+		if name, ok := reReq.Input["appName"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Input["app_name"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Parameters["appName"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Parameters["app_name"].(string); ok && name != "" {
+			appName = name
 		}
 
-		// Use the default agent (harbourmaster) if not specified
-		appName := "harbourmaster"
+		userID := "default_user"
+		if u, ok := reReq.Input["userID"].(string); ok && u != "" {
+			userID = u
+		} else if u, ok := reReq.Input["user_id"].(string); ok && u != "" {
+			userID = u
+		} else if u, ok := reReq.Parameters["user_id"].(string); ok && u != "" {
+			userID = u
+		}
+
+		sessionID := "default_session"
+		if sess, ok := reReq.Input["sessionID"].(string); ok && sess != "" {
+			sessionID = sess
+		} else if sess, ok := reReq.Input["session_id"].(string); ok && sess != "" {
+			sessionID = sess
+		} else if sess, ok := reReq.Parameters["session_id"].(string); ok && sess != "" {
+			sessionID = sess
+		}
 
 		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
 		if err != nil {
@@ -928,16 +944,34 @@ func (s *Server) handleStreamReasoningEngine(cfg *launcher.Config) http.HandlerF
 			inputMsg, _ = reReq.Input["input"].(string)
 		}
 
-		userID, _ := reReq.Parameters["user_id"].(string)
-		if userID == "" {
-			userID = "default_user"
-		}
-		sessionID, _ := reReq.Parameters["session_id"].(string)
-		if sessionID == "" {
-			sessionID = "default_session"
+		appName := "harbourmaster"
+		if name, ok := reReq.Input["appName"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Input["app_name"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Parameters["appName"].(string); ok && name != "" {
+			appName = name
+		} else if name, ok := reReq.Parameters["app_name"].(string); ok && name != "" {
+			appName = name
 		}
 
-		appName := "harbourmaster"
+		userID := "default_user"
+		if u, ok := reReq.Input["userID"].(string); ok && u != "" {
+			userID = u
+		} else if u, ok := reReq.Input["user_id"].(string); ok && u != "" {
+			userID = u
+		} else if u, ok := reReq.Parameters["user_id"].(string); ok && u != "" {
+			userID = u
+		}
+
+		sessionID := "default_session"
+		if sess, ok := reReq.Input["sessionID"].(string); ok && sess != "" {
+			sessionID = sess
+		} else if sess, ok := reReq.Input["session_id"].(string); ok && sess != "" {
+			sessionID = sess
+		} else if sess, ok := reReq.Parameters["session_id"].(string); ok && sess != "" {
+			sessionID = sess
+		}
 
 		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
 		if err != nil {
