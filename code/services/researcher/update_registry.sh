@@ -1,7 +1,7 @@
 AGENT_NAMES="specialist pilot commodore harbourmaster"
 for AGENT in $AGENT_NAMES; do
   echo "Updating $AGENT in registry..."
-  AUDIENCE="https://navalplan-researcher-2azck273fq-uc.a.run.app"
+  AUDIENCE="projects/navallog/locations/us-central1/reasoningEngines/1643463669536784384"
   # I'll just use a generic card since I can't fetch it easily from here without the token issue
   # But I can construct it!
   cat > "${AGENT}_card.json" <<EOC
