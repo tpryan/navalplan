@@ -1,3 +1,5 @@
+cd "$(dirname "$0")"
+
 AGENT_NAMES="specialist pilot commodore harbourmaster"
 for AGENT in $AGENT_NAMES; do
   echo "Updating $AGENT in registry..."
