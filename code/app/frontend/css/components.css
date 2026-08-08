@@ -126,6 +126,7 @@
 .np-day-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    align-items: stretch;
     gap: 10px;
     margin-bottom: 28px;
 }
@@ -134,6 +135,8 @@
 }
 .np-day-tile {
     --accent: var(--sky);
+    display: flex;
+    flex-direction: column;
     padding: 12px 14px;
     border-radius: var(--radius-tile);
     background: color-mix(in oklab, var(--accent) 10%, var(--surface));
@@ -169,8 +172,16 @@
     color: var(--accent, var(--sky));
 }
 .np-day-tile__chart {
-    margin-top: 8px;
+    /* Cards have a variable number of meta lines above the chart (weather,
+       temp, wind, sunrise/sunset, next-stop distance are all conditional
+       on data being available). Pushing the chart to the bottom of the
+       tile — combined with .np-day-grid's row stretch, which makes every
+       tile in a row match the tallest one — keeps every chart's top edge
+       aligned horizontally regardless of how much text a given day has. */
+    margin-top: auto;
+    padding-top: 8px;
     height: 40px;
+    box-sizing: content-box;
 }
 
 /* ─── Destination overview pull-quote ────────────────────────────────────── */
