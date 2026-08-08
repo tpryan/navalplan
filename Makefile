@@ -42,7 +42,7 @@ GO_FILES=$(shell find . -name '*.go')
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -364,6 +364,16 @@ test-backend:
 test-frontend:
 	@echo "Running Frontend Tests..."
 	cd code/app/frontend && npm test
+
+vet: vet-backend vet-researcher
+
+vet-backend:
+	@echo "Vetting Backend..."
+	cd code/app/backend && go vet ./...
+
+vet-researcher:
+	@echo "Vetting Researcher Agent..."
+	cd code/services/researcher && go vet ./...
 
 # --- Evaluation ---
 

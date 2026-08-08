@@ -1,210 +1,31 @@
 // Package main is the entry point for the researcher service, orchestrating multiple AI agents
 // (Researcher, Guide, Discovery) to assist with sailing voyage planning.
+//
+// main is a composition root only: it loads configuration, builds the
+// service's dependency graph (nautical tools, agents, session service), and
+// hands the result to the server package to serve over HTTP. Agent
+// construction lives in package agents, HTTP routing/middleware in package
+// server, and tool-call/SSE instrumentation in package telemetry.
 package main
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"log"
 	"log/slog"
-	"net/http"
 	"os"
-	"os/signal"
-	"strings"
-	"sync"
-	"syscall"
 	"time"
 
-	"github.com/a2aproject/a2a-go/a2a"
-	"github.com/a2aproject/a2a-go/a2asrv"
 	"github.com/joho/godotenv"
+	"github.com/tpryan/navalplan/services/researcher/agents"
 	"github.com/tpryan/navalplan/services/researcher/config"
 	"github.com/tpryan/navalplan/services/researcher/logging"
-	"github.com/tpryan/navalplan/services/researcher/mcp"
+	"github.com/tpryan/navalplan/services/researcher/prompts"
+	"github.com/tpryan/navalplan/services/researcher/server"
+	"github.com/tpryan/navalplan/services/researcher/sessions"
+	"github.com/tpryan/navalplan/services/researcher/telemetry"
 	"github.com/tpryan/navalplan/services/researcher/tools"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/adk/v2/agent"
-	"google.golang.org/adk/v2/agent/llmagent"
-	"google.golang.org/adk/v2/cmd/launcher"
-	"google.golang.org/adk/v2/model/gemini"
-	"google.golang.org/adk/v2/runner"
-	"google.golang.org/adk/v2/server/adka2a"
-	"google.golang.org/adk/v2/server/adkrest"
+	"github.com/tpryan/navalplan/services/researcher/tracing"
 	"google.golang.org/adk/v2/session"
-
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"google.golang.org/adk/v2/tool"
-	"google.golang.org/adk/v2/tool/agenttool"
-	"google.golang.org/adk/v2/tool/functiontool"
-	"google.golang.org/adk/v2/tool/geminitool"
-	"google.golang.org/genai"
 )
-
-//go:embed prompts/search_specialist.md
-var _searchSpecialistPrompt string
-
-//go:embed prompts/harbourmaster.md
-var _harbourmasterPrompt string
-
-//go:embed prompts/pilot.md
-var _pilotPrompt string
-
-//go:embed prompts/commodore.md
-var _commodorePrompt string
-
-//go:embed prompts/specialist.md
-var _specialistPrompt string
-
-//go:embed prompts/lookout.md
-var _lookoutPrompt string
-
-const maxOutputTokens = 65536
-
-type Provider interface {
-	Close() error
-}
-
-type autoCreateSessionService struct {
-	session.Service
-}
-
-func (s *autoCreateSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
-	resp, err := s.Service.Get(ctx, req)
-	if err != nil {
-		slog.Debug("Session not found, auto-creating", "appName", req.AppName, "userID", req.UserID, "sessionID", req.SessionID)
-		createResp, createErr := s.Service.Create(ctx, &session.CreateRequest{
-			AppName:   req.AppName,
-			UserID:    req.UserID,
-			SessionID: req.SessionID,
-		})
-		if createErr != nil {
-			// If creation failed, maybe it was created by another request in the meantime?
-			if resp2, err2 := s.Service.Get(ctx, req); err2 == nil {
-				return resp2, nil
-			}
-			return nil, createErr
-		}
-		return &session.GetResponse{Session: createResp.Session}, nil
-	}
-	return resp, nil
-}
-
-type toolTiming struct {
-	start time.Time
-	span  trace.Span
-}
-
-type Server struct {
-	config *config.Config
-	mu     sync.Mutex
-	// timings stores the start time and OTel span of tool executions, keyed by function call ID.
-	timings map[string]toolTiming
-
-	providers []Provider
-
-	// Telemetry streaming
-	muClients sync.RWMutex
-	clients   map[chan TelemetryEvent]bool
-}
-
-type TelemetryEvent struct {
-	SessionID string `json:"session_id,omitempty"`
-	Event     string `json:"event"` // "tool_start", "tool_end"
-	Tool      string `json:"tool"`
-	Duration  string `json:"duration,omitempty"`
-	Timestamp int64  `json:"timestamp"`
-}
-
-// Reasoning Engine contract types
-type reasoningEngineRequest struct {
-	Input      map[string]any `json:"input"`
-	Parameters map[string]any `json:"parameters"`
-}
-
-type reasoningEngineResponse struct {
-	Output map[string]any `json:"output"`
-}
-
-func (s *Server) broadcast(event TelemetryEvent) {
-	s.muClients.RLock()
-	defer s.muClients.RUnlock()
-	for client := range s.clients {
-		select {
-		case client <- event:
-		default:
-			// Client slow, skip or drop
-		}
-	}
-}
-
-func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	sessionID := r.URL.Query().Get("session_id")
-
-	f, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	messageChan := make(chan TelemetryEvent, 10)
-	s.muClients.Lock()
-	if s.clients == nil {
-		s.clients = make(map[chan TelemetryEvent]bool)
-	}
-	s.clients[messageChan] = true
-	s.muClients.Unlock()
-
-	defer func() {
-		s.muClients.Lock()
-		delete(s.clients, messageChan)
-		close(messageChan)
-		s.muClients.Unlock()
-	}()
-
-	// Heartbeat
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			fmt.Fprintf(w, "event: heartbeat\ndata: {}\n\n")
-			f.Flush()
-		case event := <-messageChan:
-			// If session_id is provided, only stream events for that session.
-			if sessionID != "" && event.SessionID != sessionID {
-				continue
-			}
-			jsonData, _ := json.Marshal(event)
-			fmt.Fprintf(w, "event: telemetry\ndata: %s\n\n", jsonData)
-			f.Flush()
-		}
-	}
-}
-
-func (s *Server) Close() {
-	var failed int
-	for _, p := range s.providers {
-		if err := p.Close(); err != nil {
-			slog.Error("Failed to close provider", "error", err)
-			failed++
-		}
-	}
-	if failed > 0 {
-		slog.Warn("Some providers failed to close cleanly", "count", failed)
-	}
-}
 
 func main() {
 	// Load .env file (try current dir, then project root)
@@ -218,10 +39,12 @@ func main() {
 	}
 
 	logging.InitLogging(cfg.Env)
+	logConfig(cfg)
+
 	ctx := context.Background()
 
 	// Initialize OpenTelemetry
-	tp, err := InitTelemetry(ctx, cfg.Project, cfg.Env, cfg.DisableTracing)
+	tp, err := tracing.Init(ctx, cfg.Project, cfg.Env, cfg.DisableTracing)
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 		// We continue anyway, as telemetry is not critical for service operation
@@ -236,47 +59,11 @@ func main() {
 		slog.Info("Telemetry was not initialized (likely disabled or not in production)")
 	}
 
-	slog.Info("config", "modelName", cfg.ModelName)
-	slog.Info("config", "port", cfg.Port)
-	if len(cfg.MapsAPIKey) > 5 {
-		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
-	}
-
-	if len(cfg.UKTidalAPIKey) > 5 {
-		slog.Info("config", "UKTidalAPIKey", cfg.UKTidalAPIKey[:5]+"...")
-	}
-
-	if len(cfg.NIWAAPIKey) > 5 {
-		slog.Info("config", "NIWAAPIKey", cfg.NIWAAPIKey[:5]+"...")
-	}
-
-	srv := &Server{
-		config:  cfg,
-		timings: make(map[string]toolTiming),
-	}
-	defer srv.Close()
-
-	if err := srv.run(ctx); err != nil {
-		slog.Error("Application error", "error", err)
-		os.Exit(1)
-	}
-}
-
-func (s *Server) run(ctx context.Context) error {
 	// Validate embedded prompts before attempting agent creation so that an
 	// accidentally empty file fails fast with a clear message.
-	prompts := map[string]string{
-		"harbourmaster":     _harbourmasterPrompt,
-		"pilot":             _pilotPrompt,
-		"commodore":         _commodorePrompt,
-		"specialist":        _specialistPrompt,
-		"search_specialist": _searchSpecialistPrompt,
-		"lookout":           _lookoutPrompt,
-	}
-	for name, p := range prompts {
-		if len(strings.TrimSpace(p)) == 0 {
-			return fmt.Errorf("embedded prompt %q is empty — check prompts/ directory", name)
-		}
+	if err := prompts.Validate(); err != nil {
+		slog.Error("Invalid prompts", "error", err)
+		os.Exit(1)
 	}
 
 	// Use a bounded context for agent/model initialisation. If the Gemini API
@@ -284,753 +71,80 @@ func (s *Server) run(ctx context.Context) error {
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 
-	nauticalSvc, err := s.setupNauticalService(initCtx)
+	nautical, providers, err := tools.NewNauticalService(initCtx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey)
 	if err != nil {
-		return fmt.Errorf("setting up nautical service: %w", err)
+		slog.Error("Failed to set up nautical service", "error", err)
+		os.Exit(1)
 	}
+	defer closeProviders(providers)
 
-	allResearcherTools := s.setupMCPTools(nauticalSvc)
-
-	pilotAgent, err := s.createPilotAgent(initCtx, allResearcherTools)
+	researcherTools, err := nautical.AsTools()
 	if err != nil {
-		return fmt.Errorf("creating pilot agent: %w", err)
+		slog.Error("Failed to build researcher tools", "error", err)
+		os.Exit(1)
 	}
 
-	harbourmasterAgent, err := s.createHarbourmasterAgent(initCtx, allResearcherTools)
+	broadcaster := telemetry.NewBroadcaster()
+	tracker := telemetry.NewToolTracker(broadcaster)
+
+	factory := agents.NewFactory(cfg, tracker.BeforeTool, tracker.AfterTool)
+	builtAgents, err := factory.BuildAll(initCtx, researcherTools)
 	if err != nil {
-		return fmt.Errorf("creating harbourmaster agent: %w", err)
+		slog.Error("Failed to build agents", "error", err)
+		os.Exit(1)
 	}
 
-	commodoreAgent, err := s.createCommodoreAgent(initCtx)
-	if err != nil {
-		return fmt.Errorf("creating commodore agent: %w", err)
-	}
-
-	specialistAgent, err := s.createSpecialistAgent(initCtx, allResearcherTools)
-	if err != nil {
-		return fmt.Errorf("creating specialist agent: %w", err)
-	}
-
-	lookoutAgent, err := s.createLookoutAgent(initCtx)
-	if err != nil {
-		return fmt.Errorf("creating lookout agent: %w", err)
-	}
-
-	loader, err := agent.NewMultiLoader(harbourmasterAgent, pilotAgent, commodoreAgent, specialistAgent, lookoutAgent)
-	if err != nil {
-		return fmt.Errorf("creating multi loader: %w", err)
-	}
-
-	config := &launcher.Config{
-		AgentLoader:    loader,
-		SessionService: &autoCreateSessionService{session.InMemoryService()},
-	}
-
-	// Start Custom Server
-	mux := http.NewServeMux()
-
-	// Mount the MCP server endpoint as recommended in geap.md
-	mcpHandler := mcp.NewHandler(ctx, nauticalSvc)
-	mux.Handle("/mcp/tools", mcpHandler)
-
-	// Expose to a2a for eval purposes
-	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke", config.SessionService)
-	s.registerAgentA2A(mux, harbourmasterAgent, "/invoke/harbourmaster", config.SessionService)
-	s.registerAgentA2A(mux, pilotAgent, "/invoke/pilot", config.SessionService)
-	s.registerAgentA2A(mux, commodoreAgent, "/invoke/commodore", config.SessionService)
-	s.registerAgentA2A(mux, specialistAgent, "/invoke/specialist", config.SessionService)
-	s.registerAgentA2A(mux, lookoutAgent, "/invoke/lookout", config.SessionService)
-
-	// Special case: The root Agent Card at .well-known usually points to the main agent.
-	// We'll point it to harbourmasterAgent for now.
-	agentCard := s.buildAgentCard(harbourmasterAgent, "/invoke")
-	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(agentCard))
-
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
-	// Create the ADK HTTP Server
-	adkHandler, err := adkrest.NewServer(adkrest.ServerConfig{
-		AgentLoader:     config.AgentLoader,
-		SessionService:  config.SessionService,
-		SSEWriteTimeout: 600 * time.Second,
-		DebugConfig:     adkrest.DebugTelemetryConfig{},
+	handler, err := server.Build(ctx, server.Deps{
+		Config:         cfg,
+		Agents:         builtAgents,
+		SessionService: sessions.NewAutoCreate(session.InMemoryService()),
+		Nautical:       nautical,
+		Telemetry:      broadcaster,
 	})
 	if err != nil {
-		log.Fatalf("Failed to create ADK server: %v", err)
+		slog.Error("Failed to build HTTP handler", "error", err)
+		os.Exit(1)
 	}
 
-	// Mount ADK under /api/
-	mux.Handle("/api/", http.StripPrefix("/api", adkHandler))
-
-	// Native Reasoning Engine contract endpoints
-	mux.HandleFunc("/api/reasoning_engine", s.handleReasoningEngine(config))
-	mux.HandleFunc("/api/stream_reasoning_engine", s.handleStreamReasoningEngine(config))
-
-	// Telemetry endpoint — streams internal tool execution events.
-	// In production this is protected by Cloud Run IAM; no additional
-	// application-level auth is enforced here.
-	mux.HandleFunc("/telemetry", s.handleTelemetry)
-
-	// Wrap the entire handler with OpenTelemetry and logging middleware
-	handler := otelhttp.NewHandler(loggingMiddleware(mux), "navalplan-researcher")
-
-	httpSrv := &http.Server{
-		Addr:    ":" + s.config.Port,
-		Handler: traceMiddleware(s.config.Project, handler),
+	// Cloud Run gives instances a limited window to drain in-flight requests
+	// on scale-down; keep that bounded, but don't make local dev wait 5 minutes.
+	shutdownTimeout := 5 * time.Minute
+	if cfg.Env == "development" {
+		shutdownTimeout = 5 * time.Second
 	}
 
-	// Listen for SIGTERM/SIGINT so Cloud Run scale-down drains in-flight requests.
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		<-quit
-		slog.Info("Shutdown signal received, draining requests...")
-		timeout := 5 * time.Minute
-		if s.config.Env == "development" {
-			timeout = 5 * time.Second
-		}
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("HTTP server shutdown error", "error", err)
-			httpSrv.Close()
-		}
-	}()
-
-	slog.Info("Starting custom server", "port", s.config.Port)
-	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
-}
-
-type agentConfig struct {
-	name        string
-	description string
-	instruction string
-	tools       []tool.Tool
-	temperature float32
-}
-
-func (s *Server) createAgent(ctx context.Context, acfg *agentConfig) (agent.Agent, error) {
-	genConfig := &genai.GenerateContentConfig{
-		MaxOutputTokens: maxOutputTokens,
-		Temperature:     genai.Ptr[float32](acfg.temperature),
-	}
-
-	// Cap reasoning tokens to keep latency bounded and protect the output budget.
-	// A negative budget means "leave dynamic/default" (don't send a ThinkingConfig).
-	if s.config.ThinkingBudget >= 0 {
-		budget := s.config.ThinkingBudget
-		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
-	}
-
-	m, err := gemini.NewModel(ctx, s.config.ModelName, &genai.ClientConfig{
-		APIKey: s.config.GeminiAPIKey,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return llmagent.New(llmagent.Config{
-		Name:                  acfg.name,
-		Model:                 m,
-		Description:           acfg.description,
-		Instruction:           acfg.instruction,
-		Tools:                 acfg.tools,
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{s.onBeforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{s.onAfterTool},
-		GenerateContentConfig: genConfig,
-	})
-}
-
-func (s *Server) registerAgentA2A(mux *http.ServeMux, a agent.Agent, path string, sessionService session.Service) {
-	card := s.buildAgentCard(a, path)
-	executor := adka2a.NewExecutor(adka2a.ExecutorConfig{
-		RunnerConfig: runner.Config{
-			AppName:        a.Name(),
-			Agent:          a,
-			SessionService: sessionService,
-		},
-	})
-	handler := a2asrv.NewHandler(executor)
-
-	mux.Handle(path, a2asrv.NewJSONRPCHandler(handler))
-	mux.Handle(path+"/agent-card.json", a2asrv.NewStaticAgentCardHandler(card))
-	slog.Info("Registered A2A agent", "name", a.Name(), "path", path)
-}
-
-func (s *Server) buildAgentCard(a agent.Agent, path string) *a2a.AgentCard {
-	baseURL := s.config.BaseURL
-	if baseURL == "" {
-		baseURL = "http://localhost:" + s.config.Port
-	}
-	return &a2a.AgentCard{
-		Name:               a.Name(),
-		Skills:             adka2a.BuildAgentSkills(a),
-		PreferredTransport: a2a.TransportProtocolJSONRPC,
-		URL:                baseURL + path,
-		Capabilities:       a2a.AgentCapabilities{Streaming: true},
-		DefaultInputModes:  []string{},
-		DefaultOutputModes: []string{},
+	if err := server.Serve(ctx, handler, ":"+cfg.Port, shutdownTimeout); err != nil {
+		slog.Error("Application error", "error", err)
+		os.Exit(1)
 	}
 }
 
-func (s *Server) setupNauticalService(ctx context.Context) (*tools.NauticalToolService, error) {
-	_, wp, err := tools.NewWeatherTool()
-	if err != nil {
-		return nil, err
+func logConfig(cfg *config.Config) {
+	slog.Info("config", "modelName", cfg.ModelName)
+	slog.Info("config", "port", cfg.Port)
+	if len(cfg.MapsAPIKey) > 5 {
+		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")
 	}
-	s.providers = append(s.providers, wp)
-
-	_, tp, err := tools.NewTideTool(s.config.UKTidalAPIKey, s.config.NIWAAPIKey)
-	if err != nil {
-		return nil, err
+	if len(cfg.UKTidalAPIKey) > 5 {
+		slog.Info("config", "UKTidalAPIKey", cfg.UKTidalAPIKey[:5]+"...")
 	}
-	s.providers = append(s.providers, tp)
-
-	_, sp, err := tools.NewSunriseTool(s.config.MapsAPIKey)
-	if err != nil {
-		return nil, err
-	}
-	s.providers = append(s.providers, sp)
-
-	_, pp, err := tools.NewPlacesTool(ctx, s.config.MapsAPIKey)
-	if err != nil {
-		return nil, err
-	}
-	s.providers = append(s.providers, pp)
-
-	return &tools.NauticalToolService{
-		Tides:   tp,
-		Weather: wp,
-		Sunrise: sp,
-		Places:  pp,
-	}, nil
-}
-
-func (s *Server) setupMCPTools(nautical *tools.NauticalToolService) []tool.Tool {
-	tideTool, _ := functiontool.New(functiontool.Config{
-		Name:        "GetTides",
-		Description: "Queries hydrographic station databases for current and historic tidal matrices.",
-	}, nautical.FetchTides)
-
-	weatherTool, _ := functiontool.New(functiontool.Config{
-		Name:        "GetWeather",
-		Description: "Fetches real-time NOAA offshore marine warnings and wind velocity vectors.",
-	}, nautical.FetchWeather)
-
-	sunriseTool, _ := functiontool.New(functiontool.Config{
-		Name:        "GetSunriseSunset",
-		Description: "Retrieves sunrise and sunset times for a specific location and date.",
-	}, nautical.FetchSunriseSunset)
-
-	placesTool, _ := functiontool.New(functiontool.Config{
-		Name:        "FindPlacesNearby",
-		Description: "Finds places (e.g. marinas, restaurants) near a location.",
-	}, nautical.FetchPlacesNearby)
-
-	safetyTool, _ := functiontool.New(functiontool.Config{
-		Name:        "GetSafetyAlerts",
-		Description: "Extracts active global navigational warnings and localized security alerts.",
-	}, nautical.FetchSafetyAlerts)
-
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool}
-}
-
-func (s *Server) createPilotAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchTools, err := s.createSearchTools(ctx, "pilot_search_specialist")
-	if err != nil {
-		return nil, err
-	}
-	allTools := append(researcherTools, searchTools...)
-
-	return s.createAgent(ctx, &agentConfig{
-		name:        "pilot",
-		description: "A Local Knowledge Expert and Sailing Guide.",
-		instruction: _pilotPrompt,
-		tools:       allTools,
-		temperature: 0.25,
-	})
-}
-
-func (s *Server) createHarbourmasterAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchTools, err := s.createSearchTools(ctx, "harbourmaster_search_specialist")
-	if err != nil {
-		return nil, err
-	}
-	allTools := append(researcherTools, searchTools...)
-
-	return s.createAgent(ctx, &agentConfig{
-		name:        "harbourmaster",
-		description: "A Virtual Harbourmaster that researches sailing destinations.",
-		instruction: _harbourmasterPrompt,
-		tools:       allTools,
-		temperature: 0.25,
-	})
-}
-
-func (s *Server) createCommodoreAgent(ctx context.Context) (agent.Agent, error) {
-	searchTools, err := s.createSearchTools(ctx, "commodore_search_specialist")
-	if err != nil {
-		return nil, err
-	}
-
-	return s.createAgent(ctx, &agentConfig{
-		name:        "commodore",
-		description: "The Commodore - Global Seasonal Discovery Expert.",
-		instruction: _commodorePrompt,
-		tools:       searchTools,
-		temperature: 0.25,
-	})
-}
-
-func (s *Server) createSearchTools(ctx context.Context, name string) ([]tool.Tool, error) {
-	searchAgent, err := s.createAgent(ctx, &agentConfig{
-		name:        name,
-		description: "Finds information on the web using Google Search.",
-		instruction: _searchSpecialistPrompt,
-		tools: []tool.Tool{
-			geminitool.GoogleSearch{},
-		},
-		temperature: 0.4,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	individualTool := agenttool.New(searchAgent, nil)
-
-	sessionSvc := &autoCreateSessionService{session.InMemoryService()}
-
-	// Create the batch tool that uses the search agent in parallel
-	batchTool := &tools.BatchSearchTool{
-		Searcher: func(ctx context.Context, query string) (string, error) {
-			// Bound each grounded search so one slow query can't stall the whole
-			// parallel batch (and therefore the entire agent turn).
-			if s.config.SearchTimeoutMs > 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, time.Duration(s.config.SearchTimeoutMs)*time.Millisecond)
-				defer cancel()
-			}
-
-			// Create a runner for the search agent
-			r, err := runner.New(runner.Config{
-				AppName:        name,
-				Agent:          searchAgent,
-				SessionService: sessionSvc,
-			})
-
-			if err != nil {
-				return "", err
-			}
-
-			resp := r.Run(ctx, "system", "batch_"+fmt.Sprint(time.Now().UnixNano()), genai.NewContentFromText(query, "user"), agent.RunConfig{})
-
-			var text string
-			for event, err := range resp {
-				if err != nil {
-					slog.Error("Search agent stream error", "query", query, "error", err)
-					continue
-				}
-				if event.Content != nil && event.Content.Role == "model" {
-					for _, part := range event.Content.Parts {
-						if part.Text != "" && !part.Thought {
-							text += part.Text
-						}
-					}
-				}
-			}
-
-			if text == "" {
-				slog.Warn("Search agent returned empty result", "query", query)
-			} else {
-				slog.Debug("Search agent result", "query", query, "text_len", len(text))
-			}
-
-			return text, nil
-		},
-	}
-
-	return []tool.Tool{individualTool, batchTool}, nil
-}
-
-func (s *Server) createLookoutAgent(ctx context.Context) (agent.Agent, error) {
-	return s.createAgent(ctx, &agentConfig{
-		name:        "lookout",
-		description: "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
-		instruction: _lookoutPrompt,
-		tools:       nil,
-		temperature: 0.1,
-	})
-}
-
-func (s *Server) createSpecialistAgent(ctx context.Context, researcherTools []tool.Tool) (agent.Agent, error) {
-	searchTools, err := s.createSearchTools(ctx, "specialist_search_specialist")
-	if err != nil {
-		return nil, err
-	}
-	allTools := append(researcherTools, searchTools...)
-
-	return s.createAgent(ctx, &agentConfig{
-		name:        "specialist",
-		description: "A Local Pilot and Navigation Specialist.",
-		instruction: _specialistPrompt,
-		tools:       allTools,
-		temperature: 0.25,
-	})
-}
-
-func (s *Server) onBeforeTool(ctx agent.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
-	// Start OTel span for the tool
-	_, span := otel.Tracer("navalplan-researcher").Start(ctx, "tool:"+t.Name())
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.timings[ctx.FunctionCallID()] = toolTiming{
-		start: time.Now(),
-		span:  span,
-	}
-
-	var sessionID string
-	if sess := ctx.Session(); sess != nil {
-		sessionID = sess.ID()
-	}
-
-	slog.Log(ctx, slog.LevelInfo, "tool_start",
-		"tool", t.Name(),
-		"args", args,
-		"function_call_id", ctx.FunctionCallID(),
-		"session_id", sessionID,
-	)
-
-	s.broadcast(TelemetryEvent{
-		SessionID: sessionID,
-		Event:     "tool_start",
-		Tool:      t.Name(),
-		Timestamp: time.Now().UnixMilli(),
-	})
-	return nil, nil
-}
-
-func (s *Server) onAfterTool(ctx agent.Context, t tool.Tool, args, result map[string]any, err error) (map[string]any, error) {
-	s.mu.Lock()
-	timing, ok := s.timings[ctx.FunctionCallID()]
-	if ok {
-		delete(s.timings, ctx.FunctionCallID())
-	}
-	s.mu.Unlock()
-
-	var sessionID string
-	if sess := ctx.Session(); sess != nil {
-		sessionID = sess.ID()
-	}
-
-	var duration string
-	if ok {
-		timesince := time.Since(timing.start)
-		duration = timesince.String()
-
-		status := "success"
-		if err != nil {
-			status = "error"
-			timing.span.RecordError(err)
-		}
-		timing.span.End()
-
-		slog.Log(ctx, slog.LevelInfo, "tool_end",
-			"tool", t.Name(),
-			"duration", duration,
-			"status", status,
-			"result", result,
-			"error", err,
-			"function_call_id", ctx.FunctionCallID(),
-			"session_id", sessionID,
-		)
-	}
-
-	s.broadcast(TelemetryEvent{
-		SessionID: sessionID,
-		Event:     "tool_end",
-		Tool:      t.Name(),
-		Duration:  duration,
-		Timestamp: time.Now().UnixMilli(),
-	})
-
-	return result, nil
-}
-
-var _ http.ResponseWriter = (*responseWriter)(nil)
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) Flush() {
-	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
+	if len(cfg.NIWAAPIKey) > 5 {
+		slog.Info("config", "NIWAAPIKey", cfg.NIWAAPIKey[:5]+"...")
 	}
 }
 
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		defer func() {
-			timesince := time.Since(start)
-			str := timesince.String()
-
-			level := slog.LevelInfo
-			if ww.statusCode >= 400 {
-				level = slog.LevelWarn
-			}
-			if ww.statusCode >= 500 {
-				level = slog.LevelError
-			}
-
-			slog.Log(r.Context(), level, "Request handled",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"status", ww.statusCode,
-				"duration", str,
-				"remote_addr", r.RemoteAddr,
-			)
-		}()
-
-		next.ServeHTTP(ww, r)
-	})
-}
-
-// traceMiddleware exists to make sure when running on Cloud Run, trace
-// ids are propegated so that you can get debugging and analysis.
-func traceMiddleware(projectID string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Use standard OTel propagator to extract context from headers (X-Cloud-Trace-Context, etc.)
-		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-
-		// Also extract for legacy logging if needed, but the primary goal is OTel linkage
-		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-		if traceHeader != "" {
-			parts := strings.Split(traceHeader, ";")
-			if len(parts) > 0 {
-				traceParts := strings.Split(parts[0], "/")
-				if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-					traceID := traceParts[0]
-					var traceStr string
-					if projectID != "" {
-						traceStr = fmt.Sprintf("projects/%s/traces/%s", projectID, traceID)
-					} else {
-						traceStr = traceID
-					}
-					ctx = logging.AddTraceToContext(ctx, traceStr)
-
-					if len(traceParts) > 1 {
-						ctx = logging.AddSpanToContext(ctx, traceParts[1])
-					}
-				}
-			}
+// closeProviders releases every nautical-tool provider on shutdown, logging
+// (rather than failing) individual close errors so one bad provider can't
+// block the others from cleaning up.
+func closeProviders(providers []tools.Provider) {
+	var failed int
+	for _, p := range providers {
+		if err := p.Close(); err != nil {
+			slog.Error("Failed to close provider", "error", err)
+			failed++
 		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-func (s *Server) handleReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var reReq reasoningEngineRequest
-		if err := json.NewDecoder(r.Body).Decode(&reReq); err != nil {
-			http.Error(w, "invalid request", http.StatusBadRequest)
-			return
-		}
-
-		// Map Reasoning Engine input to ADK message
-		inputMsg, _ := reReq.Input["message"].(string)
-		if inputMsg == "" {
-			inputMsg, _ = reReq.Input["input"].(string)
-		}
-
-		appName := "harbourmaster"
-		if name, ok := reReq.Input["appName"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Input["app_name"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Parameters["appName"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Parameters["app_name"].(string); ok && name != "" {
-			appName = name
-		}
-
-		userID := "default_user"
-		if u, ok := reReq.Input["userID"].(string); ok && u != "" {
-			userID = u
-		} else if u, ok := reReq.Input["user_id"].(string); ok && u != "" {
-			userID = u
-		} else if u, ok := reReq.Parameters["user_id"].(string); ok && u != "" {
-			userID = u
-		}
-
-		sessionID := "default_session"
-		if sess, ok := reReq.Input["sessionID"].(string); ok && sess != "" {
-			sessionID = sess
-		} else if sess, ok := reReq.Input["session_id"].(string); ok && sess != "" {
-			sessionID = sess
-		} else if sess, ok := reReq.Parameters["session_id"].(string); ok && sess != "" {
-			sessionID = sess
-		}
-
-		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
-		if err != nil {
-			http.Error(w, "agent not found", http.StatusNotFound)
-			return
-		}
-
-		runr, err := runner.New(runner.Config{
-			AppName:        appName,
-			Agent:          curAgent,
-			SessionService: cfg.SessionService,
-		})
-		if err != nil {
-			http.Error(w, "failed to create runner", http.StatusInternalServerError)
-			return
-		}
-
-		resp := runr.Run(r.Context(), userID, sessionID, genai.NewContentFromText(inputMsg, "user"), agent.RunConfig{})
-
-		var finalContent string
-		for event, err := range resp {
-			if err != nil {
-				slog.Error("run error", "error", err)
-				continue
-			}
-			if event.Content != nil && event.Content.Role == "model" {
-				for _, part := range event.Content.Parts {
-					if part.Text != "" && !part.Thought {
-						finalContent += part.Text
-					}
-				}
-			}
-		}
-
-		res := reasoningEngineResponse{
-			Output: map[string]any{
-				"content":    finalContent,
-				"session_id": sessionID,
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(res)
 	}
-}
-
-func (s *Server) handleStreamReasoningEngine(cfg *launcher.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var reReq reasoningEngineRequest
-		if err := json.NewDecoder(r.Body).Decode(&reReq); err != nil {
-			http.Error(w, "invalid request", http.StatusBadRequest)
-			return
-		}
-
-		inputMsg, _ := reReq.Input["message"].(string)
-		if inputMsg == "" {
-			inputMsg, _ = reReq.Input["input"].(string)
-		}
-
-		appName := "harbourmaster"
-		if name, ok := reReq.Input["appName"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Input["app_name"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Parameters["appName"].(string); ok && name != "" {
-			appName = name
-		} else if name, ok := reReq.Parameters["app_name"].(string); ok && name != "" {
-			appName = name
-		}
-
-		userID := "default_user"
-		if u, ok := reReq.Input["userID"].(string); ok && u != "" {
-			userID = u
-		} else if u, ok := reReq.Input["user_id"].(string); ok && u != "" {
-			userID = u
-		} else if u, ok := reReq.Parameters["user_id"].(string); ok && u != "" {
-			userID = u
-		}
-
-		sessionID := "default_session"
-		if sess, ok := reReq.Input["sessionID"].(string); ok && sess != "" {
-			sessionID = sess
-		} else if sess, ok := reReq.Input["session_id"].(string); ok && sess != "" {
-			sessionID = sess
-		} else if sess, ok := reReq.Parameters["session_id"].(string); ok && sess != "" {
-			sessionID = sess
-		}
-
-		curAgent, err := cfg.AgentLoader.LoadAgent(appName)
-		if err != nil {
-			http.Error(w, "agent not found", http.StatusNotFound)
-			return
-		}
-
-		runr, err := runner.New(runner.Config{
-			AppName:        appName,
-			Agent:          curAgent,
-			SessionService: cfg.SessionService,
-		})
-		if err != nil {
-			http.Error(w, "failed to create runner", http.StatusInternalServerError)
-			return
-		}
-
-		resp := runr.Run(r.Context(), userID, sessionID, genai.NewContentFromText(inputMsg, "user"), agent.RunConfig{
-			StreamingMode: agent.StreamingModeSSE,
-		})
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		f, _ := w.(http.Flusher)
-
-		for event, err := range resp {
-			if err != nil {
-				fmt.Fprintf(w, "event: error\ndata: %v\n\n", err)
-				f.Flush()
-				continue
-			}
-
-			// Wrap ADK event in Reasoning Engine output format if needed,
-			// but usually we can just stream the ADK events directly if the
-			// client expects them, OR we wrap them.
-			// The native RE contract expects: data: {"output": {"content": "..."}}
-
-			var content string
-			if event.Content != nil && event.Content.Role == "model" {
-				for _, part := range event.Content.Parts {
-					if part.Text != "" && !part.Thought {
-						content += part.Text
-					}
-				}
-			}
-
-			if content != "" {
-				res := reasoningEngineResponse{
-					Output: map[string]any{
-						"content":    content,
-						"session_id": sessionID,
-					},
-				}
-				jsonData, _ := json.Marshal(res)
-				fmt.Fprintf(w, "data: %s\n\n", jsonData)
-				f.Flush()
-			}
-		}
+	if failed > 0 {
+		slog.Warn("Some providers failed to close cleanly", "count", failed)
 	}
 }
