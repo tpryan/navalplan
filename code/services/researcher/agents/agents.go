@@ -102,32 +102,19 @@ type agentConfig struct {
 	temperature float32
 }
 
-// Factory builds the fixed set of NavalPlan agents from shared config and
-// tool-call instrumentation callbacks.
-type Factory struct {
-	cfg        *config.Config
-	beforeTool llmagent.BeforeToolCallback
-	afterTool  llmagent.AfterToolCallback
-}
-
-// NewFactory returns a Factory that builds agents using cfg for model/runtime
-// settings, instrumenting every tool call via before/after.
-func NewFactory(cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback) *Factory {
-	return &Factory{cfg: cfg, beforeTool: before, afterTool: after}
-}
-
-// BuildAll constructs every agent described by specs, wiring researcherTools
-// into the ones that request them. It returns the agents keyed by name (see
-// the Harbourmaster/Pilot/Commodore/Specialist/Lookout constants and Order).
-func (f *Factory) BuildAll(ctx context.Context, researcherTools []tool.Tool) (map[string]agent.Agent, error) {
+// Build constructs every agent described by specs, wiring researcherTools
+// into the ones that request them, and instrumenting every tool call any of
+// them makes via before/after. It returns the agents keyed by name (see the
+// Harbourmaster/Pilot/Commodore/Specialist/Lookout constants and Order).
+func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []tool.Tool) (map[string]agent.Agent, error) {
 	built := make(map[string]agent.Agent, len(specs))
 	for _, sp := range specs {
-		agentTools, err := f.toolsFor(ctx, sp, researcherTools)
+		agentTools, err := toolsFor(ctx, cfg, before, after, sp, researcherTools)
 		if err != nil {
 			return nil, fmt.Errorf("assembling tools for %s: %w", sp.name, err)
 		}
 
-		a, err := f.createAgent(ctx, &agentConfig{
+		a, err := createAgent(ctx, cfg, before, after, &agentConfig{
 			name:        sp.name,
 			description: sp.description,
 			instruction: sp.instruction,
@@ -143,16 +130,16 @@ func (f *Factory) BuildAll(ctx context.Context, researcherTools []tool.Tool) (ma
 }
 
 // toolsFor assembles the tool list for a single agent spec. It always
-// allocates a fresh slice (rather than appending onto researcherTools)
-// so that agents built from the same shared researcherTools slice can never
+// allocates a fresh slice (rather than appending onto researcherTools) so
+// that agents built from the same shared researcherTools slice can never
 // alias one another's backing array.
-func (f *Factory) toolsFor(ctx context.Context, sp spec, researcherTools []tool.Tool) ([]tool.Tool, error) {
+func toolsFor(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, sp spec, researcherTools []tool.Tool) ([]tool.Tool, error) {
 	var agentTools []tool.Tool
 	if sp.includeResearcher {
 		agentTools = append(agentTools, researcherTools...)
 	}
 	if sp.includeSearch {
-		searchTools, err := f.createSearchTools(ctx, sp.name+"_search_specialist")
+		searchTools, err := createSearchTools(ctx, cfg, before, after, sp.name+"_search_specialist")
 		if err != nil {
 			return nil, err
 		}
@@ -161,9 +148,9 @@ func (f *Factory) toolsFor(ctx context.Context, sp spec, researcherTools []tool.
 	return agentTools, nil
 }
 
-// createAgent builds a single llmagent from acfg, applying the Factory's
-// shared model config, thinking-budget cap, and tool-call callbacks.
-func (f *Factory) createAgent(ctx context.Context, acfg *agentConfig) (agent.Agent, error) {
+// createAgent builds a single llmagent from acfg, applying the shared model
+// config, thinking-budget cap, and tool-call callbacks.
+func createAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, acfg *agentConfig) (agent.Agent, error) {
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](acfg.temperature),
@@ -171,13 +158,13 @@ func (f *Factory) createAgent(ctx context.Context, acfg *agentConfig) (agent.Age
 
 	// Cap reasoning tokens to keep latency bounded and protect the output budget.
 	// A negative budget means "leave dynamic/default" (don't send a ThinkingConfig).
-	if f.cfg.ThinkingBudget >= 0 {
-		budget := f.cfg.ThinkingBudget
+	if cfg.ThinkingBudget >= 0 {
+		budget := cfg.ThinkingBudget
 		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
 	}
 
-	m, err := gemini.NewModel(ctx, f.cfg.ModelName, &genai.ClientConfig{
-		APIKey: f.cfg.GeminiAPIKey,
+	m, err := gemini.NewModel(ctx, cfg.ModelName, &genai.ClientConfig{
+		APIKey: cfg.GeminiAPIKey,
 	})
 	if err != nil {
 		return nil, err
@@ -189,8 +176,8 @@ func (f *Factory) createAgent(ctx context.Context, acfg *agentConfig) (agent.Age
 		Description:           acfg.description,
 		Instruction:           acfg.instruction,
 		Tools:                 acfg.tools,
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{f.beforeTool},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{f.afterTool},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{before},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{after},
 		GenerateContentConfig: genConfig,
 	})
 }
@@ -199,8 +186,8 @@ func (f *Factory) createAgent(ctx context.Context, acfg *agentConfig) (agent.Age
 // then exposes it two ways: as a single agenttool (for one-off searches) and
 // as a BatchSearchTool that fans a list of queries out to the same sub-agent
 // in parallel.
-func (f *Factory) createSearchTools(ctx context.Context, name string) ([]tool.Tool, error) {
-	searchAgent, err := f.createAgent(ctx, &agentConfig{
+func createSearchTools(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, name string) ([]tool.Tool, error) {
+	searchAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
 		name:        name,
 		description: "Finds information on the web using Google Search.",
 		instruction: prompts.SearchSpecialist,
@@ -222,9 +209,9 @@ func (f *Factory) createSearchTools(ctx context.Context, name string) ([]tool.To
 		Searcher: func(ctx context.Context, query string) (string, error) {
 			// Bound each grounded search so one slow query can't stall the whole
 			// parallel batch (and therefore the entire agent turn).
-			if f.cfg.SearchTimeoutMs > 0 {
+			if cfg.SearchTimeoutMs > 0 {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, time.Duration(f.cfg.SearchTimeoutMs)*time.Millisecond)
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(cfg.SearchTimeoutMs)*time.Millisecond)
 				defer cancel()
 			}
 

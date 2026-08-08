@@ -47,9 +47,8 @@ func TestCreateHarbourmasterAgent(t *testing.T) {
 	}
 
 	tracker := telemetry.NewToolTracker(telemetry.NewBroadcaster())
-	factory := agents.NewFactory(cfg, tracker.BeforeTool, tracker.AfterTool)
 
-	built, err := factory.BuildAll(ctx, researcherTools)
+	built, err := agents.Build(ctx, cfg, tracker.BeforeTool, tracker.AfterTool, researcherTools)
 	if err != nil {
 		t.Fatalf("Failed to build agents: %v", err)
 	}
