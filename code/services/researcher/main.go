@@ -87,8 +87,7 @@ func main() {
 	broadcaster := telemetry.NewBroadcaster()
 	tracker := telemetry.NewToolTracker(broadcaster)
 
-	factory := agents.NewFactory(cfg, tracker.BeforeTool, tracker.AfterTool)
-	builtAgents, err := factory.BuildAll(initCtx, researcherTools)
+	builtAgents, err := agents.Build(initCtx, cfg, tracker.BeforeTool, tracker.AfterTool, researcherTools)
 	if err != nil {
 		slog.Error("Failed to build agents", "error", err)
 		os.Exit(1)
