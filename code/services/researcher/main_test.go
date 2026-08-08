@@ -6,14 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tpryan/navalplan/services/researcher/agents"
 	"github.com/tpryan/navalplan/services/researcher/config"
+	"github.com/tpryan/navalplan/services/researcher/telemetry"
+	"github.com/tpryan/navalplan/services/researcher/tools"
 )
 
-func TestCreateResearcherAgent(t *testing.T) {
+func TestCreateHarbourmasterAgent(t *testing.T) {
 	// Use a mock model if possible, or just check configuration
 	// For now, let's see if it instantiates without error (requires API key if real)
 
-	modelName := "gemini-2.0-flash-001"
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		t.Skip("Skipping agent creation test because GEMINI_API_KEY is not set")
@@ -24,30 +26,40 @@ func TestCreateResearcherAgent(t *testing.T) {
 		mapsKey = "dummy-key"
 	}
 
-	srv := &Server{
-		config: &config.Config{
-			ModelName:    modelName,
-			GeminiAPIKey: apiKey,
-			MapsAPIKey:   mapsKey,
-		},
-		timings: make(map[string]toolTiming),
+	cfg := &config.Config{
+		ModelName:    "gemini-2.0-flash-001",
+		GeminiAPIKey: apiKey,
+		MapsAPIKey:   mapsKey,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nauticalSvc, err := srv.setupNauticalService(ctx)
+	nautical, providers, err := tools.NewNauticalService(ctx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey)
 	if err != nil {
-		t.Fatalf("Failed to setup nautical service: %v", err)
+		t.Fatalf("Failed to set up nautical service: %v", err)
 	}
-	researcherTools := srv.setupMCPTools(nauticalSvc)
+	defer closeProviders(providers)
 
-	a, err := srv.createHarbourmasterAgent(ctx, researcherTools)
+	researcherTools, err := nautical.AsTools()
 	if err != nil {
-		t.Fatalf("Failed to create harbourmaster agent: %v", err)
+		t.Fatalf("Failed to build researcher tools: %v", err)
 	}
 
-	if a.Name() != "harbourmaster" {
-		t.Errorf("Expected agent name harbourmaster, got %s", a.Name())
+	tracker := telemetry.NewToolTracker(telemetry.NewBroadcaster())
+	factory := agents.NewFactory(cfg, tracker.BeforeTool, tracker.AfterTool)
+
+	built, err := factory.BuildAll(ctx, researcherTools)
+	if err != nil {
+		t.Fatalf("Failed to build agents: %v", err)
+	}
+
+	a, ok := built[agents.Harbourmaster]
+	if !ok {
+		t.Fatalf("Expected %q agent to be built", agents.Harbourmaster)
+	}
+
+	if a.Name() != agents.Harbourmaster {
+		t.Errorf("Expected agent name %q, got %s", agents.Harbourmaster, a.Name())
 	}
 }

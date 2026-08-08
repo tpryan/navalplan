@@ -1,4 +1,5 @@
-package main
+// Package tracing configures OpenTelemetry for the researcher service.
+package tracing
 
 import (
 	"context"
@@ -36,11 +37,11 @@ func (p *resourceIDSpanProcessor) OnEnd(s sdktrace.ReadOnlySpan)        {}
 func (p *resourceIDSpanProcessor) Shutdown(ctx context.Context) error   { return nil }
 func (p *resourceIDSpanProcessor) ForceFlush(ctx context.Context) error { return nil }
 
-// InitTelemetry sets up OpenTelemetry for the researcher service.
+// Init sets up OpenTelemetry for the researcher service.
 // It configures two exporters:
 // 1. The default ADK exporter (sends data to telemetry.googleapis.com)
 // 2. A custom Cloud Trace exporter (sends data to trace.googleapis.com for BQ Agent Analytics)
-func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bool) (*telemetry.Providers, error) {
+func Init(ctx context.Context, projectID, env string, disableTracing bool) (*telemetry.Providers, error) {
 	if disableTracing {
 		slog.Info("OTel tracing explicitly disabled")
 		return nil, nil

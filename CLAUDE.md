@@ -32,6 +32,7 @@ make test               # unit tests (backend + frontend)
 make test-all           # unit tests + ADK agent evaluations
 make test-backend       # Go tests only
 make test-frontend      # Jasmine tests only
+make vet                # go vet, both Go modules (backend + researcher)
 make eval-all           # ADK agent evaluations
 
 # Individual agent evaluations
