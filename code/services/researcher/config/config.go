@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strconv"
+
+	"cloud.google.com/go/compute/metadata"
 )
 
 type Config struct {
@@ -64,6 +66,20 @@ func New(getEnv func(string) string) (*Config, error) {
 	}
 
 	project := getEnv("GOOGLE_CLOUD_PROJECT")
+	if project == "" {
+		project = getEnv("GCP_PROJECT")
+	}
+	if project == "" {
+		project = getEnv("GCLOUD_PROJECT")
+	}
+	if project == "" {
+		project = getEnv("PROJECT_ID")
+	}
+	if project == "" && metadata.OnGCE() {
+		if pid, err := metadata.ProjectID(); err == nil {
+			project = pid
+		}
+	}
 
 	// Thinking budget caps the reasoning tokens the (thinking-capable) Gemini model spends
 	// per call. Unbounded "dynamic" thinking is the dominant source of agent latency and can

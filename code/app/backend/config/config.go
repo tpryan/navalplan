@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+
+	"cloud.google.com/go/compute/metadata"
 )
 
 type Config struct {
@@ -146,9 +148,25 @@ func New(getEnv func(string) string) (*Config, error) {
 		agentURL = "http://127.0.0.1:8081"
 	}
 
+	project := getEnv("GOOGLE_CLOUD_PROJECT")
+	if project == "" {
+		project = getEnv("GCP_PROJECT")
+	}
+	if project == "" {
+		project = getEnv("GCLOUD_PROJECT")
+	}
+	if project == "" {
+		project = getEnv("PROJECT_ID")
+	}
+	if project == "" && metadata.OnGCE() {
+		if pid, err := metadata.ProjectID(); err == nil {
+			project = pid
+		}
+	}
+
 	result := &Config{
 		Env:                  getEnv("ENV"),
-		Project:              getEnv("GOOGLE_CLOUD_PROJECT"),
+		Project:              project,
 		Port:                 port,
 		ContentDir:           contentDir,
 		DatabaseDSN:          dsn,

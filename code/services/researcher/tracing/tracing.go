@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -37,6 +38,39 @@ func (p *resourceIDSpanProcessor) OnEnd(s sdktrace.ReadOnlySpan)        {}
 func (p *resourceIDSpanProcessor) Shutdown(ctx context.Context) error   { return nil }
 func (p *resourceIDSpanProcessor) ForceFlush(ctx context.Context) error { return nil }
 
+// ResolveProjectID resolves the GCP project ID from the input string,
+// environment variables, resource strings, or GCP metadata server.
+func ResolveProjectID(projectID string) string {
+	if pid := strings.TrimSpace(projectID); pid != "" {
+		return pid
+	}
+
+	for _, key := range []string{"GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "GCLOUD_PROJECT", "PROJECT_ID"} {
+		if pid := strings.TrimSpace(os.Getenv(key)); pid != "" {
+			return pid
+		}
+	}
+
+	for _, raw := range []string{os.Getenv("NAVALPLAN_RESOURCE_ID"), os.Getenv("OTEL_RESOURCE_ATTRIBUTES")} {
+		if idx := strings.Index(raw, "projects/"); idx != -1 {
+			sub := raw[idx+len("projects/"):]
+			if slashIdx := strings.IndexByte(sub, '/'); slashIdx > 0 {
+				if pid := strings.TrimSpace(sub[:slashIdx]); pid != "" {
+					return pid
+				}
+			}
+		}
+	}
+
+	if metadata.OnGCE() {
+		if pid, err := metadata.ProjectID(); err == nil && strings.TrimSpace(pid) != "" {
+			return strings.TrimSpace(pid)
+		}
+	}
+
+	return ""
+}
+
 // Init sets up OpenTelemetry for the researcher service.
 // It configures two exporters:
 // 1. The default ADK exporter (sends data to telemetry.googleapis.com)
@@ -46,6 +80,8 @@ func Init(ctx context.Context, projectID, env string, disableTracing bool) (*tel
 		slog.Info("OTel tracing explicitly disabled")
 		return nil, nil
 	}
+
+	projectID = ResolveProjectID(projectID)
 
 	resourceID := strings.TrimSpace(os.Getenv("NAVALPLAN_RESOURCE_ID"))
 	if resourceID == "" {
@@ -77,7 +113,9 @@ func Init(ctx context.Context, projectID, env string, disableTracing bool) (*tel
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-researcher"),
 		attribute.String("deployment.environment", env),
-		attribute.String("gcp.project_id", projectID),
+	}
+	if projectID != "" {
+		resAttrs = append(resAttrs, attribute.String("gcp.project_id", projectID))
 	}
 
 	if resourceID != "" {
@@ -111,19 +149,28 @@ func Init(ctx context.Context, projectID, env string, disableTracing bool) (*tel
 		slog.Debug("Resource attribute", "key", string(attr.Key), "value", attr.Value.Emit())
 	}
 
-	traceExporter, err := texporter.New(texporter.WithProjectID(projectID))
+	var exporterOpts []texporter.Option
+	if projectID != "" {
+		exporterOpts = append(exporterOpts, texporter.WithProjectID(projectID))
+	}
+
+	traceExporter, err := texporter.New(exporterOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
 
 	spanProcessor := &resourceIDSpanProcessor{resourceID: resourceID}
 
-	telemetryProviders, err := telemetry.New(ctx,
+	adkOpts := []telemetry.Option{
 		telemetry.WithOtelToCloud(true),
 		telemetry.WithResource(res),
-		telemetry.WithGcpResourceProject(projectID),
 		telemetry.WithSpanProcessors(spanProcessor, sdktrace.NewBatchSpanProcessor(traceExporter)),
-	)
+	}
+	if projectID != "" {
+		adkOpts = append(adkOpts, telemetry.WithGcpResourceProject(projectID))
+	}
+
+	telemetryProviders, err := telemetry.New(ctx, adkOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK telemetry: %w", err)
 	}
