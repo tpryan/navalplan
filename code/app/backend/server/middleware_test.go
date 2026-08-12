@@ -104,3 +104,50 @@ func TestTraceMiddlewareLogging(t *testing.T) {
 	expectedTrace := "projects/test-project/traces/" + traceID
 	assert.Equal(t, expectedTrace, foundTrace, "Trace ID should be present in log attributes")
 }
+
+func TestSanitizePathMiddleware(t *testing.T) {
+	tests := []struct {
+		name         string
+		requestURL   string
+		expectedPath string
+	}{
+		{
+			name:         "Clean path unchanged",
+			requestURL:   "/api/admin/maintenance",
+			expectedPath: "/api/admin/maintenance",
+		},
+		{
+			name:         "Trailing space in URL sanitized",
+			requestURL:   "/api/admin/maintenance%20",
+			expectedPath: "/api/admin/maintenance",
+		},
+		{
+			name:         "Trailing slash in API path sanitized",
+			requestURL:   "/api/admin/maintenance/",
+			expectedPath: "/api/admin/maintenance",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			cfg := &config.Config{ContentDir: ".", Project: "test"}
+			srv, err := server.New(mockStore, cfg)
+			assert.NoError(t, err)
+
+			var capturedPath string
+			srv.Mux.HandleFunc("POST /api/admin/maintenance", func(w http.ResponseWriter, r *http.Request) {
+				capturedPath = r.URL.Path
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest("POST", tt.requestURL, nil)
+			rec := httptest.NewRecorder()
+			handler := srv.Middleware(srv.Mux)
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, tt.expectedPath, capturedPath)
+		})
+	}
+}
