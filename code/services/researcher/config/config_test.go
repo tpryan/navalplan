@@ -200,3 +200,63 @@ func TestNew_DisableTracing(t *testing.T) {
 		t.Error("DisableTracing = false, want true")
 	}
 }
+
+func TestNew_ProjectIDFallbacks(t *testing.T) {
+	tests := []struct {
+		name string
+		vars map[string]string
+		want string
+	}{
+		{
+			name: "prefers GOOGLE_CLOUD_PROJECT",
+			vars: map[string]string{
+				"GOOGLE_CLOUD_PROJECT": "primary-project",
+				"GCP_PROJECT":          "secondary-project",
+				"PROJECT_ID":           "tertiary-project",
+			},
+			want: "primary-project",
+		},
+		{
+			name: "falls back to GCP_PROJECT",
+			vars: map[string]string{
+				"GCP_PROJECT": "secondary-project",
+				"PROJECT_ID":  "tertiary-project",
+			},
+			want: "secondary-project",
+		},
+		{
+			name: "falls back to GCLOUD_PROJECT",
+			vars: map[string]string{
+				"GCLOUD_PROJECT": "gcloud-project",
+				"PROJECT_ID":     "tertiary-project",
+			},
+			want: "gcloud-project",
+		},
+		{
+			name: "falls back to PROJECT_ID",
+			vars: map[string]string{
+				"PROJECT_ID": "tertiary-project",
+			},
+			want: "tertiary-project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vars := map[string]string{
+				"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
+				"GEMINI_API_KEY":                 "gemini-key",
+			}
+			for k, v := range tt.vars {
+				vars[k] = v
+			}
+			cfg, err := New(envMap(vars))
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if cfg.Project != tt.want {
+				t.Errorf("Project = %q, want %q", cfg.Project, tt.want)
+			}
+		})
+	}
+}

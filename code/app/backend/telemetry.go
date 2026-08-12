@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -18,6 +19,39 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
+// resolveProjectID resolves the GCP project ID from the input string,
+// environment variables, resource strings, or GCP metadata server.
+func resolveProjectID(projectID string) string {
+	if pid := strings.TrimSpace(projectID); pid != "" {
+		return pid
+	}
+
+	for _, key := range []string{"GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "GCLOUD_PROJECT", "PROJECT_ID"} {
+		if pid := strings.TrimSpace(os.Getenv(key)); pid != "" {
+			return pid
+		}
+	}
+
+	for _, raw := range []string{os.Getenv("NAVALPLAN_RESOURCE_ID"), os.Getenv("OTEL_RESOURCE_ATTRIBUTES")} {
+		if idx := strings.Index(raw, "projects/"); idx != -1 {
+			sub := raw[idx+len("projects/"):]
+			if slashIdx := strings.IndexByte(sub, '/'); slashIdx > 0 {
+				if pid := strings.TrimSpace(sub[:slashIdx]); pid != "" {
+					return pid
+				}
+			}
+		}
+	}
+
+	if metadata.OnGCE() {
+		if pid, err := metadata.ProjectID(); err == nil && strings.TrimSpace(pid) != "" {
+			return strings.TrimSpace(pid)
+		}
+	}
+
+	return ""
+}
+
 // InitTelemetry sets up OpenTelemetry for the application.
 // In production, it exports traces to Google Cloud Trace.
 func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bool) (*sdktrace.TracerProvider, error) {
@@ -25,6 +59,8 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		slog.Info("OTel tracing explicitly disabled")
 		return nil, nil
 	}
+
+	projectID = resolveProjectID(projectID)
 
 	resourceID := strings.TrimSpace(os.Getenv("NAVALPLAN_RESOURCE_ID"))
 	if resourceID == "" {
@@ -56,7 +92,12 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 		slog.Warn("OTel project ID is empty, traces may not be exported correctly")
 	}
 
-	exporter, err := texporter.New(texporter.WithProjectID(projectID))
+	var exporterOpts []texporter.Option
+	if projectID != "" {
+		exporterOpts = append(exporterOpts, texporter.WithProjectID(projectID))
+	}
+
+	exporter, err := texporter.New(exporterOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Cloud Trace exporter: %w", err)
 	}
@@ -64,7 +105,9 @@ func InitTelemetry(ctx context.Context, projectID, env string, disableTracing bo
 	resAttrs := []attribute.KeyValue{
 		attribute.String("service.name", "navalplan-backend"),
 		attribute.String("deployment.environment", env),
-		attribute.String("gcp.project_id", projectID),
+	}
+	if projectID != "" {
+		resAttrs = append(resAttrs, attribute.String("gcp.project_id", projectID))
 	}
 
 	if resourceID != "" {
