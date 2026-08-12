@@ -473,7 +473,7 @@ deploy-backend:
 	gcloud builds submit --config .cloudbuild/cloudbuild.yaml .
 
 deploy-scheduler:
-	@echo "Deploying Cloud Scheduler Job..."
+	@echo "Deploying Cloud Scheduler Jobs..."
 	@if [ -z "$(APP_URL)" ] || [ -z "$(SYSTEM_KEY)" ]; then \
 		echo "Error: APP_URL and SYSTEM_KEY must be set."; \
 		echo "Usage: make deploy-scheduler APP_URL=https://... SYSTEM_KEY=..."; \
@@ -487,7 +487,29 @@ deploy-scheduler:
 		--location=$(REGION) \
 		--description="Triggers discovery mining for all months" \
 		--quiet || \
-	echo "Job may already exist. Try updating it manually or ignore if intended."
+	gcloud scheduler jobs update http mine-monthly-content \
+		--schedule="0 0 1 * *" \
+		--uri="$(APP_URL)/api/v1/discovery/mine?month=all" \
+		--http-method=POST \
+		--headers="Authorization=Bearer $(SYSTEM_KEY),X-Requested-With=CloudScheduler" \
+		--location=$(REGION) \
+		--quiet
+	gcloud scheduler jobs create http navalplan-update-safety-alert-hourly \
+		--schedule="0 * * * *" \
+		--uri="$(APP_URL)/api/admin/maintenance" \
+		--http-method=POST \
+		--headers="Authorization=Bearer $(SYSTEM_KEY),X-Requested-With=CloudScheduler,Content-Type=application/json" \
+		--location=$(REGION) \
+		--description="Hourly maintenance job for weather and lookout safety audits" \
+		--quiet || \
+	gcloud scheduler jobs update http navalplan-update-safety-alert-hourly \
+		--schedule="0 * * * *" \
+		--uri="$(APP_URL)/api/admin/maintenance" \
+		--http-method=POST \
+		--headers="Authorization=Bearer $(SYSTEM_KEY),X-Requested-With=CloudScheduler,Content-Type=application/json" \
+		--location=$(REGION) \
+		--quiet
+
 
 # --- Cloud SQL ---
 

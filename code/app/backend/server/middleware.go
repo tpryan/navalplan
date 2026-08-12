@@ -314,6 +314,22 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) sanitizePathMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimSpace(r.URL.Path)
+		if strings.HasPrefix(trimmed, "/api/") && strings.HasSuffix(trimmed, "/") && len(trimmed) > 5 {
+			trimmed = strings.TrimSuffix(trimmed, "/")
+		}
+		if trimmed != r.URL.Path {
+			r.URL.Path = trimmed
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = strings.TrimSpace(r.URL.RawPath)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

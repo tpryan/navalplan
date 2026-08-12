@@ -89,5 +89,6 @@ func (s *Server) Middleware(h http.Handler) http.Handler {
 	h = s.traceMiddleware(h)
 	h = s.corsMiddleware(h)
 	h = s.recoveryMiddleware(h)
+	h = s.sanitizePathMiddleware(h)
 	return h
 }
