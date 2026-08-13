@@ -1,18 +1,17 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/json"
+	"context"
 	"strings"
 	"testing"
 )
 
 func parseStreamChunk(data []byte) string {
 	var sb strings.Builder
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	lines := strings.Split(string(data), "\n")
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
 			continue
 		}
@@ -24,38 +23,7 @@ func parseStreamChunk(data []byte) string {
 			}
 		}
 
-		var event AgentEvent
-		if err := json.Unmarshal([]byte(line), &event); err == nil {
-			if (event.Content.Role == "" || event.Content.Role == "model") && len(event.Content.Parts) > 0 {
-				for _, p := range event.Content.Parts {
-					if p.Text != "" && !p.Thought {
-						sb.WriteString(p.Text)
-					}
-				}
-			}
-		} else {
-			var generic struct {
-				Content string `json:"content"`
-				Text    string `json:"text"`
-				Output  struct {
-					Content string `json:"content"`
-					Text    string `json:"text"`
-				} `json:"output"`
-			}
-			if err := json.Unmarshal([]byte(line), &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
-				if generic.Content != "" {
-					sb.WriteString(generic.Content)
-				} else if generic.Text != "" {
-					sb.WriteString(generic.Text)
-				} else if generic.Output.Content != "" {
-					sb.WriteString(generic.Output.Content)
-				} else if generic.Output.Text != "" {
-					sb.WriteString(generic.Output.Text)
-				}
-			} else if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
-				sb.WriteString(line)
-			}
-		}
+		parseAndAppendChunk(context.Background(), line, &sb)
 	}
 	return sb.String()
 }
@@ -100,5 +68,52 @@ func TestParseStreamChunk(t *testing.T) {
 				t.Errorf("parseStreamChunk() = %q, want %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestStreamLineBuffering(t *testing.T) {
+	// Simulate gRPC chunks split across network packets
+	chunk1 := []byte("data: {\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"chunk")
+	chunk2 := []byte(" 1 and chunk 2\"}]}}\n")
+
+	var sb strings.Builder
+	var lineBuf bytes.Buffer
+
+	// Process chunk 1
+	lineBuf.Write(chunk1)
+	for {
+		lineBytes, err := lineBuf.ReadBytes('\n')
+		if err != nil {
+			if len(lineBytes) > 0 {
+				lineBuf.Write(lineBytes)
+			}
+			break
+		}
+		line := strings.TrimSpace(strings.TrimPrefix(string(lineBytes), "data:"))
+		parseAndAppendChunk(context.Background(), line, &sb)
+	}
+
+	// Should not have parsed incomplete chunk 1 yet
+	if sb.Len() > 0 {
+		t.Errorf("expected empty output after chunk 1, got %q", sb.String())
+	}
+
+	// Process chunk 2
+	lineBuf.Write(chunk2)
+	for {
+		lineBytes, err := lineBuf.ReadBytes('\n')
+		if err != nil {
+			if len(lineBytes) > 0 {
+				lineBuf.Write(lineBytes)
+			}
+			break
+		}
+		line := strings.TrimSpace(strings.TrimPrefix(string(lineBytes), "data:"))
+		parseAndAppendChunk(context.Background(), line, &sb)
+	}
+
+	expected := "chunk 1 and chunk 2"
+	if sb.String() != expected {
+		t.Errorf("got %q, want %q", sb.String(), expected)
 	}
 }
