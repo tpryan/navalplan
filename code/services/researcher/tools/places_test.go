@@ -108,3 +108,58 @@ func TestFindPlaces_APIError(t *testing.T) {
 		t.Errorf("expected ErrAPIUnavailable, got %v", err)
 	}
 }
+
+func TestFindPlaces_RadiusClamping(t *testing.T) {
+	tests := []struct {
+		name           string
+		inputRadius    float64
+		expectedRadius float64
+	}{
+		{
+			name:           "Radius zero uses default 5000",
+			inputRadius:    0,
+			expectedRadius: 5000,
+		},
+		{
+			name:           "Radius within limits preserved",
+			inputRadius:    15000,
+			expectedRadius: 15000,
+		},
+		{
+			name:           "Radius exceeding 50000 clamped to 50000",
+			inputRadius:    74080,
+			expectedRadius: 50000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedRadius float64
+			mockClient := &mockPlacesClient{
+				SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
+					if req.LocationBias != nil {
+						if circle, ok := req.LocationBias.Type.(*placespb.SearchTextRequest_LocationBias_Circle); ok && circle.Circle != nil {
+							capturedRadius = circle.Circle.Radius
+						}
+					}
+					return &placespb.SearchTextResponse{}, nil
+				},
+			}
+
+			p := &PlacesProvider{client: mockClient}
+			_, err := p.FindPlaces(newMockContext(), PlacesArgs{
+				Query:     "marina",
+				Latitude:  10.0,
+				Longitude: 20.0,
+				Radius:    tt.inputRadius,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if capturedRadius != tt.expectedRadius {
+				t.Errorf("got radius %v, want %v", capturedRadius, tt.expectedRadius)
+			}
+		})
+	}
+}
