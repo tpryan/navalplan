@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -97,6 +96,48 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 	return extractTextFromValue(output), nil
 }
 
+func parseAndAppendChunk(ctx context.Context, line string, sb *strings.Builder) {
+	var event AgentEvent
+	if err := json.Unmarshal([]byte(line), &event); err == nil {
+		if (event.Content.Role == "" || event.Content.Role == "model") && len(event.Content.Parts) > 0 {
+			for _, p := range event.Content.Parts {
+				if p.Text != "" && !p.Thought {
+					sb.WriteString(p.Text)
+				}
+			}
+		}
+	} else {
+		var generic struct {
+			Content string `json:"content"`
+			Text    string `json:"text"`
+			Output  struct {
+				Content string `json:"content"`
+				Text    string `json:"text"`
+			} `json:"output"`
+		}
+		if err := json.Unmarshal([]byte(line), &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
+			if generic.Content != "" {
+				sb.WriteString(generic.Content)
+			} else if generic.Text != "" {
+				sb.WriteString(generic.Text)
+			} else if generic.Output.Content != "" {
+				sb.WriteString(generic.Output.Content)
+			} else if generic.Output.Text != "" {
+				sb.WriteString(generic.Output.Text)
+			}
+		} else {
+			if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
+				if ctx != nil {
+					slog.DebugContext(ctx, "Failed to unmarshal stream chunk line, writing raw plain text", "data", line)
+				}
+				sb.WriteString(line)
+			} else if ctx != nil {
+				slog.WarnContext(ctx, "Failed to unmarshal JSON stream chunk line", "data", line)
+			}
+		}
+	}
+}
+
 func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, appName, userID, sessionID, prompt string) (string, error) {
 	ctx, span := otel.Tracer("navalplan-backend").Start(ctx, "reasoning_engine:"+appName,
 		trace.WithAttributes(
@@ -127,12 +168,13 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 	stream, err := r.Client.StreamQueryReasoningEngine(ctx, req)
 	if err != nil {
 		span.RecordError(err)
-		return "", fmt.Errorf("reasoning engine stream query failed: %w", err)
+		slog.WarnContext(ctx, "StreamQueryReasoningEngine call failed, falling back to RunSync", "error", err)
+		return r.RunSync(ctx, resourceName, appName, userID, sessionID, prompt)
 	}
 
 	var sb strings.Builder
-	// StreamQueryReasoningEngine in v1beta1 returns a stream of httpbody.HttpBody.
-	// Each chunk is a part of the streaming response from the agent (usually SSE/NDJSON lines).
+	var lineBuf bytes.Buffer
+
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -140,13 +182,26 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 		}
 		if err != nil {
 			span.RecordError(err)
-			return sb.String(), fmt.Errorf("stream receive error: %w", err)
+			if sb.Len() > 0 {
+				return sb.String(), nil
+			}
+			slog.WarnContext(ctx, "StreamQueryReasoningEngine receive error, falling back to RunSync", "error", err)
+			return r.RunSync(ctx, resourceName, appName, userID, sessionID, prompt)
 		}
 
 		if resp != nil && len(resp.Data) > 0 {
-			scanner := bufio.NewScanner(bytes.NewReader(resp.Data))
-			for scanner.Scan() {
-				line := strings.TrimSpace(scanner.Text())
+			lineBuf.Write(resp.Data)
+
+			for {
+				lineBytes, err := lineBuf.ReadBytes('\n')
+				if err != nil {
+					if len(lineBytes) > 0 {
+						lineBuf.Write(lineBytes)
+					}
+					break
+				}
+
+				line := strings.TrimSpace(string(lineBytes))
 				if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
 					continue
 				}
@@ -158,46 +213,26 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 					}
 				}
 
-				var event AgentEvent
-				if err := json.Unmarshal([]byte(line), &event); err == nil {
-					if (event.Content.Role == "" || event.Content.Role == "model") && len(event.Content.Parts) > 0 {
-						for _, p := range event.Content.Parts {
-							if p.Text != "" && !p.Thought {
-								sb.WriteString(p.Text)
-							}
-						}
-					}
-				} else {
-					var generic struct {
-						Content string `json:"content"`
-						Text    string `json:"text"`
-						Output  struct {
-							Content string `json:"content"`
-							Text    string `json:"text"`
-						} `json:"output"`
-					}
-					if err := json.Unmarshal([]byte(line), &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
-						if generic.Content != "" {
-							sb.WriteString(generic.Content)
-						} else if generic.Text != "" {
-							sb.WriteString(generic.Text)
-						} else if generic.Output.Content != "" {
-							sb.WriteString(generic.Output.Content)
-						} else if generic.Output.Text != "" {
-							sb.WriteString(generic.Output.Text)
-						}
-					} else {
-						// Only write line if it's plain text (not syntax-broken JSON fragments)
-						if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
-							slog.DebugContext(ctx, "Failed to unmarshal stream chunk line, writing raw plain text", "data", line)
-							sb.WriteString(line)
-						} else {
-							slog.WarnContext(ctx, "Failed to unmarshal JSON stream chunk line", "data", line)
-						}
-					}
-				}
+				parseAndAppendChunk(ctx, line, &sb)
 			}
 		}
+	}
+
+	if lineBuf.Len() > 0 {
+		line := strings.TrimSpace(lineBuf.String())
+		if line != "" && !strings.HasPrefix(line, ":") && !strings.HasPrefix(line, "event:") {
+			if strings.HasPrefix(line, "data:") {
+				line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			}
+			if line != "" && line != "[DONE]" {
+				parseAndAppendChunk(ctx, line, &sb)
+			}
+		}
+	}
+
+	if sb.Len() == 0 {
+		slog.WarnContext(ctx, "StreamQueryReasoningEngine returned no text, falling back to RunSync", "appName", appName)
+		return r.RunSync(ctx, resourceName, appName, userID, sessionID, prompt)
 	}
 
 	return sb.String(), nil
