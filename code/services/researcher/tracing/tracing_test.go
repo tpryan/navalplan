@@ -42,12 +42,21 @@ func TestResolveProjectID(t *testing.T) {
 			expectedProjectID: "proj-id",
 		},
 		{
-			name:           "fallback to NAVALPLAN_RESOURCE_ID extraction",
+			name:           "ignore numeric project number in NAVALPLAN_RESOURCE_ID when GOOGLE_CLOUD_PROJECT set",
 			inputProjectID: "",
 			envVars: map[string]string{
+				"GOOGLE_CLOUD_PROJECT":  "navallog",
 				"NAVALPLAN_RESOURCE_ID": "projects/70159681032/locations/us-central1/reasoningEngines/1643463669536784384",
 			},
-			expectedProjectID: "70159681032",
+			expectedProjectID: "navallog",
+		},
+		{
+			name:           "fallback to NAVALPLAN_RESOURCE_ID extraction when string project ID present",
+			inputProjectID: "",
+			envVars: map[string]string{
+				"NAVALPLAN_RESOURCE_ID": "projects/navallog/locations/us-central1/reasoningEngines/1643463669536784384",
+			},
+			expectedProjectID: "navallog",
 		},
 		{
 			name:           "fallback to OTEL_RESOURCE_ATTRIBUTES extraction",

@@ -19,16 +19,34 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // resolveProjectID resolves the GCP project ID from the input string,
 // environment variables, resource strings, or GCP metadata server.
 func resolveProjectID(projectID string) string {
-	if pid := strings.TrimSpace(projectID); pid != "" {
+	if pid := strings.TrimSpace(projectID); pid != "" && !isNumeric(pid) {
 		return pid
 	}
 
 	for _, key := range []string{"GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "GCLOUD_PROJECT", "PROJECT_ID"} {
-		if pid := strings.TrimSpace(os.Getenv(key)); pid != "" {
+		if pid := strings.TrimSpace(os.Getenv(key)); pid != "" && !isNumeric(pid) {
 			return pid
+		}
+	}
+
+	if metadata.OnGCE() {
+		if pid, err := metadata.ProjectID(); err == nil && strings.TrimSpace(pid) != "" && !isNumeric(pid) {
+			return strings.TrimSpace(pid)
 		}
 	}
 
@@ -36,16 +54,19 @@ func resolveProjectID(projectID string) string {
 		if idx := strings.Index(raw, "projects/"); idx != -1 {
 			sub := raw[idx+len("projects/"):]
 			if slashIdx := strings.IndexByte(sub, '/'); slashIdx > 0 {
-				if pid := strings.TrimSpace(sub[:slashIdx]); pid != "" {
+				if pid := strings.TrimSpace(sub[:slashIdx]); pid != "" && !isNumeric(pid) {
 					return pid
 				}
 			}
 		}
 	}
 
-	if metadata.OnGCE() {
-		if pid, err := metadata.ProjectID(); err == nil && strings.TrimSpace(pid) != "" {
-			return strings.TrimSpace(pid)
+	if pid := strings.TrimSpace(projectID); pid != "" {
+		return pid
+	}
+	for _, key := range []string{"GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "GCLOUD_PROJECT", "PROJECT_ID"} {
+		if pid := strings.TrimSpace(os.Getenv(key)); pid != "" {
+			return pid
 		}
 	}
 
