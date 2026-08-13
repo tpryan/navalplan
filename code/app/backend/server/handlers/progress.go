@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,10 +79,16 @@ func (h *Handler) StreamProgress(w http.ResponseWriter, r *http.Request) {
 		h.muProgressStreams.Unlock()
 	}()
 
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-ticker.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			rc.Flush()
 		case evt, ok := <-ch:
 			if !ok {
 				return
@@ -89,6 +96,9 @@ func (h *Handler) StreamProgress(w http.ResponseWriter, r *http.Request) {
 			jsonData, _ := json.Marshal(evt)
 			fmt.Fprintf(w, "event: progress\ndata: %s\n\n", jsonData)
 			rc.Flush()
+			if evt.Stage == "done" || evt.Stage == "error" || evt.Stage == "error_503" || strings.HasPrefix(evt.Stage, "error") {
+				return
+			}
 		}
 	}
 }

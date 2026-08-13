@@ -216,11 +216,20 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 		h.muRecStreams.Unlock()
 	}()
 
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case rec := <-ch:
+		case <-ticker.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			rc.Flush()
+		case rec, ok := <-ch:
+			if !ok {
+				return
+			}
 			jsonData, _ := json.Marshal(rec)
 			fmt.Fprintf(w, "event: recommendation\ndata: %s\n\n", jsonData)
 			rc.Flush()
@@ -275,7 +284,15 @@ func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request
 
 func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, progressSessionID string) {
 	h.ResearchSem <- struct{}{}
-	defer func() { <-h.ResearchSem }()
+	defer func() {
+		<-h.ResearchSem
+		h.muRecStreams.Lock()
+		if ch, ok := h.recStreams[sessionID]; ok {
+			close(ch)
+			delete(h.recStreams, sessionID)
+		}
+		h.muRecStreams.Unlock()
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
