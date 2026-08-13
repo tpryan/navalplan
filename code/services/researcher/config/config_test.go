@@ -108,8 +108,8 @@ func TestNew_Defaults(t *testing.T) {
 	if cfg.ThinkingBudget != 1024 {
 		t.Errorf("ThinkingBudget = %d, want 1024", cfg.ThinkingBudget)
 	}
-	if cfg.SearchTimeoutMs != 15000 {
-		t.Errorf("SearchTimeoutMs = %d, want 15000", cfg.SearchTimeoutMs)
+	if cfg.SearchTimeoutMs != 30000 {
+		t.Errorf("SearchTimeoutMs = %d, want 30000", cfg.SearchTimeoutMs)
 	}
 	if cfg.DisableTracing {
 		t.Error("DisableTracing = true, want false by default")
