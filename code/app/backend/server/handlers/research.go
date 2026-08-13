@@ -317,11 +317,14 @@ func (h *Handler) performStopResearchLogic(stop *models.Stop, sessionID string) 
 		// var mu sync.Mutex // Removed as we always re-marshal now for sorting
 
 		for i := range facilities {
+			if facilities[i].Latitude != 0 && facilities[i].Longitude != 0 {
+				continue // Keep precise coordinates from FindPlacesNearby/Places API
+			}
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
 				f := facilities[i]
-				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility: %s near %s", f.Name, stop.LocationName))
+				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility missing coordinates: %s near %s", f.Name, stop.LocationName))
 				lat, lng, err := geocodeFacility(ctx, f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
 				if err == nil {
 					facilities[i].Latitude = lat
