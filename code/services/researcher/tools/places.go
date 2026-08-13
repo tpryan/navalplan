@@ -105,10 +105,13 @@ func NewPlacesTool(ctx context.Context, apiKey string) (tool.Tool, *PlacesProvid
 func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesResponse, error) {
 	start := time.Now()
 
-	// Default radius if 0
+	// Default radius if 0, cap at 50,000 meters (Google Places SearchText API limit)
 	radius := args.Radius
 	if radius <= 0 {
 		radius = 5000 // 5km default
+	}
+	if radius > 50000 {
+		radius = 50000 // Google Places API maximum limit is 50,000 meters
 	}
 
 	centerPoint := &latlng.LatLng{
@@ -168,10 +171,15 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			lng = pt.Location.Longitude
 		}
 
+		filterRadius := args.Radius
+		if filterRadius <= 0 {
+			filterRadius = radius
+		}
+
 		dist := 0.0
 		if lat != 0 && lng != 0 {
 			dist = haversineDistance(args.Latitude, args.Longitude, lat, lng)
-			if dist > radius {
+			if dist > filterRadius {
 				continue
 			}
 		}

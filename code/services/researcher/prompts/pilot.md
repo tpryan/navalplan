@@ -27,7 +27,7 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
     - `query`: "diesel fuel dock", `radius`: 50000
     - `query`: "attraction", `radius`: 50000
     - `query`: "park", `radius`: 50000
-    - `query`: "airport", `radius`: 100000
+    - `query`: "airport", `radius`: 50000
 
 Output: Produce a JSON object strictly following this schema:
 ```json

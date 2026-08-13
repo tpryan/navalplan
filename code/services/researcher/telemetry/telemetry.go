@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -129,6 +130,17 @@ func NewToolTracker(b *Broadcaster) *ToolTracker {
 }
 
 func sessionIDFrom(ctx agent.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	// ADK toolContext logs "Session() is not supported for tool context" if Session() is invoked.
+	typeStr := fmt.Sprintf("%T", ctx)
+	if strings.Contains(strings.ToLower(typeStr), "tool") {
+		return ""
+	}
+	defer func() {
+		_ = recover()
+	}()
 	if sess := ctx.Session(); sess != nil {
 		return sess.ID()
 	}
