@@ -55,6 +55,8 @@ CRITICAL RULES:
 	You may limit Bars and Restaurants to the top 5-10 most relevant to sailors 
 	(e.g. waterfront/dinghy access) to avoid clutter, but NEVER omit a nautical 
 	facility found within the radius.
+7a. **Synthesize Web Discovered Anchorages & Moorings:** Google Places API (`FindPlacesNearby`) often returns zero results for remote coastal anchorages, coves, and mooring fields because they are natural geographical features rather than registered businesses on Google Maps. You MUST extract every anchorage, cove, and mooring field identified in `batch_google_search` results within the radius. Add them as items in the `facilities` array with their name, type (`Anchorage` or `Mooring`), coordinates (latitude/longitude from search results or estimated near the location), description (including protection, holding, depth, pilotage), and reference links.
+7b. **Exclude Inland/Irrelevant POIs:** Do NOT include inland city parks, public squares, generic statues, or land attractions in `facilities`. Focus strictly on nautical facilities (Anchorages, Marinas, Moorings, Fuel Stations, Yacht Clubs, Boat Launches) and relevant waterfront dining with dinghy/marina access.
 8. **Websites:** Populate the "website" field using the 'website_uri' returned 
 	by the 'FindPlacesNearby' tool whenever available. **MANDATORY**: Do not omit this field if a URL is provided by the tool.
 8a. **Ratings:** Populate "rating", "user_rating_count", and "business_status" 
