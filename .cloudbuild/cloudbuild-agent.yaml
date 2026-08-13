@@ -1,12 +1,12 @@
 steps:
 # 1. Build the container image
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest', '.']
+  args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest', '.']
   dir: 'code/services/researcher'
 
 # 2. Push the container image to Container Registry
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}']
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}']
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest']
@@ -18,7 +18,7 @@ steps:
   - 'deploy'
   - 'navalplan-researcher'
   - '--image'
-  - 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}'
+  - 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}'
   - '--region'
   - 'us-central1'
   - '--project'
@@ -62,10 +62,11 @@ steps:
   dir: 'code/services/researcher'
 
 images:
-- 'gcr.io/${PROJECT_ID}/navalplan-researcher:${SHORT_SHA}'
+- 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}'
 - 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest'
 
 substitutions:
+  _SHORT_SHA: "latest"
   _NAVALPLAN_AGENT_MODEL: "gemini-3.5-flash-lite"
   _ENV: "production"
 
