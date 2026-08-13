@@ -350,9 +350,14 @@ func (h *Handler) performRecommendationGeneration(v *models.Voyage, sessionID, p
 		Recommendations []models.VoyageRecommendation `json:"recommendations"`
 	}
 	if err := json.Unmarshal([]byte(fullText), &wrapper); err != nil {
-		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
-		h.broadcastProgress(progressSessionID, "error", "Agent returned an unreadable response — please try again")
-		return
+		var directRecs []models.VoyageRecommendation
+		if errArray := json.Unmarshal([]byte(fullText), &directRecs); errArray == nil {
+			wrapper.Recommendations = directRecs
+		} else {
+			slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
+			h.broadcastProgress(progressSessionID, "error", "Agent returned an unreadable response — please try again")
+			return
+		}
 	}
 
 	recommendations := wrapper.Recommendations

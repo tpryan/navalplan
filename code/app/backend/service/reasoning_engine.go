@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -130,7 +132,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 
 	var sb strings.Builder
 	// StreamQueryReasoningEngine in v1beta1 returns a stream of httpbody.HttpBody.
-	// Each chunk is a part of the streaming response from the agent (usually NDJSON).
+	// Each chunk is a part of the streaming response from the agent (usually SSE/NDJSON lines).
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -142,35 +144,57 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 		}
 
 		if resp != nil && len(resp.Data) > 0 {
-			var event AgentEvent
-			if err := json.Unmarshal(resp.Data, &event); err == nil && len(event.Content.Parts) > 0 {
-				for _, p := range event.Content.Parts {
-					if p.Text != "" && !p.Thought {
-						sb.WriteString(p.Text)
+			scanner := bufio.NewScanner(bytes.NewReader(resp.Data))
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
+					continue
+				}
+
+				if strings.HasPrefix(line, "data:") {
+					line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+					if line == "" || line == "[DONE]" {
+						continue
 					}
 				}
-			} else {
-				var generic struct {
-					Content string `json:"content"`
-					Text    string `json:"text"`
-					Output  struct {
-						Content string `json:"content"`
-						Text    string `json:"text"`
-					} `json:"output"`
-				}
-				if err := json.Unmarshal(resp.Data, &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
-					if generic.Content != "" {
-						sb.WriteString(generic.Content)
-					} else if generic.Text != "" {
-						sb.WriteString(generic.Text)
-					} else if generic.Output.Content != "" {
-						sb.WriteString(generic.Output.Content)
-					} else if generic.Output.Text != "" {
-						sb.WriteString(generic.Output.Text)
+
+				var event AgentEvent
+				if err := json.Unmarshal([]byte(line), &event); err == nil {
+					if (event.Content.Role == "" || event.Content.Role == "model") && len(event.Content.Parts) > 0 {
+						for _, p := range event.Content.Parts {
+							if p.Text != "" && !p.Thought {
+								sb.WriteString(p.Text)
+							}
+						}
 					}
 				} else {
-					slog.DebugContext(ctx, "Failed to unmarshal stream chunk, writing raw", "data", string(resp.Data))
-					sb.Write(resp.Data)
+					var generic struct {
+						Content string `json:"content"`
+						Text    string `json:"text"`
+						Output  struct {
+							Content string `json:"content"`
+							Text    string `json:"text"`
+						} `json:"output"`
+					}
+					if err := json.Unmarshal([]byte(line), &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
+						if generic.Content != "" {
+							sb.WriteString(generic.Content)
+						} else if generic.Text != "" {
+							sb.WriteString(generic.Text)
+						} else if generic.Output.Content != "" {
+							sb.WriteString(generic.Output.Content)
+						} else if generic.Output.Text != "" {
+							sb.WriteString(generic.Output.Text)
+						}
+					} else {
+						// Only write line if it's plain text (not syntax-broken JSON fragments)
+						if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
+							slog.DebugContext(ctx, "Failed to unmarshal stream chunk line, writing raw plain text", "data", line)
+							sb.WriteString(line)
+						} else {
+							slog.WarnContext(ctx, "Failed to unmarshal JSON stream chunk line", "data", line)
+						}
+					}
 				}
 			}
 		}
@@ -203,6 +227,9 @@ func extractTextFromValue(v *structpb.Value) string {
 						var sb strings.Builder
 						for _, item := range partsList.Values {
 							if partStruct := item.GetStructValue(); partStruct != nil {
+								if thoughtVal := partStruct.Fields["thought"]; thoughtVal != nil && thoughtVal.GetBoolValue() {
+									continue
+								}
 								if text := partStruct.Fields["text"]; text != nil {
 									sb.WriteString(text.GetStringValue())
 								}
