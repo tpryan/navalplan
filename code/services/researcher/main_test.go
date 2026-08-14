@@ -6,16 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tpryan/navalplan/services/researcher/agents"
-	"github.com/tpryan/navalplan/services/researcher/config"
-	"github.com/tpryan/navalplan/services/researcher/telemetry"
-	"github.com/tpryan/navalplan/services/researcher/tools"
+	"github.com/tpryan/navalplan/services/researcher/internal/agent"
+	"github.com/tpryan/navalplan/services/researcher/internal/config"
+	"github.com/tpryan/navalplan/services/researcher/internal/telemetry"
+	"github.com/tpryan/navalplan/services/researcher/internal/tool"
 )
 
 func TestCreateHarbourmasterAgent(t *testing.T) {
-	// Use a mock model if possible, or just check configuration
-	// For now, let's see if it instantiates without error (requires API key if real)
-
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		t.Skip("Skipping agent creation test because GEMINI_API_KEY is not set")
@@ -35,7 +32,7 @@ func TestCreateHarbourmasterAgent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nautical, providers, err := tools.NewNauticalService(ctx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey)
+	nautical, providers, err := tool.NewNauticalService(ctx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey)
 	if err != nil {
 		t.Fatalf("Failed to set up nautical service: %v", err)
 	}
@@ -48,17 +45,17 @@ func TestCreateHarbourmasterAgent(t *testing.T) {
 
 	tracker := telemetry.NewToolTracker(telemetry.NewBroadcaster())
 
-	built, err := agents.Build(ctx, cfg, tracker.BeforeTool, tracker.AfterTool, researcherTools)
+	built, err := agent.Build(ctx, cfg, tracker.BeforeTool, tracker.AfterTool, researcherTools)
 	if err != nil {
 		t.Fatalf("Failed to build agents: %v", err)
 	}
 
-	a, ok := built[agents.Harbourmaster]
+	a, ok := built[agent.Harbourmaster]
 	if !ok {
-		t.Fatalf("Expected %q agent to be built", agents.Harbourmaster)
+		t.Fatalf("Expected %q agent to be built", agent.Harbourmaster)
 	}
 
-	if a.Name() != agents.Harbourmaster {
-		t.Errorf("Expected agent name %q, got %s", agents.Harbourmaster, a.Name())
+	if a.Name() != agent.Harbourmaster {
+		t.Errorf("Expected agent name %q, got %s", agent.Harbourmaster, a.Name())
 	}
 }

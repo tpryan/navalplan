@@ -38,7 +38,7 @@
         {
           "rubric_id": "search_called",
           "rubric_content": {
-            "text_property": "The agent calls 'pilot_search_specialist' to gather real-time data."
+            "text_property": "The agent calls 'batch_google_search' to gather real-time data."
           }
         }
       ],
