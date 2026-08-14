@@ -429,13 +429,52 @@ eval-agent:
 	exit $$EXIT_CODE
 
 eval-all:
-	@echo "Starting all NavalPlan Agents for evaluation..."
+	@echo "Starting Go agent service once for parallel evaluation..."
+	@mkdir -p .adk
+	@ln -sf $$(pwd)/.env code/services/researcher/.env
+	@echo "from . import agent" > code/services/researcher/__init__.py
+	@if [ "$(VERBOSE)" != "1" ]; then \
+		(cd code/services/researcher && go run -mod=vendor .) > /dev/null 2>&1 & echo $$! > agent.pid; \
+	else \
+		(cd code/services/researcher && go run -mod=vendor .) & echo $$! > agent.pid; \
+	fi
+	@sleep 15
+	@if ! lsof -i :8081 > /dev/null; then \
+		echo "Error: Agents failed to start on port 8081"; \
+		kill $$(cat agent.pid) 2>/dev/null || true; \
+		rm -f agent.pid code/services/researcher/.env code/services/researcher/__init__.py; \
+		exit 1; \
+	fi
+	@echo "Starting evaluations in parallel..."
 	@EXIT_CODE=0; \
+	pids=""; \
 	for agent in harbourmaster pilot commodore specialist; do \
-		$(MAKE) eval-agent AGENT=$$agent; \
-		CUR_EXIT=$$?; \
-		if [ $$CUR_EXIT -ne 0 ]; then EXIT_CODE=$$CUR_EXIT; fi; \
+		( \
+			TEMP_DIR="code/services/researcher/eval_temp_$$agent"; \
+			rm -rf $$TEMP_DIR; \
+			mkdir -p $$TEMP_DIR; \
+			echo "from . import agent" > $$TEMP_DIR/__init__.py; \
+			ln -sf $$(pwd)/.env $$TEMP_DIR/.env; \
+			if [ "$$agent" = "harbourmaster" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$agent/agent-card.json"; fi; \
+			echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > $$TEMP_DIR/agent.py; \
+			echo "agent = RemoteA2aAgent(name='$${agent}_agent', agent_card='$$CARD', use_legacy=False)" >> $$TEMP_DIR/agent.py; \
+			echo "root_agent = agent" >> $$TEMP_DIR/agent.py; \
+			if [ "$(VERBOSE)" != "1" ]; then \
+				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=code/services/researcher/eval/$$agent/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+			else \
+				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=code/services/researcher/eval/$$agent/test_config.json --print_detailed_results; \
+			fi; \
+			exit $$?; \
+		) & \
+		pids="$$pids $$!"; \
 	done; \
+	for pid in $$pids; do \
+		wait $$pid || EXIT_CODE=1; \
+	done; \
+	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
+	rm -f agent.pid; \
+	rm -f code/services/researcher/.env code/services/researcher/__init__.py; \
+	rm -rf code/services/researcher/eval_temp_*; \
 	exit $$EXIT_CODE
 
 deps: deps-backend deps-researcher
