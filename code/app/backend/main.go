@@ -10,9 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"app/config"
-	"app/datastore"
-	"app/server"
+	"app/internal/config"
+	"app/internal/server"
+	"app/internal/store"
+	"app/internal/telemetry"
 
 	charm "github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
@@ -59,7 +60,7 @@ func main() {
 	// Initialize OpenTelemetry
 	telemetryCtx, telemetryCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer telemetryCancel()
-	tp, err := InitTelemetry(telemetryCtx, cfg.Project, cfg.Env, cfg.DisableTracing)
+	tp, err := telemetry.InitTelemetry(telemetryCtx, cfg.Project, cfg.Env, cfg.DisableTracing)
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 	}
@@ -91,7 +92,7 @@ func main() {
 func run(ctx context.Context, cfg *config.Config) error {
 
 	// 2. Initialize DB
-	db, err := datastore.New(cfg.DatabaseDSN)
+	db, err := store.New(cfg.DatabaseDSN)
 	if err != nil {
 		return fmt.Errorf("connecting to database (%s): %w", cfg.ObscuredDSN, err)
 	}

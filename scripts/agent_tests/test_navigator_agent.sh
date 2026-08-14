@@ -1,9 +1,9 @@
 #!/bin/bash
 
 BASEURL="http://localhost:8081"
-APPNAME="navigator_agent"
+APPNAME="specialist"
 USER="testuser"
-SESSION="testsession-navigator"
+SESSION="testsession-specialist"
 
 # Endpoint for starting off the adk session
 ENDPOINT_SESSION="${BASEURL}/api/apps/${APPNAME}/users/${USER}/sessions/${SESSION}"

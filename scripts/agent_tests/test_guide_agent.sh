@@ -1,9 +1,9 @@
 #!/bin/bash
 
 BASEURL="http://localhost:8081"
-APPNAME="guide_agent"
+APPNAME="pilot"
 USER="testuser"
-SESSION="testsession-guide"
+SESSION="testsession-pilot"
 
 # Endpoint for starting off the adk session
 ENDPOINT_SESSION="${BASEURL}/api/apps/${APPNAME}/users/${USER}/sessions/${SESSION}"

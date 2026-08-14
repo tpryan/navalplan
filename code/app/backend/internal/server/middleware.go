@@ -1,0 +1,303 @@
+package server
+
+import (
+	"app/internal/server/handlers"
+	"compress/gzip"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+type rateLimitEntry struct {
+	mu       sync.Mutex
+	count    int
+	lastSeen time.Time
+}
+
+var (
+	rateLimits = sync.Map{}
+)
+
+func (s *Server) rateLimit(limit int, window time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var key string
+			person := handlers.GetPersonFromContext(r.Context())
+			if person != nil {
+				key = fmt.Sprintf("user:%d", person.ID)
+			} else {
+				key = fmt.Sprintf("ip:%s", r.RemoteAddr)
+			}
+
+			now := time.Now()
+
+			val, loaded := rateLimits.LoadOrStore(key, &rateLimitEntry{count: 1, lastSeen: now})
+			entry := val.(*rateLimitEntry)
+
+			var count int
+			if loaded {
+				entry.mu.Lock()
+				if now.Sub(entry.lastSeen) > window {
+					entry.count = 1
+					entry.lastSeen = now
+				} else {
+					entry.count++
+				}
+				count = entry.count
+				entry.mu.Unlock()
+			} else {
+				count = 1
+			}
+
+			if count > limit {
+				slog.WarnContext(r.Context(), "Rate limit exceeded", "key", key, "limit", limit)
+				http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (s *Server) secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) staticCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else if strings.HasSuffix(r.URL.Path, ".html") || r.URL.Path == "/" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	Writer *gzip.Writer
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	return g.Writer.Write(b)
+}
+
+func (s *Server) gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") || strings.Contains(r.URL.Path, "/stream") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ext := filepath.Ext(r.URL.Path)
+		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" || ext == ".ico" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+
+		gzw := &gzipResponseWriter{ResponseWriter: w, Writer: gz}
+		next.ServeHTTP(gzw, r)
+	})
+}
+
+func (s *Server) enforceCSRF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if r.Header.Get("X-Requested-With") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		http.Error(w, "CSRF Protection: Missing X-Requested-With header or JSON Content-Type", http.StatusForbidden)
+	})
+}
+
+func (s *Server) requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.SystemAPIKey != "" {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "Bearer "+s.SystemAPIKey {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		cookie, err := r.Cookie("navalplan_session")
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		sessionToken := cookie.Value
+		session, err := s.DB.GetSession(r.Context(), sessionToken)
+		if err != nil || session == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		person, err := s.DB.GetPersonByID(r.Context(), session.PersonID)
+		if err != nil || person == nil {
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := handlers.AddPersonToContext(r.Context(), person)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *Server) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.SystemAPIKey != "" && r.Header.Get("Authorization") == "Bearer "+s.SystemAPIKey {
+			next.ServeHTTP(w, r)
+			return
+		}
+		person := handlers.GetPersonFromContext(r.Context())
+		if person == nil || !person.IsAdmin {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (s *Server) traceMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+		traceParts := strings.Split(traceHeader, "/")
+		if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+			traceID := traceParts[0]
+			trace := fmt.Sprintf("projects/%s/traces/%s", s.Project, traceID)
+			ctx := handlers.AddTraceToContext(r.Context(), trace)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) requestLoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := &responseWriter{w, http.StatusOK}
+
+		next.ServeHTTP(ww, r)
+
+		if !strings.Contains(r.URL.Path, "/.well-known") {
+			timesince := time.Since(start)
+			str := timesince.String()
+			level := slog.LevelInfo
+
+			switch {
+			case ww.statusCode >= 500:
+				level = slog.LevelError
+			case ww.statusCode >= 400:
+				level = slog.LevelWarn
+			}
+
+			slog.Log(r.Context(), level, "Request handled",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.statusCode,
+				"duration", str,
+			)
+		}
+	})
+}
+
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		allowedOrigins := map[string]bool{
+			s.BaseURL:               true,
+			"http://localhost:5173": true,
+		}
+
+		if allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) sanitizePathMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimSpace(r.URL.Path)
+		if strings.HasPrefix(trimmed, "/api/") && strings.HasSuffix(trimmed, "/") && len(trimmed) > 5 {
+			trimmed = strings.TrimSuffix(trimmed, "/")
+		}
+		if trimmed != r.URL.Path {
+			r.URL.Path = trimmed
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = strings.TrimSpace(r.URL.RawPath)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				slog.ErrorContext(r.Context(), "Panic recovered", "error", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
