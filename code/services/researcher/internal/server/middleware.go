@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -34,6 +36,16 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		if r.Method == http.MethodPost {
+			if r.Body != nil {
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err == nil {
+					r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					slog.Info("Incoming POST Request", "path", r.URL.Path, "body", string(bodyBytes))
+				}
+			}
+		}
 
 		defer func() {
 			timesince := time.Since(start)

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/tpryan/navalplan/services/researcher/internal/config"
@@ -145,9 +146,13 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
 	}
 
-	m, err := gemini.NewModel(ctx, cfg.ModelName, &genai.ClientConfig{
-		APIKey: cfg.GeminiAPIKey,
-	})
+	var clientCfg *genai.ClientConfig
+	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") != "true" && os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") != "1" {
+		clientCfg = &genai.ClientConfig{
+			APIKey: cfg.GeminiAPIKey,
+		}
+	}
+	m, err := gemini.NewModel(ctx, cfg.ModelName, clientCfg)
 	if err != nil {
 		return nil, err
 	}
