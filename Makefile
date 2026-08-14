@@ -433,16 +433,15 @@ eval-all:
 	@mkdir -p .adk
 	@ln -sf $$(pwd)/.env code/services/researcher/.env
 	@echo "from . import agent" > code/services/researcher/__init__.py
-	@if [ "$(VERBOSE)" != "1" ]; then \
-		(cd code/services/researcher && go run -mod=vendor .) > /dev/null 2>&1 & echo $$! > agent.pid; \
-	else \
-		(cd code/services/researcher && go run -mod=vendor .) & echo $$! > agent.pid; \
-	fi
+	@(cd code/services/researcher && go run -mod=vendor .) > agent.log 2>&1 & echo $$! > agent.pid
 	@sleep 15
 	@if ! lsof -i :8081 > /dev/null; then \
 		echo "Error: Agents failed to start on port 8081"; \
+		echo "=== AGENT SERVICE LOGS (agent.log) ==="; \
+		cat agent.log; \
+		echo "====================================="; \
 		kill $$(cat agent.pid) 2>/dev/null || true; \
-		rm -f agent.pid code/services/researcher/.env code/services/researcher/__init__.py; \
+		rm -f agent.pid agent.log code/services/researcher/.env code/services/researcher/__init__.py; \
 		exit 1; \
 	fi
 	@echo "Starting evaluations in parallel..."
@@ -472,7 +471,7 @@ eval-all:
 		wait $$pid || EXIT_CODE=1; \
 	done; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
-	rm -f agent.pid; \
+	rm -f agent.pid agent.log; \
 	rm -f code/services/researcher/.env code/services/researcher/__init__.py; \
 	rm -rf code/services/researcher/eval_temp_*; \
 	exit $$EXIT_CODE
