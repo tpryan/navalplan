@@ -37,7 +37,7 @@ MIGRATE_BIN_VERSION=v4.18.1
 MIGRATE_BIN=.bin/migrate
 
 # Go
-GO_FILES=$(shell find . -name '*.go')
+# GO_FILES is unused and was causing blowups on export due to finding everything in vendor/
 
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
