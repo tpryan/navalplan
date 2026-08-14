@@ -7,6 +7,7 @@ steps:
     python3 -m venv /builder/venv
     /builder/venv/bin/pip install "google-adk[a2a,eval]"
     touch .env
+    make deps
     make eval-all ADK=/builder/venv/bin/adk VERBOSE=1
   secretEnv:
   - 'GEMINI_API_KEY'
