@@ -1,9 +1,9 @@
 #!/bin/bash
 
 BASEURL="http://localhost:8081"
-APPNAME="researcher_agent"
+APPNAME="harbourmaster"
 USER="testuser"
-SESSION="testsession-researcher"
+SESSION="testsession-harbourmaster"
 
 # Endpoint for starting off the adk session
 ENDPOINT_SESSION="${BASEURL}/api/apps/${APPNAME}/users/${USER}/sessions/${SESSION}"

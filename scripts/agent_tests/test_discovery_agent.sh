@@ -1,9 +1,9 @@
 #!/bin/bash
 
 BASEURL="http://localhost:8081"
-APPNAME="discovery_agent"
+APPNAME="commodore"
 USER="testuser"
-SESSION="testsession-discovery"
+SESSION="testsession-commodore"
 
 # Endpoint for starting off the adk session
 ENDPOINT_SESSION="${BASEURL}/api/apps/${APPNAME}/users/${USER}/sessions/${SESSION}"
