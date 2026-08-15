@@ -9,7 +9,7 @@ steps:
   script: |
     apt-get update && apt-get install -y python3 python3-pip python3-venv lsof
     python3 -m venv /builder/venv
-    /builder/venv/bin/pip install "google-adk[a2a,eval]"
+    /builder/venv/bin/pip install "google-adk[a2a,eval]==1.28.0"
     touch .env
     make deps
     make eval-all ADK=/builder/venv/bin/adk VERBOSE=1

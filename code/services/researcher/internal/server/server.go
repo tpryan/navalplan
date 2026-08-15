@@ -142,6 +142,7 @@ func buildAgentCard(cfg *config.Config, a adkagent.Agent, path string) *a2a.Agen
 		baseURL = "http://localhost:" + cfg.Port
 	}
 	return &a2a.AgentCard{
+		ProtocolVersion:    "0.3.0",
 		Name:               a.Name(),
 		Skills:             adka2a.BuildAgentSkills(a),
 		PreferredTransport: a2a.TransportProtocolJSONRPC,
