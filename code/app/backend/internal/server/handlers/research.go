@@ -177,6 +177,17 @@ func (h *Handler) performStopResearch(stop *model.Stop, sessionID, jobKey string
 	h.performStopResearchLogic(stop, sessionID)
 }
 
+func hasValidFacilities(raw model.RawJSON) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var facs []Facility
+	if err := json.Unmarshal(raw, &facs); err != nil {
+		return false
+	}
+	return len(facs) > 0
+}
+
 func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
@@ -197,7 +208,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 				slog.InfoContext(ctx, "Redundant last stop detected, attempting to clone briefing from first stop", "stop_id", stop.ID, "first_stop_id", first.ID)
 
 				firstBriefing, err := h.DB.GetBriefing(ctx, first.ID)
-				if err == nil && firstBriefing != nil {
+				if err == nil && firstBriefing != nil && hasValidFacilities(firstBriefing.Facilities) {
 					h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from first stop for %s", stop.LocationName))
 
 					newBriefing := &model.Briefing{
@@ -255,7 +266,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		prompt = fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
 			stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
-		if nearbyErr == nil && nearbyBriefing != nil && len(nearbyBriefing.Facilities) > 0 {
+		if nearbyErr == nil && nearbyBriefing != nil && hasValidFacilities(nearbyBriefing.Facilities) {
 			slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
 			reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 			prompt += " Do not research facilities; I will provide those separately."
@@ -479,7 +490,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 		if redundantLastStop != nil {
 			slog.InfoContext(ctx, "Cloning first stop briefing to redundant last stop", "voyage_id", voyageID, "last_stop_id", redundantLastStop.ID)
 			firstBriefing, err := h.DB.GetBriefing(ctx, firstStopID)
-			if err == nil && firstBriefing != nil {
+			if err == nil && firstBriefing != nil && hasValidFacilities(firstBriefing.Facilities) {
 				newBriefing := &model.Briefing{
 					StopID:         redundantLastStop.ID,
 					WeatherSummary: firstBriefing.WeatherSummary,
@@ -493,7 +504,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 					h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", redundantLastStop.LocationName))
 				}
 			} else {
-				slog.WarnContext(ctx, "First stop briefing missing for cloning, falling back to full research for last stop")
+				slog.WarnContext(ctx, "First stop briefing missing or invalid for cloning, falling back to full research for last stop")
 				h.performStopResearchLogic(redundantLastStop, sessionID)
 			}
 		}

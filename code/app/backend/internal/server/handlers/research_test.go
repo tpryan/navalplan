@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"app/internal/model"
 )
 
 func slowServer(delay time.Duration) *httptest.Server {
@@ -83,5 +85,63 @@ func TestGetStaticMap_MissingAPIKey(t *testing.T) {
 	expected := "NAVALPLAN_BACKEND_MAPS_API_KEY not set"
 	if err.Error() != expected {
 		t.Errorf("unexpected error message: %q", err.Error())
+	}
+}
+
+func TestHasValidFacilities(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    model.RawJSON
+		expected bool
+	}{
+		{
+			name:     "nil raw bytes",
+			input:    nil,
+			expected: false,
+		},
+		{
+			name:     "empty bytes",
+			input:    model.RawJSON([]byte("")),
+			expected: false,
+		},
+		{
+			name:     "empty json array",
+			input:    model.RawJSON([]byte("[]")),
+			expected: false,
+		},
+		{
+			name:     "empty json array with spaces",
+			input:    model.RawJSON([]byte("[  ]")),
+			expected: false,
+		},
+		{
+			name:     "null json value",
+			input:    model.RawJSON([]byte("null")),
+			expected: false,
+		},
+		{
+			name:     "invalid json string",
+			input:    model.RawJSON([]byte("{invalid")),
+			expected: false,
+		},
+		{
+			name:     "single facility",
+			input:    model.RawJSON([]byte(`[{"name":"Kowhai Point Marina","type":"Marina","latitude":-36.8,"longitude":174.7}]`)),
+			expected: true,
+		},
+		{
+			name:     "multiple facilities",
+			input:    model.RawJSON([]byte(`[{"name":"Anchorage A","type":"Anchorage"},{"name":"Marina B","type":"Marina"}]`)),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasValidFacilities(tt.input)
+			if got != tt.expected {
+				t.Errorf("hasValidFacilities(%s) = %v, want %v", string(tt.input), got, tt.expected)
+			}
+		})
 	}
 }

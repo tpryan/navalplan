@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -246,7 +247,8 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 		Radius:    req.Radius,
 	})
 	if err != nil {
-		return nil, err
+		slog.WarnContext(ctx, "Places search failed, continuing with empty places", "error", err, "query", req.Query)
+		return &McpPlacesResponse{Facilities: nil}, nil
 	}
 
 	res := &McpPlacesResponse{}
