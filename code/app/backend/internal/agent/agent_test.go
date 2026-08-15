@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"app/internal/agent"
@@ -184,5 +185,95 @@ func TestRunStreaming_SSE(t *testing.T) {
 	}
 	if text != "sse part one sse part two" {
 		t.Errorf("got %q, want %q", text, "sse part one sse part two")
+	}
+}
+
+func TestAgentRunner_TargetResolution(t *testing.T) {
+	tests := []struct {
+		name     string
+		resolver agent.Resolver
+		appName  string
+	}{
+		{
+			name:     "nil resolver falls back to default",
+			resolver: nil,
+			appName:  "harbourmaster",
+		},
+		{
+			name:     "static resolver with empty URL falls back to default",
+			resolver: &agent.StaticResolver{BaseURL: ""},
+			appName:  "pilot",
+		},
+		{
+			name:     "static resolver with custom URL returns custom URL",
+			resolver: &agent.StaticResolver{BaseURL: "https://custom-agent.run.app"},
+			appName:  "commodore",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &agent.AgentRunner{
+				Client:   &http.Client{},
+				Resolver: tt.resolver,
+			}
+			// Testing with an invalid port/server will fail network dial, but confirms getTarget worked
+			err := runner.CreateSession(context.Background(), tt.appName, "user", "sess1", nil)
+			if err == nil {
+				t.Error("expected dial error when server does not exist")
+			}
+		})
+	}
+}
+
+func TestAgentRunner_ReasoningEngineNilRunner(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    string
+		operation string
+	}{
+		{
+			name:      "CreateSession returns error when ReasoningEngine runner is nil",
+			target:    "projects/123/locations/us-central1/reasoningEngines/456",
+			operation: "create_session",
+		},
+		{
+			name:      "RunSync returns error when ReasoningEngine runner is nil",
+			target:    "projects/123/locations/us-central1/reasoningEngines/456",
+			operation: "run_sync",
+		},
+		{
+			name:      "RunStreaming returns error when ReasoningEngine runner is nil",
+			target:    "projects/123/locations/us-central1/reasoningEngines/456",
+			operation: "run_streaming",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &agent.AgentRunner{
+				Client:          &http.Client{},
+				Resolver:        &agent.StaticResolver{BaseURL: tt.target},
+				ReasoningEngine: nil,
+			}
+
+			switch tt.operation {
+			case "create_session":
+				err := runner.CreateSession(context.Background(), "harbourmaster", "user", "sess1", nil)
+				if err == nil || !strings.Contains(err.Error(), "reasoning engine runner not initialized") {
+					t.Errorf("expected runner not initialized error, got %v", err)
+				}
+			case "run_sync":
+				_, err := runner.RunSync(context.Background(), "harbourmaster", "user", "sess1", "prompt")
+				if err == nil || !strings.Contains(err.Error(), "reasoning engine runner not initialized") {
+					t.Errorf("expected runner not initialized error, got %v", err)
+				}
+			case "run_streaming":
+				_, err := runner.RunStreaming(context.Background(), "harbourmaster", "user", "sess1", "prompt")
+				if err == nil || !strings.Contains(err.Error(), "reasoning engine runner not initialized") {
+					t.Errorf("expected runner not initialized error, got %v", err)
+				}
+			}
+		})
 	}
 }

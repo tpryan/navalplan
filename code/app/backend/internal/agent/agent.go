@@ -86,7 +86,10 @@ func (r *AgentRunner) CreateSession(ctx context.Context, appName, userID, sessio
 		return err
 	}
 
-	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+	if r.isReasoningEngine(target) {
+		if r.ReasoningEngine == nil {
+			return fmt.Errorf("reasoning engine runner not initialized for target: %s", target)
+		}
 		return r.ReasoningEngine.CreateSession(ctx, target, appName, userID, sessionID, state)
 	}
 
@@ -137,7 +140,10 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 		return "", err
 	}
 
-	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+	if r.isReasoningEngine(target) {
+		if r.ReasoningEngine == nil {
+			return "", fmt.Errorf("reasoning engine runner not initialized for target: %s", target)
+		}
 		slog.InfoContext(ctx, "invoking agent via Reasoning Engine", "target", target, "appName", appName)
 		return r.ReasoningEngine.RunSync(ctx, target, appName, userID, sessionID, prompt)
 	}
@@ -154,7 +160,10 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 		return "", err
 	}
 
-	if r.isReasoningEngine(target) && r.ReasoningEngine != nil {
+	if r.isReasoningEngine(target) {
+		if r.ReasoningEngine == nil {
+			return "", fmt.Errorf("reasoning engine runner not initialized for target: %s", target)
+		}
 		slog.InfoContext(ctx, "invoking agent via Reasoning Engine", "target", target, "appName", appName)
 		return r.ReasoningEngine.RunStreaming(ctx, target, appName, userID, sessionID, prompt)
 	}

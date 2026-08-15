@@ -150,11 +150,15 @@ func New(db DBStore, contentDir string, agentURL string, resolver agent.Resolver
 		}
 	}
 
+	if resolver == nil {
+		resolver = &agent.StaticResolver{BaseURL: agentURL}
+	}
+
 	agentRunner := &agent.AgentRunner{Client: client, Resolver: resolver}
 
 	reRunner, err := agent.NewReasoningEngineRunner(context.Background())
 	if err != nil {
-		slog.Warn("Failed to initialize Reasoning Engine runner (metrics will be disabled)", "error", err)
+		slog.Warn("Failed to initialize Reasoning Engine runner", "error", err)
 	} else {
 		agentRunner.ReasoningEngine = reRunner
 	}
