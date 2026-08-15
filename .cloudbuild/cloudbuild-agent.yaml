@@ -3,7 +3,7 @@ steps:
 - name: 'golang:1.26'
   id: 'run-evaluations'
   env:
-  - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
+  - 'GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
   - 'GOOGLE_GENAI_USE_VERTEXAI=true'
   - 'GOOGLE_CLOUD_LOCATION=us-central1'
   script: |
