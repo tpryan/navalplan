@@ -42,7 +42,7 @@ MIGRATE_BIN=.bin/migrate
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -391,6 +391,9 @@ eval-commodore:
 eval-specialist:
 	@$(MAKE) eval-agent AGENT=specialist
 
+eval-lookout:
+	@$(MAKE) eval-agent AGENT=lookout
+
 eval-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
 		echo "Evaluating NavalPlan Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
@@ -416,10 +419,14 @@ eval-agent:
 	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > code/services/researcher/agent.py; \
 	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> code/services/researcher/agent.py; \
 	echo "root_agent = agent" >> code/services/researcher/agent.py; \
+	CONFIG_PATH="code/services/researcher/eval/$$AGENT/test_config.json"; \
+	if [ -f "code/services/researcher/eval/$$AGENT/eval_config.yaml" ]; then \
+		CONFIG_PATH="code/services/researcher/eval/$$AGENT/eval_config.yaml"; \
+	fi; \
 	if [ "$(VERBOSE)" != "1" ]; then \
-		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=code/services/researcher/eval/$$AGENT/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=$$CONFIG_PATH 2>/dev/null | grep -A 10 "Eval Run Summary"; \
 	else \
-		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=code/services/researcher/eval/$$AGENT/test_config.json --print_detailed_results; \
+		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=$$CONFIG_PATH --print_detailed_results; \
 	fi; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
@@ -455,7 +462,7 @@ eval-all:
 	@echo "Starting evaluations in parallel..."
 	@EXIT_CODE=0; \
 	pids=""; \
-	for agent in harbourmaster pilot commodore specialist; do \
+	for agent in harbourmaster pilot commodore specialist lookout; do \
 		( \
 			TEMP_DIR="code/services/researcher/eval_temp_$$agent"; \
 			rm -rf $$TEMP_DIR; \
@@ -466,10 +473,14 @@ eval-all:
 			echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > $$TEMP_DIR/agent.py; \
 			echo "agent = RemoteA2aAgent(name='$${agent}_agent', agent_card='$$CARD', use_legacy=False)" >> $$TEMP_DIR/agent.py; \
 			echo "root_agent = agent" >> $$TEMP_DIR/agent.py; \
+			CONFIG_PATH="code/services/researcher/eval/$$agent/test_config.json"; \
+			if [ -f "code/services/researcher/eval/$$agent/eval_config.yaml" ]; then \
+				CONFIG_PATH="code/services/researcher/eval/$$agent/eval_config.yaml"; \
+			fi; \
 			if [ "$(VERBOSE)" != "1" ]; then \
-				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=code/services/researcher/eval/$$agent/test_config.json 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=$$CONFIG_PATH 2>/dev/null | grep -A 10 "Eval Run Summary"; \
 			else \
-				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=code/services/researcher/eval/$$agent/test_config.json --print_detailed_results; \
+				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=$$CONFIG_PATH --print_detailed_results; \
 			fi; \
 			exit $$?; \
 		) & \
@@ -483,6 +494,17 @@ eval-all:
 	rm -f code/services/researcher/.env code/services/researcher/__init__.py; \
 	rm -rf code/services/researcher/eval_temp_*; \
 	exit $$EXIT_CODE
+
+eval-submit:
+	@if [ -z "$$AGENT" ]; then \
+		echo "Usage: make eval-submit AGENT=<harbourmaster|pilot|commodore|specialist|lookout> [DEST=gs://bucket/path] [RESOURCE_NAME=projects/.../locations/.../reasoningEngines/...]" ; \
+		exit 1; \
+	fi
+	@DEST_FLAG=""; \
+	if [ -n "$$DEST" ]; then DEST_FLAG="--dest $$DEST"; fi; \
+	RESOURCE_FLAG=""; \
+	if [ -n "$$RESOURCE_NAME" ]; then RESOURCE_FLAG="--resource-name $$RESOURCE_NAME"; fi; \
+	agents-cli eval submit --dataset code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$DEST_FLAG $$RESOURCE_FLAG
 
 deps: deps-backend deps-researcher
 

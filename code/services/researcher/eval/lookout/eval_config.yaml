@@ -1,0 +1,18 @@
+metrics_to_run:
+  - final_response_quality
+  - hallucination
+  - safety
+  - nautical_rubric_quality
+
+custom_metrics:
+  - name: nautical_rubric_quality
+    rubric_group_name: agent_rubrics
+    prompt_template: |
+      You are an expert maritime safety evaluator assessing a voyage safety auditor agent.
+      Evaluate the response based on the safety rubrics provided, the user's prompt, and the agent's output.
+      User Prompt: {prompt}
+      Agent Response: {response}
+      Agent Data & Tool Trajectory: {agent_data}
+      Return JSON: {"score": <score between 0.0 and 1.0>, "explanation": "<reasoning>"}
+    judge_model: gemini-2.5-flash-lite
+    judge_model_sampling_count: 1

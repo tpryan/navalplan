@@ -1,111 +1,94 @@
 {
-  "eval_set_id": "specialist_eval_set",
-  "name": "Specialist Agent Evaluation",
-  "description": "Evaluates the specialist agent's ability to identify resource hubs and anchorages.",
   "eval_cases": [
     {
-      "eval_id": "nantucket_navigator",
-      "session_input": {
-        "app_name": "specialist",
-        "user_id": "test_user",
-        "state": {}
+      "eval_case_id": "nantucket_navigator",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Identify resource hubs and anchorages for 41.2835 N, 70.0995 W (Nantucket, MA). Radius 10 nm."
+          }
+        ]
       },
-      "rubrics": [
-        {
-          "rubric_id": "hub_identified",
-          "rubric_content": {
-            "text_property": "The agent identifies Nantucket Harbor as a major sailing hub."
-          }
-        },
-        {
-          "rubric_id": "json_format",
-          "rubric_content": {
-            "text_property": "The response is a valid JSON array of objects."
-          }
-        },
-        {
-          "rubric_id": "recommendations_have_urls",
-          "rubric_content": {
-            "text_property": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
-          }
-        },
-        {
-          "rubric_id": "find_places_called",
-          "rubric_content": {
-            "text_property": "The agent calls 'find_places_nearby' to locate anchorages or marinas."
-          }
-        }
-      ],
-      "conversation": [
-        {
-          "invocation_id": "inv_1",
-          "user_content": {
-            "role": "user",
-            "parts": [
-              {
-                "text": "Identify resource hubs and anchorages for 41.2835 N, 70.0995 W (Nantucket, MA). Radius 10 nm."
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "hub_identified",
+              "content": {
+                "property": {
+                  "description": "The agent identifies Nantucket Harbor as a major sailing hub."
+                }
               }
-            ]
-          },
-          "final_response": {
-            "role": "model",
-            "parts": [
-              {
-                "text": "Nantucket Navigation"
+            },
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of objects."
+                }
               }
-            ]
-          }
+            },
+            {
+              "rubric_id": "recommendations_have_urls",
+              "content": {
+                "property": {
+                  "description": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
+                }
+              }
+            },
+            {
+              "rubric_id": "find_places_called",
+              "content": {
+                "property": {
+                  "description": "The agent calls 'find_places_nearby' to locate anchorages or marinas."
+                }
+              }
+            }
+          ]
         }
-      ]
+      }
     },
     {
-      "eval_id": "day_trip_anchorages",
-      "session_input": {
-        "app_name": "specialist",
-        "user_id": "test_user",
-        "state": {}
+      "eval_case_id": "day_trip_anchorages",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Recommend 15 anchorages, moorings, and marinas within 15 nm of 41.2835°N, 70.0995°W (Nantucket, MA). This is a day trip — a single-day outing with no overnight stay. Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
+          }
+        ]
       },
-      "rubrics": [
-        {
-          "rubric_id": "json_format",
-          "rubric_content": {
-            "text_property": "The response is a valid JSON array of objects."
-          }
-        },
-        {
-          "rubric_id": "recommendations_have_urls",
-          "rubric_content": {
-            "text_property": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
-          }
-        },
-        {
-          "rubric_id": "day_trip_bias_adjusted",
-          "rubric_content": {
-            "text_property": "The recommendations favor moorings and easily reached day-use anchorages suited to a few hours, rather than secluded, hard-to-reach, overnight-only spots."
-          }
-        }
-      ],
-      "conversation": [
-        {
-          "invocation_id": "inv_1",
-          "user_content": {
-            "role": "user",
-            "parts": [
-              {
-                "text": "Recommend 15 anchorages, moorings, and marinas within 15 nm of 41.2835°N, 70.0995°W (Nantucket, MA). This is a day trip — a single-day outing with no overnight stay. Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of objects."
+                }
               }
-            ]
-          },
-          "final_response": {
-            "role": "model",
-            "parts": [
-              {
-                "text": "Nantucket Day Trip"
+            },
+            {
+              "rubric_id": "recommendations_have_urls",
+              "content": {
+                "property": {
+                  "description": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
+                }
               }
-            ]
-          }
+            },
+            {
+              "rubric_id": "day_trip_bias_adjusted",
+              "content": {
+                "property": {
+                  "description": "The recommendations favor moorings and easily reached day-use anchorages suited to a few hours, rather than secluded, hard-to-reach, overnight-only spots."
+                }
+              }
+            }
+          ]
         }
-      ]
+      }
     }
   ]
 }

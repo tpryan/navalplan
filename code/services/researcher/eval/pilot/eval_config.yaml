@@ -1,0 +1,20 @@
+metrics_to_run:
+  - multi_turn_tool_use_quality
+  - multi_turn_trajectory_quality
+  - final_response_quality
+  - hallucination
+  - safety
+  - nautical_rubric_quality
+
+custom_metrics:
+  - name: nautical_rubric_quality
+    rubric_group_name: agent_rubrics
+    prompt_template: |
+      You are an expert maritime evaluator assessing an AI sailing assistant.
+      Evaluate the response based on the rubrics provided, the user's prompt, and the agent's tool execution trace.
+      User Prompt: {prompt}
+      Agent Response: {response}
+      Agent Data & Tool Trajectory: {agent_data}
+      Return JSON: {"score": <score between 0.0 and 1.0>, "explanation": "<reasoning>"}
+    judge_model: gemini-2.5-flash-lite
+    judge_model_sampling_count: 1

@@ -1,0 +1,25 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-2.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "danger_severity_flagged",
+          "rubric_content": {
+            "text_property": "The response flags a danger-level severity alert for severe wind or waves."
+          }
+        },
+        {
+          "rubric_id": "json_array_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON array of alert objects."
+          }
+        }
+      ]
+    }
+  }
+}
