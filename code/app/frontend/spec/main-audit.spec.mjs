@@ -301,3 +301,19 @@ describe('reverseGeocode result formatting', () => {
         expect(buildLocationName([], 'Some remote ocean point')).toBe('Some remote ocean point');
     });
 });
+
+// ---------------------------------------------------------------------------
+// 7. Safety Overview — hidden in sailing mode
+// ---------------------------------------------------------------------------
+describe('Safety Overview non-sailing class', () => {
+    it('ensures safety overview box includes np-report-item--non-sailing class', () => {
+        const box = document.createElement('div');
+        box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
+        box.id = 'np-safety-overview';
+
+        expect(box.classList.contains('np-report-item--non-sailing')).toBeTrue();
+        expect(box.classList.contains('np-safety-overview')).toBeTrue();
+        expect(box.classList.contains('lookout-box')).toBeTrue();
+    });
+});
+

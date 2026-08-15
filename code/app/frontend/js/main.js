@@ -3762,7 +3762,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
     }
 
     const box = document.createElement('div');
-    box.className = 'lookout-box np-safety-overview';
+    box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
     box.id = 'np-safety-overview';
 
     const header = document.createElement('div');
