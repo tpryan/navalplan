@@ -42,7 +42,7 @@ MIGRATE_BIN=.bin/migrate
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -495,16 +495,48 @@ eval-all:
 	rm -rf code/services/researcher/eval_temp_*; \
 	exit $$EXIT_CODE
 
+eval-submit-harbourmaster:
+	@$(MAKE) eval-submit AGENT=harbourmaster
+
+eval-submit-pilot:
+	@$(MAKE) eval-submit AGENT=pilot
+
+eval-submit-commodore:
+	@$(MAKE) eval-submit AGENT=commodore
+
+eval-submit-specialist:
+	@$(MAKE) eval-submit AGENT=specialist
+
+eval-submit-lookout:
+	@$(MAKE) eval-submit AGENT=lookout
+
+eval-submit-all:
+	@$(MAKE) eval-submit AGENT=all
+
 eval-submit:
-	@if [ -z "$$AGENT" ]; then \
-		echo "Usage: make eval-submit AGENT=<harbourmaster|pilot|commodore|specialist|lookout> [DEST=gs://bucket/path] [RESOURCE_NAME=projects/.../locations/.../reasoningEngines/...]" ; \
-		exit 1; \
+	@if [ -z "$$AGENT" ] || [ "$$AGENT" = "all" ]; then \
+		echo "Submitting evaluations for all researcher agents..."; \
+		for a in harbourmaster pilot commodore specialist lookout; do \
+			echo "\n=== Submitting $$a evaluation ==="; \
+			$(MAKE) eval-submit AGENT=$$a DEST="$(DEST)" RESOURCE_NAME="$(RESOURCE_NAME)" || true; \
+		done; \
+	else \
+		DEST_FLAG=""; \
+		if [ -n "$$DEST" ]; then DEST_FLAG="--dest $$DEST"; fi; \
+		RESOURCE_FLAG=""; \
+		if [ -n "$$RESOURCE_NAME" ]; then \
+			RESOURCE_FLAG="--resource-name $$RESOURCE_NAME"; \
+		elif [ -f "code/services/researcher/deployment_metadata.json" ]; then \
+			RES_ID=$$(grep -o '"remote_agent_runtime_id": "[^"]*"' code/services/researcher/deployment_metadata.json | cut -d'"' -f4); \
+			if [ -n "$$RES_ID" ]; then RESOURCE_FLAG="--resource-name $$RES_ID"; fi; \
+		fi; \
+		CONFIG_FLAG=""; \
+		if [ -f "code/services/researcher/eval/$$AGENT/eval_config.yaml" ]; then \
+			CONFIG_FLAG="--config code/services/researcher/eval/$$AGENT/eval_config.yaml"; \
+		fi; \
+		echo "Submitting $$AGENT evaluation dataset to Agent Platform Eval Service..."; \
+		agents-cli eval submit --dataset code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG $$DEST_FLAG $$RESOURCE_FLAG; \
 	fi
-	@DEST_FLAG=""; \
-	if [ -n "$$DEST" ]; then DEST_FLAG="--dest $$DEST"; fi; \
-	RESOURCE_FLAG=""; \
-	if [ -n "$$RESOURCE_NAME" ]; then RESOURCE_FLAG="--resource-name $$RESOURCE_NAME"; fi; \
-	agents-cli eval submit --dataset code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$DEST_FLAG $$RESOURCE_FLAG
 
 deps: deps-backend deps-researcher
 
