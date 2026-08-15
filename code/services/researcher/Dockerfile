@@ -19,7 +19,6 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 COPY --from=builder /app/researcher .
-COPY --from=builder /app/prompts ./prompts
 
 EXPOSE 8081
 
