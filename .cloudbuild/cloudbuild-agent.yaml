@@ -2,15 +2,16 @@ steps:
 # 0. Run parallel agent evaluations
 - name: 'golang:1.26'
   id: 'run-evaluations'
+  env:
+  - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
+  - 'GOOGLE_GENAI_USE_VERTEXAI=true'
+  - 'GOOGLE_CLOUD_LOCATION=us-central1'
   script: |
     apt-get update && apt-get install -y python3 python3-pip python3-venv lsof
     python3 -m venv /builder/venv
     /builder/venv/bin/pip install "google-adk[a2a,eval]"
     touch .env
     make deps
-    export GOOGLE_GENAI_USE_VERTEXAI=true
-    export GOOGLE_CLOUD_LOCATION=us-central1
-    export GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
     make eval-all ADK=/builder/venv/bin/adk VERBOSE=1
   secretEnv:
   - 'GEMINI_API_KEY'
