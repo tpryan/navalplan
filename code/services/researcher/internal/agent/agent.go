@@ -147,7 +147,13 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 	}
 
 	var clientCfg *genai.ClientConfig
-	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") != "true" && os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") != "1" {
+	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" {
+		clientCfg = &genai.ClientConfig{
+			Project:  cfg.Project,
+			Location: "us-central1",
+			Backend:  genai.BackendVertexAI,
+		}
+	} else {
 		clientCfg = &genai.ClientConfig{
 			APIKey: cfg.GeminiAPIKey,
 		}
