@@ -1,86 +1,35 @@
 {
+  "eval_set_id": "harbourmaster_eval_set",
   "eval_cases": [
     {
-      "eval_case_id": "oak_bluffs_research",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Research anchorages and weather for 41.388800 N, -70.613100 W (Oak Bluffs, MA) for May 1, 2025. Radius 5 nm."
+      "eval_id": "oak_bluffs_research",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Research Oak Bluffs (lat: 41.4556, lng: -70.5583) on July 15, 2025. Radius 5 nm."
+              }
+            ],
+            "role": "user"
           }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "weather_tool_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'GetWeather' with the latitude and longitude mentioned in the user prompt."
-                }
-              }
-            },
-            {
-              "rubric_id": "tides_tool_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'GetTides' with the date mentioned in the user prompt."
-                }
-              }
-            },
-            {
-              "rubric_id": "radius_check",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'find_places_nearby' with a radius that matches the nautical miles mentioned in the user prompt (converted to meters)."
-                }
-              }
-            }
-          ]
         }
-      }
+      ]
     },
     {
-      "eval_case_id": "newport_ri_research",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Research anchorages and weather for 41.490100 N, -71.312800 W (Newport, RI) for June 15, 2025. Radius 10 nm."
+      "eval_id": "newport_ri_research",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Research Newport, RI (lat: 41.4901, lng: -71.3128) on August 1, 2025. Radius 10 nm."
+              }
+            ],
+            "role": "user"
           }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "weather_tool_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'GetWeather' with the coordinates for Newport, RI."
-                }
-              }
-            },
-            {
-              "rubric_id": "tides_tool_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'GetTides' for June 15, 2025."
-                }
-              }
-            },
-            {
-              "rubric_id": "places_tool_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'find_places_nearby' to search for anchorages, marinas, and nautical points of interest."
-                }
-              }
-            }
-          ]
         }
-      }
+      ]
     }
   ]
 }

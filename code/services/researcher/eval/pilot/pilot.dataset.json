@@ -1,0 +1,61 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "british_virgin_islands_guide",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Research the general sailing region for 18.4286 N, 64.6176 W (Tortola, BVI)."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "summary_contains_bvi",
+              "content": {
+                "property": {
+                  "description": "The final response summary mentions the British Virgin Islands."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON object."
+                }
+              }
+            },
+            {
+              "rubric_id": "hubs_have_urls",
+              "content": {
+                "property": {
+                  "description": "Every entry in the 'hubs' array contains a valid 'url' and a non-empty 'references' array."
+                }
+              }
+            },
+            {
+              "rubric_id": "charter_has_urls",
+              "content": {
+                "property": {
+                  "description": "The 'charter_info.companies' array contains entries with valid 'url' and 'references'."
+                }
+              }
+            },
+            {
+              "rubric_id": "search_called",
+              "content": {
+                "property": {
+                  "description": "The agent calls 'batch_google_search' or search tools to gather real-time data."
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

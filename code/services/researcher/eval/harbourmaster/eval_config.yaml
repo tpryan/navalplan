@@ -16,5 +16,5 @@ custom_metrics:
       Agent Response: {response}
       Agent Data & Tool Trajectory: {agent_data}
       Return JSON: {"score": <score between 0.0 and 1.0>, "explanation": "<reasoning>"}
-    judge_model: gemini-2.5-flash-lite
+    judge_model: publishers/google/models/gemini-2.5-flash
     judge_model_sampling_count: 1

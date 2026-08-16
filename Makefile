@@ -26,6 +26,7 @@ PROD_CONN_NAME=$(shell gcloud config get-value project 2>/dev/null):$(REGION):$(
 PROD_DB_NAME=navalplan
 PROD_DB_USER=navalplan_user
 STORAGE_BUCKET=navallog-system
+EVAL_DEST_BUCKET?=gs://$(STORAGE_BUCKET)/eval_results
 # PROD_DB_USER and PROD_DB_PASS must be set in your environment for migrate-prod targets.
 
 # Cloud SQL Auth Proxy binary (downloaded on demand to .bin/)
@@ -42,7 +43,7 @@ MIGRATE_BIN=.bin/migrate
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout eval-results eval-list eval-runs build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -419,14 +420,14 @@ eval-agent:
 	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > code/services/researcher/agent.py; \
 	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> code/services/researcher/agent.py; \
 	echo "root_agent = agent" >> code/services/researcher/agent.py; \
-	CONFIG_PATH="code/services/researcher/eval/$$AGENT/test_config.json"; \
-	if [ -f "code/services/researcher/eval/$$AGENT/eval_config.yaml" ]; then \
-		CONFIG_PATH="code/services/researcher/eval/$$AGENT/eval_config.yaml"; \
+	CONFIG_FLAG=""; \
+	if [ -f "code/services/researcher/eval/$$AGENT/test_config.json" ]; then \
+		CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$AGENT/test_config.json"; \
 	fi; \
 	if [ "$(VERBOSE)" != "1" ]; then \
-		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=$$CONFIG_PATH 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG 2>/dev/null | grep -A 10 "Eval Run Summary"; \
 	else \
-		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json --config_file_path=$$CONFIG_PATH --print_detailed_results; \
+		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG --print_detailed_results; \
 	fi; \
 	EXIT_CODE=$$?; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
@@ -473,14 +474,14 @@ eval-all:
 			echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > $$TEMP_DIR/agent.py; \
 			echo "agent = RemoteA2aAgent(name='$${agent}_agent', agent_card='$$CARD', use_legacy=False)" >> $$TEMP_DIR/agent.py; \
 			echo "root_agent = agent" >> $$TEMP_DIR/agent.py; \
-			CONFIG_PATH="code/services/researcher/eval/$$agent/test_config.json"; \
-			if [ -f "code/services/researcher/eval/$$agent/eval_config.yaml" ]; then \
-				CONFIG_PATH="code/services/researcher/eval/$$agent/eval_config.yaml"; \
+			CONFIG_FLAG=""; \
+			if [ -f "code/services/researcher/eval/$$agent/test_config.json" ]; then \
+				CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$agent/test_config.json"; \
 			fi; \
 			if [ "$(VERBOSE)" != "1" ]; then \
-				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=$$CONFIG_PATH 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG 2>/dev/null | grep -A 10 "Eval Run Summary"; \
 			else \
-				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json --config_file_path=$$CONFIG_PATH --print_detailed_results; \
+				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG --print_detailed_results; \
 			fi; \
 			exit $$?; \
 		) & \
@@ -522,21 +523,78 @@ eval-submit:
 		done; \
 	else \
 		DEST_FLAG=""; \
-		if [ -n "$$DEST" ]; then DEST_FLAG="--dest $$DEST"; fi; \
-		RESOURCE_FLAG=""; \
+		if [ -n "$$DEST" ]; then \
+			DEST_FLAG="--dest $$DEST"; \
+		elif [ -n "$(EVAL_DEST_BUCKET)" ]; then \
+			DEST_FLAG="--dest $(EVAL_DEST_BUCKET)"; \
+		fi; \
+		RES_ID=""; \
 		if [ -n "$$RESOURCE_NAME" ]; then \
-			RESOURCE_FLAG="--resource-name $$RESOURCE_NAME"; \
+			RES_ID="$$RESOURCE_NAME"; \
 		elif [ -f "code/services/researcher/deployment_metadata.json" ]; then \
 			RES_ID=$$(grep -o '"remote_agent_runtime_id": "[^"]*"' code/services/researcher/deployment_metadata.json | cut -d'"' -f4); \
-			if [ -n "$$RES_ID" ]; then RESOURCE_FLAG="--resource-name $$RES_ID"; fi; \
+		fi; \
+		RESOURCE_FLAG=""; \
+		if [ -n "$$RES_ID" ]; then RESOURCE_FLAG="--resource-name $$RES_ID"; fi; \
+		PROJECT_FLAG=""; \
+		if [ -n "$$PROJECT" ]; then \
+			PROJECT_FLAG="--project $$PROJECT"; \
+		elif [ -n "$$RES_ID" ]; then \
+			PROJ_VAL=$$(echo "$$RES_ID" | cut -d'/' -f2); \
+			if [ -n "$$PROJ_VAL" ]; then PROJECT_FLAG="--project $$PROJ_VAL"; fi; \
+		fi; \
+		REGION_FLAG=""; \
+		if [ -n "$$REGION" ]; then \
+			REGION_FLAG="--region $$REGION"; \
+		elif [ -n "$$RES_ID" ]; then \
+			REG_VAL=$$(echo "$$RES_ID" | cut -d'/' -f4); \
+			if [ -n "$$REG_VAL" ]; then REGION_FLAG="--region $$REG_VAL"; fi; \
 		fi; \
 		CONFIG_FLAG=""; \
 		if [ -f "code/services/researcher/eval/$$AGENT/eval_config.yaml" ]; then \
 			CONFIG_FLAG="--config code/services/researcher/eval/$$AGENT/eval_config.yaml"; \
 		fi; \
+		DATASET_PATH="code/services/researcher/eval/$$AGENT/$$AGENT.dataset.json"; \
+		if [ ! -f "$$DATASET_PATH" ]; then \
+			DATASET_PATH="code/services/researcher/eval/$$AGENT/$$AGENT.test.json"; \
+		fi; \
 		echo "Submitting $$AGENT evaluation dataset to Agent Platform Eval Service..."; \
-		agents-cli eval submit --dataset code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG $$DEST_FLAG $$RESOURCE_FLAG; \
+		agents-cli eval submit --dataset $$DATASET_PATH $$CONFIG_FLAG $$DEST_FLAG $$RESOURCE_FLAG $$PROJECT_FLAG $$REGION_FLAG; \
 	fi
+
+eval-results:
+	@if [ -z "$(RUN_ID)" ]; then \
+		echo "Usage: make eval-results RUN_ID=<projects/.../locations/.../evaluationRuns/...> [OUTPUT=dir]"; \
+		exit 1; \
+	fi
+	@PROJ_VAL=$$(echo "$(RUN_ID)" | cut -d'/' -f2); \
+	REG_VAL=$$(echo "$(RUN_ID)" | cut -d'/' -f4); \
+	OUT_FLAG="--output ./artifacts/grade_results"; \
+	if [ -n "$(OUTPUT)" ]; then OUT_FLAG="--output $(OUTPUT)"; fi; \
+	mkdir -p ./artifacts/grade_results; \
+	echo "Retrieving evaluation results for $(RUN_ID)..."; \
+	agents-cli eval results --run-id "$(RUN_ID)" --project "$$PROJ_VAL" --region "$$REG_VAL" $$OUT_FLAG
+
+eval-list:
+	@PYTHON_BIN=""; \
+	if [ -f "/Users/tpryan/.local/share/uv/tools/google-agents-cli/bin/python" ]; then \
+		PYTHON_BIN="/Users/tpryan/.local/share/uv/tools/google-agents-cli/bin/python"; \
+	elif command -v uv >/dev/null 2>&1; then \
+		PYTHON_BIN="uv run python3"; \
+	elif [ -f "venv/bin/python" ]; then \
+		PYTHON_BIN="venv/bin/python"; \
+	else \
+		PYTHON_BIN="python3"; \
+	fi; \
+	PROJ_FLAG=""; \
+	if [ -n "$(PROJECT)" ]; then PROJ_FLAG="--project $(PROJECT)"; fi; \
+	REG_FLAG=""; \
+	if [ -n "$(REGION)" ]; then REG_FLAG="--region $(REGION)"; fi; \
+	LIMIT_FLAG=""; \
+	if [ -n "$(LIMIT)" ]; then LIMIT_FLAG="--limit $(LIMIT)"; fi; \
+	$$PYTHON_BIN code/services/researcher/eval/list_runs.py $$PROJ_FLAG $$REG_FLAG $$LIMIT_FLAG
+
+eval-runs: eval-list
 
 deps: deps-backend deps-researcher
 
