@@ -35,4 +35,9 @@ code/services/researcher/agent.py
 .bin/migrate
 code/app/backend/app
 code/app/backend/scratch/trigger_telemetry.py
-code/services/researcher/eval/__pycache__/metrics.cpython-314.pyc
+code/services/researcher/eval/__pycache__/*
+code/services/researcher/eval/results/*
+code/services/researcher/researcher-service
+agent.log
+code/services/researcher/eval_temp_specialist/*
+artifacts/grade_results/*

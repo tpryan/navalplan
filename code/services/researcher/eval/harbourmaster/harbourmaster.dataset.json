@@ -1,0 +1,68 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "oak_bluffs_research",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Research Oak Bluffs (lat: 41.4556, lng: -70.5583) on July 15, 2025. Radius 5 nm."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "weather_tool_called",
+              "rubric_content": {
+                "text_property": "The agent calls 'GetWeather' with the latitude and longitude mentioned in the user prompt."
+              }
+            },
+            {
+              "rubric_id": "tides_tool_called",
+              "rubric_content": {
+                "text_property": "The agent calls 'GetTides' with the date mentioned in the user prompt."
+              }
+            },
+            {
+              "rubric_id": "radius_check",
+              "rubric_content": {
+                "text_property": "The agent calls 'find_places_nearby' with a radius that matches the nautical miles mentioned in the user prompt (converted to meters)."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "newport_ri_research",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Research Newport, RI (lat: 41.4901, lng: -71.3128) on August 1, 2025. Radius 10 nm."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "weather_tool_called",
+              "rubric_content": {
+                "text_property": "The agent calls 'GetWeather' with the latitude and longitude for Newport, RI."
+              }
+            },
+            {
+              "rubric_id": "places_search_called",
+              "rubric_content": {
+                "text_property": "The agent calls 'find_places_nearby' for Newport, RI to find anchorages, marinas, and points of interest."
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

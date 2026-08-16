@@ -1,0 +1,78 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "heavy_weather_danger_alert",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Audit safety for Stop 1 of 3: Position 41.42°N, 70.92°W (Cuttyhunk). Forecast winds 36 knots gusting to 48 knots, wave height 14 ft. Distance to next stop is 15 nm at course 220°."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "danger_severity_flagged",
+              "content": {
+                "property": {
+                  "description": "The response flags a danger-level severity alert for wind speed exceeding 33 knots or wave height exceeding 13 ft."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_array_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of alert objects without markdown fences or extraneous prose."
+                }
+              }
+            },
+            {
+              "rubric_id": "safety_action_provided",
+              "content": {
+                "property": {
+                  "description": "Each alert includes an actionable recommendation and valid Material Symbol icon name."
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "calm_conditions_no_alerts",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Audit safety for Stop 2 of 2: Position 41.38°N, -70.61°W (Oak Bluffs). Forecast wind 8 knots, waves 1-2 ft, tides normal, distance to next stop is none."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "no_false_danger_alerts",
+              "content": {
+                "property": {
+                  "description": "For normal/mild conditions and final stop, the agent returns an empty array or minimal info alert without false danger/warning alarms."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_array_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array."
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

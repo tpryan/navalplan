@@ -1,78 +1,35 @@
 {
+  "eval_set_id": "commodore_eval_set",
   "eval_cases": [
     {
-      "eval_case_id": "january_discovery",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Identify prime sailing regions for the month of January."
+      "eval_id": "january_discovery",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify prime sailing regions for the month of January."
+              }
+            ],
+            "role": "user"
           }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "contains_multiple_regions",
-              "content": {
-                "property": {
-                  "description": "The response identifies multiple sailing regions suitable for the requested month."
-                }
-              }
-            },
-            {
-              "rubric_id": "json_format",
-              "content": {
-                "property": {
-                  "description": "The response is a valid JSON array of objects."
-                }
-              }
-            },
-            {
-              "rubric_id": "search_called",
-              "content": {
-                "property": {
-                  "description": "The agent calls 'batch_google_search' or search tools to gather real-time data."
-                }
-              }
-            }
-          ]
         }
-      }
+      ]
     },
     {
-      "eval_case_id": "july_mediterranean_discovery",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Identify prime sailing regions for the month of July."
+      "eval_id": "july_mediterranean_discovery",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify prime sailing regions for the month of July."
+              }
+            ],
+            "role": "user"
           }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "contains_multiple_regions",
-              "content": {
-                "property": {
-                  "description": "The response identifies prime sailing regions suitable for July (such as the Mediterranean, New England, etc.)."
-                }
-              }
-            },
-            {
-              "rubric_id": "json_format",
-              "content": {
-                "property": {
-                  "description": "The response is a valid JSON array of objects."
-                }
-              }
-            }
-          ]
         }
-      }
+      ]
     }
   ]
 }
