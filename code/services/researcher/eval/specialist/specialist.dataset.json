@@ -38,10 +38,10 @@
               }
             },
             {
-              "rubric_id": "find_places_called",
+              "rubric_id": "facilities_found",
               "content": {
                 "property": {
-                  "description": "The agent calls 'find_places_nearby' to locate anchorages or marinas."
+                  "description": "The agent locates anchorages, moorings, or marinas for the requested area."
                 }
               }
             }

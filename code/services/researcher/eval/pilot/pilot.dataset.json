@@ -46,10 +46,10 @@
               }
             },
             {
-              "rubric_id": "search_called",
+              "rubric_id": "comprehensive_info_present",
               "content": {
                 "property": {
-                  "description": "The agent calls 'batch_google_search' or search tools to gather real-time data."
+                  "description": "The response provides comprehensive sailing details and charter company information for the requested region."
                 }
               }
             }
