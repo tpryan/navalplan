@@ -157,6 +157,96 @@ func TestParseReasoningEngineRequest(t *testing.T) {
 			wantSessionID: "s3",
 		},
 		{
+			name: "message from input.prompt string",
+			req: reasoningEngineRequest{
+				Input: map[string]any{"prompt": "hello from prompt"},
+			},
+			wantMessage:   "hello from prompt",
+			wantAppName:   "harbourmaster",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "message from input.prompt text object",
+			req: reasoningEngineRequest{
+				Input: map[string]any{
+					"prompt": map[string]any{
+						"text": "Research Oak Bluffs",
+					},
+				},
+			},
+			wantMessage:   "Research Oak Bluffs",
+			wantAppName:   "harbourmaster",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "message from input.prompt Content parts",
+			req: reasoningEngineRequest{
+				Input: map[string]any{
+					"prompt": map[string]any{
+						"role": "user",
+						"parts": []any{
+							map[string]any{"text": "Research Newport, RI"},
+						},
+					},
+				},
+			},
+			wantMessage:   "Research Newport, RI",
+			wantAppName:   "harbourmaster",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "message from raw string input",
+			req: reasoningEngineRequest{
+				Input: "raw string prompt",
+			},
+			wantMessage:   "raw string prompt",
+			wantAppName:   "harbourmaster",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "message from input.parts slice",
+			req: reasoningEngineRequest{
+				Input: map[string]any{
+					"parts": []any{
+						map[string]any{"text": "hello "},
+						map[string]any{"text": "world"},
+					},
+				},
+			},
+			wantMessage:   "hello world",
+			wantAppName:   "harbourmaster",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "agent routing key in input",
+			req: reasoningEngineRequest{
+				Input: map[string]any{
+					"prompt": "hi",
+					"agent":  "pilot",
+				},
+			},
+			wantMessage:   "hi",
+			wantAppName:   "pilot",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
+			name: "agent_name routing key in parameters",
+			req: reasoningEngineRequest{
+				Input:      map[string]any{"prompt": "hi"},
+				Parameters: map[string]any{"agent_name": "lookout"},
+			},
+			wantMessage:   "hi",
+			wantAppName:   "lookout",
+			wantUserID:    "default_user",
+			wantSessionID: "default_session",
+		},
+		{
 			name: "input takes precedence over parameters",
 			req: reasoningEngineRequest{
 				Input:      map[string]any{"message": "hi", "appName": "lookout"},

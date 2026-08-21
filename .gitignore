@@ -41,3 +41,5 @@ code/services/researcher/researcher-service
 agent.log
 code/services/researcher/eval_temp_specialist/*
 artifacts/grade_results/*
+venv/
+.venv/

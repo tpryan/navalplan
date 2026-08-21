@@ -25,7 +25,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const maxOutputTokens = 65536
+const maxOutputTokens = 8192
 
 const (
 	Harbourmaster = "harbourmaster"
@@ -148,9 +148,13 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 
 	var clientCfg *genai.ClientConfig
 	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" {
+		loc := os.Getenv("GOOGLE_CLOUD_LOCATION")
+		if loc == "" {
+			loc = "global"
+		}
 		clientCfg = &genai.ClientConfig{
 			Project:  cfg.Project,
-			Location: "us-central1",
+			Location: loc,
 			Backend:  genai.BackendVertexAI,
 		}
 	} else {
@@ -163,15 +167,24 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 		return nil, err
 	}
 
+	var beforeCallbacks []llmagent.BeforeToolCallback
+	if before != nil {
+		beforeCallbacks = []llmagent.BeforeToolCallback{before}
+	}
+	var afterCallbacks []llmagent.AfterToolCallback
+	if after != nil {
+		afterCallbacks = []llmagent.AfterToolCallback{after}
+	}
+
 	return llmagent.New(llmagent.Config{
 		Name:                  acfg.name,
 		Model:                 m,
 		Description:           acfg.description,
 		Instruction:           acfg.instruction,
 		Tools:                 acfg.tools,
-		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{before},
-		AfterToolCallbacks:    []llmagent.AfterToolCallback{after},
 		GenerateContentConfig: genConfig,
+		BeforeToolCallbacks:   beforeCallbacks,
+		AfterToolCallbacks:    afterCallbacks,
 	})
 }
 
@@ -201,9 +214,10 @@ func createSearchTools(ctx context.Context, cfg *config.Config, before llmagent.
 			}
 
 			r, err := runner.New(runner.Config{
-				AppName:        name,
-				Agent:          searchAgent,
-				SessionService: sessionSvc,
+				AppName:           name,
+				Agent:             searchAgent,
+				SessionService:    sessionSvc,
+				AutoCreateSession: true,
 			})
 			if err != nil {
 				return "", err

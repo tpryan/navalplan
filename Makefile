@@ -623,7 +623,10 @@ deploy-agent-runtime:
 	cd code/services/researcher && agents-cli deploy \
 		--project $(shell gcloud config get-value project) \
 		--region $(REGION) \
+		--deployment-target agent_runtime \
 		--service-name navalplan-researcher \
+		--secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
+		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,ENV=production,GOOGLE_CLOUD_PROJECT=$(shell gcloud config get-value project),GCP_PROJECT=$(shell gcloud config get-value project),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace" \
 		--no-confirm-project
 
 deploy-backend:

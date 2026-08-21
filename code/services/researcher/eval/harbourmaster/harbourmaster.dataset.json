@@ -14,21 +14,27 @@
         "agent_rubrics": {
           "rubrics": [
             {
-              "rubric_id": "weather_tool_called",
-              "rubric_content": {
-                "text_property": "The agent calls 'GetWeather' with the latitude and longitude mentioned in the user prompt."
+              "rubric_id": "weather_data_present",
+              "content": {
+                "property": {
+                  "description": "The agent response contains comprehensive weather details including wind speed, direction, and conditions for the requested location."
+                }
               }
             },
             {
-              "rubric_id": "tides_tool_called",
-              "rubric_content": {
-                "text_property": "The agent calls 'GetTides' with the date mentioned in the user prompt."
+              "rubric_id": "tides_data_present",
+              "content": {
+                "property": {
+                  "description": "The agent response contains tide predictions and high/low events for the requested date."
+                }
               }
             },
             {
-              "rubric_id": "radius_check",
-              "rubric_content": {
-                "text_property": "The agent calls 'find_places_nearby' with a radius that matches the nautical miles mentioned in the user prompt (converted to meters)."
+              "rubric_id": "facilities_present",
+              "content": {
+                "property": {
+                  "description": "The agent response provides nearby facilities, marinas, or anchorages within the requested nautical mile radius."
+                }
               }
             }
           ]
@@ -49,15 +55,19 @@
         "agent_rubrics": {
           "rubrics": [
             {
-              "rubric_id": "weather_tool_called",
-              "rubric_content": {
-                "text_property": "The agent calls 'GetWeather' with the latitude and longitude for Newport, RI."
+              "rubric_id": "weather_data_present",
+              "content": {
+                "property": {
+                  "description": "The agent response contains weather details including wind and conditions for Newport, RI."
+                }
               }
             },
             {
-              "rubric_id": "places_search_called",
-              "rubric_content": {
-                "text_property": "The agent calls 'find_places_nearby' for Newport, RI to find anchorages, marinas, and points of interest."
+              "rubric_id": "places_search_present",
+              "content": {
+                "property": {
+                  "description": "The agent response contains anchorages, marinas, or points of interest for Newport, RI."
+                }
               }
             }
           ]
@@ -66,3 +76,4 @@
     }
   ]
 }
+

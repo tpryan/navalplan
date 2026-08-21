@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/runner"
@@ -13,7 +15,7 @@ import (
 )
 
 type reasoningEngineRequest struct {
-	Input      map[string]any `json:"input"`
+	Input      any            `json:"input"`
 	Parameters map[string]any `json:"parameters"`
 }
 
@@ -21,8 +23,44 @@ type reasoningEngineResponse struct {
 	Output map[string]any `json:"output"`
 }
 
+func extractText(val any) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case map[string]any:
+		for _, k := range []string{"prompt", "message", "input", "query", "text", "content"} {
+			if sub, ok := v[k]; ok {
+				if txt := extractText(sub); txt != "" {
+					return txt
+				}
+			}
+		}
+		if parts, ok := v["parts"].([]any); ok {
+			var sb strings.Builder
+			for _, p := range parts {
+				if text := extractText(p); text != "" {
+					sb.WriteString(text)
+				}
+			}
+			return sb.String()
+		}
+	case []any:
+		var sb strings.Builder
+		for _, item := range v {
+			if text := extractText(item); text != "" {
+				sb.WriteString(text)
+			}
+		}
+		return sb.String()
+	}
+	return ""
+}
+
 func lookupString(fallback string, maps []map[string]any, keys ...string) string {
 	for _, m := range maps {
+		if m == nil {
+			continue
+		}
 		for _, k := range keys {
 			if v, ok := m[k].(string); ok && v != "" {
 				return v
@@ -33,10 +71,14 @@ func lookupString(fallback string, maps []map[string]any, keys ...string) string
 }
 
 func parseReasoningEngineRequest(reReq reasoningEngineRequest) (message, appName, userID, sessionID string) {
-	maps := []map[string]any{reReq.Input, reReq.Parameters}
+	var inputMap map[string]any
+	if m, ok := reReq.Input.(map[string]any); ok {
+		inputMap = m
+	}
+	maps := []map[string]any{inputMap, reReq.Parameters}
 
-	message = lookupString("", []map[string]any{reReq.Input}, "message", "input")
-	appName = lookupString("harbourmaster", maps, "appName", "app_name")
+	message = extractText(reReq.Input)
+	appName = lookupString("harbourmaster", maps, "appName", "app_name", "agent", "agent_name")
 	userID = lookupString("default_user", maps, "userID", "user_id")
 	sessionID = lookupString("default_session", maps, "sessionID", "session_id")
 	return
@@ -53,9 +95,10 @@ func (h *reasoningEngineHandlers) newRunner(appName string) (*runner.Runner, err
 		return nil, fmt.Errorf("agent not found: %w", err)
 	}
 	return runner.New(runner.Config{
-		AppName:        appName,
-		Agent:          a,
-		SessionService: h.session,
+		AppName:           appName,
+		Agent:             a,
+		SessionService:    h.session,
+		AutoCreateSession: true,
 	})
 }
 
@@ -66,6 +109,9 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	message, appName, userID, sessionID := parseReasoningEngineRequest(reReq)
+	if sessionID == "" || sessionID == "default_session" {
+		sessionID = fmt.Sprintf("re_%d", time.Now().UnixNano())
+	}
 
 	runr, err := h.newRunner(appName)
 	if err != nil {
@@ -78,10 +124,10 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 	var finalContent string
 	for event, err := range resp {
 		if err != nil {
-			slog.Error("run error", "error", err)
+			slog.Error("reasoning engine run error", "error", err, "appName", appName, "sessionID", sessionID)
 			continue
 		}
-		if event.Content != nil && event.Content.Role == "model" {
+		if event.Content != nil && (event.Content.Role == "" || event.Content.Role == "model") {
 			for _, part := range event.Content.Parts {
 				if part.Text != "" && !part.Thought {
 					finalContent += part.Text
@@ -107,6 +153,9 @@ func (h *reasoningEngineHandlers) handleStream(w http.ResponseWriter, r *http.Re
 		return
 	}
 	message, appName, userID, sessionID := parseReasoningEngineRequest(reReq)
+	if sessionID == "" || sessionID == "default_session" {
+		sessionID = fmt.Sprintf("re_%d", time.Now().UnixNano())
+	}
 
 	runr, err := h.newRunner(appName)
 	if err != nil {
