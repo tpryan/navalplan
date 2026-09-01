@@ -58,6 +58,10 @@ func (s *sessionTrackingStore) GetVoyageGuide(_ context.Context, _ int64) (*mode
 	return nil, nil
 }
 
+func (s *sessionTrackingStore) UpsertSafetyAlerts(_ context.Context, _ int64, _ model.RawJSON) error {
+	return nil
+}
+
 func agentServerWithSessionFailure(t *testing.T) (srv *httptest.Server, runCalled *bool) {
 	t.Helper()
 	called := false

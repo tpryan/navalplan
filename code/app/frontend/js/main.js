@@ -8,6 +8,7 @@ import { DataTile } from './ui/DataTile.js';
 import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
+import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
 import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
@@ -3457,6 +3458,14 @@ async function showBriefing(briefing, doPushState = true) {
         sections.appendChild(sunSec);
     }
 
+    // ── Pilotage & Harbor Guidance ────────────────────────────────────────────
+    if (briefing.pilot_notes) {
+        const pilotBox = PilotNotesBox(briefing.pilot_notes);
+        if (pilotBox) {
+            sections.appendChild(pilotBox);
+        }
+    }
+
     // ── Facilities ────────────────────────────────────────────────────────────
     const facilities = briefing.facilities || [];
     if (facilities.length > 0) {
@@ -3762,7 +3771,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
     }
 
     const box = document.createElement('div');
-    box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
+    box.className = 'lookout-box np-safety-overview';
     box.id = 'np-safety-overview';
 
     const header = document.createElement('div');
@@ -5898,7 +5907,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
             }, 'info');
 
-            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview">
+            html += `<div class="lookout-box np-safety-overview" id="np-safety-overview">
                 <div class="lookout-header">
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                     <h3>Safety Overview</h3>
@@ -6044,6 +6053,14 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     </div>
                     <div class="lookout-alert-list">${alertsHtml}</div>
                 </div>`;
+            }
+
+            // Pilot Notes / Sailing Directions
+            if (b.pilot_notes) {
+                const pilotHtml = renderPilotNotesHTML(b.pilot_notes);
+                if (pilotHtml) {
+                    html += pilotHtml;
+                }
             }
 
             // Facilities

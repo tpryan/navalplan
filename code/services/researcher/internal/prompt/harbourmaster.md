@@ -68,6 +68,7 @@ CRITICAL RULES:
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
 11. **References:** **MANDATORY**: Populate the "references" field for each facility with at least 1-2 relevant URLs if available from the tool or your knowledge of the facility.
+12. **Pilot Notes & Sailing Directions:** Synthesize findings from 'QuerySailingDirections' and local pilot sources into the 'pilot_notes' object. Provide actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and source citations (e.g. NOAA Coast Pilot or NGA Sailing Directions).
 
 ```json
 {
@@ -100,6 +101,13 @@ CRITICAL RULES:
 		"events": [
 			{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5}
 		]
+	},
+	"pilot_notes": {
+		"overview": "Comprehensive hydrographic and pilotage overview for entering and staying in this harbor or area.",
+		"approach_and_channels": "Controlling depths, recommended approaches, entrance channels, navigational aids, and landmarks.",
+		"anchorages_and_moorings": "Designated anchorage areas, holding ground characteristics, shelter from wind/swells, and mooring field information.",
+		"regulations_and_hazards": "Speed limits, no-wake zones, bridge/overhead clearances, VHF channels, local harbormaster regulations, and specific hazards.",
+		"sources": ["NOAA Coast Pilot 2, Chapter 5", "..."]
 	},
 	"facilities": [
 		{

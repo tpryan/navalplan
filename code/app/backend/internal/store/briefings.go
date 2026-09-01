@@ -55,13 +55,14 @@ func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*model.B
 
 func (db *DB) CreateBriefing(ctx context.Context, b *model.Briefing) error {
 	query := `
-		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities)
-		VALUES (:stop_id, :weather_summary, :sun_phase, :tides, :facilities)
+		INSERT INTO briefing (stop_id, weather_summary, sun_phase, tides, facilities, pilot_notes)
+		VALUES (:stop_id, :weather_summary, :sun_phase, :tides, :facilities, :pilot_notes)
 		ON CONFLICT (stop_id) DO UPDATE SET
 			weather_summary = EXCLUDED.weather_summary,
 			sun_phase = EXCLUDED.sun_phase,
 			tides = EXCLUDED.tides,
 			facilities = EXCLUDED.facilities,
+			pilot_notes = EXCLUDED.pilot_notes,
 			created_at = NOW()
 		RETURNING id, created_at`
 
