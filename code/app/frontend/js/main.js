@@ -3771,7 +3771,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
     }
 
     const box = document.createElement('div');
-    box.className = 'lookout-box np-safety-overview';
+    box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
     box.id = 'np-safety-overview';
 
     const header = document.createElement('div');
@@ -5907,7 +5907,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
             }, 'info');
 
-            html += `<div class="lookout-box np-safety-overview" id="np-safety-overview">
+            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview">
                 <div class="lookout-header">
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                     <h3>Safety Overview</h3>
@@ -5944,7 +5944,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Full Destination Guide ────────────────────────────────────────────────
     if (guide) {
         html += `
-            <div class="np-guide-section">
+            <div class="np-guide-section np-report-item--non-sailing">
                 <span class="np-guide-section__eyebrow">Destination Guide</span>
                 ${generateGuideHTML(guide)}
             </div>
