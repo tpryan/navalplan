@@ -17,7 +17,8 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
 1. Call 'GetWeather' for the location and date.
 2. Call 'GetTides' for the location and date.
 3. Call 'GetSunriseSunset' for the location and date.
-4. Call 'FindPlacesNearby' for EACH of the following categories 
+4. Call 'QuerySailingDirections' for official Coast Pilot / Sailing Directions pilotage notes, channel depths, bridge clearances, speed limits, and anchorage rules.
+5. Call 'FindPlacesNearby' for EACH of the following categories 
    (converting the Search Radius to METERS) - 
    UNLESS instructed not to research facilities:
    - Query: "anchorage"
@@ -29,7 +30,7 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
    - Query: "boat launch ramp"
    - Query: "waterfront restaurant"
    - Query: "bar"
-5. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
+6. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
    and recent reviews/hazards for the location. Also use search results to identify
    any additional safe anchorages or mooring fields that might be missing from map search results.
 

@@ -68,7 +68,7 @@ var specs = []spec{
 		description:       "The Commodore - Global Seasonal Discovery Expert.",
 		instruction:       prompt.Commodore,
 		temperature:       0.25,
-		includeResearcher: false,
+		includeResearcher: true,
 		includeSearch:     true,
 	},
 	{
@@ -84,7 +84,7 @@ var specs = []spec{
 		description:       "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
 		instruction:       prompt.Lookout,
 		temperature:       0.1,
-		includeResearcher: false,
+		includeResearcher: true,
 		includeSearch:     false,
 	},
 }

@@ -13,7 +13,7 @@ func TestNauticalToolService_AsTools(t *testing.T) {
 		t.Fatalf("AsTools() error = %v", err)
 	}
 
-	wantNames := []string{"GetTides", "GetWeather", "GetSunriseSunset", "FindPlacesNearby", "GetSafetyAlerts"}
+	wantNames := []string{"GetTides", "GetWeather", "GetSunriseSunset", "FindPlacesNearby", "GetSafetyAlerts", "QuerySailingDirections", "QueryCoastPilot"}
 	if len(got) != len(wantNames) {
 		t.Fatalf("AsTools() returned %d tools, want %d", len(got), len(wantNames))
 	}

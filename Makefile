@@ -626,7 +626,7 @@ deploy-agent-runtime:
 		--deployment-target agent_runtime \
 		--service-name navalplan-researcher \
 		--secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,ENV=production,GOOGLE_CLOUD_PROJECT=$(shell gcloud config get-value project),GCP_PROJECT=$(shell gcloud config get-value project),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace" \
+		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,ENV=production,GOOGLE_CLOUD_PROJECT=$(shell gcloud config get-value project),GCP_PROJECT=$(shell gcloud config get-value project),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
 		--no-confirm-project
 
 deploy-backend:
@@ -857,3 +857,11 @@ register-agents:
 	else \
 		echo "Warning: agents-cli not found. Skipping Gemini Enterprise publishing."; \
 	fi
+
+setup-infra-rag:
+	@echo "Setting up RAG Infrastructure via Cloud Build..."
+	gcloud builds submit --config .cloudbuild/cloudbuild-infra-rag.yaml .
+
+deploy-nautical-sync-job:
+	@echo "Building and deploying nautical-sync Cloud Run Job via Cloud Build..."
+	gcloud builds submit --config .cloudbuild/cloudbuild-nautical-sync.yaml .

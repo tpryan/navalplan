@@ -1,0 +1,58 @@
+steps:
+# 1. Build the container image for nautical-sync job
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:${_SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:latest', '.']
+  dir: 'code/jobs/nautical-sync'
+
+# 2. Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:${_SHORT_SHA}']
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:latest']
+
+# 3. Deploy/Update Cloud Run Job
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - 'run'
+  - 'jobs'
+  - 'deploy'
+  - 'nautical-sync'
+  - '--image'
+  - 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:${_SHORT_SHA}'
+  - '--region'
+  - '${_REGION}'
+  - '--project'
+  - '${PROJECT_ID}'
+  - '--set-env-vars=NAVALPLAN_PUBLICATIONS_BUCKET=${PROJECT_ID}-nautical-publications,COAST_PILOT_CORPUS_ID=${_COAST_PILOT_CORPUS_ID},NGA_CORPUS_ID=${_NGA_CORPUS_ID},VERTEX_LOCATION=${_REGION},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SYNC_CONCURRENCY=4'
+  - '--memory'
+  - '2Gi'
+  - '--task-timeout'
+  - '3600s'
+  - '--max-retries'
+  - '2'
+  id: 'deploy-cloud-run-job'
+
+# 4. Optional: Execute job immediately
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    if [ "${_EXECUTE_SYNC}" = "true" ]; then
+      gcloud run jobs execute nautical-sync --region=${_REGION} --project=${PROJECT_ID} --wait
+    fi
+  id: 'execute-sync-job'
+
+images:
+- 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:${_SHORT_SHA}'
+- 'gcr.io/${PROJECT_ID}/navalplan-nautical-sync:latest'
+
+substitutions:
+  _SHORT_SHA: "latest"
+  _REGION: "us-central1"
+  _COAST_PILOT_CORPUS_ID: "coast-pilot-corpus"
+  _NGA_CORPUS_ID: "nga-sailing-directions-corpus"
+  _EXECUTE_SYNC: "false"
+
+logsBucket: gs://navalplan-logging-bucket

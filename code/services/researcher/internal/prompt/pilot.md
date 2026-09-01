@@ -19,7 +19,10 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
     - "Currency language emergency numbers [Location]"
     - "Security safety crime report for tourists and sailors in [Location] 2024 2025"
     - "Top sailing points of interest [Location] travel guides"
-2.  **Multiple `FindPlacesNearby` calls** (Use the provided Latitude/Longitude):
+2.  **A `QuerySailingDirections` call** (for hydrographic pilotage notes, channel depths, bridge clearances, and official navigation hazards):
+    - `query`: "[Location] navigation hazards anchorages channels pilotage"
+    - `territory`: "all" (or "us" for US waters, "international" for others)
+3.  **Multiple `FindPlacesNearby` calls** (Use the provided Latitude/Longitude):
     - `query`: "marina", `radius`: 50000
     - `query`: "anchorage", `radius`: 50000
     - `query`: "yacht club", `radius`: 50000

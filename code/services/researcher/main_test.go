@@ -32,7 +32,7 @@ func TestCreateHarbourmasterAgent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nautical, providers, err := tool.NewNauticalService(ctx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey)
+	nautical, providers, err := tool.NewNauticalService(ctx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey, cfg.Project, cfg.VertexLocation, cfg.CoastPilotCorpusID, cfg.NGACorpusID)
 	if err != nil {
 		t.Fatalf("Failed to set up nautical service: %v", err)
 	}

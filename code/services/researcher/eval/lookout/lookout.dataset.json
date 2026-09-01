@@ -73,6 +73,39 @@
           ]
         }
       }
+    },
+    {
+      "eval_case_id": "hydrographic_navigational_hazard_lookup",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Distance to next stop is 12 nm at course 060°. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "hydrographic_rag_lookup_invoked",
+              "content": {
+                "property": {
+                  "description": "The agent calls QuerySailingDirections or QueryCoastPilot to check for official navigation hazards, currents, bridge clearances, or channel constraints."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_array_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of alert objects without markdown fences or extraneous prose."
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }

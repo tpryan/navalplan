@@ -12,10 +12,11 @@ import (
 
 // NauticalToolService aggregates the robust domain logic providers.
 type NauticalToolService struct {
-	Tides   *TideManager
-	Weather *WeatherProvider
-	Sunrise *SunriseProvider
-	Places  *PlacesProvider
+	Tides             *TideManager
+	Weather           *WeatherProvider
+	Sunrise           *SunriseProvider
+	Places            *PlacesProvider
+	SailingDirections *SailingDirectionsProvider
 }
 
 // TideRequest represents the input for the GetTides MCP tool.
@@ -292,5 +293,71 @@ func (s *NauticalToolService) FetchSafetyAlerts(ctx agent.Context, req SafetyReq
 	return &SafetyResponse{
 		ActiveHazards: []string{"Shoaling reported near channel marker 4"},
 		SecurityLevel: "Normal",
+	}, nil
+}
+
+// SailingDirectionsRequest represents the input for the QuerySailingDirections MCP tool.
+type SailingDirectionsRequest struct {
+	Query     string `json:"query"`
+	Territory string `json:"territory,omitempty"`
+	TopK      int    `json:"top_k,omitempty"`
+}
+
+// CoastPilotRequest represents the input for the QueryCoastPilot MCP tool.
+type CoastPilotRequest struct {
+	Query string `json:"query"`
+	TopK  int    `json:"top_k,omitempty"`
+}
+
+// SailingDirectionsResponse represents the output for the QuerySailingDirections MCP tool.
+type SailingDirectionsResponse struct {
+	Query           string `json:"query"`
+	Territory       string `json:"territory"`
+	Contexts        string `json:"contexts"`
+	DebugDurationMS int64  `json:"debug_duration_ms"`
+}
+
+// FetchSailingDirections queries the hydrographic pilot RAG corpora.
+func (s *NauticalToolService) FetchSailingDirections(ctx agent.Context, req SailingDirectionsRequest) (*SailingDirectionsResponse, error) {
+	if s.SailingDirections == nil {
+		return nil, fmt.Errorf("sailing directions service unavailable")
+	}
+
+	result, err := s.SailingDirections.QuerySailingDirections(ctx, SailingDirectionsArgs{
+		Query:     req.Query,
+		Territory: req.Territory,
+		TopK:      req.TopK,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &SailingDirectionsResponse{
+		Query:           result.Query,
+		Territory:       result.Territory,
+		Contexts:        result.Contexts,
+		DebugDurationMS: result.DebugDurationMS,
+	}, nil
+}
+
+// FetchCoastPilot queries NOAA Coast Pilot volumes.
+func (s *NauticalToolService) FetchCoastPilot(ctx agent.Context, req CoastPilotRequest) (*SailingDirectionsResponse, error) {
+	if s.SailingDirections == nil {
+		return nil, fmt.Errorf("coast pilot service unavailable")
+	}
+
+	result, err := s.SailingDirections.QueryCoastPilot(ctx, CoastPilotArgs{
+		Query: req.Query,
+		TopK:  req.TopK,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &SailingDirectionsResponse{
+		Query:           result.Query,
+		Territory:       result.Territory,
+		Contexts:        result.Contexts,
+		DebugDurationMS: result.DebugDurationMS,
 	}, nil
 }

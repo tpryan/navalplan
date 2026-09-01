@@ -26,7 +26,10 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
     - "Hidden coves sheltered bays overnight anchorage [Location/Area]"
     - "Secluded anchorages off the beaten path [Location/Area]"
     - "Shallow draft anchorages and gunkholes [Location/Area]"
-2.  **Multiple `FindPlacesNearby` calls** (Respect the user's requested search radius and coordinates):
+2.  **A `QuerySailingDirections` call** (to extract hydrographic anchorages, coves, depths, and local hazards from official pilot books):
+    - `query`: "[Location/Area] safe anchorages coves depths pilotage"
+    - `territory`: "all" (or "us" for US waters, "international" for others)
+3.  **Multiple `FindPlacesNearby` calls** (Respect the user's requested search radius and coordinates):
     - You MUST convert the requested radius (usually in Nautical Miles) to METERS for the `FindPlacesNearby` tool (1 NM = 1852 meters, capped at max 50000 meters).
     - `query`: "anchorage", `radius`: [Calculated Radius in Meters]
     - `query`: "marina", `radius`: [Calculated Radius in Meters]

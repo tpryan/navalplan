@@ -258,3 +258,55 @@ func TestNew_ProjectIDFallbacks(t *testing.T) {
 		})
 	}
 }
+
+func TestNew_RAGCorpusConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		vars         map[string]string
+		wantCP       string
+		wantNGA      string
+		wantLocation string
+	}{
+		{
+			name: "defaults",
+			vars: map[string]string{
+				"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
+				"GEMINI_API_KEY":                 "gemini-key",
+			},
+			wantCP:       "coast-pilot-corpus",
+			wantNGA:      "nga-sailing-directions-corpus",
+			wantLocation: "us-central1",
+		},
+		{
+			name: "explicit overrides",
+			vars: map[string]string{
+				"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
+				"GEMINI_API_KEY":                 "gemini-key",
+				"COAST_PILOT_CORPUS_ID":          "custom-cp-corpus",
+				"NGA_CORPUS_ID":                  "custom-nga-corpus",
+				"VERTEX_LOCATION":                "europe-west1",
+			},
+			wantCP:       "custom-cp-corpus",
+			wantNGA:      "custom-nga-corpus",
+			wantLocation: "europe-west1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := New(envMap(tt.vars))
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if cfg.CoastPilotCorpusID != tt.wantCP {
+				t.Errorf("CoastPilotCorpusID = %q, want %q", cfg.CoastPilotCorpusID, tt.wantCP)
+			}
+			if cfg.NGACorpusID != tt.wantNGA {
+				t.Errorf("NGACorpusID = %q, want %q", cfg.NGACorpusID, tt.wantNGA)
+			}
+			if cfg.VertexLocation != tt.wantLocation {
+				t.Errorf("VertexLocation = %q, want %q", cfg.VertexLocation, tt.wantLocation)
+			}
+		})
+	}
+}
