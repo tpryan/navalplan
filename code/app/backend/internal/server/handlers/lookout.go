@@ -267,6 +267,14 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		return
 	}
 
+	for i := range alerts {
+		if rawIcon, ok := alerts[i]["icon"].(string); ok {
+			alerts[i]["icon"] = normalizeLookoutAlertIcon(rawIcon)
+		} else {
+			alerts[i]["icon"] = "warning"
+		}
+	}
+
 	if distNM > 0 && next != nil {
 		rows := buildTravelTable(distNM, briefing.SunPhase)
 		alerts = append(alerts, map[string]any{
@@ -426,4 +434,54 @@ func lookoutHaversineNM(lat1, lon1, lat2, lon2 float64) float64 {
 	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Cos(toRad(lat1))*math.Cos(toRad(lat2))*math.Sin(dLon/2)*math.Sin(dLon/2)
 	return 2 * R * math.Asin(math.Sqrt(a))
+}
+
+func normalizeLookoutAlertIcon(icon string) string {
+	clean := strings.ToLower(strings.TrimSpace(icon))
+	clean = strings.ReplaceAll(clean, "-", "_")
+	clean = strings.ReplaceAll(clean, " ", "_")
+	switch clean {
+	case "bridge", "bridges", "clearance", "vertical_clearance", "overhead", "mast":
+		return "height"
+	case "boat", "vessel", "ship":
+		return "directions_boat"
+	case "sail":
+		return "sailing"
+	case "compass", "navigation":
+		return "explore"
+	case "current", "currents", "cross_current":
+		return "water"
+	case "tide", "tides", "rip", "rips", "tidal_rip", "rough_seas":
+		return "waves"
+	case "shoal", "shallow", "rock", "reef", "alert", "caution":
+		return "warning"
+	case "depth", "channel":
+		return "straighten"
+	case "wind", "gust", "gale":
+		return "air"
+	case "thunderstorm", "lightning":
+		return "bolt"
+	case "rain":
+		return "rainy"
+	case "snow":
+		return "weather_snowy"
+	case "fog":
+		return "foggy"
+	case "temperature":
+		return "thermostat"
+	case "sun", "daylight":
+		return "light_mode"
+	case "sunset", "sunrise", "twilight":
+		return "wb_twilight"
+	case "time", "clock":
+		return "schedule"
+	case "danger":
+		return "dangerous"
+	case "notice":
+		return "info"
+	case "":
+		return "warning"
+	default:
+		return clean
+	}
 }

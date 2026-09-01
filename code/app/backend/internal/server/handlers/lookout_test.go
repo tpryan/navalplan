@@ -134,3 +134,33 @@ func contains(s, substr string) bool {
 		return false
 	})()
 }
+
+func TestNormalizeLookoutAlertIcon(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"bridge", "height"},
+		{"BRIDGE", "height"},
+		{"vertical_clearance", "height"},
+		{"clearance", "height"},
+		{"wind", "air"},
+		{"gale", "air"},
+		{"tide", "waves"},
+		{"rip", "waves"},
+		{"current", "water"},
+		{"sun", "light_mode"},
+		{"sunset", "wb_twilight"},
+		{"unknown_custom_icon", "unknown_custom_icon"},
+		{"", "warning"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizeLookoutAlertIcon(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeLookoutAlertIcon(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

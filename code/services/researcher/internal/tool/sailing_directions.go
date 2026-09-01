@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2/google"
@@ -50,6 +51,8 @@ type SailingDirectionsProvider struct {
 	coastPilotCorpus string
 	ngaCorpus        string
 	client           HTTPDoer
+	mu               sync.RWMutex
+	resolvedCorpora  map[string]string
 }
 
 func (p *SailingDirectionsProvider) Close() error {
@@ -74,6 +77,7 @@ func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus s
 		coastPilotCorpus: coastPilotCorpus,
 		ngaCorpus:        ngaCorpus,
 		client:           client,
+		resolvedCorpora:  make(map[string]string),
 	}
 	t, err := functiontool.New(functiontool.Config{
 		Name:        "query_sailing_directions",
@@ -168,26 +172,34 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 	switch territory {
 	case "international":
 		if p.ngaCorpus != "" {
-			resources = append(resources, ragResource{
-				RagCorpus: formatCorpusResource(p.projectID, p.location, p.ngaCorpus),
-			})
+			if res := p.resolveCorpus(reqCtx, p.ngaCorpus); res != "" {
+				resources = append(resources, ragResource{
+					RagCorpus: res,
+				})
+			}
 		}
 	case "us":
 		if p.coastPilotCorpus != "" {
-			resources = append(resources, ragResource{
-				RagCorpus: formatCorpusResource(p.projectID, p.location, p.coastPilotCorpus),
-			})
+			if res := p.resolveCorpus(reqCtx, p.coastPilotCorpus); res != "" {
+				resources = append(resources, ragResource{
+					RagCorpus: res,
+				})
+			}
 		}
 	default:
 		if p.coastPilotCorpus != "" {
-			resources = append(resources, ragResource{
-				RagCorpus: formatCorpusResource(p.projectID, p.location, p.coastPilotCorpus),
-			})
+			if res := p.resolveCorpus(reqCtx, p.coastPilotCorpus); res != "" {
+				resources = append(resources, ragResource{
+					RagCorpus: res,
+				})
+			}
 		}
 		if p.ngaCorpus != "" {
-			resources = append(resources, ragResource{
-				RagCorpus: formatCorpusResource(p.projectID, p.location, p.ngaCorpus),
-			})
+			if res := p.resolveCorpus(reqCtx, p.ngaCorpus); res != "" {
+				resources = append(resources, ragResource{
+					RagCorpus: res,
+				})
+			}
 		}
 	}
 
@@ -286,6 +298,79 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 		Contexts:        formatted,
 		DebugDurationMS: durationMS,
 	}, nil
+}
+
+func (p *SailingDirectionsProvider) resolveCorpus(ctx context.Context, corpusID string) string {
+	if corpusID == "" {
+		return ""
+	}
+	if strings.HasPrefix(corpusID, "projects/") {
+		return corpusID
+	}
+	isNumeric := true
+	for _, r := range corpusID {
+		if r < '0' || r > '9' {
+			isNumeric = false
+			break
+		}
+	}
+	if isNumeric {
+		return fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", p.projectID, p.location, corpusID)
+	}
+
+	p.mu.RLock()
+	if p.resolvedCorpora != nil {
+		if resolved, ok := p.resolvedCorpora[corpusID]; ok {
+			p.mu.RUnlock()
+			return resolved
+		}
+	}
+	p.mu.RUnlock()
+
+	// Query Vertex AI list ragCorpora endpoint to resolve displayName to resource name
+	listURL := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/ragCorpora", p.location, p.projectID, p.location)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
+	if err != nil {
+		return formatCorpusResource(p.projectID, p.location, corpusID)
+	}
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to dynamically list RAG corpora", "error", err)
+		return formatCorpusResource(p.projectID, p.location, corpusID)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return formatCorpusResource(p.projectID, p.location, corpusID)
+	}
+
+	var listResp struct {
+		RagCorpora []struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"ragCorpora"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+		return formatCorpusResource(p.projectID, p.location, corpusID)
+	}
+
+	p.mu.Lock()
+	if p.resolvedCorpora == nil {
+		p.resolvedCorpora = make(map[string]string)
+	}
+	for _, c := range listResp.RagCorpora {
+		p.resolvedCorpora[c.DisplayName] = c.Name
+		p.resolvedCorpora[c.Name] = c.Name
+	}
+	resolved, ok := p.resolvedCorpora[corpusID]
+	p.mu.Unlock()
+
+	if ok {
+		return resolved
+	}
+
+	return formatCorpusResource(p.projectID, p.location, corpusID)
 }
 
 func formatCorpusResource(projectID, location, corpusID string) string {

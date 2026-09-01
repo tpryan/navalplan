@@ -74,7 +74,7 @@ Return **only** a raw JSON array with no markdown fences, no prose, and no expla
 ]
 ```
 
-Use these icon names from Material Symbols: `storm`, `air`, `waves`, `tsunami`, `anchor`, `warning`, `explore`, `light_mode`, `wb_twilight`, `schedule`, `thermostat`, `trending_up`, `trending_down`, `bridge`, `water`, `sailing`.
+Use these icon names from Material Symbols: `storm`, `air`, `waves`, `tsunami`, `anchor`, `warning`, `explore`, `light_mode`, `wb_twilight`, `schedule`, `thermostat`, `trending_up`, `trending_down`, `height` (for bridge clearances/overhead hazards), `water` (for currents/shoals), `sailing`, `speed`.
 
 If there are no safety concerns or significant trends, return an empty array: `[]`
 

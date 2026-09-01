@@ -1,4 +1,101 @@
 /**
+ * Maps arbitrary or LLM-suggested icon names into valid Material Symbols Outlined icon ligatures.
+ * @param {string} icon
+ * @returns {string} valid Material Symbol icon name
+ */
+export function normalizeLookoutIcon(icon) {
+  if (!icon) return 'warning';
+  const clean = String(icon).trim().toLowerCase().replace(/[- ]/g, '_');
+  const iconMap = {
+    // Bridges, clearances, overhead
+    'bridge': 'height',
+    'bridges': 'height',
+    'clearance': 'height',
+    'vertical_clearance': 'height',
+    'overhead': 'height',
+    'mast': 'height',
+    'lock': 'lock',
+    'canal_lock': 'lock',
+
+    // Marine & Navigation
+    'boat': 'directions_boat',
+    'vessel': 'directions_boat',
+    'ship': 'directions_boat',
+    'sailing': 'sailing',
+    'sail': 'sailing',
+    'anchor': 'anchor',
+    'anchorage': 'anchor',
+    'compass': 'explore',
+    'explore': 'explore',
+    'navigation': 'explore',
+    'speed': 'speed',
+    'speed_limit': 'speed',
+
+    // Water, currents, tides
+    'water': 'water',
+    'current': 'water',
+    'currents': 'water',
+    'cross_current': 'water',
+    'tide': 'waves',
+    'tides': 'waves',
+    'rip': 'waves',
+    'rips': 'waves',
+    'tidal_rip': 'waves',
+    'waves': 'waves',
+    'rough_seas': 'waves',
+    'tsunami': 'tsunami',
+    'shoal': 'warning',
+    'shallow': 'warning',
+    'depth': 'straighten',
+    'channel': 'straighten',
+    'rock': 'warning',
+    'reef': 'warning',
+
+    // Weather & Wind
+    'wind': 'air',
+    'gust': 'air',
+    'gale': 'air',
+    'air': 'air',
+    'storm': 'storm',
+    'thunderstorm': 'thunderstorm',
+    'lightning': 'bolt',
+    'rain': 'rainy',
+    'rainy': 'rainy',
+    'snow': 'weather_snowy',
+    'fog': 'foggy',
+    'foggy': 'foggy',
+    'thermostat': 'thermostat',
+    'temperature': 'thermostat',
+
+    // Sun & Timing
+    'sun': 'light_mode',
+    'light_mode': 'light_mode',
+    'daylight': 'light_mode',
+    'sunset': 'wb_twilight',
+    'sunrise': 'wb_twilight',
+    'twilight': 'wb_twilight',
+    'wb_twilight': 'wb_twilight',
+    'time': 'schedule',
+    'schedule': 'schedule',
+    'clock': 'schedule',
+
+    // Trends & Warnings
+    'trending_up': 'trending_up',
+    'trending_down': 'trending_down',
+    'warning': 'warning',
+    'danger': 'dangerous',
+    'dangerous': 'dangerous',
+    'alert': 'warning',
+    'caution': 'warning',
+    'info': 'info',
+    'notice': 'info',
+    'visibility': 'visibility',
+  };
+
+  return iconMap[clean] || clean;
+}
+
+/**
  * LookoutBox — renders a list of maritime safety alerts from the Lookout agent.
  * @param {Array} alerts - array of {severity, category, message, action, icon}
  * @returns {HTMLElement|null} section element, or null if no alerts
@@ -27,7 +124,7 @@ export function LookoutBox(alerts) {
     const icon = document.createElement('span');
     icon.className = 'material-symbols-outlined lookout-alert__icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = alert.icon || 'warning';
+    icon.textContent = normalizeLookoutIcon(alert.icon);
 
     const text = document.createElement('div');
     text.className = 'lookout-alert__text';

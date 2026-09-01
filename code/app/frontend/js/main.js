@@ -7,7 +7,7 @@ import { MapPin } from './ui/MapPin.js';
 import { DataTile } from './ui/DataTile.js';
 import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
-import { LookoutBox } from './ui/LookoutBox.js';
+import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 
 import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
@@ -3787,7 +3787,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
         briefing.safety_alerts.forEach(a => {
             const alertEl = document.createElement('div');
             alertEl.className = `lookout-alert lookout-alert--${a.severity || 'info'}`;
-            alertEl.innerHTML = `<span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${DOMPurify.sanitize(a.icon || 'warning')}</span>
+            alertEl.innerHTML = `<span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${DOMPurify.sanitize(normalizeLookoutIcon(a.icon))}</span>
                 <div class="lookout-alert__text">
                     <span class="lookout-alert__msg">${DOMPurify.sanitize(a.message || '')}</span>
                     ${a.action ? `<span class="lookout-alert__action">${DOMPurify.sanitize(a.action)}</span>` : ''}
@@ -5713,7 +5713,7 @@ function alertToHTML(a) {
         </table>` : '';
     const travelClass = hasTbl ? 'lookout-alert--travel' : `lookout-alert--${esc(a.severity || 'info')}`;
     return `<div class="lookout-alert ${travelClass}">
-        <span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${esc(a.icon || 'warning')}</span>
+        <span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${esc(normalizeLookoutIcon(a.icon))}</span>
         <div class="lookout-alert__text">
             <span class="lookout-alert__msg">${esc(a.message || '')}</span>
             ${tblHTML}
