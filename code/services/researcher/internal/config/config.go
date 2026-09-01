@@ -8,18 +8,21 @@ import (
 )
 
 type Config struct {
-	Env             string
-	Project         string
-	ModelName       string
-	GeminiAPIKey    string
-	MapsAPIKey      string
-	UKTidalAPIKey   string
-	NIWAAPIKey      string
-	Port            string
-	BaseURL         string
-	ThinkingBudget  int32
-	SearchTimeoutMs int
-	DisableTracing  bool
+	Env                string
+	Project            string
+	ModelName          string
+	GeminiAPIKey       string
+	MapsAPIKey         string
+	UKTidalAPIKey      string
+	NIWAAPIKey         string
+	Port               string
+	BaseURL            string
+	ThinkingBudget     int32
+	SearchTimeoutMs    int
+	CoastPilotCorpusID string
+	NGACorpusID        string
+	VertexLocation     string
+	DisableTracing     bool
 }
 
 func New(getEnv func(string) string) (*Config, error) {
@@ -95,19 +98,49 @@ func New(getEnv func(string) string) (*Config, error) {
 		}
 	}
 
+	coastPilotCorpus := getEnv("COAST_PILOT_CORPUS_ID")
+	if coastPilotCorpus == "" {
+		coastPilotCorpus = getEnv("NAVALPLAN_COAST_PILOT_CORPUS_ID")
+	}
+	if coastPilotCorpus == "" {
+		coastPilotCorpus = "coast-pilot-corpus"
+	}
+
+	ngaCorpus := getEnv("NGA_CORPUS_ID")
+	if ngaCorpus == "" {
+		ngaCorpus = getEnv("NAVALPLAN_NGA_CORPUS_ID")
+	}
+	if ngaCorpus == "" {
+		ngaCorpus = "nga-sailing-directions-corpus"
+	}
+
+	vertexLocation := getEnv("VERTEX_LOCATION")
+	if vertexLocation == "" {
+		vertexLocation = getEnv("GOOGLE_CLOUD_LOCATION")
+	}
+	if vertexLocation == "" {
+		vertexLocation = getEnv("REGION")
+	}
+	if vertexLocation == "" {
+		vertexLocation = "us-central1"
+	}
+
 	cfg := &Config{
-		Env:             env,
-		Project:         project,
-		ModelName:       modelName,
-		GeminiAPIKey:    geminiKey,
-		MapsAPIKey:      mapsKey,
-		UKTidalAPIKey:   ukTidalKey,
-		NIWAAPIKey:      niwaKey,
-		Port:            port,
-		BaseURL:         baseURL,
-		ThinkingBudget:  thinkingBudget,
-		SearchTimeoutMs: searchTimeoutMs,
-		DisableTracing:  getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
+		Env:                env,
+		Project:            project,
+		ModelName:          modelName,
+		GeminiAPIKey:       geminiKey,
+		MapsAPIKey:         mapsKey,
+		UKTidalAPIKey:      ukTidalKey,
+		NIWAAPIKey:         niwaKey,
+		Port:               port,
+		BaseURL:            baseURL,
+		ThinkingBudget:     thinkingBudget,
+		SearchTimeoutMs:    searchTimeoutMs,
+		CoastPilotCorpusID: coastPilotCorpus,
+		NGACorpusID:        ngaCorpus,
+		VertexLocation:     vertexLocation,
+		DisableTracing:     getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
 	}
 
 	return cfg, nil

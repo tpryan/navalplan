@@ -1,0 +1,106 @@
+steps:
+# 1. Enable required GCP APIs
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'enable-apis'
+  args:
+  - 'services'
+  - 'enable'
+  - 'aiplatform.googleapis.com'
+  - 'storage.googleapis.com'
+  - 'run.googleapis.com'
+  - 'cloudscheduler.googleapis.com'
+  - 'vectorsearch.googleapis.com'
+  - '--project'
+  - '${PROJECT_ID}'
+
+# 2. Create Cloud Storage bucket for nautical publications if not already created
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'create-gcs-bucket'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    BUCKET="gs://${PROJECT_ID}-nautical-publications"
+    if ! gcloud storage buckets describe "$${BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+      echo "Creating bucket $${BUCKET} in ${_REGION}..."
+      gcloud storage buckets create "$${BUCKET}" --project="${PROJECT_ID}" --location="${_REGION}" --uniform-bucket-level-access
+    else
+      echo "Bucket $${BUCKET} already exists."
+    fi
+
+# 3. Create Vertex AI RAG Corpora (Coast Pilot & NGA Sailing Directions)
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'create-rag-corpora'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    ACCESS_TOKEN=$$(gcloud auth print-access-token)
+    CONFIG_ENDPOINT="https://${_REGION}-aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/${_REGION}/ragEngineConfig"
+    ENDPOINT="https://${_REGION}-aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/${_REGION}/ragCorpora"
+    
+    echo "Ensuring serverless RAG mode for ${_REGION}..."
+    curl -s -X PATCH -H "Authorization: Bearer $$ACCESS_TOKEN" -H "Content-Type: application/json" \
+      "$$CONFIG_ENDPOINT" \
+      -d '{"ragManagedDbConfig": {"serverless": {}}}' >/dev/null 2>&1 || true
+    
+    create_corpus() {
+      local DISPLAY_NAME="$$1"
+      local DESC="$$2"
+      echo "Checking/creating RAG corpus: $$DISPLAY_NAME..."
+      EXISTING=$$(curl -s -H "Authorization: Bearer $$ACCESS_TOKEN" -H "Content-Type: application/json" "$$ENDPOINT" | grep -o "\"displayName\": \"$$DISPLAY_NAME\"" || true)
+      if [ -z "$$EXISTING" ]; then
+        echo "Creating corpus $$DISPLAY_NAME..."
+        curl -s -X POST -H "Authorization: Bearer $$ACCESS_TOKEN" -H "Content-Type: application/json" \
+          "$$ENDPOINT" \
+          -d "{
+            \"displayName\": \"$$DISPLAY_NAME\",
+            \"description\": \"$$DESC\"
+          }"
+        echo ""
+      else
+        echo "Corpus $$DISPLAY_NAME already exists."
+      fi
+    }
+
+    create_corpus "${_COAST_PILOT_CORPUS_ID}" "NOAA Coast Pilot Volumes 1-10 Nautical Text RAG Store"
+    create_corpus "${_NGA_CORPUS_ID}" "NGA Sailing Directions Enroute and Planning Guides RAG Store"
+
+# 4. Create or update Cloud Scheduler Monthly Sync Job
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'schedule-monthly-sync'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    JOB_NAME="nautical-sync-monthly"
+    SCHEDULER_SVC_ACCOUNT="${PROJECT_ID}@appspot.gserviceaccount.com"
+    
+    if gcloud scheduler jobs describe "$${JOB_NAME}" --location="${_REGION}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+      echo "Updating Cloud Scheduler job $${JOB_NAME}..."
+      gcloud scheduler jobs update http "$${JOB_NAME}" \
+        --location="${_REGION}" \
+        --project="${PROJECT_ID}" \
+        --schedule="0 0 1 * *" \
+        --time-zone="Etc/UTC" \
+        --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/nautical-sync:run" \
+        --http-method="POST" \
+        --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
+    else
+      echo "Creating Cloud Scheduler job $${JOB_NAME}..."
+      gcloud scheduler jobs create http "$${JOB_NAME}" \
+        --location="${_REGION}" \
+        --project="${PROJECT_ID}" \
+        --schedule="0 0 1 * *" \
+        --time-zone="Etc/UTC" \
+        --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/nautical-sync:run" \
+        --http-method="POST" \
+        --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
+    fi
+
+substitutions:
+  _REGION: "us-central1"
+  _COAST_PILOT_CORPUS_ID: "coast-pilot-corpus"
+  _NGA_CORPUS_ID: "nga-sailing-directions-corpus"
+
+logsBucket: gs://navalplan-logging-bucket

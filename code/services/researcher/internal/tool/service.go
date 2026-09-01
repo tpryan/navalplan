@@ -17,7 +17,7 @@ type Provider interface {
 
 // NewNauticalService constructs a NauticalToolService along with the list of
 // underlying Providers that must be closed on shutdown.
-func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIKey string) (*NauticalToolService, []Provider, error) {
+func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIKey, projectID, vertexLocation, coastPilotCorpus, ngaCorpus string) (*NauticalToolService, []Provider, error) {
 	var providers []Provider
 
 	_, wp, err := NewWeatherTool()
@@ -44,11 +44,18 @@ func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIK
 	}
 	providers = append(providers, pp)
 
+	_, sdp, err := NewSailingDirectionsTool(projectID, vertexLocation, coastPilotCorpus, ngaCorpus)
+	if err != nil {
+		return nil, nil, fmt.Errorf("sailing directions tool: %w", err)
+	}
+	providers = append(providers, sdp)
+
 	return &NauticalToolService{
-		Tides:   tp,
-		Weather: wp,
-		Sunrise: sp,
-		Places:  pp,
+		Tides:             tp,
+		Weather:           wp,
+		Sunrise:           sp,
+		Places:            pp,
+		SailingDirections: sdp,
 	}, providers, nil
 }
 
@@ -99,9 +106,25 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("GetSafetyAlerts: %w", err))
 	}
 
+	sailingTool, err := functiontool.New(functiontool.Config{
+		Name:        "QuerySailingDirections",
+		Description: "Searches official hydrographic pilot books (NOAA Coast Pilot for US waters and NGA Sailing Directions for international waters) for channel depths, bridge clearances, tidal rips, hazards, and harbor regulations.",
+	}, s.FetchSailingDirections)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("QuerySailingDirections: %w", err))
+	}
+
+	coastPilotTool, err := functiontool.New(functiontool.Config{
+		Name:        "QueryCoastPilot",
+		Description: "Searches NOAA Coast Pilot (Volumes 1-10) for US coastal waters, channels, bridge clearances, anchorages, and hazards.",
+	}, s.FetchCoastPilot)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("QueryCoastPilot: %w", err))
+	}
+
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool}, nil
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool}, nil
 }

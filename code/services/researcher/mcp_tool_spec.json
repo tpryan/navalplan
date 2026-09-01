@@ -63,6 +63,31 @@
         },
         "required": ["region"]
       }
+    },
+    {
+      "name": "QuerySailingDirections",
+      "description": "Searches official hydrographic pilot books (NOAA Coast Pilot for US waters and NGA Sailing Directions for international waters) for channel depths, bridge clearances, tidal rips, hazards, and harbor regulations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "territory": {"type": "string", "enum": ["us", "international", "all"]},
+          "top_k": {"type": "number"}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "QueryCoastPilot",
+      "description": "Searches NOAA Coast Pilot (Volumes 1-10) for US coastal waters, channels, bridge clearances, anchorages, and hazards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "top_k": {"type": "number"}
+        },
+        "required": ["query"]
+      }
     }
   ]
 }

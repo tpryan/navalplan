@@ -120,6 +120,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						"required": []string{"region"},
 					},
 				},
+				{
+					"name":        "QuerySailingDirections",
+					"description": "Searches official hydrographic pilot books (NOAA Coast Pilot for US waters and NGA Sailing Directions for international waters) for channel depths, bridge clearances, tidal rips, hazards, and harbor regulations.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"query":     map[string]string{"type": "string"},
+							"territory": map[string]string{"type": "string"},
+							"top_k":     map[string]string{"type": "number"},
+						},
+						"required": []string{"query"},
+					},
+				},
+				{
+					"name":        "QueryCoastPilot",
+					"description": "Searches NOAA Coast Pilot (Volumes 1-10) for US coastal waters, channels, bridge clearances, anchorages, and hazards.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"query": map[string]string{"type": "string"},
+							"top_k": map[string]string{"type": "number"},
+						},
+						"required": []string{"query"},
+					},
+				},
 			},
 		}
 	case "tools/call":
@@ -185,6 +210,18 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 			return nil, err
 		}
 		return h.Nautical.FetchSafetyAlerts(nil, req)
+	case "QuerySailingDirections", "query_sailing_directions":
+		var req tool.SailingDirectionsRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchSailingDirections(nil, req)
+	case "QueryCoastPilot", "query_coast_pilot":
+		var req tool.CoastPilotRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchCoastPilot(nil, req)
 	}
 	return nil, fmt.Errorf("unknown tool %s", callReq.Name)
 }

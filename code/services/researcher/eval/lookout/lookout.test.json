@@ -30,6 +30,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "hydrographic_navigational_hazard_lookup",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Distance to next stop is 12 nm at course 060°. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

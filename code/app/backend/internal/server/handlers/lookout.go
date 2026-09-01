@@ -323,6 +323,11 @@ func buildLookoutPrompt(stop *model.Stop, briefing *model.Briefing, distNM, cour
 		tidesJSON = string(briefing.Tides)
 	}
 
+	locationInfo := stop.LocationName
+	if stop.Latitude != 0 || stop.Longitude != 0 {
+		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", stop.LocationName, stop.Latitude, stop.Longitude)
+	}
+
 	return fmt.Sprintf(`Analyze the following stop data for maritime safety concerns and return a JSON array of alerts.
 
 Location: %s
@@ -340,7 +345,7 @@ Tides (48h hourly forecast):
 %s
 
 Return ONLY the JSON array of alerts. If no concerns or significant trends, return [].`,
-		stop.LocationName,
+		locationInfo,
 		stop.TargetDate.Format("January 2, 2006"),
 		stopPosition,
 		totalStops,
