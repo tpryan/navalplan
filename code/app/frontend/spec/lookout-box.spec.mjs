@@ -10,6 +10,15 @@ describe('normalizeLookoutIcon', () => {
     expect(normalizeLookoutIcon('overhead')).toBe('height');
   });
 
+  it('maps marine, navigation, route, and passage variations appropriately', () => {
+    expect(normalizeLookoutIcon('route')).toBe('alt_route');
+    expect(normalizeLookoutIcon('passage')).toBe('alt_route');
+    expect(normalizeLookoutIcon('transit')).toBe('alt_route');
+    expect(normalizeLookoutIcon('channel')).toBe('straighten');
+    expect(normalizeLookoutIcon('directions_boat')).toBe('directions_boat');
+    expect(normalizeLookoutIcon('boat')).toBe('directions_boat');
+  });
+
   it('maps weather, tides, and currents appropriately', () => {
     expect(normalizeLookoutIcon('wind')).toBe('air');
     expect(normalizeLookoutIcon('tide')).toBe('waves');

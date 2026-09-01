@@ -47,16 +47,19 @@ func TestRawJSON_UnmarshalJSON(t *testing.T) {
 func TestBriefing_JSON(t *testing.T) {
 	b := model.Briefing{
 		WeatherSummary: model.RawJSON(`{"temp":20}`),
+		PilotNotes:     model.RawJSON(`{"overview":"Sheltered harbor with good holding"}`),
 	}
 
 	data, err := json.Marshal(b)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `{"temp":20}`)
+	assert.Contains(t, string(data), `Sheltered harbor with good holding`)
 
 	var b2 model.Briefing
 	err = json.Unmarshal(data, &b2)
 	assert.NoError(t, err)
 	assert.JSONEq(t, string(b.WeatherSummary), string(b2.WeatherSummary))
+	assert.JSONEq(t, string(b.PilotNotes), string(b2.PilotNotes))
 }
 
 func TestRawJSON_Value(t *testing.T) {

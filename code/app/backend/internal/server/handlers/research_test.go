@@ -3,11 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"app/internal/agent"
 	"app/internal/model"
 )
 
@@ -141,6 +144,148 @@ func TestHasValidFacilities(t *testing.T) {
 			got := hasValidFacilities(tt.input)
 			if got != tt.expected {
 				t.Errorf("hasValidFacilities(%s) = %v, want %v", string(tt.input), got, tt.expected)
+			}
+		})
+	}
+}
+
+type mockResearchAndLookoutStore struct {
+	sessionTrackingStore
+	stops       []model.Stop
+	firstBrief  *model.Briefing
+	savedAlerts map[int64]model.RawJSON
+}
+
+func (m *mockResearchAndLookoutStore) ListStops(_ context.Context, _ int64, _, _ int) ([]model.Stop, error) {
+	return m.stops, nil
+}
+
+func (m *mockResearchAndLookoutStore) GetBriefing(_ context.Context, stopID int64) (*model.Briefing, error) {
+	if m.firstBrief != nil && stopID == m.firstBrief.StopID {
+		return m.firstBrief, nil
+	}
+	return nil, nil
+}
+
+func (m *mockResearchAndLookoutStore) UpsertSafetyAlerts(_ context.Context, stopID int64, alerts model.RawJSON) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.savedAlerts == nil {
+		m.savedAlerts = make(map[int64]model.RawJSON)
+	}
+	m.savedAlerts[stopID] = alerts
+	return nil
+}
+
+func TestPerformStopResearch_TriggersLookout(t *testing.T) {
+	tests := []struct {
+		name              string
+		stop              *model.Stop
+		allStops          []model.Stop
+		firstBriefing     *model.Briefing
+		wantBriefingCount int
+		wantAlertStopID   int64
+	}{
+		{
+			name: "standard stop research creates briefing and triggers lookout",
+			stop: &model.Stop{
+				ID:           101,
+				VoyageID:     1,
+				LocationName: "English Harbour",
+				Latitude:     17.0,
+				Longitude:    -61.76,
+				TargetDate:   time.Now(),
+			},
+			allStops: []model.Stop{
+				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now()},
+				{ID: 102, VoyageID: 1, LocationName: "Falmouth", Latitude: 17.01, Longitude: -61.78, TargetDate: time.Now().Add(24 * time.Hour)},
+			},
+			wantBriefingCount: 1,
+			wantAlertStopID:   101,
+		},
+		{
+			name: "redundant last stop clones briefing and triggers lookout",
+			stop: &model.Stop{
+				ID:           102,
+				VoyageID:     1,
+				LocationName: "English Harbour Return",
+				Latitude:     17.0,
+				Longitude:    -61.76,
+				TargetDate:   time.Now().Add(48 * time.Hour),
+			},
+			allStops: []model.Stop{
+				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now()},
+				{ID: 102, VoyageID: 1, LocationName: "English Harbour Return", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now().Add(48 * time.Hour)},
+			},
+			firstBriefing: &model.Briefing{
+				StopID:         101,
+				WeatherSummary: model.RawJSON([]byte(`{"summary":"Clear"}`)),
+				SunPhase:       model.RawJSON([]byte(`{"sunrise":"06:00"}`)),
+				Tides:          model.RawJSON([]byte(`{"high":"12:00"}`)),
+				Facilities:     model.RawJSON([]byte(`[{"name":"Nelson Dockyard","type":"Marina"}]`)),
+				PilotNotes:     model.RawJSON([]byte(`{"overview":"Deep sheltered bay"}`)),
+			},
+			wantBriefingCount: 1,
+			wantAlertStopID:   102,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+
+				if strings.Contains(r.URL.Path, "sessions") {
+					w.Write([]byte(`{"name":"session"}`))
+					return
+				}
+
+				if r.URL.Path == "/api/run" {
+					var req struct {
+						AppName string `json:"appName"`
+					}
+					json.NewDecoder(r.Body).Decode(&req)
+					if req.AppName == "lookout" {
+						lookoutResp := `[{"severity":"warning","category":"hazards","message":"Reef nearby","icon":"warning"}]`
+						event := fmt.Sprintf(`[{"content":{"parts":[{"text":%q}],"role":"model"}}]`, lookoutResp)
+						w.Write([]byte(event))
+						return
+					}
+					harbourResp := `{"weather_summary":{"summary":"Sunny"},"sun_phase":{"sunrise":"06:00"},"tides":{"high":"12:00"},"facilities":[{"name":"Harbour Marina","type":"Marina"}],"pilot_notes":{"overview":"Protected"}}`
+					event := fmt.Sprintf(`[{"content":{"parts":[{"text":%q}],"role":"model"}}]`, harbourResp)
+					w.Write([]byte(event))
+				}
+			}))
+			defer srv.Close()
+
+			store := &mockResearchAndLookoutStore{
+				stops:       tt.allStops,
+				firstBrief:  tt.firstBriefing,
+				savedAlerts: make(map[int64]model.RawJSON),
+			}
+			client := &http.Client{Timeout: 5 * time.Second}
+			h := &Handler{
+				DB:          store,
+				AgentURL:    srv.URL,
+				AgentClient: client,
+				Agent:       &agent.AgentRunner{Client: client, Resolver: &agent.StaticResolver{BaseURL: srv.URL}},
+				ResearchSem: make(chan struct{}, 10),
+			}
+
+			h.performStopResearchLogic(tt.stop, "")
+
+			store.mu.Lock()
+			defer store.mu.Unlock()
+
+			if len(store.briefings) != tt.wantBriefingCount {
+				t.Fatalf("expected %d briefing saved, got %d", tt.wantBriefingCount, len(store.briefings))
+			}
+			if store.briefings[0].StopID != tt.stop.ID {
+				t.Errorf("briefing StopID = %d, want %d", store.briefings[0].StopID, tt.stop.ID)
+			}
+			if _, ok := store.savedAlerts[tt.wantAlertStopID]; !ok {
+				t.Errorf("expected safety alerts for stop ID %d to be upserted, but found none", tt.wantAlertStopID)
 			}
 		})
 	}

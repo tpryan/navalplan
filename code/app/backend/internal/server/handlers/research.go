@@ -25,6 +25,7 @@ type AgentOutput struct {
 	SunPhase       json.RawMessage `json:"sun_phase"`
 	Tides          json.RawMessage `json:"tides"`
 	Facilities     json.RawMessage `json:"facilities"`
+	PilotNotes     json.RawMessage `json:"pilot_notes"`
 }
 
 type Facility struct {
@@ -217,8 +218,13 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 						SunPhase:       firstBriefing.SunPhase,
 						Tides:          firstBriefing.Tides,
 						Facilities:     firstBriefing.Facilities,
+						PilotNotes:     firstBriefing.PilotNotes,
 					}
 					if err := h.DB.CreateBriefing(ctx, newBriefing); err == nil {
+						allStops := make([]model.Stop, len(stops))
+						copy(allStops, stops)
+						sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
+						h.performLookoutAuditLogic(stop, newBriefing, allStops, sessionID)
 						h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", stop.LocationName))
 						return
 					}
@@ -347,10 +353,17 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		SunPhase:       model.RawJSON(output.SunPhase),
 		Tides:          model.RawJSON(output.Tides),
 		Facilities:     model.RawJSON(output.Facilities),
+		PilotNotes:     model.RawJSON(output.PilotNotes),
 	}
 
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
 		slog.ErrorContext(ctx, "Failed to save briefing", "error", err)
+	} else {
+		allStops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
+		if err == nil && len(allStops) > 0 {
+			sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
+			h.performLookoutAuditLogic(stop, briefing, allStops, sessionID)
+		}
 	}
 	slog.InfoContext(ctx, fmt.Sprintf("Briefing saved for stop %d", stop.ID))
 	h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete for %s", stop.LocationName))
@@ -497,10 +510,15 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 					SunPhase:       firstBriefing.SunPhase,
 					Tides:          firstBriefing.Tides,
 					Facilities:     firstBriefing.Facilities,
+					PilotNotes:     firstBriefing.PilotNotes,
 				}
 				if err := h.DB.CreateBriefing(ctx, newBriefing); err != nil {
 					slog.ErrorContext(ctx, "Failed to clone briefing for redundant last stop", "error", err)
 				} else {
+					allStops := make([]model.Stop, len(stops))
+					copy(allStops, stops)
+					sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
+					h.performLookoutAuditLogic(redundantLastStop, newBriefing, allStops, sessionID)
 					h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", redundantLastStop.LocationName))
 				}
 			} else {
@@ -520,6 +538,7 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 		SunPhase:       model.RawJSON([]byte(`{}`)),
 		Tides:          model.RawJSON([]byte(`{}`)),
 		Facilities:     model.RawJSON([]byte(`[]`)),
+		PilotNotes:     model.RawJSON([]byte(`{}`)),
 	}
 	h.DB.CreateBriefing(ctx, briefing)
 }

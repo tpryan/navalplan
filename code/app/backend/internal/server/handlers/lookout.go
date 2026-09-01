@@ -243,7 +243,7 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		}
 	}
 
-	prompt := buildLookoutPrompt(stop, briefing, distNM, course, hasCourse, stopPosition, totalStops)
+	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops)
 
 	const appName = "lookout"
 	const userID = "system"
@@ -295,16 +295,26 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
 }
 
-func buildLookoutPrompt(stop *model.Stop, briefing *model.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int) string {
+func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int) string {
 	distInfo := "none — this is the last stop, no departure planned (do not generate navigation or arrival-time alerts)"
 	var travelTableInfo string
+	var nextStopInfo string
 
 	if distNM > 0 {
 		courseInfo := ""
 		if hasCourse {
 			courseInfo = fmt.Sprintf(" at a course of %.0f°", course)
 		}
-		distInfo = fmt.Sprintf("%.1f nautical miles%s", distNM, courseInfo)
+		if next != nil {
+			nextLoc := next.LocationName
+			if next.Latitude != 0 || next.Longitude != 0 {
+				nextLoc = fmt.Sprintf("%s (%.4f, %.4f)", next.LocationName, next.Latitude, next.Longitude)
+			}
+			nextStopInfo = fmt.Sprintf("\nNext Destination: %s", nextLoc)
+			distInfo = fmt.Sprintf("%.1f nautical miles%s to %s", distNM, courseInfo, next.LocationName)
+		} else {
+			distInfo = fmt.Sprintf("%.1f nautical miles%s", distNM, courseInfo)
+		}
 		rows := buildTravelTable(distNM, briefing.SunPhase)
 		var sb strings.Builder
 		sb.WriteString("\nTravel time at various speeds (for your analysis of arrival/departure times):\n")
@@ -336,11 +346,11 @@ func buildLookoutPrompt(stop *model.Stop, briefing *model.Briefing, distNM, cour
 		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", stop.LocationName, stop.Latitude, stop.Longitude)
 	}
 
-	return fmt.Sprintf(`Analyze the following stop data for maritime safety concerns and return a JSON array of alerts.
+	return fmt.Sprintf(`Analyze the following stop data and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. Return a JSON array of alerts.
 
 Location: %s
 Date: %s (Note: Weather and Tide data covers 48 hours starting from this date)
-Stop position: %d of %d
+Stop position: %d of %d%s
 Distance to next stop: %s%s
 
 Weather (48h hourly forecast):
@@ -357,6 +367,7 @@ Return ONLY the JSON array of alerts. If no concerns or significant trends, retu
 		stop.TargetDate.Format("January 2, 2006"),
 		stopPosition,
 		totalStops,
+		nextStopInfo,
 		distInfo,
 		travelTableInfo,
 		weatherJSON,

@@ -109,6 +109,7 @@ type Briefing struct {
 	SunPhase              RawJSON    `json:"sun_phase" db:"sun_phase"`
 	Tides                 RawJSON    `json:"tides" db:"tides"`
 	Facilities            RawJSON    `json:"facilities" db:"facilities"`
+	PilotNotes            RawJSON    `json:"pilot_notes,omitempty" db:"pilot_notes"`
 	SafetyAlerts          RawJSON    `json:"safety_alerts" db:"safety_alerts"`
 	SafetyAlertsUpdatedAt *time.Time `json:"safety_alerts_updated_at" db:"safety_alerts_updated_at"`
 	WeatherLastUpdated    *time.Time `json:"weather_last_updated" db:"weather_last_updated"`
