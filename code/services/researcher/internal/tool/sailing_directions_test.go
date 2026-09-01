@@ -2,6 +2,7 @@ package tool
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -212,5 +213,68 @@ func TestQueryCoastPilot(t *testing.T) {
 	}
 	if res.Territory != "us" {
 		t.Errorf("Expected Territory 'us', got %s", res.Territory)
+	}
+}
+
+func TestResolveCorpus(t *testing.T) {
+	tests := []struct {
+		name     string
+		corpusID string
+		mockResp string
+		want     string
+	}{
+		{
+			name:     "empty corpus ID",
+			corpusID: "",
+			want:     "",
+		},
+		{
+			name:     "full project resource name",
+			corpusID: "projects/my-proj/locations/us-central1/ragCorpora/12345",
+			want:     "projects/my-proj/locations/us-central1/ragCorpora/12345",
+		},
+		{
+			name:     "numeric corpus ID",
+			corpusID: "7540406762822696960",
+			want:     "projects/test-proj/locations/us-central1/ragCorpora/7540406762822696960",
+		},
+		{
+			name:     "displayName resolved dynamically via API",
+			corpusID: "coast-pilot-corpus",
+			mockResp: `{
+				"ragCorpora": [
+					{
+						"name": "projects/test-proj/locations/us-central1/ragCorpora/7540406762822696960",
+						"displayName": "coast-pilot-corpus"
+					}
+				]
+			}`,
+			want: "projects/test-proj/locations/us-central1/ragCorpora/7540406762822696960",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockDoer := &mockHTTPDoer{
+				DoFunc: func(req *http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewBufferString(tt.mockResp)),
+					}, nil
+				},
+			}
+
+			provider := &SailingDirectionsProvider{
+				projectID:       "test-proj",
+				location:        "us-central1",
+				client:          mockDoer,
+				resolvedCorpora: make(map[string]string),
+			}
+
+			got := provider.resolveCorpus(context.Background(), tt.corpusID)
+			if got != tt.want {
+				t.Errorf("resolveCorpus(%q) = %q, want %q", tt.corpusID, got, tt.want)
+			}
+		})
 	}
 }
