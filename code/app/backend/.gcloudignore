@@ -1,0 +1,5 @@
+.gcloudignore
+.git
+.gitignore
+!static.min
+!static.min/**

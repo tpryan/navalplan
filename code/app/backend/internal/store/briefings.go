@@ -10,7 +10,13 @@ import (
 
 func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*model.Briefing, error) {
 	var b model.Briefing
-	query := `SELECT * FROM briefing WHERE stop_id = $1`
+	query := `
+		SELECT id, stop_id, weather_summary, sun_phase, tides, facilities, 
+		       COALESCE(pilot_notes, '{}'::jsonb) AS pilot_notes, 
+		       COALESCE(safety_alerts, '{}'::jsonb) AS safety_alerts, 
+		       safety_alerts_updated_at, weather_last_updated, created_at
+		FROM briefing 
+		WHERE stop_id = $1`
 	err := db.GetContext(ctx, &b, query, stopID)
 	if err != nil {
 		return nil, err
@@ -21,7 +27,10 @@ func (db *DB) GetBriefing(ctx context.Context, stopID int64) (*model.Briefing, e
 func (db *DB) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]model.Briefing, error) {
 	briefings := []model.Briefing{}
 	query := `
-		SELECT b.*
+		SELECT b.id, b.stop_id, b.weather_summary, b.sun_phase, b.tides, b.facilities, 
+		       COALESCE(b.pilot_notes, '{}'::jsonb) AS pilot_notes, 
+		       COALESCE(b.safety_alerts, '{}'::jsonb) AS safety_alerts, 
+		       b.safety_alerts_updated_at, b.weather_last_updated, b.created_at
 		FROM briefing b
 		JOIN stop s ON b.stop_id = s.id
 		WHERE s.voyage_id = $1
@@ -38,7 +47,10 @@ func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*model.B
 
 	var b model.Briefing
 	query := `
-		SELECT b.*
+		SELECT b.id, b.stop_id, b.weather_summary, b.sun_phase, b.tides, b.facilities, 
+		       COALESCE(b.pilot_notes, '{}'::jsonb) AS pilot_notes, 
+		       COALESCE(b.safety_alerts, '{}'::jsonb) AS safety_alerts, 
+		       b.safety_alerts_updated_at, b.weather_last_updated, b.created_at
 		FROM briefing b
 		JOIN stop s ON b.stop_id = s.id
 		WHERE s.latitude BETWEEN $1::float - $3::float AND $1::float + $3::float
@@ -81,7 +93,8 @@ func (db *DB) CreateBriefing(ctx context.Context, b *model.Briefing) error {
 func (db *DB) ListStopsInWindow(ctx context.Context, days int) ([]model.Stop, error) {
 	stops := []model.Stop{}
 	query := `
-		SELECT s.*
+		SELECT s.id, s.voyage_id, s.target_date, s.stop_type, s.location_name, s.precise_location, 
+		       s.latitude, s.longitude, s.search_radius, s.search_radius_unit, s.notes, s.created_at
 		FROM stop s
 		JOIN voyage v ON s.voyage_id = v.id
 		WHERE s.target_date >= CURRENT_DATE 
@@ -98,7 +111,8 @@ func (db *DB) ListStopsInWindow(ctx context.Context, days int) ([]model.Stop, er
 func (db *DB) ListAllFutureStops(ctx context.Context) ([]model.Stop, error) {
 	stops := []model.Stop{}
 	query := `
-		SELECT s.*
+		SELECT s.id, s.voyage_id, s.target_date, s.stop_type, s.location_name, s.precise_location, 
+		       s.latitude, s.longitude, s.search_radius, s.search_radius_unit, s.notes, s.created_at
 		FROM stop s
 		JOIN voyage v ON s.voyage_id = v.id
 		WHERE s.target_date >= CURRENT_DATE

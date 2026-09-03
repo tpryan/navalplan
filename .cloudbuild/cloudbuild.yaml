@@ -1,11 +1,13 @@
 steps:
 # 1. Install Frontend Dependencies
-- name: 'gcr.io/cloud-builders/npm'
+- name: 'node:22-alpine'
+  entrypoint: 'npm'
   args: ['install']
   dir: 'code/app/frontend'
 
 # 2. Build Frontend
-- name: 'gcr.io/cloud-builders/npm'
+- name: 'node:22-alpine'
+  entrypoint: 'npm'
   args: ['run', 'build']
   dir: 'code/app/frontend'
   secretEnv: ['NAVALPLAN_FRONTEND_MAPS_API_KEY', 'NAVALPLAN_MAP_ID']
@@ -22,32 +24,26 @@ steps:
   env:
   - 'GO111MODULE=on'
 
-# 4.5. Agent Evaluation
-# - name: 'golang'
-#   script: |
-#     apt-get update && apt-get install -y python3 python3-pip lsof
-#     pip3 install "google-adk[a2a]" --break-system-packages
-    
-#     # Check version for debugging
-#     go version
-    
-#     # Ensure dependencies are ready
-#     make deps
-    
-#     # Force VERBOSE and capture Go logs in a file
-#     # If eval fails, we cat the log to see the crash reason
-#     make eval-all ADK=adk VERBOSE=1 || (cat code/services/researcher/agent.log && exit 1)
-#   secretEnv: ['GEMINI_API_KEY', 'NAVALPLAN_BACKEND_MAPS_API_KEY']
+# 5. Build Backend Container Image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-backend:${_SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-backend:latest', '.']
+  dir: 'code/app/backend'
 
-# 5. Deploy Backend to Cloud Run
+# 6. Push Backend Container Image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-backend:${_SHORT_SHA}']
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-backend:latest']
+
+# 7. Deploy Backend to Cloud Run
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
   - 'run'
   - 'deploy'
   - 'navalplan-backend'
-  - '--source'
-  - '.'
-  - '--clear-base-image'
+  - '--image'
+  - 'gcr.io/${PROJECT_ID}/navalplan-backend:${_SHORT_SHA}'
   - '--region'
   - 'us-central1'
   - '--project'
@@ -76,21 +72,24 @@ steps:
   - '--set-env-vars=OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event'
   - '--set-env-vars=NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/services/navalplan-backend'
   - '--set-env-vars=OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/${PROJECT_ID}/locations/us-central1/services/navalplan-backend'
-  dir: 'code/app/backend'
+
+images:
+- 'gcr.io/${PROJECT_ID}/navalplan-backend:${_SHORT_SHA}'
+- 'gcr.io/${PROJECT_ID}/navalplan-backend:latest'
+
 availableSecrets:
   secretManager:
   - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_FRONTEND_MAPS_API_KEY/versions/latest
     env: 'NAVALPLAN_FRONTEND_MAPS_API_KEY'
   - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_MAP_ID/versions/latest
     env: 'NAVALPLAN_MAP_ID'
-  # - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_GEMINI_KEY/versions/latest
-  #   env: 'GEMINI_API_KEY'
-  # - versionName: projects/${PROJECT_ID}/secrets/NAVALPLAN_BACKEND_MAPS_API_KEY/versions/latest
-  #   env: 'NAVALPLAN_BACKEND_MAPS_API_KEY'
+
 substitutions:
+  _SHORT_SHA: "latest"
   _NAVALPLAN_BASE_URL: 'https://plan.wakelog.app'
   _NAVALPLAN_PORT: "8080"
   _NAVALPLAN_AGENT_MODEL: "gemini-3.5-flash-lite"
   _ENV: "production"
   _NAVALPLAN_CONTENT_DIR: "./static.min"
+
 logsBucket: gs://navalplan-logging-bucket

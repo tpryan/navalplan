@@ -631,7 +631,7 @@ deploy-agent-runtime:
 
 deploy-backend:
 	@echo "Deploying Backend..."
-	gcloud builds submit --config .cloudbuild/cloudbuild.yaml .
+	gcloud builds submit --config .cloudbuild/cloudbuild.yaml --substitutions=_SHORT_SHA=$(shell git rev-parse --short HEAD 2>/dev/null || echo latest) .
 
 deploy-scheduler:
 	@echo "Deploying Cloud Scheduler Jobs..."
