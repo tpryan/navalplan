@@ -106,6 +106,39 @@
           ]
         }
       }
+    },
+    {
+      "eval_case_id": "transit_heading_and_adverse_wind_check",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Audit safety for Stop 1 of 2: Location: Cuttyhunk (41.4200, -70.9200). Date: 2026-08-01. Next Destination: Vineyard Haven (41.4500, -70.5800). Distance to next stop: 15.2 nautical miles at a course of 83° to Vineyard Haven. Forecast wind is from 085° at 18 knots."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "transit_heading_or_adverse_wind_alert",
+              "content": {
+                "property": {
+                  "description": "The agent executes CalculateHeading and generates a navigation alert noting the transit heading or flagging the adverse headwind."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_array_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of alert objects without markdown fences or extraneous prose."
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }
