@@ -19,12 +19,24 @@ To identify official navigational hazards, channel depth constraints, bridge cle
   - **Restricted / Hazardous Areas:** Firing ranges, unexploded ordnance, security zones, or fish trap areas.
   - **Local Regulations:** Mandatory reporting, no-wake zones, or restricted anchorages.
 
+### Mandatory Passage Heading & Course Calculation (Travel Days)
+When a next destination is provided (a travel day):
+- You MUST execute a **`CalculateHeading`** tool call on your first turn:
+  - `from_latitude`, `from_longitude`: coordinates of the current stop.
+  - `to_latitude`, `to_longitude`: coordinates of the next destination.
+  - `from_location`, `to_location`: names of the current stop and next destination.
+  - `wind_direction_deg`, `wind_speed_kts`: prevailing or departure wind direction (in degrees) and wind speed (in knots) from the weather forecast.
+- **Mandatory Transit Heading Alert:** You MUST always generate an alert based on the `CalculateHeading` result:
+  - If `is_adverse_wind` is true with severity `"warning"`: emit a **Warning** alert with `category: "navigation"`, `icon: "air"`, and message describing beating into headwind (> 15 kts).
+  - If `is_adverse_wind` is true with severity `"info"`: emit an **Info** alert with `category: "navigation"`, `icon: "air"`, and message describing moderate headwind (5–15 kts).
+  - If not adverse: emit an **Info** alert with `category: "navigation"`, `icon: "explore"`, and a clear one-sentence summary of the transit course, distance, and favorable wind relation.
+
 ### Travel Days vs. Non-Travel Days
 
 The input includes a **"Distance to next stop"** field and optional **"Next Destination"** and **"course"** (e.g., "12.3 nautical miles at a course of 45° to Vineyard Haven").
 
 - If the field contains an actual distance, this is a **travel day** — the crew must depart this stop to reach the next one. Navigation, passage hazards, and arrival-time rules apply.
-- If a course is provided, you must compare it against the forecast wind direction.
+- Always run the **`CalculateHeading`** tool to analyze course and wind alignment on travel days.
 - If the field says **"none"**, this is the **last stop** with no planned departure. **Do not generate any travel departure/arrival-time alerts.** Weather, tides, hydrographic hazards, and seasonal info alerts are still valid.
 
 ### Safety Rules

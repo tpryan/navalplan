@@ -361,3 +361,11 @@ func (s *NauticalToolService) FetchCoastPilot(ctx agent.Context, req CoastPilotR
 		DebugDurationMS: result.DebugDurationMS,
 	}, nil
 }
+
+// FetchHeading calculates the heading, distance, compass direction, and evaluates adverse wind conditions.
+func (s *NauticalToolService) FetchHeading(ctx agent.Context, req HeadingRequest) (*HeadingResponse, error) {
+	if req.FromLatitude == 0 && req.FromLongitude == 0 && req.ToLatitude == 0 && req.ToLongitude == 0 {
+		return nil, fmt.Errorf("coordinates must be provided for both origin and destination")
+	}
+	return CalculateHeadingResult(req), nil
+}

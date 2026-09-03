@@ -122,9 +122,17 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("QueryCoastPilot: %w", err))
 	}
 
+	headingTool, err := functiontool.New(functiontool.Config{
+		Name:        "CalculateHeading",
+		Description: "Calculates the nautical heading (course/bearing in degrees), cardinal compass direction, distance in nautical miles, and reciprocal heading between two coordinates. Optionally analyzes wind conditions relative to the course to determine headwinds or adverse winds.",
+	}, s.FetchHeading)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("CalculateHeading: %w", err))
+	}
+
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool}, nil
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool}, nil
 }
