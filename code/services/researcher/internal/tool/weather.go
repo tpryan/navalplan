@@ -82,49 +82,72 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx agent.Context, args WeatherArg
 		return WeatherResult{}, fmt.Errorf("%w: %v", ErrInvalidDate, err)
 	}
 
-	// Auto-adjust for Future Dates to fit Open-Meteo API limits (+14 days)
-	isSeasonal := false
 	daysUntil := time.Until(targetDate).Hours() / 24
-	queryDate := targetDate
-	if daysUntil > 14 {
-		isSeasonal = true
-		queryDate = time.Now().AddDate(0, 0, 7)
-	}
-
-	// Build Options
-	weatherOpts := wp.buildWeatherOptions(args.Latitude, args.Longitude, queryDate, isSeasonal)
-	marineOpts := wp.buildMarineOptions(args.Latitude, args.Longitude, queryDate)
-
-	// Fetch Data (Parallel using errgroup)
 	var weather, marine *openmeteogo.WeatherData
 	var weatherErr, marineErr error
 
-	g, _ := errgroup.WithContext(ctx) //nolint:errcheck // derived context unused: WeatherClient.Get has no context parameter
+	// Live forecast is available for dates up to 16 days out
+	if daysUntil >= -1 && daysUntil <= 16 {
+		weatherOpts := wp.buildWeatherOptions(args.Latitude, args.Longitude, targetDate)
+		marineOpts := wp.buildMarineOptions(args.Latitude, args.Longitude, targetDate)
 
-	// Fetch Weather
-	g.Go(func() error {
-		var err error
-		weather, err = wp.client.Get(weatherOpts)
-		if err != nil {
-			weatherErr = err
+		g, _ := errgroup.WithContext(ctx) //nolint:errcheck // derived context unused: WeatherClient.Get has no context parameter
+		g.Go(func() error {
+			var err error
+			weather, err = wp.client.Get(weatherOpts)
+			if err != nil {
+				weatherErr = err
+			}
+			return nil
+		})
+		g.Go(func() error {
+			var err error
+			marine, err = wp.client.Get(marineOpts)
+			if err != nil {
+				marineErr = err
+			}
+			return nil
+		})
+		_ = g.Wait()
+
+		if weather != nil && len(weather.Daily.WeatherCode) > 0 {
+			result := wp.processResults(weather, marine, marineErr, false)
+			result.Date = args.Date
+			result.DebugDurationMS = time.Since(start).Milliseconds()
+			return result, nil
 		}
-		return nil
-	})
+	}
 
-	// Fetch Marine (Optional)
-	g.Go(func() error {
-		var err error
-		marine, err = wp.client.Get(marineOpts)
-		if err != nil {
-			marineErr = err
-		}
-		return nil
-	})
+	// For future dates (>16 days out) or if live forecast failed, fetch historical archive data (1 year prior)
+	historicalDate := targetDate.AddDate(-1, 0, 0)
+	weatherOpts := wp.buildWeatherOptions(args.Latitude, args.Longitude, historicalDate)
 
-	_ = g.Wait()
+	weather, weatherErr = wp.client.Get(weatherOpts)
+	if weatherErr != nil || weather == nil || len(weather.Daily.WeatherCode) == 0 {
+		if daysUntil > 16 {
+			// Fallback climatology with full 24h hourly arrays
+			hourlyWind := make([]float64, 24)
+			hourlyWindDir := make([]string, 24)
+			hourlyConditions := make([]string, 24)
+			hourlyTemp := make([]float64, 24)
+			hourlyGusts := make([]float64, 24)
+			hourlyPrecip := make([]float64, 24)
+			hourlyWaveHeight := make([]float64, 24)
+			hourlyWavePeriod := make([]float64, 24)
+			hourlyWaveDir := make([]float64, 24)
 
-	if weatherErr != nil || weather == nil || weather.Daily.Time == nil || len(weather.Daily.Time) == 0 {
-		if isSeasonal {
+			for i := 0; i < 24; i++ {
+				hourlyWind[i] = 12.0
+				hourlyWindDir[i] = "NW"
+				hourlyConditions[i] = "Partly cloudy"
+				hourlyTemp[i] = 72.0
+				hourlyGusts[i] = 16.0
+				hourlyPrecip[i] = 0.0
+				hourlyWaveHeight[i] = 3.0
+				hourlyWavePeriod[i] = 8.0
+				hourlyWaveDir[i] = 290.0
+			}
+
 			return WeatherResult{
 				Date:             args.Date,
 				Condition:        "Seasonal Average",
@@ -135,11 +158,15 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx agent.Context, args WeatherArg
 				MaxGustsKts:      16.0,
 				WindDirDeg:       315,
 				WindDirection:    "NW",
-				HourlyWind:       []float64{10, 10, 12, 14, 15, 12, 10, 8},
-				HourlyWindDir:    []string{"NW", "NW", "NW", "NW", "NW", "NW", "NW", "NW"},
-				HourlyConditions: []string{"Clear", "Clear", "Clear", "Clear", "Clear", "Clear"},
-				HourlyTemp:       []float64{70, 72, 75, 78, 76, 72},
-				HourlyGusts:      []float64{12, 14, 16, 18, 16, 14},
+				HourlyWind:       hourlyWind,
+				HourlyWindDir:    hourlyWindDir,
+				HourlyConditions: hourlyConditions,
+				HourlyTemp:       hourlyTemp,
+				HourlyGusts:      hourlyGusts,
+				HourlyPrecip:     hourlyPrecip,
+				HourlyWaveHeight: hourlyWaveHeight,
+				HourlyWavePeriod: hourlyWavePeriod,
+				HourlyWaveDir:    hourlyWaveDir,
 				WaveHeight:       3.0,
 				WaveDirection:    290,
 				WavePeriod:       8.0,
@@ -152,21 +179,21 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx agent.Context, args WeatherArg
 		return WeatherResult{}, fmt.Errorf("no weather data returned for %s", args.Date)
 	}
 
-	result := wp.processResults(weather, marine, marineErr, isSeasonal)
+	result := wp.processResults(weather, nil, fmt.Errorf("marine unavailable for historical"), true)
 	result.Date = args.Date
 	result.DebugDurationMS = time.Since(start).Milliseconds()
-
 	return result, nil
 }
 
-func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time, isSeasonal bool) *openmeteogo.Options {
-	builder := openmeteogo.NewOptionsBuilder().
+func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time) *openmeteogo.Options {
+	return openmeteogo.NewOptionsBuilder().
 		Latitude(lat).
 		Longitude(lng).
 		TemperatureUnit(openmeteogo.Fahrenheit).
 		WindspeedUnit(openmeteogo.KN).
+		PrecipitationUnit(openmeteogo.PrecipitationUnit("inch")).
 		Start(date).
-		End(date).
+		End(date.AddDate(0, 0, 1)).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WeatherCode,
 			openmeteogo.Temperature2mMax,
@@ -183,12 +210,8 @@ func (wp *WeatherProvider) buildWeatherOptions(lat, lng float64, date time.Time,
 			openmeteogo.Temperature2m,
 			openmeteogo.WindGusts10m,
 			openmeteogo.Precipitation,
-		})
-
-	if isSeasonal {
-		builder.Seasonal(true)
-	}
-	return builder.Build()
+		}).
+		Build()
 }
 
 func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) *openmeteogo.Options {
@@ -197,7 +220,7 @@ func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) 
 		Longitude(lng).
 		Marine(true).
 		Start(date).
-		End(date).
+		End(date.AddDate(0, 0, 1)).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WaveHeightMax,
 			openmeteogo.WaveDirectionDominant,
@@ -211,7 +234,7 @@ func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) 
 		Build()
 }
 
-func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherData, marineErr error, isSeasonal bool) WeatherResult {
+func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherData, marineErr error, isHistorical bool) WeatherResult {
 	var waveHeight, waveDir, wavePeriod float64
 	if marineErr == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
 		if len(marine.Daily.WaveHeightMax) > 0 {
@@ -231,8 +254,8 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 	}
 
 	forecastType := "Standard"
-	if isSeasonal {
-		forecastType = "Seasonal"
+	if isHistorical {
+		forecastType = "Historical Archive"
 	}
 
 	var maxTemp, minTemp, maxWind, maxGusts, precip float64

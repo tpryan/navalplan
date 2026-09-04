@@ -3137,7 +3137,14 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
     const hwp = weather.hourly_wave_period || [];
     const hwd_deg = weather.hourly_wave_dir || [];
 
-    if (hw.length < 24) return '';
+    if (!hw || hw.length === 0) return '';
+
+    const sample = (arr, i, def = undefined) => {
+        if (!arr || arr.length === 0) return def;
+        if (arr.length === 24) return arr[i] !== undefined ? arr[i] : def;
+        const idx = Math.min(Math.floor(i * arr.length / 24), arr.length - 1);
+        return arr[idx] !== undefined ? arr[idx] : def;
+    };
 
     // Helper: Parse HH:MM AM/PM into hour (0-23) and minute (0-59)
     const parseSunTime = (s) => {
@@ -3167,14 +3174,23 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
         const isNight = (sunrise && sunset) ? (i < sunrise.total || i > sunset.total) : (i < 6 || i > 18);
         const colClass = 'np-hour-col' + (isNight ? ' np-hour-col--night' : '');
 
-        const kt = Math.round(hw[i]);
-        const deg = directionToDegrees(hwd[i]);
+        const rawKt = sample(hw, i, 0);
+        const kt = Math.round(rawKt);
+        const windDirVal = sample(hwd, i, '');
+        const deg = directionToDegrees(windDirVal);
         const scale = getWindScale(kt) * 0.7;
         const strengthClass = kt < 11 ? 'light' : kt < 22 ? 'moderate' : 'strong';
+        const condVal = sample(hc, i, 'Clear');
+        const tempVal = sample(ht, i, 70);
+        const gustVal = sample(hg, i, 0);
+        const precipVal = sample(hp, i, 0);
+        const waveHVal = sample(hwh, i, 0);
+        const wavePVal = sample(hwp, i, 0);
+        const waveDirVal = sample(hwd_deg, i, 0);
         
         let waveHTML = '';
-        if (hwh[i] > 0) {
-            const waveDeg = hwd_deg[i] || 0;
+        if (waveHVal > 0) {
+            const waveDeg = waveDirVal || 0;
             const waveCompass = degreesToCompass(waveDeg);
 
             waveHTML = `
@@ -3183,35 +3199,35 @@ function generateHourlyTimelineHTML(weather, sun = {}) {
                         ${getWindArrowSVG(waveDeg, 0.65, 'np-wind-forecast__arrow-svg')}
                     </div>
                     <div class="np-wind-forecast__circle">
-                        <div class="np-wind-forecast__value">${hwh[i].toFixed(1)}</div>
+                        <div class="np-wind-forecast__value">${waveHVal.toFixed(1)}</div>
                         <div class="np-wind-forecast__dir">ft</div>
                     </div>
                 </div>
-                <div class="np-hour-wave-period">${hwp[i] ? Math.round(hwp[i]) : '-'}s</div>
+                <div class="np-hour-wave-period">${wavePVal ? Math.round(wavePVal) : '-'}s</div>
             `;
         }
 
         html += `
             <div class="${colClass}">
                 <div class="np-hour-time">${hourLabel}</div>
-                <span class="material-symbols-outlined np-hour-icon">${getIconForWeather(hc[i], isNight)}</span>
-                <div class="np-hour-temp">${Math.round(ht[i])}°</div>
+                <span class="material-symbols-outlined np-hour-icon">${getIconForWeather(condVal, isNight)}</span>
+                <div class="np-hour-temp">${Math.round(tempVal)}°</div>
                 <div class="np-hour-wind-visual np-hour-wind-visual--${strengthClass}">
                     <div class="np-wind-forecast__arrow-bg">
                         ${getWindArrowSVG(deg, scale, 'np-wind-forecast__arrow-svg')}
                     </div>
                     <div class="np-wind-forecast__circle">
                         <div class="np-wind-forecast__value">${kt}</div>
-                        ${hg[i] ? `<div class="np-hour-wind-gust-inner">${Math.round(hg[i])}</div>` : ''}
+                        ${gustVal ? `<div class="np-hour-wind-gust-inner">${Math.round(gustVal)}</div>` : ''}
                     </div>
                 </div>
-                <div class="np-hour-wind-dir-label">${hwd[i] || '--'}</div>
+                <div class="np-hour-wind-dir-label">${windDirVal || '--'}</div>
                 <div style="margin-top:auto; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 4px;">
                     <div style="height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                         ${waveHTML}
                     </div>
                     <div style="height: 20px; display: flex; align-items: center; justify-content: center;">
-                        ${hp[i] > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${hp[i].toFixed(1).replace(/^0/, '')}"</div>` : ''}
+                        ${precipVal > 0 ? `<div class="np-hour-precip"><span class="material-symbols-outlined">water_drop</span>${precipVal.toFixed(1).replace(/^0/, '')}"</div>` : ''}
                     </div>
                 </div>
             </div>
