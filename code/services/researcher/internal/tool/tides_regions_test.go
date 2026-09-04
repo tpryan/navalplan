@@ -172,12 +172,32 @@ func TestUKProvider_GetTides_InvalidDate(t *testing.T) {
 }
 
 func TestUKProvider_GetTides_DateTooFar(t *testing.T) {
-	// A date well beyond the 7-day ADMIRALTY window should return an error
-	// rather than silently succeeding with empty tides.
-	p := &UKProvider{client: &mockUKTidalClient{}}
-	_, err := p.GetTides(51.5, -0.1, "2030-01-01")
-	if err == nil {
-		t.Error("expected error for date beyond ADMIRALTY 7-day window, got nil")
+	// A date beyond the 7-day ADMIRALTY window returns an informative note.
+	mockClient := &mockUKTidalClient{
+		StationsFunc: func(name string) (*uktidal.StationCollection, error) {
+			return &uktidal.StationCollection{
+				Features: []uktidal.Station{
+					{
+						Properties: uktidal.Properties{Id: "0001", Name: "Portsmouth"},
+						Geometry:   uktidal.Geometry{Coordinates: []float64{-1.1, 50.8}},
+					},
+				},
+			}, nil
+		},
+	}
+	p := &UKProvider{client: mockClient}
+	result, err := p.GetTides(50.8, -1.1, "2030-01-01")
+	if err != nil {
+		t.Fatalf("unexpected error for date beyond 7-day window: %v", err)
+	}
+	if result.StationName != "Portsmouth" {
+		t.Errorf("expected station Portsmouth, got %s", result.StationName)
+	}
+	if len(result.Tides) != 0 {
+		t.Errorf("expected 0 tides, got %d", len(result.Tides))
+	}
+	if result.Note == "" {
+		t.Error("expected non-empty Note explaining availability, got empty")
 	}
 }
 
@@ -301,9 +321,15 @@ func TestTideManager_NoProviderMatch(t *testing.T) {
 		&captureProvider{canHandle: false},
 	}}
 
-	_, err := tm.GetTides(newMockContext(), TideArgs{Latitude: 0, Longitude: 0, Date: "2026-04-18"})
-	if err == nil {
-		t.Error("expected error when no provider matches")
+	result, err := tm.GetTides(newMockContext(), TideArgs{Latitude: 0, Longitude: 0, Date: "2026-04-18"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Note == "" {
+		t.Error("expected note indicating no provider supports coordinates, got empty")
+	}
+	if len(result.Tides) != 0 {
+		t.Errorf("expected 0 tides, got %d", len(result.Tides))
 	}
 }
 
