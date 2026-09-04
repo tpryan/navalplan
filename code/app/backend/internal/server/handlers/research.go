@@ -255,22 +255,31 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	h.broadcastProgress(sessionID, "agent", fmt.Sprintf("Consulting the Harbourmaster for %s", stop.LocationName))
 
 	var prompt string
+	latDir := "N"
+	absLat := stop.Latitude
+	if absLat < 0 {
+		latDir = "S"
+		absLat = -absLat
+	}
+	lngDir := "E"
+	absLng := stop.Longitude
+	if absLng < 0 {
+		lngDir = "W"
+		absLng = -absLng
+	}
+	coordStr := fmt.Sprintf("%.4f %s, %.4f %s (Lat: %f, Lng: %f)", absLat, latDir, absLng, lngDir, stop.Latitude, stop.Longitude)
+
 	if isPassage {
 		prompt = fmt.Sprintf("This is an open-ocean passage position with no landfall. Do NOT research anchorages, marinas, moorings, or any shore facilities. "+
-			"Report the underway conditions for %f N, %f W on %s: weather (wind speed and direction, wave height, swell period), "+
+			"Report the underway conditions for %s on %s: weather (wind speed and direction, wave height, swell period), "+
 			"tides and tidal currents, sun phase (sunrise/sunset), and any safety or navigational alerts. "+
 			"Populate weather_summary, tides, and sun_phase, and return an empty array for facilities.",
-			stop.Latitude, stop.Longitude, stop.TargetDate.Format("January 2, 2006"))
+			coordStr, stop.TargetDate.Format("January 2, 2006"))
 	} else {
-		var locInfo string
-		if stop.PreciseLocation != "" {
-			locInfo = fmt.Sprintf("%s (Lat: %f, Lng: %f)", stop.LocationName, stop.Latitude, stop.Longitude)
-		} else {
-			locInfo = stop.LocationName
-		}
+		locInfo := fmt.Sprintf("%s (%s)", stop.LocationName, coordStr)
 
-		prompt = fmt.Sprintf("Research anchorages and weather for %f N, %f W (%s) for %s. Radius %d %s.",
-			stop.Latitude, stop.Longitude, locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+		prompt = fmt.Sprintf("Research anchorages and weather for %s for %s. Radius %d %s.",
+			locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
 		if nearbyErr == nil && nearbyBriefing != nil && hasValidFacilities(nearbyBriefing.Facilities) {
 			slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))

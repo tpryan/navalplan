@@ -3,6 +3,7 @@ package tool
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tpryan/openmeteogo"
 )
@@ -56,81 +57,147 @@ func TestNewWeatherTool(t *testing.T) {
 	}
 }
 
-func TestGetWeatherForecast_Success(t *testing.T) {
-	mockClient := &mockWeatherClient{
-		GetFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
-			// Check if marine or weather request based on metrics
-			// This is a simplified check
+func TestGetWeatherForecast(t *testing.T) {
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	futureDate := now.AddDate(0, 2, 0).Format("2006-01-02")
 
-			return &openmeteogo.WeatherData{
-				Daily: openmeteogo.Daily{
-					Time:                     []string{"2025-01-01"},
-					WeatherCode:              []int{1}, // Main Clear
-					Temperature2mMax:         []float64{75.0},
-					Temperature2mMin:         []float64{65.0},
-					WindSpeed10mMax:          []float64{15.0},
-					WindGusts10mMax:          []float64{20.0},
-					WindDirection10mDominant: []int{90},
-					PrecipitationSum:         []float64{0.1},
-					WaveHeightMax:            []float64{1.5}, // 1.5m ~ 4.9ft
-					WaveDirectionDominant:    []float64{180.0},
-					WavePeriodMax:            []float64{8.0},
-				},
-			}, nil
+	makeHourly := func(val float64) []float64 {
+		res := make([]float64, 24)
+		for i := range res {
+			res[i] = val
+		}
+		return res
+	}
+
+	tests := []struct {
+		name       string
+		args       WeatherArgs
+		mockFunc   func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error)
+		wantErr    bool
+		wantTemp   float64
+		wantWaves  float64
+		wantType   string
+		wantHourly int
+	}{
+		{
+			name: "Live forecast success",
+			args: WeatherArgs{Latitude: 10.0, Longitude: 20.0, Date: today},
+			mockFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
+				return &openmeteogo.WeatherData{
+					Daily: openmeteogo.Daily{
+						Time:                     []string{today},
+						WeatherCode:              []int{1},
+						Temperature2mMax:         []float64{75.0},
+						Temperature2mMin:         []float64{65.0},
+						WindSpeed10mMax:          []float64{15.0},
+						WindGusts10mMax:          []float64{20.0},
+						WindDirection10mDominant: []int{90},
+						PrecipitationSum:         []float64{0.1},
+						WaveHeightMax:            []float64{1.5},
+						WaveDirectionDominant:    []float64{180.0},
+						WavePeriodMax:            []float64{8.0},
+					},
+					Hourly: openmeteogo.Hourly{
+						WindSpeed10m:     makeHourly(12.0),
+						WindDirection10m: make([]int, 24),
+						WeatherCode:      make([]int, 24),
+						Temperature2m:    makeHourly(70.0),
+						WindGusts10m:     makeHourly(16.0),
+						Precipitation:    makeHourly(0.0),
+						WaveHeight:       makeHourly(1.5),
+					},
+				}, nil
+			},
+			wantErr:    false,
+			wantTemp:   75.0,
+			wantWaves:  4.92,
+			wantType:   "Standard",
+			wantHourly: 24,
+		},
+		{
+			name: "Future date queries historical archive",
+			args: WeatherArgs{Latitude: 51.05, Longitude: 2.37, Date: futureDate},
+			mockFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
+				return &openmeteogo.WeatherData{
+					Daily: openmeteogo.Daily{
+						Time:                     []string{futureDate},
+						WeatherCode:              []int{2},
+						Temperature2mMax:         []float64{68.0},
+						Temperature2mMin:         []float64{55.0},
+						WindSpeed10mMax:          []float64{14.0},
+						WindGusts10mMax:          []float64{18.0},
+						WindDirection10mDominant: []int{270},
+						PrecipitationSum:         []float64{0.0},
+					},
+					Hourly: openmeteogo.Hourly{
+						WindSpeed10m:     makeHourly(10.0),
+						WindDirection10m: make([]int, 24),
+						WeatherCode:      make([]int, 24),
+						Temperature2m:    makeHourly(62.0),
+						WindGusts10m:     makeHourly(14.0),
+						Precipitation:    makeHourly(0.0),
+					},
+				}, nil
+			},
+			wantErr:    false,
+			wantTemp:   68.0,
+			wantWaves:  0.0,
+			wantType:   "Historical Archive",
+			wantHourly: 24,
+		},
+		{
+			name: "Future date fallback on API error",
+			args: WeatherArgs{Latitude: 51.05, Longitude: 2.37, Date: futureDate},
+			mockFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
+				return nil, fmt.Errorf("historical archive down")
+			},
+			wantErr:    false,
+			wantTemp:   78.0,
+			wantWaves:  3.0,
+			wantType:   "Climatology Projection",
+			wantHourly: 24,
+		},
+		{
+			name: "Invalid date format returns error",
+			args: WeatherArgs{Latitude: 41.497, Longitude: -71.362, Date: "invalid-date"},
+			mockFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
+				return nil, nil
+			},
+			wantErr: true,
+		},
+		{
+			name: "Near-term API error",
+			args: WeatherArgs{Latitude: 10.0, Longitude: 20.0, Date: today},
+			mockFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
+				return nil, fmt.Errorf("network error")
+			},
+			wantErr: true,
 		},
 	}
 
-	wp := &WeatherProvider{client: mockClient}
-	args := WeatherArgs{
-		Latitude:  10.0,
-		Longitude: 20.0,
-		Date:      "2025-01-01",
-	}
-
-	result, err := wp.GetWeatherForecast(newMockContext(), args)
-	if err != nil {
-		t.Fatalf("GetWeatherForecast() error = %v", err)
-	}
-
-	if result.MaxTemp != 75.0 {
-		t.Errorf("Expected MaxTemp 75.0, got %f", result.MaxTemp)
-	}
-	// 1.5 meters * 3.28084 = 4.92126
-	if result.WaveHeight < 4.9 || result.WaveHeight > 5.0 {
-		t.Errorf("Expected WaveHeight ~4.92, got %f", result.WaveHeight)
-	}
-}
-
-func TestGetWeatherForecast_InvalidDate(t *testing.T) {
-	args := WeatherArgs{
-		Latitude:  41.497,
-		Longitude: -71.362,
-		Date:      "invalid",
-	}
-
-	wp := &WeatherProvider{client: &mockWeatherClient{}}
-	_, err := wp.GetWeatherForecast(newMockContext(), args)
-	if err == nil {
-		t.Error("Expected error for invalid date, got none")
-	}
-}
-
-func TestGetWeatherForecast_APIError(t *testing.T) {
-	mockClient := &mockWeatherClient{
-		GetFunc: func(opts *openmeteogo.Options) (*openmeteogo.WeatherData, error) {
-			return nil, fmt.Errorf("API error")
-		},
-	}
-
-	wp := &WeatherProvider{client: mockClient}
-	args := WeatherArgs{
-		Latitude:  10.0,
-		Longitude: 20.0,
-		Date:      "2025-01-01",
-	}
-
-	_, err := wp.GetWeatherForecast(newMockContext(), args)
-	if err == nil {
-		t.Error("Expected error for API error, got none")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wp := &WeatherProvider{client: &mockWeatherClient{GetFunc: tt.mockFunc}}
+			result, err := wp.GetWeatherForecast(newMockContext(), tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetWeatherForecast() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if result.MaxTemp != tt.wantTemp {
+				t.Errorf("MaxTemp = %v, want %v", result.MaxTemp, tt.wantTemp)
+			}
+			if tt.wantWaves > 0 && (result.WaveHeight < tt.wantWaves-0.1 || result.WaveHeight > tt.wantWaves+0.1) {
+				t.Errorf("WaveHeight = %v, want ~%v", result.WaveHeight, tt.wantWaves)
+			}
+			if result.ForecastType != tt.wantType {
+				t.Errorf("ForecastType = %v, want %v", result.ForecastType, tt.wantType)
+			}
+			if len(result.HourlyWind) != tt.wantHourly {
+				t.Errorf("len(HourlyWind) = %v, want %v", len(result.HourlyWind), tt.wantHourly)
+			}
+		})
 	}
 }
