@@ -3038,9 +3038,12 @@ async function renderTideChart(canvasId, tideData, targetDateStr) {
 
     const points = parseTidePoints(tideData, targetDateStr);
 
+    const canvasEl = document.getElementById(canvasId);
+    if (!canvasEl) return;
+
     const Chart = await loadChart();
     if (chartInstances.has(canvasId)) { chartInstances.get(canvasId).destroy(); chartInstances.delete(canvasId); }
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const ctx = canvasEl.getContext('2d');
 
     const cs = getComputedStyle(document.documentElement);
     const appFont = cs.getPropertyValue('--font').trim() || 'Inter, system-ui, sans-serif';
@@ -3379,7 +3382,7 @@ async function showBriefing(briefing, doPushState = true) {
     // ── Tides (Injected under Weather) ────────────────────────────────────────
     const tides = briefing.tides || {};
     const allEvents = tides.events || [];
-    const displayEvents = allEvents.filter(e => e.time.startsWith(targetDateYMD));
+    const displayEvents = allEvents.filter(e => e.time && e.time.startsWith(targetDateYMD));
     const [y, m, d] = targetDateYMD.split('-');
     const displayDateHeader = `${m}/${d}/${y}`;
 
@@ -3387,9 +3390,12 @@ async function showBriefing(briefing, doPushState = true) {
     tidesSec.className = 'briefing-section';
     tidesSec.style.marginTop = '16px'; // Add some spacing
 
+    const hasStation = tides.station_name && tides.station_name !== 'No local station' && tides.station_name !== 'Unknown Station';
+    const stationLabel = hasStation ? ` — ${tides.station_name}` : '';
+
     const tidesHeader = document.createElement('h3');
     tidesHeader.className = 'briefing-header-icon';
-    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span class="np-tides-meta">${displayDateHeader}</span>`;
+    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides${stationLabel} <span class="np-tides-meta">${displayDateHeader}</span>`;
     tidesSec.appendChild(tidesHeader);
 
     if (displayEvents.length > 0) {
@@ -3431,7 +3437,8 @@ async function showBriefing(briefing, doPushState = true) {
     } else {
         const noData = document.createElement('p');
         noData.className = 'briefing-no-data';
-        noData.textContent = tides.note || 'Tidal data is not yet available for this date. Predictions will become available within 7 days of the trip.';
+        const defaultNote = 'Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters (and becomes available within 7 days of the trip for UK/Ireland).';
+        noData.textContent = tides.note || defaultNote;
         tidesSec.appendChild(noData);
     }
     weatherSec.appendChild(tidesSec);
@@ -5903,9 +5910,13 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     ${sunsetStr  ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">wb_twilight</span>↓ ${sunsetStr}</div>` : ''}
                     ${distNm !== null ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">sailing</span>${distNm.toFixed(2)} nm to next stop</div>` : '<div class="np-day-tile__meta np-day-tile__meta--placeholder">&nbsp;</div>'}
                     ${briefing.weather_last_updated ? `<div class="np-day-tile__meta" style="font-style:italic;opacity:0.7"><span class="material-symbols-outlined np-day-tile__icon">update</span>${new Date(briefing.weather_last_updated).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>` : ''}
+                    ${(briefing.tides && Array.isArray(briefing.tides.events) && briefing.tides.events.length > 0) ? `
                     <div class="np-day-tile__chart overview-chart">
                         <canvas id="${canvasId}" data-tide-json='${JSON.stringify(briefing.tides || {}).replace(/'/g, "&apos;")}' data-date="${stop.target_date}"></canvas>
-                    </div>
+                    </div>` : `
+                    <div class="np-day-tile__chart overview-chart">
+                        <div class="np-day-tile__no-tide"><span class="material-symbols-outlined" style="font-size:12px;vertical-align:middle;margin-right:2px">info</span>${DOMPurify.sanitize(briefing.tides && briefing.tides.note ? briefing.tides.note : 'Tidal data not available yet for this region')}</div>
+                    </div>`}
                 </div>`;
         });
         html += `</div>`;
@@ -6054,9 +6065,13 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 }
             }
 
-            // Tide chart canvas (preserved for Chart.js rendering)
-            if (b.tides && b.tides.events) {
+            // Tide chart canvas or availability notice
+            if (b.tides && Array.isArray(b.tides.events) && b.tides.events.length > 0) {
                 html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
+            } else if (b.tides && b.tides.note) {
+                html += `<p class="briefing-no-data" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>${DOMPurify.sanitize(b.tides.note)}</p>`;
+            } else if (b.tides) {
+                html += `<p class="briefing-no-data" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>Tidal data is not available yet for this region.</p>`;
             }
 
             // Safety alerts (Moved after tides)

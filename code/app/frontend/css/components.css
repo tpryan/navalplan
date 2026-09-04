@@ -183,6 +183,13 @@
     height: 40px;
     box-sizing: content-box;
 }
+.np-day-tile__no-tide {
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.25;
+    padding-top: 4px;
+}
 
 /* ─── Destination overview pull-quote ────────────────────────────────────── */
 .np-destination-overview {

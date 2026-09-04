@@ -73,7 +73,14 @@
 }
 
 .briefing-no-data {
-    padding: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
+    border-radius: var(--radius-sm, 6px);
+    border: 1px dashed var(--border, rgba(0, 0, 0, 0.12));
+    margin-top: 6px;
+    line-height: 1.4;
 }
 
 /* --- Report Typography & Colors --- */

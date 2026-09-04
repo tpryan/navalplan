@@ -92,7 +92,7 @@ func (p *NOAAProvider) GetTides(lat, lng float64, dateStr string) (TideResult, e
 		return TideResult{
 			StationName: "No local station",
 			Tides:       []TideEvent{},
-			Note:        "No official tide prediction station found within 150 miles.",
+			Note:        "Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters.",
 		}, nil
 	}
 
@@ -518,13 +518,13 @@ func (tm *TideManager) GetTides(ctx agent.Context, args TideArgs) (TideResult, e
 		return TideResult{
 			StationName: "No local station",
 			Tides:       []TideEvent{},
-			Note:        fmt.Sprintf("Tidal data unavailable: %v", lastErr),
+			Note:        fmt.Sprintf("Tidal data is not available yet for this region: %v", lastErr),
 		}, nil
 	}
 	return TideResult{
 		StationName: "No local station",
 		Tides:       []TideEvent{},
-		Note:        fmt.Sprintf("No tidal data provider supports coordinates: %.4f, %.4f", args.Latitude, args.Longitude),
+		Note:        "Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters.",
 	}, nil
 }
 
