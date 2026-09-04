@@ -37,11 +37,11 @@ func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 // PlacesArgs defines the arguments for the find_places_nearby tool.
 type PlacesArgs struct {
 	Query     string  `json:"query" description:"Text query (e.g. 'restaurants', 'marinas')."`
-	Latitude  float64 `json:"latitude" description:"Latitude for location bias."`
-	Longitude float64 `json:"longitude" description:"Longitude for location bias."`
-	Radius    float64 `json:"radius" description:"Search radius in meters. Default 5000."`
-	OpenNow   bool    `json:"open_now" description:"If true, only return places currently open."`
-	MinRating float64 `json:"min_rating" description:"Minimum rating (1.0 - 5.0)."`
+	Latitude  float64 `json:"latitude" description:"Latitude for location bias (required)."`
+	Longitude float64 `json:"longitude" description:"Longitude for location bias (required)."`
+	Radius    float64 `json:"radius,omitempty" description:"Search radius in meters. Default 5000, max 50000."`
+	OpenNow   bool    `json:"open_now,omitempty" description:"If true, only return places currently open."`
+	MinRating float64 `json:"min_rating,omitempty" description:"Minimum rating (1.0 - 5.0)."`
 }
 
 // PlaceResult represents a single place found by the search.

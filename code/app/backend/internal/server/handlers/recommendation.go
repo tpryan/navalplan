@@ -30,12 +30,12 @@ func radiusToNM(radius int, unit string) float64 {
 
 func recommendationCount(radius int, unit string) int {
 	nm := radiusToNM(radius, unit)
-	count := int(math.Round(nm * 2))
-	if count < 20 {
-		count = 20
+	count := int(math.Round(nm * 1.0))
+	if count < 15 {
+		count = 15
 	}
-	if count > 50 {
-		count = 50
+	if count > 30 {
+		count = 30
 	}
 	return count
 }
@@ -341,9 +341,17 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		if errArray := json.Unmarshal([]byte(fullText), &directRecs); errArray == nil {
 			wrapper.Recommendations = directRecs
 		} else {
-			slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
-			h.broadcastProgress(progressSessionID, "error", "Agent returned an unreadable response — please try again")
-			return
+			repaired := repairTruncatedJSONArray(fullText)
+			if errRepaired := json.Unmarshal([]byte(repaired), &wrapper); errRepaired == nil && len(wrapper.Recommendations) > 0 {
+				slog.WarnContext(ctx, "Salvaged recommendations from truncated agent response", "count", len(wrapper.Recommendations))
+			} else if errDirectRepaired := json.Unmarshal([]byte(repaired), &directRecs); errDirectRepaired == nil && len(directRecs) > 0 {
+				wrapper.Recommendations = directRecs
+				slog.WarnContext(ctx, "Salvaged recommendations from truncated agent array", "count", len(wrapper.Recommendations))
+			} else {
+				slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", fullText)
+				h.broadcastProgress(progressSessionID, "error", "Agent returned an unreadable response — please try again")
+				return
+			}
 		}
 	}
 

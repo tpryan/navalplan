@@ -295,6 +295,56 @@ func cleanJSON(s string) string {
 	return strings.TrimSpace(s)
 }
 
+func repairTruncatedJSONArray(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	if json.Valid([]byte(s)) {
+		return s
+	}
+
+	startObj := strings.Index(s, "{")
+	startArr := strings.Index(s, "[")
+
+	if startObj == -1 && startArr == -1 {
+		return s
+	}
+
+	isObjRoot := startObj != -1 && (startArr == -1 || startObj < startArr)
+	start := startObj
+	if !isObjRoot {
+		start = startArr
+	}
+
+	// Scan backwards from the end for each '}' to find the last valid closure
+	for i := len(s) - 1; i >= start; i-- {
+		if s[i] == '}' {
+			sub := s[start : i+1]
+			if isObjRoot {
+				// Try closing array and object wrapper: ...]}
+				candidate := sub + "\n]}"
+				if json.Valid([]byte(candidate)) {
+					return candidate
+				}
+				// Try closing object only: ...}
+				candidateObj := sub + "\n}"
+				if json.Valid([]byte(candidateObj)) {
+					return candidateObj
+				}
+			} else {
+				// Array root: ...]
+				candidate := sub + "\n]"
+				if json.Valid([]byte(candidate)) {
+					return candidate
+				}
+			}
+		}
+	}
+
+	return s
+}
+
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

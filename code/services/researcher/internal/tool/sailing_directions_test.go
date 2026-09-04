@@ -131,10 +131,11 @@ func TestQuerySailingDirections(t *testing.T) {
 			args: SailingDirectionsArgs{
 				Query: "Chesapeake Bay controlling depth",
 			},
-			projectID:  "test-proj",
-			mockStatus: http.StatusInternalServerError,
-			mockResp:   `{"error": "internal error"}`,
-			wantErr:    true,
+			projectID:   "test-proj",
+			mockStatus:  http.StatusInternalServerError,
+			mockResp:    `{"error": "internal error"}`,
+			wantErr:     false,
+			wantContain: "unavailable",
 		},
 	}
 

@@ -252,25 +252,35 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		slog.ErrorContext(reqCtx, "RAG retrieveContexts HTTP call failed",
+		slog.WarnContext(reqCtx, "RAG retrieveContexts HTTP call failed, falling back to graceful notice",
 			"query", args.Query,
 			"endpoint", endpoint,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"error", err,
 		)
-		return SailingDirectionsResult{}, fmt.Errorf("%w: retrieveContexts call failed: %w", ErrAPIUnavailable, err)
+		return SailingDirectionsResult{
+			Query:           args.Query,
+			Territory:       territory,
+			Contexts:        "Official hydrographic sailing directions are currently unreachable; rely on Google Search results and nautical charts.",
+			DebugDurationMS: time.Since(start).Milliseconds(),
+		}, nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		slog.ErrorContext(reqCtx, "RAG retrieveContexts returned error status",
+		slog.WarnContext(reqCtx, "RAG retrieveContexts returned error status, falling back to graceful notice",
 			"query", args.Query,
 			"status_code", resp.StatusCode,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"body", string(body),
 		)
-		return SailingDirectionsResult{}, fmt.Errorf("%w: vertex rag error (%d): %s", ErrAPIUnavailable, resp.StatusCode, string(body))
+		return SailingDirectionsResult{
+			Query:           args.Query,
+			Territory:       territory,
+			Contexts:        "Official hydrographic sailing directions are currently unavailable for this area; rely on Google Search results and nautical charts.",
+			DebugDurationMS: time.Since(start).Milliseconds(),
+		}, nil
 	}
 
 	formatted, chunkCount, sourceList, err := formatRagContextResponse(resp.Body)
