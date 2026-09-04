@@ -41,6 +41,7 @@ type TideResult struct {
 	StationID     string      `json:"station_id"`
 	DistanceMiles float64     `json:"distance_miles"`
 	Tides         []TideEvent `json:"tides"`
+	Note          string      `json:"note,omitempty"`
 }
 
 // RegionalTideProvider is implemented by each regional tide data source.
@@ -79,12 +80,20 @@ func (p *NOAAProvider) CanHandle(lat, lng float64) bool {
 }
 
 func (p *NOAAProvider) GetTides(lat, lng float64, dateStr string) (TideResult, error) {
+	if _, err := time.Parse("2006-01-02", dateStr); err != nil {
+		return TideResult{}, ErrInvalidDate
+	}
+
 	stations, err := p.findNearbyStations(lat, lng)
 	if err != nil {
 		return TideResult{}, err
 	}
 	if len(stations) == 0 {
-		return TideResult{}, ErrNotFound
+		return TideResult{
+			StationName: "No local station",
+			Tides:       []TideEvent{},
+			Note:        "No official tide prediction station found within 150 miles.",
+		}, nil
 	}
 
 	var lastErr error
@@ -100,7 +109,13 @@ func (p *NOAAProvider) GetTides(lat, lng float64, dateStr string) (TideResult, e
 		}
 		lastErr = err
 	}
-	return TideResult{}, fmt.Errorf("getting tides from nearby stations. Last error: %v", lastErr)
+	return TideResult{
+		StationName:   stations[0].Name,
+		StationID:     stations[0].ID,
+		DistanceMiles: haversineDistanceMiles(lat, lng, stations[0].Lat, stations[0].Lng),
+		Tides:         []TideEvent{},
+		Note:          fmt.Sprintf("Tidal predictions unavailable for %s: %v", stations[0].Name, lastErr),
+	}, nil
 }
 
 func (p *NOAAProvider) findNearbyStations(lat, lng float64) ([]noaago.Station, error) {
@@ -192,13 +207,6 @@ func (p *UKProvider) GetTides(lat, lng float64, dateStr string) (TideResult, err
 		return TideResult{}, ErrInvalidDate
 	}
 
-	// Reject dates beyond the API's fixed forecast window so TideManager can
-	// fall through to the next provider rather than silently returning no tides.
-	cutoff := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, ukForecastDays)
-	if parsedDate.After(cutoff) {
-		return TideResult{}, fmt.Errorf("UK tidal data unavailable for %s: ADMIRALTY API covers at most %d days from today", dateStr, ukForecastDays)
-	}
-
 	stations, err := p.client.Stations("")
 	if err != nil {
 		return TideResult{}, fmt.Errorf("%w: listing UK stations: %w", ErrAPIUnavailable, err)
@@ -208,6 +216,26 @@ func (p *UKProvider) GetTides(lat, lng float64, dateStr string) (TideResult, err
 	}
 
 	candidates := nearestUKStations(lat, lng, stations.Features, MaxStationsToCheck)
+	if len(candidates) == 0 {
+		return TideResult{}, ErrNotFound
+	}
+
+	nearest := candidates[0]
+	stationName := nearest.station.Properties.Name
+	stationID := nearest.station.Properties.Id
+	distMiles := nearest.dist
+
+	// Reject dates beyond the API's fixed forecast window with an informative note.
+	cutoff := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, ukForecastDays)
+	if parsedDate.After(cutoff) {
+		return TideResult{
+			StationName:   stationName,
+			StationID:     stationID,
+			DistanceMiles: distMiles,
+			Tides:         []TideEvent{},
+			Note:          fmt.Sprintf("Tidal data for %s is published up to %d days in advance and will become available within %d days of your trip.", stationName, ukForecastDays, ukForecastDays),
+		}, nil
+	}
 
 	// Try candidates in order of distance. Secondary ports only publish High Water
 	// predictions, so skip any station whose events don't contain both H and L types.
@@ -228,21 +256,22 @@ func (p *UKProvider) GetTides(lat, lng float64, dateStr string) (TideResult, err
 	}
 
 	// Fallback: return whatever the nearest station has, even if incomplete.
-	if len(candidates) > 0 {
-		nearest := candidates[0]
-		events, err := p.client.Events(nearest.station.Properties.Id, 7)
-		if err != nil {
-			return TideResult{}, fmt.Errorf("%w: fetching UK tidal events: %w", ErrAPIUnavailable, err)
-		}
-		return TideResult{
-			StationName:   nearest.station.Properties.Name,
-			StationID:     nearest.station.Properties.Id,
-			DistanceMiles: nearest.dist,
-			Tides:         filterUKEvents(events, parsedDate),
-		}, nil
+	events, err := p.client.Events(nearest.station.Properties.Id, 7)
+	if err != nil {
+		return TideResult{}, fmt.Errorf("%w: fetching UK tidal events: %w", ErrAPIUnavailable, err)
 	}
-
-	return TideResult{}, ErrNotFound
+	tides := filterUKEvents(events, parsedDate)
+	note := ""
+	if len(tides) == 0 {
+		note = "Tidal data for this station is not available for this date. Live predictions are published up to 7 days in advance."
+	}
+	return TideResult{
+		StationName:   nearest.station.Properties.Name,
+		StationID:     nearest.station.Properties.Id,
+		DistanceMiles: nearest.dist,
+		Tides:         tides,
+		Note:          note,
+	}, nil
 }
 
 type ukStationDist struct {
@@ -486,9 +515,17 @@ func (tm *TideManager) GetTides(ctx agent.Context, args TideArgs) (TideResult, e
 		lastErr = err
 	}
 	if lastErr != nil {
-		return TideResult{}, lastErr
+		return TideResult{
+			StationName: "No local station",
+			Tides:       []TideEvent{},
+			Note:        fmt.Sprintf("Tidal data unavailable: %v", lastErr),
+		}, nil
 	}
-	return TideResult{}, fmt.Errorf("no tidal data provider supports coordinates: %f, %f", args.Latitude, args.Longitude)
+	return TideResult{
+		StationName: "No local station",
+		Tides:       []TideEvent{},
+		Note:        fmt.Sprintf("No tidal data provider supports coordinates: %.4f, %.4f", args.Latitude, args.Longitude),
+	}, nil
 }
 
 // haversineDistanceMiles returns the great-circle distance in miles between two

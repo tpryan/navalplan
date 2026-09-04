@@ -3392,16 +3392,16 @@ async function showBriefing(briefing, doPushState = true) {
     tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides — ${tides.station_name || 'Unknown Station'} <span class="np-tides-meta">${displayDateHeader}</span>`;
     tidesSec.appendChild(tidesHeader);
 
-    const tideCanvasId = `briefingTideChart_${stop.id}`;
-    const tideWrap = document.createElement('div');
-    tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
-    const tideCanvas = document.createElement('canvas');
-    tideCanvas.id = tideCanvasId;
-    tideWrap.appendChild(tideCanvas);
-    tidesSec.appendChild(tideWrap);
-    requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
-
     if (displayEvents.length > 0) {
+        const tideCanvasId = `briefingTideChart_${stop.id}`;
+        const tideWrap = document.createElement('div');
+        tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
+        const tideCanvas = document.createElement('canvas');
+        tideCanvas.id = tideCanvasId;
+        tideWrap.appendChild(tideCanvas);
+        tidesSec.appendChild(tideWrap);
+        requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
+
         const tbl = document.createElement('table');
         tbl.className = 'briefing-table np-tides-table';
         tbl.style.marginTop = '10px';
@@ -3431,7 +3431,7 @@ async function showBriefing(briefing, doPushState = true) {
     } else {
         const noData = document.createElement('p');
         noData.className = 'briefing-no-data';
-        noData.textContent = 'No tide events for this date';
+        noData.textContent = tides.note || 'Tidal data is not yet available for this date. Predictions will become available within 7 days of the trip.';
         tidesSec.appendChild(noData);
     }
     weatherSec.appendChild(tidesSec);

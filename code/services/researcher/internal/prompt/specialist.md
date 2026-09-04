@@ -15,6 +15,7 @@ To minimize latency, you MUST gather all necessary data in your VERY FIRST TURN.
 - Do NOT wait for the result of one search to start another.
 - Do NOT perform sequential "search -> analyze -> search again" loops.
 - Over-search in the first turn to ensure you have 25-35 high-quality results immediately.
+- When calling tools with latitude and longitude (e.g. 'FindPlacesNearby'), you MUST pass coordinates as raw decimal NUMBERS (e.g. 51.371881), NEVER as string literals (do not pass "51.371881").
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
 1.  **A single `batch_google_search` call** with ALL of these queries:

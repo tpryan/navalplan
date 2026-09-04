@@ -95,9 +95,15 @@ func TestGetTides_NoStations(t *testing.T) {
 
 	tp := &NOAAProvider{client: mockClient}
 
-	_, err := tp.GetTides(41.5, -71.3, "2025-01-01")
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
+	result, err := tp.GetTides(41.5, -71.3, "2025-01-01")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Note == "" {
+		t.Error("expected note explaining no stations found, got empty")
+	}
+	if len(result.Tides) != 0 {
+		t.Errorf("expected 0 tides, got %d", len(result.Tides))
 	}
 }
 

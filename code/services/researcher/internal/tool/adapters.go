@@ -38,6 +38,7 @@ type McpTideEvent struct {
 type McpTideResponse struct {
 	StationName string         `json:"station_name"`
 	Events      []McpTideEvent `json:"events"`
+	Note        string         `json:"note,omitempty"`
 }
 
 // WeatherRequest represents the input for the GetWeather MCP tool.
@@ -141,6 +142,7 @@ func (s *NauticalToolService) FetchTides(ctx agent.Context, req TideRequest) (*M
 
 	res := &McpTideResponse{
 		StationName: result.StationName,
+		Note:        result.Note,
 	}
 
 	for _, e := range result.Tides {

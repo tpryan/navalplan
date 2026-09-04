@@ -14,6 +14,7 @@ RESTRICTIONS:
   and received data.
 
 DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
+- Tool Call Parameters: When calling tools with latitude and longitude (e.g. 'GetTides', 'GetSunriseSunset', 'FindPlacesNearby'), you MUST pass coordinates as raw decimal NUMBERS (e.g. 51.371881), NEVER as strings (do not pass "51.371881").
 1. Call 'GetWeather' for the location and date.
 2. Call 'GetTides' for the location and date.
 3. Call 'GetSunriseSunset' for the location and date.
@@ -42,8 +43,9 @@ CRITICAL RULES:
 	Radius of the [Location]. If a facility is too far (e.g. in a different 
 	city or bay outside the radius), EXCLUDE it.
 2. For 'tides.events': Include ALL events returned by the tool (including 
-	buffer days). Do not filter. This is required for charting.
+	buffer days). Do not filter. If no events are available, provide an empty list `[]`.
 3. For 'tides.station_name': Use the EXACT station_name from the tool.
+3a. For 'tides.note': If the tool provides a note or message explaining data availability (e.g. 'Tidal data for ... is published up to 7 days in advance...'), include that explanation in 'tides.note'.
 4. For 'weather_summary': Synthesize a readable sentence.
 6. **Facility Coordinates:** Use the EXACT Latitude/Longitude returned by 
 	'FindPlacesNearby'.
@@ -100,7 +102,8 @@ CRITICAL RULES:
 		"station_name": "...",
 		"events": [
 			{"time": "2025-05-01 06:30", "type": "High", "height_ft": 8.5}
-		]
+		],
+		"note": "..."
 	},
 	"pilot_notes": {
 		"overview": "Comprehensive hydrographic and pilotage overview for entering and staying in this harbor or area.",
