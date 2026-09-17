@@ -40,6 +40,6 @@
 36. Done. 36. Add GPS check-in feature for voyage owners to show current position on map and shared report.
 37. Done. Back, Guide, Report, Tracks buttons aren't designed well. They words needs to be smaller fonts. or somehow better spaced. 
 38. Done. The dropdown for Track Type should be styled like the app, instead of native. 
-39. Delete uploaded tracks button does not work. (Actually it's a z index issue, the confirm modal needs to be higher.)
+39. Done. Delete uploaded tracks button does not work. (Actually it's a z index issue, the confirm modal needs to be higher.)
 40. Can we trigger a debrief job for all tracks at once instead of one by one?
 41. Can we add the debrief content to the voyage report?

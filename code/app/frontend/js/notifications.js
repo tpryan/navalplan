@@ -40,7 +40,11 @@ export function showNotification(title, message, actions = null) {
                 btn.textContent = action.label;
                 btn.onclick = () => {
                     modal.classList.add('hidden');
-                    modalOverlay.classList.add('hidden');
+                    const hasOtherModal = Array.from(document.querySelectorAll('.modal:not(#modal-notification)'))
+                        .some(m => !m.classList.contains('hidden'));
+                    if (!hasOtherModal && modalOverlay) {
+                        modalOverlay.classList.add('hidden');
+                    }
                     if (action.callback) action.callback();
                 };
                 actionsContainer.insertBefore(btn, closeBtn);
