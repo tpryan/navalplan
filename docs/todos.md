@@ -47,4 +47,4 @@
 43. Done. When adding debriefing to a page of the report, can you add it along with the starting stop for each leg. I do not want a consolidated report at the end. I want one per stop. It should appear as part of the filtered sailing version of the report. 
 44. Done. When we have a planned route, can we not show the direct lines between stops as they are just straght lines between two points.
 45. Done. After rerunning stop research the tracks on the map disappear, it should still be there. 
-46. There should only be one button for debriefing. Not one per gpx track. Debrief all at once and only do all at once.
+46. Done. There should only be one button for debriefing. Not one per gpx track. Debrief all at once and only do all at once.
