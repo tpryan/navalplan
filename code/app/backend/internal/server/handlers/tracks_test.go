@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -252,4 +253,135 @@ func TestDebriefVoyageTrack(t *testing.T) {
 		}
 		mockStore.AssertExpectations(t)
 	})
+}
+
+func TestDebriefAllVoyageTracks(t *testing.T) {
+	personID := int64(1)
+	otherPersonID := int64(2)
+	voyageID := int64(10)
+	recDist1 := 12.5
+	avgSpd1 := 6.2
+	maxSpd1 := 7.8
+	dur1 := "02:00:00"
+	recDist2 := 18.0
+	avgSpd2 := 7.0
+	maxSpd2 := 8.5
+	dur2 := "02:30:00"
+
+	tests := []struct {
+		name           string
+		voyageID       string
+		withAuth       bool
+		authPersonID   int64
+		setupMock      func(m *MockStore)
+		expectedStatus int
+		expectCount    int
+	}{
+		{
+			name:           "unauthorized when no person in context",
+			voyageID:       "10",
+			withAuth:       false,
+			setupMock:      func(m *MockStore) {},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "invalid voyage id",
+			voyageID:       "invalid",
+			withAuth:       true,
+			authPersonID:   personID,
+			setupMock:      func(m *MockStore) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:         "voyage not found",
+			voyageID:     "10",
+			withAuth:     true,
+			authPersonID: personID,
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(nil, errors.New("not found"))
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:         "forbidden when voyage owned by different person",
+			voyageID:     "10",
+			withAuth:     true,
+			authPersonID: otherPersonID,
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:         "successfully debriefs all tracks",
+			voyageID:     "10",
+			withAuth:     true,
+			authPersonID: personID,
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				tracks := []model.VoyageTrack{
+					{
+						ID:               "track-1",
+						VoyageID:         voyageID,
+						Kind:             "recorded",
+						Name:             "Leg 1",
+						DistanceNM:       &recDist1,
+						DurationInterval: &dur1,
+						AvgSpeedKts:      &avgSpd1,
+						MaxSpeedKts:      &maxSpd1,
+					},
+					{
+						ID:               "track-2",
+						VoyageID:         voyageID,
+						Kind:             "recorded",
+						Name:             "Leg 2",
+						DistanceNM:       &recDist2,
+						DurationInterval: &dur2,
+						AvgSpeedKts:      &avgSpd2,
+						MaxSpeedKts:      &maxSpd2,
+					},
+				}
+				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
+				m.On("UpdateVoyageTrackDebrief", "track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
+				m.On("UpdateVoyageTrackDebrief", "track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectCount:    2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			tt.setupMock(mockStore)
+			handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/voyages/"+tt.voyageID+"/track/debrief", nil)
+			req.SetPathValue("id", tt.voyageID)
+			if tt.withAuth {
+				req = addPerson(req, tt.authPersonID)
+			}
+
+			w := httptest.NewRecorder()
+			handler.DebriefAllVoyageTracks(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("DebriefAllVoyageTracks() status = %d, want %d; body = %s", w.Code, tt.expectedStatus, w.Body.String())
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				var debriefs []*model.TrackDebrief
+				if err := json.Unmarshal(w.Body.Bytes(), &debriefs); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+				if len(debriefs) != tt.expectCount {
+					t.Errorf("Debrief count = %d, want %d", len(debriefs), tt.expectCount)
+				}
+				if debriefs[0].TrackID != "track-1" || debriefs[1].TrackID != "track-2" {
+					t.Errorf("Unexpected track IDs in debriefs: %+v", debriefs)
+				}
+			}
+			mockStore.AssertExpectations(t)
+		})
+	}
 }

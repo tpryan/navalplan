@@ -412,7 +412,13 @@
         <div class="tracks-list-section card p-md mb-lg">
           <div class="flex justify-between align-center mb-sm">
             <h3 class="m-0">Voyage Tracks</h3>
-            <span id="tracks-count-badge" class="font-sm text-gray">0 tracks</span>
+            <div class="flex align-center gap-sm">
+              <span id="tracks-count-badge" class="font-sm text-gray">0 tracks</span>
+              <button id="btn-debrief-all-tracks" class="btn secondary p-xs font-xs flex align-center gap-xs hidden" title="Debrief all tracks">
+                <span class="material-symbols-outlined icon-align font-sm">analytics</span>
+                Debrief All
+              </button>
+            </div>
           </div>
           <div id="tracks-list-container">
             <p class="font-sm text-gray">No tracks uploaded yet for this voyage.</p>

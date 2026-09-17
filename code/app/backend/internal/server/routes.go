@@ -108,6 +108,8 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodDelete, "/api/v1/voyages/{id}/tracks/{trackId}", http.HandlerFunc(s.Handler.DeleteVoyageTrack), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/track/{trackId}/debrief", http.HandlerFunc(s.Handler.DebriefVoyageTrack), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/tracks/{trackId}/debrief", http.HandlerFunc(s.Handler.DebriefVoyageTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/track/debrief", http.HandlerFunc(s.Handler.DebriefAllVoyageTracks), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/tracks/debrief", http.HandlerFunc(s.Handler.DebriefAllVoyageTracks), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/track", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/tracks", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
 

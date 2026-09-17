@@ -4593,13 +4593,43 @@ function renderTracksList() {
     const countBadge = document.getElementById('tracks-count-badge');
     if (!container) return;
 
+    const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
+
     if (!currentTracks || currentTracks.length === 0) {
         container.innerHTML = '<p class="font-sm text-gray">No tracks uploaded yet for this voyage.</p>';
         if (countBadge) countBadge.textContent = '0 tracks';
+        if (debriefAllBtn) debriefAllBtn.classList.add('hidden');
+        renderDebriefCard(null);
         return;
     }
 
     if (countBadge) countBadge.textContent = `${currentTracks.length} track${currentTracks.length === 1 ? '' : 's'}`;
+    if (debriefAllBtn) {
+        debriefAllBtn.classList.remove('hidden');
+        debriefAllBtn.onclick = async () => {
+            if (!currentVoyage) return;
+            debriefAllBtn.disabled = true;
+            debriefAllBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing All...';
+            const trackDebriefBtns = container.querySelectorAll('.btn-track-debrief');
+            trackDebriefBtns.forEach(b => { b.disabled = true; });
+
+            try {
+                const res = await API.debriefAllVoyageTracks(currentVoyage.id);
+                const debriefList = Array.isArray(res) ? res : (res.debriefs || []);
+                debriefList.forEach(deb => {
+                    const tr = currentTracks.find(x => x.id === deb.track_id);
+                    if (tr) tr.debrief = deb;
+                });
+                renderDebriefCard(debriefList);
+            } catch (err) {
+                showNotification('Debrief Error', err.message || 'Failed to debrief all tracks');
+            } finally {
+                debriefAllBtn.disabled = false;
+                debriefAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief All';
+                trackDebriefBtns.forEach(b => { b.disabled = false; });
+            }
+        };
+    }
 
     let html = '<div class="flex flex-col gap-sm">';
     currentTracks.forEach(t => {
@@ -4670,9 +4700,10 @@ function renderTracksList() {
             debriefBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing...';
             try {
                 const res = await API.debriefVoyageTrack(currentVoyage.id, trackId);
+                const debriefData = res.debrief || res;
                 const tr = currentTracks.find(x => x.id === trackId);
-                if (tr) tr.debrief = res.debrief;
-                renderDebriefCard(res.debrief);
+                if (tr) tr.debrief = debriefData;
+                renderDebriefCard(debriefData);
             } catch (err) {
                 showNotification('Debrief Error', err.message || 'Failed to run passage debrief');
             } finally {
@@ -4683,82 +4714,103 @@ function renderTracksList() {
     });
 
     // Check if any track has debrief data already
-    const trackWithDebrief = currentTracks.find(t => t.debrief != null);
-    if (trackWithDebrief) {
-        renderDebriefCard(trackWithDebrief.debrief);
+    const tracksWithDebrief = currentTracks.filter(t => t.debrief != null);
+    if (tracksWithDebrief.length > 0) {
+        renderDebriefCard(tracksWithDebrief.map(t => t.debrief));
+    } else {
+        renderDebriefCard(null);
     }
 }
 
 function renderDebriefCard(debrief) {
     const container = document.getElementById('debrief-container');
     if (!container) return;
-    if (!debrief) {
+    if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
         container.classList.add('hidden');
         return;
     }
 
-    let parsed = debrief;
-    if (typeof debrief === 'string') {
-        try { parsed = JSON.parse(debrief); } catch (e) { parsed = { summary: debrief }; }
-    }
+    const debriefs = Array.isArray(debrief) ? debrief : [debrief];
+    let html = '';
 
-    let obsHtml = '';
-    if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
-        obsHtml = `
-          <div class="mt-sm">
-            <h5 class="m-0 mb-xs">Tactical Pilot Observations:</h5>
-            <ul class="m-0 pl-md font-sm">
-              ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
-            </ul>
+    debriefs.forEach((item, index) => {
+        let parsed = item;
+        if (typeof item === 'string') {
+            try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
+        }
+
+        let obsHtml = '';
+        if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
+            obsHtml = `
+              <div class="mt-sm">
+                <h5 class="m-0 mb-xs">Tactical Pilot Observations:</h5>
+                <ul class="m-0 pl-md font-sm">
+                  ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
+                </ul>
+              </div>
+            `;
+        }
+
+        const title = parsed.track_name
+            ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
+            : 'Passage Debrief Analysis';
+
+        const varVal = parsed.distance_variance_pct != null
+            ? `${parsed.distance_variance_pct > 0 ? '+' : ''}${parsed.distance_variance_pct.toFixed(1)}%`
+            : (parsed.distance_delta_nm != null
+                ? `${parsed.distance_delta_nm > 0 ? '+' : ''}${parsed.distance_delta_nm.toFixed(1)} NM`
+                : null);
+
+        const avgSpdVal = parsed.average_speed_kts ?? parsed.avg_speed_kts;
+
+        html += `
+          <div class="debrief-card ${index > 0 ? 'mt-md' : ''}">
+            <div class="flex justify-between align-center">
+              <h4 class="m-0 flex align-center gap-xs">
+                <span class="material-symbols-outlined text-brand-medium">flag</span>
+                ${title}
+              </h4>
+              <span class="font-xs text-gray">${new Date().toLocaleDateString()}</span>
+            </div>
+            <p class="debrief-summary font-sm mt-xs mb-sm">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
+            
+            <div class="debrief-stat-grid">
+              ${parsed.recorded_distance_nm != null ? `
+                <div class="debrief-stat-item">
+                  <div class="val rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>
+                  <div class="lbl">Recorded Dist</div>
+                </div>` : ''}
+              ${parsed.planned_distance_nm != null ? `
+                <div class="debrief-stat-item">
+                  <div class="val plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>
+                  <div class="lbl">Planned Dist</div>
+                </div>` : ''}
+              ${varVal != null ? `
+                <div class="debrief-stat-item">
+                  <div class="val var-pct" style="color: ${(parsed.distance_variance_pct || 0) > 25 ? '#D84A1B' : '#0077B6'}">
+                    ${varVal}
+                  </div>
+                  <div class="lbl">Variance (Tacking)</div>
+                </div>` : ''}
+              ${avgSpdVal != null ? `
+                <div class="debrief-stat-item">
+                  <div class="val avg-spd">${avgSpdVal.toFixed(1)} kt</div>
+                  <div class="lbl">Avg Speed</div>
+                </div>` : ''}
+            </div>
+
+            ${parsed.tacking_efficiency ? `
+              <p class="font-sm mb-xs tack-eff"><strong>Tacking Efficiency:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}</p>
+            ` : ''}
+            ${parsed.weather_impact ? `
+              <p class="font-sm mb-xs"><strong>Weather &amp; Conditions:</strong> ${escapeTrackHtml(parsed.weather_impact)}</p>
+            ` : ''}
+            ${obsHtml}
           </div>
         `;
-    }
+    });
 
-    container.innerHTML = `
-      <div class="debrief-card">
-        <div class="flex justify-between align-center">
-          <h4 class="m-0 flex align-center gap-xs">
-            <span class="material-symbols-outlined text-brand-medium">flag</span>
-            Passage Debrief Analysis
-          </h4>
-          <span class="font-xs text-gray">${new Date().toLocaleDateString()}</span>
-        </div>
-        <p class="font-sm mt-xs mb-sm">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
-        
-        <div class="debrief-stat-grid">
-          ${parsed.recorded_distance_nm != null ? `
-            <div class="debrief-stat-item">
-              <div class="val">${parsed.recorded_distance_nm.toFixed(1)} NM</div>
-              <div class="lbl">Recorded Dist</div>
-            </div>` : ''}
-          ${parsed.planned_distance_nm != null ? `
-            <div class="debrief-stat-item">
-              <div class="val">${parsed.planned_distance_nm.toFixed(1)} NM</div>
-              <div class="lbl">Planned Dist</div>
-            </div>` : ''}
-          ${parsed.distance_variance_pct != null ? `
-            <div class="debrief-stat-item">
-              <div class="val" style="color: ${parsed.distance_variance_pct > 25 ? '#D84A1B' : '#0077B6'}">
-                ${parsed.distance_variance_pct > 0 ? '+' : ''}${parsed.distance_variance_pct.toFixed(1)}%
-              </div>
-              <div class="lbl">Variance (Tacking)</div>
-            </div>` : ''}
-          ${parsed.average_speed_kts != null ? `
-            <div class="debrief-stat-item">
-              <div class="val">${parsed.average_speed_kts.toFixed(1)} kt</div>
-              <div class="lbl">Avg Speed</div>
-            </div>` : ''}
-        </div>
-
-        ${parsed.tacking_efficiency ? `
-          <p class="font-sm mb-xs"><strong>Tacking Efficiency:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}</p>
-        ` : ''}
-        ${parsed.weather_impact ? `
-          <p class="font-sm mb-xs"><strong>Weather &amp; Conditions:</strong> ${escapeTrackHtml(parsed.weather_impact)}</p>
-        ` : ''}
-        ${obsHtml}
-      </div>
-    `;
+    container.innerHTML = html;
     container.classList.remove('hidden');
 }
 
