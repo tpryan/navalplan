@@ -248,3 +248,50 @@ func (r *RawJSON) Scan(value interface{}) error {
 	}
 	return nil
 }
+
+// TrackKind represents whether a track is planned or recorded.
+type TrackKind string
+
+const (
+	TrackKindPlanned  TrackKind = "planned"
+	TrackKindRecorded TrackKind = "recorded"
+)
+
+// VoyageTrack represents a planned route or recorded GPS track.
+type VoyageTrack struct {
+	ID                string     `json:"id" db:"id"`
+	VoyageID          int64      `json:"voyage_id" db:"voyage_id"`
+	VoyageStopID      *int64     `json:"voyage_stop_id,omitempty" db:"voyage_stop_id"`
+	Kind              string     `json:"kind" db:"kind"`
+	Name              string     `json:"name" db:"name"`
+	FileName          *string    `json:"file_name,omitempty" db:"file_name"`
+	StartTime         *time.Time `json:"start_time,omitempty" db:"start_time"`
+	EndTime           *time.Time `json:"end_time,omitempty" db:"end_time"`
+	DistanceNM        *float64   `json:"distance_nm,omitempty" db:"distance_nm"`
+	DurationInterval  *string    `json:"duration_interval,omitempty" db:"duration_interval"`
+	MaxSpeedKts       *float64   `json:"max_speed_kts,omitempty" db:"max_speed_kts"`
+	AvgSpeedKts       *float64   `json:"avg_speed_kts,omitempty" db:"avg_speed_kts"`
+	GeoJSON           RawJSON    `json:"geojson" db:"geojson"`
+	SimplifiedGeoJSON RawJSON    `json:"simplified_geojson" db:"simplified_geojson"`
+	RawGPX            *string    `json:"raw_gpx,omitempty" db:"raw_gpx"`
+	Debrief           RawJSON    `json:"debrief,omitempty" db:"debrief"`
+	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// TrackDebrief encapsulates comparative analysis metrics and AI observations.
+type TrackDebrief struct {
+	TrackID            string   `json:"track_id"`
+	TrackName          string   `json:"track_name"`
+	RecordedDistanceNM float64  `json:"recorded_distance_nm"`
+	PlannedDistanceNM  float64  `json:"planned_distance_nm"`
+	DistanceDeltaNM    float64  `json:"distance_delta_nm"`
+	RecordedDuration   string   `json:"recorded_duration"`
+	PlannedDuration    string   `json:"planned_duration"`
+	AvgSpeedKts        float64  `json:"avg_speed_kts"`
+	MaxSpeedKts        float64  `json:"max_speed_kts"`
+	Summary            string   `json:"summary"`
+	TackingEfficiency  string   `json:"tacking_efficiency"`
+	WeatherImpact      string   `json:"weather_impact"`
+	Observations       []string `json:"observations"`
+}

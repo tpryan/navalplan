@@ -91,6 +91,7 @@ func InitLogging(env string) {
 		})
 		handler = &CloudLoggingHandler{Handler: jsonHandler, FormatMessage: false}
 	} else {
+		lipgloss.SetHasDarkBackground(true)
 		chOptions := charm.Options{Prefix: "agent", ReportTimestamp: true, Level: charm.DebugLevel}
 		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
 		handler = &CloudLoggingHandler{Handler: cbLogger, FormatMessage: true}

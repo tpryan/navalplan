@@ -62,8 +62,10 @@ func (p *SailingDirectionsProvider) Close() error {
 // NewSailingDirectionsTool creates the ADK function tool for query_sailing_directions.
 func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus string) (tool.Tool, *SailingDirectionsProvider, error) {
 	var client HTTPDoer = http.DefaultClient
-	if projectID != "" {
-		googleClient, err := google.DefaultClient(context.Background(), "https://www.googleapis.com/auth/cloud-platform")
+	if projectID != "" && projectID != "your-project-id" {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		googleClient, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 		if err == nil {
 			client = googleClient
 		}

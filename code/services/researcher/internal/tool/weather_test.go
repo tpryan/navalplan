@@ -58,7 +58,7 @@ func TestNewWeatherTool(t *testing.T) {
 }
 
 func TestGetWeatherForecast(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC()
 	today := now.Format("2006-01-02")
 	futureDate := now.AddDate(0, 2, 0).Format("2006-01-02")
 

@@ -82,7 +82,9 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx agent.Context, args WeatherArg
 		return WeatherResult{}, fmt.Errorf("%w: %v", ErrInvalidDate, err)
 	}
 
-	daysUntil := time.Until(targetDate).Hours() / 24
+	nowUTC := time.Now().UTC()
+	todayUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
+	daysUntil := targetDate.Sub(todayUTC).Hours() / 24
 	var weather, marine *openmeteogo.WeatherData
 	var weatherErr, marineErr error
 

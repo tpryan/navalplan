@@ -1133,3 +1133,120 @@ html:has(.print-view) {
 .gm-style .gm-style-iw-t::after {
     top: -1px !important;
 }
+
+/* ─── GPX Track & Debrief Styles ─────────────────────────────────────────── */
+#track-layer-controls {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow);
+    padding: 8px 14px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.track-layer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-color);
+    background: var(--surface);
+    color: var(--text-dark);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.track-layer-btn.active {
+    border-color: var(--brand-medium);
+    background: var(--brand-lighter);
+}
+
+.track-legend-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 4px;
+    border-radius: 2px;
+}
+
+.track-swatch-planned {
+    background: #00B4D8;
+    border: 1px dashed #0077B6;
+}
+
+.track-swatch-recorded {
+    background: #FF6B35;
+}
+
+.track-hover-hud {
+    position: absolute;
+    z-index: 50;
+    background: rgba(11, 18, 32, 0.92);
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--font-mono, monospace);
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.track-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.track-badge-planned {
+    background: rgba(0, 180, 216, 0.15);
+    color: #0077B6;
+    border: 1px solid rgba(0, 180, 216, 0.4);
+}
+.track-badge-recorded {
+    background: rgba(255, 107, 53, 0.15);
+    color: #D84A1B;
+    border: 1px solid rgba(255, 107, 53, 0.4);
+}
+
+.debrief-card {
+    background: var(--surface-subtle, #f8fafc);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+}
+.debrief-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin: 12px 0;
+}
+.debrief-stat-item {
+    background: var(--surface);
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+.debrief-stat-item .val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--brand-dark);
+}
+.debrief-stat-item .lbl {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+

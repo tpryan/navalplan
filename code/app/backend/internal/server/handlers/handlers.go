@@ -91,6 +91,14 @@ type DBStore interface {
 	DeleteSeasonalityForMonth(ctx context.Context, month int) error
 	GetAllRegions(ctx context.Context) ([]model.SailingRegion, error)
 	DeleteSeasonality(ctx context.Context, regionID int, month int) error
+
+	// Tracks
+	CreateVoyageTrack(ctx context.Context, t *model.VoyageTrack) error
+	GetVoyageTrack(ctx context.Context, id string) (*model.VoyageTrack, error)
+	ListVoyageTracks(ctx context.Context, voyageID int64) ([]model.VoyageTrack, error)
+	ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error)
+	DeleteVoyageTrack(ctx context.Context, id string) error
+	UpdateVoyageTrackDebrief(ctx context.Context, id string, debrief model.RawJSON) error
 }
 
 var _ DBStore = (*store.DB)(nil)

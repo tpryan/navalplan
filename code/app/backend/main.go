@@ -15,6 +15,7 @@ import (
 	"app/internal/store"
 	"app/internal/telemetry"
 
+	"github.com/charmbracelet/lipgloss"
 	charm "github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
@@ -23,6 +24,7 @@ func main() {
 	// Load .env file (try current dir, then project root)
 	godotenv.Load(".env")
 	godotenv.Load("../../.env")
+	godotenv.Load("../../../.env")
 
 	cfg, err := config.New(os.Getenv)
 	if err != nil {
@@ -50,6 +52,7 @@ func main() {
 		handler = &server.CloudLoggingHandler{Handler: jsonHandler, FormatMessage: true}
 	} else {
 		// Development: Charmbracelet colorful slog
+		lipgloss.SetHasDarkBackground(true)
 		chOptions := charm.Options{Prefix: "backend", ReportTimestamp: true}
 		cbLogger := charm.NewWithOptions(os.Stderr, chOptions)
 		handler = &server.CloudLoggingHandler{Handler: cbLogger}

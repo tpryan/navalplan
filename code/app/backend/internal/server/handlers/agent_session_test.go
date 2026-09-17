@@ -62,6 +62,30 @@ func (s *sessionTrackingStore) UpsertSafetyAlerts(_ context.Context, _ int64, _ 
 	return nil
 }
 
+func (s *sessionTrackingStore) ListStopTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
+	return nil, nil
+}
+
+func (s *sessionTrackingStore) ListVoyageTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
+	return nil, nil
+}
+
+func (s *sessionTrackingStore) CreateVoyageTrack(_ context.Context, _ *model.VoyageTrack) error {
+	return nil
+}
+
+func (s *sessionTrackingStore) GetVoyageTrack(_ context.Context, _ string) (*model.VoyageTrack, error) {
+	return nil, nil
+}
+
+func (s *sessionTrackingStore) DeleteVoyageTrack(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *sessionTrackingStore) UpdateVoyageTrackDebrief(_ context.Context, _ string, _ model.RawJSON) error {
+	return nil
+}
+
 func agentServerWithSessionFailure(t *testing.T) (srv *httptest.Server, runCalled *bool) {
 	t.Helper()
 	called := false

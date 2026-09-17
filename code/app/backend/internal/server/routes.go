@@ -56,8 +56,11 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodGet, "/api/v1/public/voyages/{token}", http.HandlerFunc(s.Handler.GetPublicVoyage), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/stops", http.HandlerFunc(s.Handler.GetPublicStops), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/guide", http.HandlerFunc(s.Handler.GetPublicVoyageGuide), 0},
+		{http.MethodGet, "/api/v1/public/voyages/{token}/track", http.HandlerFunc(s.Handler.GetPublicVoyageTracks), 0},
+		{http.MethodGet, "/api/v1/public/voyages/{token}/tracks", http.HandlerFunc(s.Handler.GetPublicVoyageTracks), 0},
 
 		// --- API Protected (Level 1) ---
+
 		// Person
 		{http.MethodGet, "/api/v1/person", http.HandlerFunc(s.Handler.GetPerson), 1},
 		{http.MethodPut, "/api/v1/person", http.HandlerFunc(s.Handler.UpdatePerson), 1},
@@ -96,7 +99,20 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/lookout", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerVoyageLookout)), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/weather", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.UpdateVoyageWeather)), 1},
 
+		// Tracks
+		{http.MethodGet, "/api/v1/voyages/{id}/track", http.HandlerFunc(s.Handler.ListVoyageTracks), 1},
+		{http.MethodGet, "/api/v1/voyages/{id}/tracks", http.HandlerFunc(s.Handler.ListVoyageTracks), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/track", http.HandlerFunc(s.Handler.UploadVoyageTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/tracks", http.HandlerFunc(s.Handler.UploadVoyageTrack), 1},
+		{http.MethodDelete, "/api/v1/voyages/{id}/track/{trackId}", http.HandlerFunc(s.Handler.DeleteVoyageTrack), 1},
+		{http.MethodDelete, "/api/v1/voyages/{id}/tracks/{trackId}", http.HandlerFunc(s.Handler.DeleteVoyageTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/track/{trackId}/debrief", http.HandlerFunc(s.Handler.DebriefVoyageTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/tracks/{trackId}/debrief", http.HandlerFunc(s.Handler.DebriefVoyageTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/track", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/tracks", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
+
 		// --- Admin ---
+
 		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},
 		{http.MethodPost, "/api/admin/invite", http.HandlerFunc(s.Handler.InviteUser), 2},
 		{http.MethodDelete, "/api/admin/invite/{email}", http.HandlerFunc(s.Handler.RevokeInvitation), 2},

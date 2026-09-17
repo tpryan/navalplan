@@ -65,6 +65,12 @@ let _guideProgressES = null;
 let _stopPoll = null;
 let _stopProgressES = null;
 
+// GPX Tracks state
+let currentTracks = [];
+let trackPolylines = [];
+let showPlannedTracks = true;
+let showRecordedTracks = true;
+
 // ─── Sweep Manager ────────────────────────────────────────────────────────────
 const STOP_SWEEP_RADIUS_M = 9260; // 5 nautical miles
 const stopSweepInstances = new Map(); // stopId → RadarSweep instance
@@ -530,6 +536,7 @@ function initUI() {
     initVoyageModalListeners();
     initNavigationListeners();
     initModalCloseListeners();
+    initTrackListeners();
     initAdminUI();
 }
 
@@ -961,6 +968,11 @@ function initNavigationListeners() {
 
     const btnResearchAll = document.getElementById('btn-research-all');
     if (btnResearchAll) btnResearchAll.addEventListener('click', () => handleResearchAll(true));
+
+    const btnVoyageTracks = document.getElementById('btn-voyage-tracks');
+    if (btnVoyageTracks) {
+        btnVoyageTracks.addEventListener('click', openTracksModal);
+    }
 }
 
 function initModalCloseListeners() {
@@ -992,7 +1004,8 @@ function initModalCloseListeners() {
             if (document.getElementById('modal-new-voyage').classList.contains('hidden') &&
                 document.getElementById('modal-briefing').classList.contains('hidden') &&
                 document.getElementById('modal-report').classList.contains('hidden') &&
-                document.getElementById('modal-guide').classList.contains('hidden')) {
+                document.getElementById('modal-guide').classList.contains('hidden') &&
+                document.getElementById('modal-tracks').classList.contains('hidden')) {
                 modalOverlay.classList.add('hidden');
             }
         };
@@ -1008,6 +1021,37 @@ function initModalCloseListeners() {
         }
     };
     if (btnCloseGuide) btnCloseGuide.onclick = closeGuide;
+
+    // Tracks modal
+    const modalTracks = document.getElementById('modal-tracks');
+    const btnCloseTracks = document.getElementById('btn-close-tracks');
+    const closeTracks = () => {
+        if (modalTracks) modalTracks.classList.add('hidden');
+        if (document.getElementById('modal-new-voyage').classList.contains('hidden') &&
+            document.getElementById('modal-briefing').classList.contains('hidden') &&
+            document.getElementById('modal-report').classList.contains('hidden') &&
+            document.getElementById('modal-guide').classList.contains('hidden')) {
+            modalOverlay.classList.add('hidden');
+        }
+    };
+    if (btnCloseTracks) btnCloseTracks.onclick = closeTracks;
+}
+
+function initTrackListeners() {
+    const btnTogglePlanned = document.getElementById('btn-toggle-planned-tracks');
+    if (btnTogglePlanned) {
+        btnTogglePlanned.addEventListener('click', () => toggleTrackLayer('planned'));
+    }
+
+    const btnToggleRecorded = document.getElementById('btn-toggle-recorded-tracks');
+    if (btnToggleRecorded) {
+        btnToggleRecorded.addEventListener('click', () => toggleTrackLayer('recorded'));
+    }
+
+    const formUploadTrack = document.getElementById('form-upload-track');
+    if (formUploadTrack) {
+        formUploadTrack.addEventListener('submit', handleTrackUpload);
+    }
 }
 
 async function handleCopyReport() {
@@ -1626,6 +1670,10 @@ async function loadStops() {
         renderItinerary();
         renderMapStops();
 
+        if (currentVoyage && currentVoyage.id) {
+            await loadAndRenderTracks(currentVoyage.id);
+        }
+
         // Toggle visibility of Research All button
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) {
@@ -1692,6 +1740,21 @@ async function loadStops() {
             // Include Pilot Circle in bounds if it exists
             if (pilotCircle) {
                 bounds.union(pilotCircle.getBounds());
+            }
+
+            // Include Track points in bounds if they exist
+            if (currentTracks && currentTracks.length > 0) {
+                currentTracks.forEach(tr => {
+                    const rawGeo = tr.simplified_geojson || tr.geojson;
+                    let geoData = rawGeo;
+                    if (typeof rawGeo === 'string') {
+                        try { geoData = JSON.parse(rawGeo); } catch (e) {}
+                    }
+                    const coords = geoData?.geometry?.coordinates;
+                    if (Array.isArray(coords)) {
+                        coords.forEach(pt => bounds.extend({ lat: pt[1], lng: pt[0] }));
+                    }
+                });
             }
 
             if (!bounds.isEmpty()) {
@@ -4334,6 +4397,15 @@ async function initMap() {
           routePolyline = null;
       }
 
+      trackPolylines.forEach(tp => {
+          if (tp.polyline) tp.polyline.setMap(null);
+      });
+      trackPolylines = [];
+      const trackControls = document.getElementById('track-layer-controls');
+      if (trackControls) trackControls.classList.add('hidden');
+      const trackHud = document.getElementById('track-hover-hud');
+      if (trackHud) trackHud.classList.add('hidden');
+
       facilityMarkers.forEach(({ marker }) => marker.map = null);
       facilityMarkers = [];
       document.getElementById('facility-controls').classList.add('hidden');
@@ -4348,6 +4420,386 @@ async function initMap() {
           });
       }
   }
+
+// ─── GPX Tracks & Debrief Functions ──────────────────────────────────────────
+
+function escapeTrackHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+async function loadAndRenderTracks(voyageId) {
+    if (!voyageId) return;
+    try {
+        currentTracks = await API.listVoyageTracks(voyageId);
+        await renderTrackPolylines();
+        updateTrackLayerControls();
+    } catch (err) {
+        console.warn('Failed to load voyage tracks:', err);
+        currentTracks = [];
+        await renderTrackPolylines();
+        updateTrackLayerControls();
+    }
+}
+
+function updateTrackLayerControls() {
+    const controls = document.getElementById('track-layer-controls');
+    if (!controls) return;
+    if (currentTracks && currentTracks.length > 0) {
+        controls.classList.remove('hidden');
+    } else {
+        controls.classList.add('hidden');
+    }
+}
+
+async function renderTrackPolylines() {
+    // Detach and clean up existing track polylines
+    trackPolylines.forEach(tp => {
+        if (tp.polyline) tp.polyline.setMap(null);
+    });
+    trackPolylines = [];
+
+    if (!map || !currentTracks || currentTracks.length === 0) return;
+
+    const { Polyline } = await importLibrary("maps");
+    const hud = document.getElementById('track-hover-hud');
+
+    for (const track of currentTracks) {
+        const rawGeo = track.simplified_geojson || track.geojson;
+        if (!rawGeo) continue;
+
+        let geoData = rawGeo;
+        if (typeof rawGeo === 'string') {
+            try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
+        }
+
+        const coords = geoData?.geometry?.coordinates;
+        if (!coords || !Array.isArray(coords) || coords.length < 2) continue;
+
+        // GeoJSON coordinate order is [longitude, latitude]
+        const pathCoords = coords.map(pt => ({ lat: pt[1], lng: pt[0] }));
+        const isPlanned = track.kind === 'planned';
+
+        let polyline;
+        if (isPlanned) {
+            polyline = new Polyline({
+                path: pathCoords,
+                geodesic: true,
+                strokeColor: '#00B4D8',
+                strokeOpacity: 0,
+                icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: '#00B4D8', scale: 3 },
+                    offset: '0',
+                    repeat: '16px'
+                }],
+                map: showPlannedTracks ? map : null
+            });
+        } else {
+            polyline = new Polyline({
+                path: pathCoords,
+                geodesic: true,
+                strokeColor: '#FF6B35',
+                strokeOpacity: 0.85,
+                strokeWeight: 4,
+                map: showRecordedTracks ? map : null
+            });
+
+            if (hud) {
+                polyline.addListener('mousemove', (e) => {
+                    const mapDiv = document.getElementById('map-container');
+                    if (!mapDiv) return;
+                    const rect = mapDiv.getBoundingClientRect();
+                    const x = e.domEvent.clientX - rect.left;
+                    const y = e.domEvent.clientY - rect.top;
+                    hud.style.left = `${x + 12}px`;
+                    hud.style.top = `${y + 12}px`;
+
+                    let info = `${escapeTrackHtml(track.name || 'Recorded Track')}`;
+                    if (track.avg_speed_kts != null) {
+                        info += ` | Avg: ${track.avg_speed_kts.toFixed(1)} kts`;
+                    }
+                    if (track.max_speed_kts != null) {
+                        info += ` | Max: ${track.max_speed_kts.toFixed(1)} kts`;
+                    }
+                    if (track.distance_nm != null) {
+                        info += ` | Dist: ${track.distance_nm.toFixed(1)} NM`;
+                    }
+                    hud.innerHTML = info;
+                    hud.classList.remove('hidden');
+                });
+
+                polyline.addListener('mouseout', () => {
+                    hud.classList.add('hidden');
+                });
+            }
+        }
+
+        polyline.addListener('click', () => {
+            openTracksModal();
+        });
+
+        trackPolylines.push({ id: track.id, kind: track.kind, polyline });
+    }
+}
+
+function toggleTrackLayer(kind) {
+    if (kind === 'planned') {
+        showPlannedTracks = !showPlannedTracks;
+        const btn = document.getElementById('btn-toggle-planned-tracks');
+        if (btn) btn.classList.toggle('active', showPlannedTracks);
+    } else if (kind === 'recorded') {
+        showRecordedTracks = !showRecordedTracks;
+        const btn = document.getElementById('btn-toggle-recorded-tracks');
+        if (btn) btn.classList.toggle('active', showRecordedTracks);
+    }
+    trackPolylines.forEach(tp => {
+        if (tp.kind === 'planned') {
+            tp.polyline.setMap(showPlannedTracks ? map : null);
+        } else if (tp.kind === 'recorded') {
+            tp.polyline.setMap(showRecordedTracks ? map : null);
+        }
+    });
+}
+
+function openTracksModal() {
+    const modal = document.getElementById('modal-tracks');
+    const overlay = document.getElementById('modal-overlay');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    if (overlay) overlay.classList.remove('hidden');
+    renderTracksList();
+}
+
+function closeTracksModal() {
+    const modal = document.getElementById('modal-tracks');
+    const overlay = document.getElementById('modal-overlay');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    if (overlay && document.getElementById('modal-new-voyage').classList.contains('hidden') &&
+        document.getElementById('modal-briefing').classList.contains('hidden') &&
+        document.getElementById('modal-report').classList.contains('hidden') &&
+        document.getElementById('modal-guide').classList.contains('hidden')) {
+        overlay.classList.add('hidden');
+    }
+}
+
+function renderTracksList() {
+    const container = document.getElementById('tracks-list-container');
+    const countBadge = document.getElementById('tracks-count-badge');
+    if (!container) return;
+
+    if (!currentTracks || currentTracks.length === 0) {
+        container.innerHTML = '<p class="font-sm text-gray">No tracks uploaded yet for this voyage.</p>';
+        if (countBadge) countBadge.textContent = '0 tracks';
+        return;
+    }
+
+    if (countBadge) countBadge.textContent = `${currentTracks.length} track${currentTracks.length === 1 ? '' : 's'}`;
+
+    let html = '<div class="flex flex-col gap-sm">';
+    currentTracks.forEach(t => {
+        const isPlanned = t.kind === 'planned';
+        const badgeClass = isPlanned ? 'track-badge-planned' : 'track-badge-recorded';
+        const distStr = t.distance_nm != null ? `${t.distance_nm.toFixed(1)} NM` : '--';
+        const durationStr = t.duration_interval || '--';
+        const avgSpeedStr = t.avg_speed_kts != null ? `${t.avg_speed_kts.toFixed(1)} kts` : '--';
+        const maxSpeedStr = t.max_speed_kts != null ? `${t.max_speed_kts.toFixed(1)} kts` : '--';
+
+        html += `
+        <div class="card p-sm border flex flex-col gap-xs track-item" data-track-id="${t.id}">
+          <div class="flex justify-between align-center">
+            <div class="flex align-center gap-xs">
+              <span class="track-badge ${badgeClass}">${t.kind}</span>
+              <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
+            </div>
+            <div class="flex gap-xs">
+              <button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}" title="Run Passage Debrief">
+                <span class="material-symbols-outlined icon-align font-sm">analytics</span>
+                Debrief
+              </button>
+              <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}" title="Delete Track">
+                <span class="material-symbols-outlined font-sm">delete</span>
+              </button>
+            </div>
+          </div>
+          <div class="font-xs text-gray flex gap-md">
+            <span>Distance: <strong>${distStr}</strong></span>
+            <span>Duration: <strong>${durationStr}</strong></span>
+            ${!isPlanned ? `<span>Avg SOG: <strong>${avgSpeedStr}</strong></span><span>Max SOG: <strong>${maxSpeedStr}</strong></span>` : ''}
+          </div>
+        </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Wire up delete and debrief buttons
+    container.querySelectorAll('.btn-track-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const trackId = e.currentTarget.dataset.trackId;
+            showNotification('Delete Track', 'Are you sure you want to delete this track?', [
+                {
+                    label: 'Delete',
+                    type: 'danger',
+                    hideClose: true,
+                    callback: async () => {
+                        try {
+                            await API.deleteVoyageTrack(currentVoyage.id, trackId);
+                            await loadAndRenderTracks(currentVoyage.id);
+                            renderTracksList();
+                        } catch (err) {
+                            showNotification('Error', err.message || 'Failed to delete track');
+                        }
+                    }
+                },
+                { label: 'Cancel' }
+            ]);
+        });
+    });
+
+    container.querySelectorAll('.btn-track-debrief').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const trackId = e.currentTarget.dataset.trackId;
+            const debriefBtn = e.currentTarget;
+            debriefBtn.disabled = true;
+            debriefBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing...';
+            try {
+                const res = await API.debriefVoyageTrack(currentVoyage.id, trackId);
+                const tr = currentTracks.find(x => x.id === trackId);
+                if (tr) tr.debrief = res.debrief;
+                renderDebriefCard(res.debrief);
+            } catch (err) {
+                showNotification('Debrief Error', err.message || 'Failed to run passage debrief');
+            } finally {
+                debriefBtn.disabled = false;
+                debriefBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief';
+            }
+        });
+    });
+
+    // Check if any track has debrief data already
+    const trackWithDebrief = currentTracks.find(t => t.debrief != null);
+    if (trackWithDebrief) {
+        renderDebriefCard(trackWithDebrief.debrief);
+    }
+}
+
+function renderDebriefCard(debrief) {
+    const container = document.getElementById('debrief-container');
+    if (!container) return;
+    if (!debrief) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    let parsed = debrief;
+    if (typeof debrief === 'string') {
+        try { parsed = JSON.parse(debrief); } catch (e) { parsed = { summary: debrief }; }
+    }
+
+    let obsHtml = '';
+    if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
+        obsHtml = `
+          <div class="mt-sm">
+            <h5 class="m-0 mb-xs">Tactical Pilot Observations:</h5>
+            <ul class="m-0 pl-md font-sm">
+              ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+    }
+
+    container.innerHTML = `
+      <div class="debrief-card">
+        <div class="flex justify-between align-center">
+          <h4 class="m-0 flex align-center gap-xs">
+            <span class="material-symbols-outlined text-brand-medium">flag</span>
+            Passage Debrief Analysis
+          </h4>
+          <span class="font-xs text-gray">${new Date().toLocaleDateString()}</span>
+        </div>
+        <p class="font-sm mt-xs mb-sm">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
+        
+        <div class="debrief-stat-grid">
+          ${parsed.recorded_distance_nm != null ? `
+            <div class="debrief-stat-item">
+              <div class="val">${parsed.recorded_distance_nm.toFixed(1)} NM</div>
+              <div class="lbl">Recorded Dist</div>
+            </div>` : ''}
+          ${parsed.planned_distance_nm != null ? `
+            <div class="debrief-stat-item">
+              <div class="val">${parsed.planned_distance_nm.toFixed(1)} NM</div>
+              <div class="lbl">Planned Dist</div>
+            </div>` : ''}
+          ${parsed.distance_variance_pct != null ? `
+            <div class="debrief-stat-item">
+              <div class="val" style="color: ${parsed.distance_variance_pct > 25 ? '#D84A1B' : '#0077B6'}">
+                ${parsed.distance_variance_pct > 0 ? '+' : ''}${parsed.distance_variance_pct.toFixed(1)}%
+              </div>
+              <div class="lbl">Variance (Tacking)</div>
+            </div>` : ''}
+          ${parsed.average_speed_kts != null ? `
+            <div class="debrief-stat-item">
+              <div class="val">${parsed.average_speed_kts.toFixed(1)} kt</div>
+              <div class="lbl">Avg Speed</div>
+            </div>` : ''}
+        </div>
+
+        ${parsed.tacking_efficiency ? `
+          <p class="font-sm mb-xs"><strong>Tacking Efficiency:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}</p>
+        ` : ''}
+        ${parsed.weather_impact ? `
+          <p class="font-sm mb-xs"><strong>Weather &amp; Conditions:</strong> ${escapeTrackHtml(parsed.weather_impact)}</p>
+        ` : ''}
+        ${obsHtml}
+      </div>
+    `;
+    container.classList.remove('hidden');
+}
+
+async function handleTrackUpload(e) {
+    e.preventDefault();
+    if (!currentVoyage) return;
+    const form = e.target;
+    const fileInput = document.getElementById('track-file-input');
+    const kindSelect = document.getElementById('track-kind-select');
+    const autoSplitCheckbox = document.getElementById('track-auto-split');
+    const submitBtn = document.getElementById('btn-submit-track-upload');
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showNotification('File Required', 'Please select a .gpx file to upload.');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const kind = kindSelect ? kindSelect.value : '';
+    const autoSplit = autoSplitCheckbox ? autoSplitCheckbox.checked : true;
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined spin">sync</span> Uploading...';
+    }
+
+    try {
+        await API.uploadVoyageTrack(currentVoyage.id, file, kind, autoSplit);
+        showNotification('Track Uploaded', `Successfully imported ${file.name}`);
+        form.reset();
+        await loadAndRenderTracks(currentVoyage.id);
+        renderTracksList();
+    } catch (err) {
+        showNotification('Upload Failed', err.message || 'Could not process GPX file');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="material-symbols-outlined icon-align">upload_file</span> Upload &amp; Process Track';
+        }
+    }
+}
   
 async function renderMiniTideChart(canvasId, tideData, targetDateStr) {
     const canvas = document.getElementById(canvasId);
