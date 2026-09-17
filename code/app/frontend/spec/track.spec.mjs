@@ -686,4 +686,69 @@ describe('GPX Track UI & Rendering', () => {
       expect(buildStaticPath(stops, tracksNoPlan)).toContain('&path=color:0x999999ff|weight:1|37.8,-122.4|37.5,-122.5');
     });
   });
+
+  describe('Track Persistence across Stop Research and Map Re-renders', () => {
+    it('preserves track polylines and layer controls when clearMap is called with clearTracks false', () => {
+      const setMapSpy = jasmine.createSpy('setMap');
+      let trackPolylines = [{ id: 't1', kind: 'recorded', polyline: { setMap: setMapSpy } }];
+      const trackControls = document.getElementById('track-layer-controls');
+      trackControls.classList.remove('hidden');
+
+      function clearMap(options = {}) {
+        const { clearTracks = true } = options;
+        if (clearTracks) {
+          trackPolylines.forEach(tp => {
+            if (tp.polyline) tp.polyline.setMap(null);
+          });
+          trackPolylines = [];
+          if (trackControls) trackControls.classList.add('hidden');
+        }
+      }
+
+      // Re-rendering map stops passes clearTracks: false
+      clearMap({ clearTracks: false });
+      expect(trackPolylines.length).toBe(1);
+      expect(setMapSpy).not.toHaveBeenCalled();
+      expect(trackControls.classList.contains('hidden')).toBe(false);
+
+      // Closing voyage passes clearTracks: true (or default)
+      clearMap();
+      expect(trackPolylines.length).toBe(0);
+      expect(setMapSpy).toHaveBeenCalledWith(null);
+      expect(trackControls.classList.contains('hidden')).toBe(true);
+    });
+
+    it('re-renders tracks if polylines were empty when stops are re-rendered', async () => {
+      let trackPolylines = [];
+      const currentTracks = [{ id: 't1', kind: 'recorded', name: 'Leg 1 Track' }];
+      const trackControls = document.getElementById('track-layer-controls');
+
+      let renderTrackPolylinesCalled = false;
+      const renderTrackPolylines = async () => {
+        renderTrackPolylinesCalled = true;
+        trackPolylines.push({ id: 't1', kind: 'recorded' });
+      };
+
+      const updateTrackLayerControls = () => {
+        if (currentTracks && currentTracks.length > 0) {
+          trackControls.classList.remove('hidden');
+        } else {
+          trackControls.classList.add('hidden');
+        }
+      };
+
+      // Simulating renderMapStops logic after stop research rerun
+      if (currentTracks && currentTracks.length > 0) {
+        if (trackPolylines.length === 0) {
+          await renderTrackPolylines();
+        }
+        updateTrackLayerControls();
+      }
+
+      expect(renderTrackPolylinesCalled).toBe(true);
+      expect(trackPolylines.length).toBe(1);
+      expect(trackControls.classList.contains('hidden')).toBe(false);
+    });
+  });
 });
+

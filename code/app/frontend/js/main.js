@@ -1594,11 +1594,12 @@ function showVoyageList(doPushState = true) {
     document.querySelectorAll('#mobile-tab-bar .np-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'plan'));
 
     currentVoyage = null;
+    currentTracks = [];
     selectedDate = null;
     lastKnownItineraryFull = false;
     clearRecommendations();   // also clears pilot poll/SSE
     clearPilotCircle();
-    clearMap();
+    clearMap({ clearTracks: true });
     clearStopSweeps();
     // Cancel any other in-flight research polls
     if (_fullResPoll) { clearInterval(_fullResPoll); _fullResPoll = null; }
@@ -4217,7 +4218,7 @@ async function initMap() {
             importLibrary("maps")
         ]);
 
-        clearMap();
+        clearMap({ clearTracks: false });
 
         // Sort stops by date
         const sortedStops = [...currentStops].sort((a, b) => 
@@ -4376,48 +4377,59 @@ async function initMap() {
 
     // Draw route — dashed marching-ants polyline for legs without a planned route
     await updateRoutePolylines();
+
+    // Ensure tracks remain visible and layer controls are shown
+    if (currentTracks && currentTracks.length > 0) {
+        if (trackPolylines.length === 0) {
+            await renderTrackPolylines();
+        }
+        updateTrackLayerControls();
+    }
     } catch (err) {
         console.error("Error in renderMapStops:", err);
     }
 }
   
-  function clearMap() {
-      if (activeInfoWindow) activeInfoWindow.close();
-      markers.forEach(m => m.map = null);
-      markers = [];
+function clearMap(options = {}) {
+    const { clearTracks = true } = options;
+    if (activeInfoWindow) activeInfoWindow.close();
+    markers.forEach(m => m.map = null);
+    markers = [];
 
-      routePolylines.forEach(tp => {
-          if (tp) tp.setMap(null);
-      });
-      routePolylines = [];
-      if (routePolyline) {
-          routePolyline.setMap(null);
-          routePolyline = null;
-      }
+    routePolylines.forEach(tp => {
+        if (tp) tp.setMap(null);
+    });
+    routePolylines = [];
+    if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
+    }
 
-      trackPolylines.forEach(tp => {
-          if (tp.polyline) tp.polyline.setMap(null);
-      });
-      trackPolylines = [];
-      const trackControls = document.getElementById('track-layer-controls');
-      if (trackControls) trackControls.classList.add('hidden');
-      const trackHud = document.getElementById('track-hover-hud');
-      if (trackHud) trackHud.classList.add('hidden');
+    if (clearTracks) {
+        trackPolylines.forEach(tp => {
+            if (tp.polyline) tp.polyline.setMap(null);
+        });
+        trackPolylines = [];
+        const trackControls = document.getElementById('track-layer-controls');
+        if (trackControls) trackControls.classList.add('hidden');
+        const trackHud = document.getElementById('track-hover-hud');
+        if (trackHud) trackHud.classList.add('hidden');
+    }
 
-      facilityMarkers.forEach(({ marker }) => marker.map = null);
-      facilityMarkers = [];
-      document.getElementById('facility-controls').classList.add('hidden');
+    facilityMarkers.forEach(({ marker }) => marker.map = null);
+    facilityMarkers = [];
+    document.getElementById('facility-controls').classList.add('hidden');
 
-      if (map && map.data) {
-          map.data.forEach((feature) => {
-              // Sparce recommendation blobs and discovery regions
-              const type = feature.getProperty('type');
-              if (type !== 'recommendation' && type !== 'discovery') {
-                  map.data.remove(feature);
-              }
-          });
-      }
-  }
+    if (map && map.data) {
+        map.data.forEach((feature) => {
+            // Sparce recommendation blobs and discovery regions
+            const type = feature.getProperty('type');
+            if (type !== 'recommendation' && type !== 'discovery') {
+                map.data.remove(feature);
+            }
+        });
+    }
+}
 
 // ─── GPX Tracks & Debrief Functions ──────────────────────────────────────────
 
