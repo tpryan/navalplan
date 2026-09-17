@@ -45,4 +45,4 @@
 41. Done. Can we add the debrief content to the voyage report?
 42. Done. Debriefing step is not correct.  It should compare the actual to the planned, and come up with conclusions. so they should be paired between planned actual.
 43. Done. When adding debriefing to a page of the report, can you add it along with the starting stop for each leg. 
-44. When we have a planned route, can we not show the direct lines between stops as they are just straght lines between two points.
+44. Done. When we have a planned route, can we not show the direct lines between stops as they are just straght lines between two points.
