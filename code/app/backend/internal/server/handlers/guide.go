@@ -417,6 +417,12 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 					if d.TrackID == "" && t.ID != "" {
 						d.TrackID = t.ID
 					}
+					if d.VoyageStopID == nil && t.VoyageStopID != nil {
+						d.VoyageStopID = t.VoyageStopID
+					}
+					if d.StartStopID == nil {
+						d.StartStopID = d.VoyageStopID
+					}
 					debriefs = append(debriefs, &d)
 				}
 			}

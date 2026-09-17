@@ -450,8 +450,13 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 						MaxSpeedKts:      &maxSpd2,
 					},
 				}
+				stops := []model.Stop{
+					{ID: 101, VoyageID: voyageID, LocationName: "Stop 1"},
+					{ID: 102, VoyageID: voyageID, LocationName: "Stop 2"},
+					{ID: 103, VoyageID: voyageID, LocationName: "Stop 3"},
+				}
 				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
-				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("ListStops", voyageID, 100, 0).Return(stops, nil)
 				m.On("UpdateVoyageTrackDebrief", "rec-track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
 				m.On("UpdateVoyageTrackDebrief", "rec-track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},
@@ -467,6 +472,9 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				if debriefs[0].PlannedTrackName != "Leg 1 Plan" {
 					t.Errorf("Debrief 0 planned name = %s, want Leg 1 Plan", debriefs[0].PlannedTrackName)
 				}
+				if debriefs[0].StartStopID == nil || *debriefs[0].StartStopID != 101 {
+					t.Errorf("Debrief 0 start stop ID = %v, want 101", debriefs[0].StartStopID)
+				}
 				if debriefs[0].DistanceVariancePct != 25.0 {
 					t.Errorf("Debrief 0 variance pct = %v, want 25.0", debriefs[0].DistanceVariancePct)
 				}
@@ -475,6 +483,9 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				}
 				if debriefs[1].TrackID != "rec-track-2" {
 					t.Errorf("Debrief 1 track ID = %s, want rec-track-2", debriefs[1].TrackID)
+				}
+				if debriefs[1].StartStopID == nil || *debriefs[1].StartStopID != 102 {
+					t.Errorf("Debrief 1 start stop ID = %v, want 102", debriefs[1].StartStopID)
 				}
 				if debriefs[1].Conclusions == "" {
 					t.Errorf("Debrief 1 missing conclusions")
