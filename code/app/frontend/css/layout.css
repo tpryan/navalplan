@@ -97,6 +97,30 @@
     line-height: 1;
 }
 
+#itinerary-view .sidebar-actions {
+  padding: 10px 14px;
+  gap: 6px;
+}
+
+#itinerary-view .sidebar-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 4px;
+  letter-spacing: -0.2px;
+}
+
+#itinerary-view .sidebar-actions .btn .material-symbols-outlined {
+  font-size: 1.15rem;
+  margin: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 #voyage-list {
   flex: 1;
   overflow-y: auto;
@@ -757,6 +781,24 @@
   .sidebar-actions {
     flex-wrap: wrap;
     gap: 6px;
+  }
+
+  #itinerary-view .sidebar-actions {
+    flex-wrap: nowrap;
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  #itinerary-view .sidebar-actions .btn {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 2px;
+    font-size: 0.75rem;
+    gap: 3px;
+  }
+
+  #itinerary-view .sidebar-actions .btn .material-symbols-outlined {
+    font-size: 1.05rem;
   }
 
   /* Discovery controls: horizontal scroll */

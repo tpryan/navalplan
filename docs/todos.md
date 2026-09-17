@@ -38,7 +38,7 @@
 34. Done. make buildImprove display of precipitation in hourly_track. It should be at bottom. it should be easier to read.
 35. Done. 35. In really narrow screens, the whole content spills out the viewport. I'd like it to look right even when teh viewport is <390 px.
 36. Done. 36. Add GPS check-in feature for voyage owners to show current position on map and shared report.
-37. Back, Guide, Report, Tracks buttons aren't designed well. They words needs to be smaller fonts. or somehow better spaced. 
+37. Done. Back, Guide, Report, Tracks buttons aren't designed well. They words needs to be smaller fonts. or somehow better spaced. 
 38. The dropdown for Track Type should be styled like the app, instead of native. 
 39. Delete uploaded tracks button does not work. (Actually it's a z index issue, the confirm modal needs to be higher.)
 40. Can we trigger a debrief job for all tracks at once instead of one by one?
