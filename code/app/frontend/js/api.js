@@ -396,5 +396,88 @@ export const API = {
         } catch (e) {
             return { ok: false, status: 0, message: 'Backend Connection Lost' };
         }
+    },
+
+  async listVoyageTracks(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track`);
+    if (!res.ok) throw new Error('Failed to load voyage tracks');
+    return res.json();
+  },
+
+  async uploadVoyageTrack(voyageId, fileOrFormData, kind = '', autoSplit = true) {
+    let body;
+    let headers = {};
+    if (fileOrFormData instanceof FormData) {
+      body = fileOrFormData;
+    } else if (fileOrFormData instanceof File || fileOrFormData instanceof Blob) {
+      body = new FormData();
+      body.append('file', fileOrFormData);
+      if (kind) body.append('kind', kind);
+      body.append('auto_split', autoSplit ? 'true' : 'false');
+    } else {
+      body = fileOrFormData;
+      headers['Content-Type'] = 'application/gpx+xml';
     }
-  };
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload track');
+    }
+    return res.json();
+  },
+
+  async uploadStopTrack(voyageId, stopId, fileOrFormData, kind = '') {
+    let body;
+    let headers = {};
+    if (fileOrFormData instanceof FormData) {
+      body = fileOrFormData;
+    } else if (fileOrFormData instanceof File || fileOrFormData instanceof Blob) {
+      body = new FormData();
+      body.append('file', fileOrFormData);
+      if (kind) body.append('kind', kind);
+    } else {
+      body = fileOrFormData;
+      headers['Content-Type'] = 'application/gpx+xml';
+    }
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops/${stopId}/track`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload stop track');
+    }
+    return res.json();
+  },
+
+  async deleteVoyageTrack(voyageId, trackId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track/${trackId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete track');
+    return true;
+  },
+
+  async debriefVoyageTrack(voyageId, trackId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track/${trackId}/debrief`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to debrief track');
+    }
+    return res.json();
+  },
+
+  async getPublicVoyageTracks(token) {
+    const res = await apiFetch(`${API_BASE}/public/voyages/${token}/track`);
+    if (!res.ok) throw new Error('Failed to load public voyage tracks');
+    return res.json();
+  }
+};
+

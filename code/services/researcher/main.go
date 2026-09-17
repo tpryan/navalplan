@@ -22,6 +22,7 @@ import (
 func main() {
 	godotenv.Load(".env")
 	godotenv.Load("../../.env")
+	godotenv.Load("../../../.env")
 
 	cfg, err := config.New(os.Getenv)
 	if err != nil {

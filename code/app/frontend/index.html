@@ -72,7 +72,12 @@
                <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">description</span>
                Report
             </button>
+            <button id="btn-voyage-tracks" class="btn secondary" title="GPX Tracks &amp; Debrief" aria-label="Manage GPX Tracks">
+               <span class="material-symbols-outlined icon-lg icon-align" aria-hidden="true">route</span>
+               Tracks
+            </button>
           </div>
+
           <div class="voyage-header">
             <div class="voyage-header__text">
               <h2 id="itinerary-title">Voyage Title</h2>
@@ -147,9 +152,21 @@
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
+
+      <div id="track-layer-controls" class="hidden">
+        <span class="pilot-legend-title">Tracks</span>
+        <button id="btn-toggle-planned-tracks" class="track-layer-btn active" data-kind="planned">
+          <span class="track-legend-swatch track-swatch-planned"></span>Planned
+        </button>
+        <button id="btn-toggle-recorded-tracks" class="track-layer-btn active" data-kind="recorded">
+          <span class="track-legend-swatch track-swatch-recorded"></span>Recorded
+        </button>
+      </div>
+      <div id="track-hover-hud" class="track-hover-hud hidden" aria-live="polite"></div>
     </div>
 
     <!-- Modals -->
+
     <div id="modal-overlay" class="hidden"></div>
     
     <!-- Voyage Form Modal -->
@@ -359,7 +376,62 @@
       </div>
     </div>
 
+    <!-- Tracks & Debrief Modal -->
+    <div id="modal-tracks" class="modal hidden modal-scrollable" role="dialog" aria-modal="true" aria-labelledby="modal-tracks-title">
+      <div class="modal-header-row flex justify-between align-center">
+        <h2 id="modal-tracks-title" class="m-0">GPX Tracks &amp; Passage Debrief</h2>
+        <button id="btn-close-tracks" class="btn-icon icon-xl" aria-label="Close tracks modal">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-content-scroll p-md">
+        <div class="upload-section card p-md mb-lg">
+          <h3 class="mt-0 mb-sm">Upload GPX Track</h3>
+          <p class="font-sm text-gray mb-md">Import planned navigation routes or recorded GPS track logs (.gpx).</p>
+          <form id="form-upload-track" class="flex flex-col gap-sm">
+            <div class="form-group">
+              <label for="track-file-input">Select GPX File</label>
+              <input type="file" id="track-file-input" name="file" accept=".gpx,application/gpx+xml" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="track-kind-select">Track Type</label>
+                <select id="track-kind-select" name="kind">
+                  <option value="">Auto-detect (Routes &rarr; Planned, Tracks &rarr; Recorded)</option>
+                  <option value="planned">Planned Route</option>
+                  <option value="recorded">Recorded GPS Track</option>
+                </select>
+              </div>
+              <div class="form-group flex-1 flex align-center gap-xs mt-md">
+                <input type="checkbox" id="track-auto-split" name="auto_split" checked />
+                <label for="track-auto-split" class="m-0 font-sm">Auto-split voyage into leg tracks at stops</label>
+              </div>
+            </div>
+            <button type="submit" id="btn-submit-track-upload" class="btn primary mt-xs">
+              <span class="material-symbols-outlined icon-align">upload_file</span>
+              Upload &amp; Process Track
+            </button>
+          </form>
+        </div>
+
+        <div class="tracks-list-section card p-md mb-lg">
+          <div class="flex justify-between align-center mb-sm">
+            <h3 class="m-0">Voyage Tracks</h3>
+            <span id="tracks-count-badge" class="font-sm text-gray">0 tracks</span>
+          </div>
+          <div id="tracks-list-container">
+            <p class="font-sm text-gray">No tracks uploaded yet for this voyage.</p>
+          </div>
+        </div>
+
+        <div id="debrief-container" class="card p-md hidden">
+          <!-- Debrief details injected dynamically -->
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile bottom tab bar (hidden on desktop) -->
+
     <nav id="mobile-tab-bar" aria-label="Primary navigation">
       <button class="np-tab" id="tab-map" data-tab="map" aria-label="Map" aria-pressed="true">
         <span class="material-symbols-outlined" aria-hidden="true">map</span>

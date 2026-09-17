@@ -376,6 +376,45 @@ func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, stopID int64, wea
 	return args.Error(0)
 }
 
+func (m *MockStore) CreateVoyageTrack(ctx context.Context, track *model.VoyageTrack) error {
+	args := m.Called(track)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetVoyageTrack(ctx context.Context, id string) (*model.VoyageTrack, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.VoyageTrack), args.Error(1)
+}
+
+func (m *MockStore) ListVoyageTracks(ctx context.Context, voyageID int64) ([]model.VoyageTrack, error) {
+	args := m.Called(voyageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]model.VoyageTrack), args.Error(1)
+}
+
+func (m *MockStore) ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error) {
+	args := m.Called(stopID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]model.VoyageTrack), args.Error(1)
+}
+
+func (m *MockStore) DeleteVoyageTrack(ctx context.Context, id string) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+func (m *MockStore) UpdateVoyageTrackDebrief(ctx context.Context, id string, debrief model.RawJSON) error {
+	args := m.Called(id, debrief)
+	return args.Error(0)
+}
+
 func TestServerHealth(t *testing.T) {
 	mockStore := new(MockStore)
 	cfg := &config.Config{

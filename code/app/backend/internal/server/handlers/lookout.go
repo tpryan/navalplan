@@ -243,7 +243,20 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		}
 	}
 
-	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops)
+	var routeWaypoints string
+	if next != nil {
+		if stopTracks, err := h.DB.ListStopTracks(ctx, next.ID); err == nil {
+			for _, tr := range stopTracks {
+				if tr.Kind == string(model.TrackKindPlanned) && tr.DistanceNM != nil && *tr.DistanceNM > 0 {
+					distNM = *tr.DistanceNM
+					routeWaypoints = extractWaypointsSummary(tr.SimplifiedGeoJSON)
+					break
+				}
+			}
+		}
+	}
+
+	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops, routeWaypoints)
 
 	const appName = "lookout"
 	const userID = "system"
@@ -295,7 +308,40 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
 }
 
-func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int) string {
+func extractWaypointsSummary(geoJSON model.RawJSON) string {
+	if len(geoJSON) == 0 {
+		return ""
+	}
+	var feat struct {
+		Geometry struct {
+			Coordinates [][]float64 `json:"coordinates"`
+		} `json:"geometry"`
+	}
+	if err := json.Unmarshal(geoJSON, &feat); err != nil || len(feat.Geometry.Coordinates) == 0 {
+		return ""
+	}
+	coords := feat.Geometry.Coordinates
+	step := 1
+	if len(coords) > 10 {
+		step = len(coords) / 10
+	}
+	var pts []string
+	for i := 0; i < len(coords); i += step {
+		if len(coords[i]) >= 2 {
+			pts = append(pts, fmt.Sprintf("(%.4f, %.4f)", coords[i][1], coords[i][0]))
+		}
+	}
+	last := coords[len(coords)-1]
+	if len(last) >= 2 {
+		lastStr := fmt.Sprintf("(%.4f, %.4f)", last[1], last[0])
+		if len(pts) == 0 || pts[len(pts)-1] != lastStr {
+			pts = append(pts, lastStr)
+		}
+	}
+	return strings.Join(pts, " -> ")
+}
+
+func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int, routeWaypoints ...string) string {
 	distInfo := "none — this is the last stop, no departure planned (do not generate navigation or arrival-time alerts)"
 	var travelTableInfo string
 	var nextStopInfo string
@@ -346,12 +392,17 @@ func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Brie
 		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", stop.LocationName, stop.Latitude, stop.Longitude)
 	}
 
+	var routeWaypointsInfo string
+	if len(routeWaypoints) > 0 && routeWaypoints[0] != "" {
+		routeWaypointsInfo = fmt.Sprintf("\nIntended Planned Route Waypoints (actual passage track):\n%s\n", routeWaypoints[0])
+	}
+
 	return fmt.Sprintf(`Analyze the following stop data and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. Return a JSON array of alerts.
 
 Location: %s
 Date: %s (Note: Weather and Tide data covers 48 hours starting from this date)
 Stop position: %d of %d%s
-Distance to next stop: %s%s
+Distance to next stop: %s%s%s
 
 Weather (48h hourly forecast):
 %s
@@ -370,6 +421,7 @@ Return ONLY the JSON array of alerts. If no concerns or significant trends, retu
 		nextStopInfo,
 		distInfo,
 		travelTableInfo,
+		routeWaypointsInfo,
 		weatherJSON,
 		sunJSON,
 		tidesJSON,

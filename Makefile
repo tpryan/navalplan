@@ -58,9 +58,9 @@ build: build-js
 # 2. RUN-BACKEND: Runs the Go backend without rebuilding JS (for dev)
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
-	@lsof -ti :8080 | xargs kill -9 2>/dev/null || true
+	@pids=$$(lsof -ti :8080 2>/dev/null); [ -n "$$pids" ] && echo "$$pids" | xargs kill -9 2>/dev/null || true
 	mkdir -p code/app/backend/static.min
-	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor .
+	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor . < /dev/null
 
 # 3. CLEAN: Removes the old static files from the backend
 clean-static:
@@ -86,9 +86,9 @@ run-frontend:
 
 run-agent:
 	@echo "Starting NavalPlan Researcher Agent..."
-	@lsof -ti :8081 | xargs kill -9 2>/dev/null || true
+	@pids=$$(lsof -ti :8081 2>/dev/null); [ -n "$$pids" ] && echo "$$pids" | xargs kill -9 2>/dev/null || true
 	# Requires GEMINI_API_KEY to be set
-	cd code/services/researcher && go run -mod=vendor .
+	cd code/services/researcher && go run -mod=vendor . < /dev/null
 
 setup-adk:
 	@echo "Setting up ADK..."
@@ -128,7 +128,7 @@ setup-infra:
 
 dev: db-start build-js
 	@echo "Cleaning up any existing processes on ports 8080 and 8081..."
-	@lsof -ti :8080 :8081 | xargs kill -9 2>/dev/null || true
+	@pids=$$(lsof -ti :8080 :8081 2>/dev/null); [ -n "$$pids" ] && echo "$$pids" | xargs kill -9 2>/dev/null || true
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
 	@(trap 'kill 0' SIGINT; make run-backend & make run-agent & (sleep 3 && make run-frontend) & wait)
