@@ -254,4 +254,60 @@ describe('GPX Track UI & Rendering', () => {
       expect(btnRecorded.classList.contains('active')).toBe(false);
     });
   });
+
+  describe('Voyage Report Debrief Integration', () => {
+    function generateDebriefsHTML(debrief) {
+      if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
+        return '';
+      }
+      const debriefs = Array.isArray(debrief) ? debrief : [debrief];
+      let html = '';
+      debriefs.forEach((item) => {
+        let parsed = item;
+        if (typeof item === 'string') {
+          try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
+        }
+        if (!parsed) return;
+        const title = parsed.track_name
+          ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
+          : 'Passage Debrief Analysis';
+        html += `
+          <div class="debrief-card">
+            <h4>${title}</h4>
+            <p class="debrief-summary">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
+          </div>
+        `;
+      });
+      return html;
+    }
+
+    function renderReportDebriefSection(debriefs) {
+      if (!Array.isArray(debriefs) || debriefs.length === 0) return '';
+      const debriefContent = generateDebriefsHTML(debriefs);
+      if (!debriefContent) return '';
+      return `
+        <div class="np-report-section np-report-debriefs">
+          <span class="np-section-label">Passage Tactical Debrief</span>
+          ${debriefContent}
+        </div>
+      `;
+    }
+
+    it('returns empty string when no debriefs exist', () => {
+      expect(renderReportDebriefSection([])).toBe('');
+      expect(renderReportDebriefSection(null)).toBe('');
+    });
+
+    it('renders tactical debrief section with header and cards when debriefs are provided', () => {
+      const debriefs = [
+        { track_id: 't1', track_name: 'Leg 1: Harbor to Point', summary: 'Excellent reaching leg' },
+        { track_id: 't2', track_name: 'Leg 2: Offshore run', summary: 'Good downwind sailing' },
+      ];
+      const html = renderReportDebriefSection(debriefs);
+      expect(html).toContain('Passage Tactical Debrief');
+      expect(html).toContain('Leg 1: Harbor to Point');
+      expect(html).toContain('Leg 2: Offshore run');
+      expect(html).toContain('np-report-debriefs');
+    });
+  });
 });

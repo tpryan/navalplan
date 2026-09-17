@@ -364,6 +364,7 @@ type PublicVoyageReport struct {
 	Briefings       []model.Briefing             `json:"briefings"`
 	Recommendations []model.VoyageRecommendation `json:"recommendations"`
 	MapURL          string                       `json:"map_url,omitempty"`
+	Debriefs        []*model.TrackDebrief        `json:"debriefs,omitempty"`
 }
 
 func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
@@ -404,6 +405,24 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		mapURL = fmt.Sprintf("/api/v1/voyages/%d/map_image", voyage.ID)
 	}
 
+	var debriefs []*model.TrackDebrief
+	if tracks, err := h.DB.ListVoyageTracks(r.Context(), voyage.ID); err == nil {
+		for _, t := range tracks {
+			if len(t.Debrief) > 0 && string(t.Debrief) != "null" {
+				var d model.TrackDebrief
+				if err := json.Unmarshal(t.Debrief, &d); err == nil {
+					if d.TrackName == "" && t.Name != "" {
+						d.TrackName = t.Name
+					}
+					if d.TrackID == "" && t.ID != "" {
+						d.TrackID = t.ID
+					}
+					debriefs = append(debriefs, &d)
+				}
+			}
+		}
+	}
+
 	if guide == nil {
 		guide = &model.VoyageGuide{
 			VoyageID: voyage.ID,
@@ -417,6 +436,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		Briefings:       briefings,
 		Recommendations: recs,
 		MapURL:          mapURL,
+		Debriefs:        debriefs,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
