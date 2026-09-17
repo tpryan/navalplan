@@ -884,7 +884,9 @@ html:has(.print-view) {
     .np-rec-item,
     .np-metric-grid,
     .np-season-card,
-    .np-hub-card {
+    .np-hub-card,
+    .debrief-card,
+    .np-report-stop-debrief {
         break-inside: avoid;
     }
 
@@ -1269,6 +1271,14 @@ html:has(.print-view) {
     border-radius: 0 4px 4px 0;
     margin: 10px 0;
     line-height: 1.4;
+}
+
+.np-report-stop-debrief {
+    margin-top: 20px;
+}
+
+.np-report-stop-debrief .debrief-card {
+    margin-top: 8px;
 }
 
 

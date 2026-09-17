@@ -340,5 +340,98 @@ describe('GPX Track UI & Rendering', () => {
       expect(html).toContain('Leg 2: Offshore run');
       expect(html).toContain('np-report-debriefs');
     });
+
+    function simulateReportStopDebriefs(stops, debriefs) {
+      const assignedDebriefIDs = new Set();
+      const result = [];
+
+      stops.forEach((stop, idx) => {
+        const legNum = idx + 1;
+        const stopDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => {
+          if (!d || assignedDebriefIDs.has(d.track_id || d)) return false;
+          if (d.start_stop_id != null && d.start_stop_id === stop.id) return true;
+          if (d.voyage_stop_id != null && d.voyage_stop_id === stop.id) return true;
+          const nameMatch = (d.track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.track_name)) ||
+                            (d.planned_track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.planned_track_name));
+          return !!nameMatch;
+        });
+        if (stopDebriefs.length === 0 && Array.isArray(debriefs) && idx < stops.length - 1) {
+          const candidate = debriefs[idx];
+          if (candidate && !assignedDebriefIDs.has(candidate.track_id || candidate) &&
+              candidate.start_stop_id == null && candidate.voyage_stop_id == null &&
+              !/\bLeg\s*\d+\b/i.test(candidate.track_name || '') &&
+              !/\bLeg\s*\d+\b/i.test(candidate.planned_track_name || '')) {
+            stopDebriefs.push(candidate);
+          }
+        }
+        stopDebriefs.forEach(d => assignedDebriefIDs.add(d.track_id || d));
+
+        let stopHtml = `<div class="np-report-stop" data-stop-id="${stop.id}"><h3>Stop ${legNum}: ${stop.name}</h3>`;
+        if (stopDebriefs.length > 0) {
+          stopHtml += `
+            <div class="np-report-stop-debrief">
+              <span class="np-facilities-header">Passage Tactical Debrief — Leg ${legNum}</span>
+              ${generateDebriefsHTML(stopDebriefs)}
+            </div>
+          `;
+        }
+        stopHtml += `</div>`;
+        result.push(stopHtml);
+      });
+
+      const remainingDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => !assignedDebriefIDs.has(d.track_id || d));
+      let remainingHtml = '';
+      if (remainingDebriefs.length > 0) {
+        remainingHtml = `
+          <div class="np-report-section np-report-debriefs">
+            <span class="np-section-label">Passage Tactical Debrief</span>
+            ${generateDebriefsHTML(remainingDebriefs)}
+          </div>
+        `;
+      }
+
+      return {
+        stopsHtml: result.join(''),
+        remainingHtml,
+      };
+    }
+
+    it('places leg debriefing inside starting stop container for each leg', () => {
+      const stops = [
+        { id: 101, name: 'Marina del Rey' },
+        { id: 102, name: 'Isthmus Cove' },
+        { id: 103, name: 'Avalon Harbor' },
+      ];
+      const debriefs = [
+        { track_id: 't1', track_name: 'Leg 1 Actual', start_stop_id: 101, summary: 'Smooth crossing to Isthmus' },
+        { track_id: 't2', track_name: 'Leg 2 Actual', start_stop_id: 102, summary: 'Coastal reach to Avalon' },
+      ];
+
+      const { stopsHtml, remainingHtml } = simulateReportStopDebriefs(stops, debriefs);
+
+      expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 1');
+      expect(stopsHtml).toContain('Smooth crossing to Isthmus');
+      expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 2');
+      expect(stopsHtml).toContain('Coastal reach to Avalon');
+      expect(remainingHtml).toBe('');
+    });
+
+    it('renders unassigned debriefs in fallback bottom section', () => {
+      const stops = [
+        { id: 101, name: 'Marina del Rey' },
+        { id: 102, name: 'Isthmus Cove' },
+      ];
+      const debriefs = [
+        { track_id: 't1', track_name: 'Leg 1 Actual', start_stop_id: 101, summary: 'Leg 1 debrief' },
+        { track_id: 't_unassigned', track_name: 'Overall Voyage Track', start_stop_id: null, voyage_stop_id: null, summary: 'Master voyage passage' },
+      ];
+
+      const { stopsHtml, remainingHtml } = simulateReportStopDebriefs(stops, debriefs);
+
+      expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 1');
+      expect(stopsHtml).toContain('Leg 1 debrief');
+      expect(remainingHtml).toContain('Passage Tactical Debrief');
+      expect(remainingHtml).toContain('Master voyage passage');
+    });
   });
 });

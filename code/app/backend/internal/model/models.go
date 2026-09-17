@@ -287,6 +287,7 @@ type TrackDebrief struct {
 	PlannedTrackID      *string  `json:"planned_track_id,omitempty"`
 	PlannedTrackName    string   `json:"planned_track_name,omitempty"`
 	VoyageStopID        *int64   `json:"voyage_stop_id,omitempty"`
+	StartStopID         *int64   `json:"start_stop_id,omitempty"`
 	RecordedDistanceNM  float64  `json:"recorded_distance_nm"`
 	PlannedDistanceNM   float64  `json:"planned_distance_nm"`
 	DistanceDeltaNM     float64  `json:"distance_delta_nm"`

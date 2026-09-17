@@ -6554,6 +6554,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Daily Itinerary sections ──────────────────────────────────────────────
+    const assignedDebriefIDs = new Set();
     if (hasBriefings) {
         sortedStops.forEach((stop, idx) => {
             const b = briefings.find(br => br && br.stop_id === stop.id);
@@ -6562,6 +6563,27 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'});
             const w = b.weather_summary || {};
             const sun = b.sun_phase || {};
+
+            // Match debriefs starting from this stop for this passage leg
+            const legNum = idx + 1;
+            const stopDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => {
+                if (!d || assignedDebriefIDs.has(d.track_id || d)) return false;
+                if (d.start_stop_id != null && d.start_stop_id === stop.id) return true;
+                if (d.voyage_stop_id != null && d.voyage_stop_id === stop.id) return true;
+                const nameMatch = (d.track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.track_name)) ||
+                                  (d.planned_track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.planned_track_name));
+                return !!nameMatch;
+            });
+            if (stopDebriefs.length === 0 && Array.isArray(debriefs) && idx < sortedStops.length - 1) {
+                const candidate = debriefs[idx];
+                if (candidate && !assignedDebriefIDs.has(candidate.track_id || candidate) &&
+                    candidate.start_stop_id == null && candidate.voyage_stop_id == null &&
+                    !/\bLeg\s*\d+\b/i.test(candidate.track_name || '') &&
+                    !/\bLeg\s*\d+\b/i.test(candidate.planned_track_name || '')) {
+                    stopDebriefs.push(candidate);
+                }
+            }
+            stopDebriefs.forEach(d => assignedDebriefIDs.add(d.track_id || d));
 
             html += `
                 <div class="np-report-stop" style="--accent:var(--${accent})">
@@ -6669,13 +6691,26 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 html += `</div>`;
             }
 
+            if (stopDebriefs.length > 0) {
+                const stopDebriefHtml = generateDebriefsHTML(stopDebriefs);
+                if (stopDebriefHtml) {
+                    html += `
+                        <div class="np-report-stop-debrief">
+                            <span class="np-facilities-header">Passage Tactical Debrief — Leg ${legNum}</span>
+                            ${stopDebriefHtml}
+                        </div>
+                    `;
+                }
+            }
+
             html += `</div>`;
         });
     }
 
-    // ── Passage Tactical Debriefs ─────────────────────────────────────────────
-    if (Array.isArray(debriefs) && debriefs.length > 0) {
-        const debriefContent = generateDebriefsHTML(debriefs);
+    // ── Remaining / Unassigned Passage Tactical Debriefs ─────────────────────
+    const remainingDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => !assignedDebriefIDs.has(d.track_id || d));
+    if (remainingDebriefs.length > 0) {
+        const debriefContent = generateDebriefsHTML(remainingDebriefs);
         if (debriefContent) {
             html += `
                 <div class="np-report-section np-report-debriefs">

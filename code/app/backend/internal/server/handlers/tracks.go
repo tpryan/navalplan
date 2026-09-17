@@ -382,6 +382,7 @@ type plannedRouteMatch struct {
 	plannedDist      float64
 	plannedDuration  string
 	voyageStopID     *int64
+	startStopID      *int64
 }
 
 func extractTrackEndpoints(t *model.VoyageTrack) (startLat, startLng, endLat, endLng float64, ok bool) {
@@ -516,6 +517,64 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		}
 	}
 
+	// Determine starting stop ID for this leg
+	var startStopID *int64
+	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
+	if aOk && len(stops) > 0 {
+		sStartIdx := findClosestStop(aStartLat, aStartLng, stops, 10.0)
+		if sStartIdx >= 0 {
+			startStopID = &stops[sStartIdx].ID
+		}
+	}
+	if startStopID == nil && len(stops) >= 2 {
+		legNum := extractLegNumber(actual.Name)
+		if legNum == 0 && matched != nil {
+			legNum = extractLegNumber(matched.Name)
+		}
+		if legNum >= 1 && legNum <= len(stops)-1 {
+			startStopID = &stops[legNum-1].ID
+		}
+	}
+	if startStopID == nil && len(stops) >= 2 {
+		refStopID := actual.VoyageStopID
+		if refStopID == nil && matched != nil {
+			refStopID = matched.VoyageStopID
+		}
+		if refStopID != nil {
+			for i, s := range stops {
+				if s.ID == *refStopID {
+					if i > 0 {
+						startStopID = &stops[i-1].ID
+					} else {
+						startStopID = &stops[0].ID
+					}
+					break
+				}
+			}
+		}
+	}
+	if startStopID == nil && len(stops) >= 2 {
+		var actualTracks []*model.VoyageTrack
+		for i := range allTracks {
+			if allTracks[i].Kind != string(model.TrackKindPlanned) {
+				actualTracks = append(actualTracks, &allTracks[i])
+			}
+		}
+		actIdx := -1
+		for i, a := range actualTracks {
+			if a.ID == actual.ID {
+				actIdx = i
+				break
+			}
+		}
+		if actIdx >= 0 && actIdx < len(stops)-1 {
+			startStopID = &stops[actIdx].ID
+		}
+	}
+	if startStopID == nil && len(stops) > 0 {
+		startStopID = &stops[0].ID
+	}
+
 	if matched != nil {
 		dist := 0.0
 		if matched.DistanceNM != nil {
@@ -525,67 +584,44 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		if matched.DurationInterval != nil {
 			dur = *matched.DurationInterval
 		}
-		stopID := matched.VoyageStopID
-		if stopID == nil {
-			stopID = actual.VoyageStopID
-		}
 		return plannedRouteMatch{
 			plannedTrackID:   &matched.ID,
 			plannedTrackName: matched.Name,
 			plannedDist:      dist,
 			plannedDuration:  dur,
-			voyageStopID:     stopID,
+			voyageStopID:     startStopID,
+			startStopID:      startStopID,
 		}
 	}
 
 	// Strategy E: Fallback to voyage stops
 	if len(stops) >= 2 {
-		if actual.VoyageStopID != nil {
+		if startStopID != nil {
 			for i, s := range stops {
-				if s.ID == *actual.VoyageStopID {
-					prevIdx := i - 1
-					if prevIdx < 0 {
-						prevIdx = 0
-					}
-					prevStop := stops[prevIdx]
-					d := gpx.CalculateHaversineNM(prevStop.Latitude, prevStop.Longitude, s.Latitude, s.Longitude)
-					name := fmt.Sprintf("Planned Route: %s to %s", prevStop.LocationName, s.LocationName)
+				if s.ID == *startStopID && i < len(stops)-1 {
+					nextStop := stops[i+1]
+					d := gpx.CalculateHaversineNM(s.Latitude, s.Longitude, nextStop.Latitude, nextStop.Longitude)
+					name := fmt.Sprintf("Planned Route: %s to %s", s.LocationName, nextStop.LocationName)
 					return plannedRouteMatch{
 						plannedTrackName: name,
 						plannedDist:      d,
-						voyageStopID:     &s.ID,
+						voyageStopID:     startStopID,
+						startStopID:      startStopID,
 					}
-				}
-			}
-		}
-
-		aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
-		if aOk {
-			sStartIdx := findClosestStop(aStartLat, aStartLng, stops, 10.0)
-			sEndIdx := findClosestStop(aEndLat, aEndLng, stops, 10.0)
-			if sStartIdx >= 0 && sEndIdx >= 0 && sStartIdx != sEndIdx {
-				startStop := stops[sStartIdx]
-				endStop := stops[sEndIdx]
-				d := gpx.CalculateHaversineNM(startStop.Latitude, startStop.Longitude, endStop.Latitude, endStop.Longitude)
-				name := fmt.Sprintf("Planned Route: %s to %s", startStop.LocationName, endStop.LocationName)
-				return plannedRouteMatch{
-					plannedTrackName: name,
-					plannedDist:      d,
-					voyageStopID:     &endStop.ID,
 				}
 			}
 		}
 	}
 
 	// Final Fallback: Direct rhumb line between actual track endpoints
-	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
 	if aOk {
 		d := gpx.CalculateHaversineNM(aStartLat, aStartLng, aEndLat, aEndLng)
 		if d > 0.1 {
 			return plannedRouteMatch{
 				plannedTrackName: "Direct Rhumb Line Course",
 				plannedDist:      d,
-				voyageStopID:     actual.VoyageStopID,
+				voyageStopID:     startStopID,
+				startStopID:      startStopID,
 			}
 		}
 	}
@@ -598,7 +634,8 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 	return plannedRouteMatch{
 		plannedTrackName: "Direct Rhumb Line Course",
 		plannedDist:      recDist * 0.88,
-		voyageStopID:     actual.VoyageStopID,
+		voyageStopID:     startStopID,
+		startStopID:      startStopID,
 	}
 }
 
@@ -643,7 +680,8 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		TrackName:           track.Name,
 		PlannedTrackID:      match.plannedTrackID,
 		PlannedTrackName:    match.plannedTrackName,
-		VoyageStopID:        match.voyageStopID,
+		VoyageStopID:        match.startStopID,
+		StartStopID:         match.startStopID,
 		RecordedDistanceNM:  recDist,
 		PlannedDistanceNM:   plannedDist,
 		DistanceDeltaNM:     distDelta,
