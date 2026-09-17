@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -312,8 +313,60 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the planned reference: either planned tracks in this voyage or distance between stops
 	allTracks, _ := h.DB.ListVoyageTracks(r.Context(), voyageID)
+	debrief := h.generateTrackDebrief(r.Context(), track, allTracks)
+	debriefBytes, _ := json.Marshal(debrief)
+	_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(debrief)
+}
+
+// DebriefAllVoyageTracks triggers an AI after-action review for all tracks of a voyage.
+func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request) {
+	person := GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	voyageID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
+		return
+	}
+
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Voyage not found")
+		return
+	}
+	if voyage.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	allTracks, err := h.DB.ListVoyageTracks(r.Context(), voyageID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list tracks for debrief", "voyage_id", voyageID, "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to list tracks")
+		return
+	}
+
+	debriefs := make([]*model.TrackDebrief, 0, len(allTracks))
+	for i := range allTracks {
+		track := &allTracks[i]
+		debrief := h.generateTrackDebrief(r.Context(), track, allTracks)
+		debriefBytes, _ := json.Marshal(debrief)
+		_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
+		debriefs = append(debriefs, debrief)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(debriefs)
+}
+
+func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack) *model.TrackDebrief {
 	var plannedDist float64
 	var plannedDuration string
 
@@ -380,8 +433,8 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if h.Agent != nil {
-		agentSessionID := fmt.Sprintf("debrief_%s_%d", track.ID, time.Now().Unix())
-		resp, err := h.Agent.RunSync(r.Context(), "pilot", "system", agentSessionID, prompt)
+		agentSessionID := fmt.Sprintf("debrief_%s_%d", track.ID, time.Now().UnixNano())
+		resp, err := h.Agent.RunSync(ctx, "pilot", "system", agentSessionID, prompt)
 		if err == nil && resp != "" {
 			var parsedResp struct {
 				Summary           string   `json:"summary"`
@@ -415,11 +468,7 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	debriefBytes, _ := json.Marshal(debrief)
-	_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(debrief)
+	return &debrief
 }
 
 func extractGPXPayload(r *http.Request) ([]byte, string, string, bool, error) {

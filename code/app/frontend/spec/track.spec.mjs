@@ -11,6 +11,7 @@ describe('GPX Track UI & Rendering', () => {
       </div>
       <div id="track-hover-hud" class="track-hover-hud hidden"></div>
       <div id="tracks-count-badge"></div>
+      <button id="btn-debrief-all-tracks" class="hidden">Debrief All</button>
       <div id="tracks-list-container"></div>
       <div id="debrief-container" class="hidden"></div>
     `;
@@ -35,13 +36,16 @@ describe('GPX Track UI & Rendering', () => {
   }
 
   function renderTracksList(tracks) {
+    const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
     if (!tracks || tracks.length === 0) {
       container.innerHTML = '<p class="font-sm text-gray">No tracks uploaded yet for this voyage.</p>';
       if (countBadge) countBadge.textContent = '0 tracks';
+      if (debriefAllBtn) debriefAllBtn.classList.add('hidden');
       return;
     }
 
     if (countBadge) countBadge.textContent = `${tracks.length} track${tracks.length === 1 ? '' : 's'}`;
+    if (debriefAllBtn) debriefAllBtn.classList.remove('hidden');
 
     let html = '<div class="flex flex-col gap-sm">';
     tracks.forEach(t => {
@@ -77,39 +81,44 @@ describe('GPX Track UI & Rendering', () => {
   }
 
   function renderDebriefCard(debrief) {
-    if (!debrief) {
+    if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
       debriefContainer.classList.add('hidden');
       return;
     }
 
-    let parsed = debrief;
-    if (typeof debrief === 'string') {
-      try { parsed = JSON.parse(debrief); } catch (e) { parsed = { summary: debrief }; }
-    }
+    const debriefs = Array.isArray(debrief) ? debrief : [debrief];
+    let html = '';
+    debriefs.forEach(item => {
+      let parsed = item;
+      if (typeof item === 'string') {
+        try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
+      }
 
-    let obsHtml = '';
-    if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
-      obsHtml = `
-        <ul class="m-0 pl-md font-sm">
-          ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
-        </ul>
-      `;
-    }
+      let obsHtml = '';
+      if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
+        obsHtml = `
+          <ul class="m-0 pl-md font-sm">
+            ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
+          </ul>
+        `;
+      }
 
-    debriefContainer.innerHTML = `
-      <div class="debrief-card">
-        <h4>Passage Debrief Analysis</h4>
-        <p class="debrief-summary">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
-        <div class="debrief-stat-grid">
-          ${parsed.recorded_distance_nm != null ? `<div class="rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>` : ''}
-          ${parsed.planned_distance_nm != null ? `<div class="plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>` : ''}
-          ${parsed.distance_variance_pct != null ? `<div class="var-pct">${parsed.distance_variance_pct.toFixed(1)}%</div>` : ''}
-          ${parsed.average_speed_kts != null ? `<div class="avg-spd">${parsed.average_speed_kts.toFixed(1)} kt</div>` : ''}
+      html += `
+        <div class="debrief-card">
+          <h4>${escapeTrackHtml(parsed.track_name ? `Passage Debrief: ${parsed.track_name}` : 'Passage Debrief Analysis')}</h4>
+          <p class="debrief-summary">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
+          <div class="debrief-stat-grid">
+            ${parsed.recorded_distance_nm != null ? `<div class="rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>` : ''}
+            ${parsed.planned_distance_nm != null ? `<div class="plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>` : ''}
+            ${parsed.distance_variance_pct != null ? `<div class="var-pct">${parsed.distance_variance_pct.toFixed(1)}%</div>` : ''}
+            ${parsed.average_speed_kts != null ? `<div class="avg-spd">${parsed.average_speed_kts.toFixed(1)} kt</div>` : ''}
+          </div>
+          ${parsed.tacking_efficiency ? `<p class="tack-eff">${escapeTrackHtml(parsed.tacking_efficiency)}</p>` : ''}
+          ${obsHtml}
         </div>
-        ${parsed.tacking_efficiency ? `<p class="tack-eff">${escapeTrackHtml(parsed.tacking_efficiency)}</p>` : ''}
-        ${obsHtml}
-      </div>
-    `;
+      `;
+    });
+    debriefContainer.innerHTML = html;
     debriefContainer.classList.remove('hidden');
   }
 
@@ -188,6 +197,28 @@ describe('GPX Track UI & Rendering', () => {
       const lis = debriefContainer.querySelectorAll('li');
       expect(lis.length).toBe(2);
       expect(lis[0].textContent).toContain('Strong ebb tide');
+    });
+
+    it('renders multiple debrief cards when given an array of debriefs', () => {
+      const debriefs = [
+        { track_id: 't1', track_name: 'Leg 1', summary: 'First leg complete', recorded_distance_nm: 10.0 },
+        { track_id: 't2', track_name: 'Leg 2', summary: 'Second leg complete', recorded_distance_nm: 15.0 },
+      ];
+      renderDebriefCard(debriefs);
+      expect(debriefContainer.classList.contains('hidden')).toBe(false);
+      const cards = debriefContainer.querySelectorAll('.debrief-card');
+      expect(cards.length).toBe(2);
+      expect(cards[0].textContent).toContain('Leg 1');
+      expect(cards[1].textContent).toContain('Leg 2');
+    });
+
+    it('toggles debrief all button visibility based on track count', () => {
+      const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
+      renderTracksList([]);
+      expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
+
+      renderTracksList([{ id: 't1', kind: 'recorded', name: 'Leg 1' }]);
+      expect(debriefAllBtn.classList.contains('hidden')).toBe(false);
     });
   });
 

@@ -474,6 +474,17 @@ export const API = {
     return res.json();
   },
 
+  async debriefAllVoyageTracks(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track/debrief`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to debrief tracks');
+    }
+    return res.json();
+  },
+
   async getPublicVoyageTracks(token) {
     const res = await apiFetch(`${API_BASE}/public/voyages/${token}/track`);
     if (!res.ok) throw new Error('Failed to load public voyage tracks');
