@@ -387,6 +387,45 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 20%, transparent);
 }
 
+.form-group select,
+select.form-select {
+  width: 100%;
+  padding: 0.6rem 2.25rem 0.6rem 0.75rem;
+  border: 1.5px solid var(--hair);
+  border-radius: var(--radius-input);
+  box-sizing: border-box;
+  font-family: var(--font, var(--font-secondary));
+  font-size: 0.95rem;
+  background-color: var(--surface);
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23566074' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-group select:focus,
+select.form-select:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 20%, transparent);
+}
+
+.form-group select:hover,
+select.form-select:hover {
+  border-color: var(--muted);
+}
+
+.form-group select option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+
 .form-group input[type="range"] {
   padding: 0;
   border: none;
