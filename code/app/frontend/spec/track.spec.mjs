@@ -64,7 +64,7 @@ describe('GPX Track UI & Rendering', () => {
               <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
             </div>
             <div class="flex gap-xs">
-              <button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}">Debrief</button>
+              ${!isPlanned ? `<button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}">Debrief</button>` : ''}
               <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}">Delete</button>
             </div>
           </div>
@@ -106,13 +106,26 @@ describe('GPX Track UI & Rendering', () => {
       html += `
         <div class="debrief-card">
           <h4>${escapeTrackHtml(parsed.track_name ? `Passage Debrief: ${parsed.track_name}` : 'Passage Debrief Analysis')}</h4>
+          ${parsed.planned_track_name ? `
+            <div class="debrief-pair-badge">
+              Compared against plan: <strong>${escapeTrackHtml(parsed.planned_track_name)}</strong>
+            </div>
+          ` : ''}
           <p class="debrief-summary">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
           <div class="debrief-stat-grid">
             ${parsed.recorded_distance_nm != null ? `<div class="rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>` : ''}
             ${parsed.planned_distance_nm != null ? `<div class="plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>` : ''}
             ${parsed.distance_variance_pct != null ? `<div class="var-pct">${parsed.distance_variance_pct.toFixed(1)}%</div>` : ''}
+            ${parsed.recorded_duration ? `<div class="rec-dur">${escapeTrackHtml(parsed.recorded_duration)}</div>` : ''}
+            ${parsed.planned_duration ? `<div class="plan-dur">${escapeTrackHtml(parsed.planned_duration)}</div>` : ''}
             ${parsed.average_speed_kts != null ? `<div class="avg-spd">${parsed.average_speed_kts.toFixed(1)} kt</div>` : ''}
           </div>
+          ${parsed.conclusions ? `
+            <div class="debrief-conclusions">
+              <strong>Debrief Conclusions &amp; Takeaways:</strong>
+              <p>${escapeTrackHtml(parsed.conclusions)}</p>
+            </div>
+          ` : ''}
           ${parsed.tacking_efficiency ? `<p class="tack-eff">${escapeTrackHtml(parsed.tacking_efficiency)}</p>` : ''}
           ${obsHtml}
         </div>
@@ -159,10 +172,12 @@ describe('GPX Track UI & Rendering', () => {
       expect(items[0].querySelector('.track-badge-planned')).not.toBeNull();
       expect(items[0].innerHTML).toContain('Planned Route &lt;Leg 1&gt;');
       expect(items[0].querySelector('.track-dist').textContent).toContain('18.3 NM');
+      expect(items[0].querySelector('.btn-track-debrief')).toBeNull();
 
       // Check recorded track
       expect(items[1].querySelector('.track-badge-recorded')).not.toBeNull();
       expect(items[1].querySelector('.track-sog').textContent).toContain('5.1 kts');
+      expect(items[1].querySelector('.btn-track-debrief')).not.toBeNull();
     });
   });
 
@@ -170,6 +185,22 @@ describe('GPX Track UI & Rendering', () => {
     it('hides debrief container when debrief is null', () => {
       renderDebriefCard(null);
       expect(debriefContainer.classList.contains('hidden')).toBe(true);
+    });
+
+    it('renders planned track pairing badge and tactical conclusions', () => {
+      const debrief = {
+        track_name: 'Leg 1 Actual',
+        planned_track_name: 'Leg 1 Planned Route',
+        recorded_distance_nm: 12.5,
+        planned_distance_nm: 10.0,
+        distance_variance_pct: 25.0,
+        conclusions: 'Actual track exceeded planned route by 2.5 NM (+25.0%) due to upwind tacking. Passage was safely completed.'
+      };
+
+      renderDebriefCard(debrief);
+
+      expect(debriefContainer.querySelector('.debrief-pair-badge').textContent).toContain('Leg 1 Planned Route');
+      expect(debriefContainer.querySelector('.debrief-conclusions').textContent).toContain('Actual track exceeded planned route');
     });
 
     it('renders debrief summary, variance metrics, and observations', () => {

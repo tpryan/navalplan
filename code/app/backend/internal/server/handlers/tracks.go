@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -312,9 +313,14 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Track not found")
 		return
 	}
+	if track.Kind == string(model.TrackKindPlanned) {
+		writeError(w, http.StatusBadRequest, "Cannot debrief a planned route directly; debrief compares an actual recorded track against the planned route.")
+		return
+	}
 
 	allTracks, _ := h.DB.ListVoyageTracks(r.Context(), voyageID)
-	debrief := h.generateTrackDebrief(r.Context(), track, allTracks)
+	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
+	debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
 	debriefBytes, _ := json.Marshal(debrief)
 	_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
 
@@ -353,10 +359,14 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
 	debriefs := make([]*model.TrackDebrief, 0, len(allTracks))
 	for i := range allTracks {
 		track := &allTracks[i]
-		debrief := h.generateTrackDebrief(r.Context(), track, allTracks)
+		if track.Kind == string(model.TrackKindPlanned) {
+			continue
+		}
+		debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
 		debriefBytes, _ := json.Marshal(debrief)
 		_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
 		debriefs = append(debriefs, debrief)
@@ -366,43 +376,257 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(debriefs)
 }
 
-func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack) *model.TrackDebrief {
-	var plannedDist float64
-	var plannedDuration string
+type plannedRouteMatch struct {
+	plannedTrackID   *string
+	plannedTrackName string
+	plannedDist      float64
+	plannedDuration  string
+	voyageStopID     *int64
+}
 
-	for _, t := range allTracks {
-		if t.Kind == string(model.TrackKindPlanned) && t.DistanceNM != nil {
-			if track.VoyageStopID != nil && t.VoyageStopID != nil && *t.VoyageStopID == *track.VoyageStopID {
-				plannedDist = *t.DistanceNM
-				if t.DurationInterval != nil {
-					plannedDuration = *t.DurationInterval
-				}
+func extractTrackEndpoints(t *model.VoyageTrack) (startLat, startLng, endLat, endLng float64, ok bool) {
+	if t == nil || len(t.GeoJSON) == 0 {
+		return 0, 0, 0, 0, false
+	}
+	var feat struct {
+		Geometry struct {
+			Coordinates [][]float64 `json:"coordinates"`
+		} `json:"geometry"`
+	}
+	if err := json.Unmarshal(t.GeoJSON, &feat); err != nil || len(feat.Geometry.Coordinates) == 0 {
+		return 0, 0, 0, 0, false
+	}
+	coords := feat.Geometry.Coordinates
+	startPt := coords[0]
+	endPt := coords[len(coords)-1]
+	if len(startPt) < 2 || len(endPt) < 2 {
+		return 0, 0, 0, 0, false
+	}
+	return startPt[1], startPt[0], endPt[1], endPt[0], true
+}
+
+func extractLegNumber(name string) int {
+	re := regexp.MustCompile(`(?i)Leg\s*#?\s*(\d+)`)
+	matches := re.FindStringSubmatch(name)
+	if len(matches) > 1 {
+		num, err := strconv.Atoi(matches[1])
+		if err == nil {
+			return num
+		}
+	}
+	return 0
+}
+
+func findClosestStop(lat, lon float64, stops []model.Stop, maxDistNM float64) int {
+	bestIdx := -1
+	minDist := maxDistNM
+	for i, s := range stops {
+		d := gpx.CalculateHaversineNM(lat, lon, s.Latitude, s.Longitude)
+		if d < minDist {
+			minDist = d
+			bestIdx = i
+		}
+	}
+	return bestIdx
+}
+
+func formatHoursMins(hours float64) string {
+	hrs := int(hours)
+	mins := int((hours - float64(hrs)) * 60)
+	return fmt.Sprintf("%02dh %02dm", hrs, mins)
+}
+
+func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) plannedRouteMatch {
+	var plannedTracks []*model.VoyageTrack
+	for i := range allTracks {
+		if allTracks[i].Kind == string(model.TrackKindPlanned) {
+			plannedTracks = append(plannedTracks, &allTracks[i])
+		}
+	}
+
+	var matched *model.VoyageTrack
+
+	// Strategy A: Match by VoyageStopID
+	if actual.VoyageStopID != nil {
+		for _, p := range plannedTracks {
+			if p.VoyageStopID != nil && *p.VoyageStopID == *actual.VoyageStopID {
+				matched = p
 				break
 			}
-			if plannedDist == 0 {
-				plannedDist = *t.DistanceNM
-				if t.DurationInterval != nil {
-					plannedDuration = *t.DurationInterval
+		}
+	}
+
+	// Strategy B: Match by Leg Number in track name
+	if matched == nil {
+		actLeg := extractLegNumber(actual.Name)
+		if actLeg > 0 {
+			for _, p := range plannedTracks {
+				if extractLegNumber(p.Name) == actLeg {
+					matched = p
+					break
 				}
 			}
 		}
 	}
 
+	// Strategy C: Match by Geographic Proximity of endpoints
+	if matched == nil && len(plannedTracks) > 0 {
+		aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
+		if aOk {
+			bestScore := 1e9
+			var bestP *model.VoyageTrack
+			for _, p := range plannedTracks {
+				pStartLat, pStartLng, pEndLat, pEndLng, pOk := extractTrackEndpoints(p)
+				if pOk {
+					dStart := gpx.CalculateHaversineNM(aStartLat, aStartLng, pStartLat, pStartLng)
+					dEnd := gpx.CalculateHaversineNM(aEndLat, aEndLng, pEndLat, pEndLng)
+					if dStart <= 8.0 && dEnd <= 8.0 && (dStart+dEnd) < bestScore {
+						bestScore = dStart + dEnd
+						bestP = p
+					}
+				}
+			}
+			if bestP != nil {
+				matched = bestP
+			}
+		}
+	}
+
+	// Strategy D: Index alignment if multiple planned tracks
+	if matched == nil && len(plannedTracks) > 0 {
+		if len(plannedTracks) == 1 {
+			matched = plannedTracks[0]
+		} else {
+			var actualTracks []*model.VoyageTrack
+			for i := range allTracks {
+				if allTracks[i].Kind != string(model.TrackKindPlanned) {
+					actualTracks = append(actualTracks, &allTracks[i])
+				}
+			}
+			actIdx := -1
+			for i, a := range actualTracks {
+				if a.ID == actual.ID {
+					actIdx = i
+					break
+				}
+			}
+			if actIdx >= 0 && actIdx < len(plannedTracks) {
+				matched = plannedTracks[actIdx]
+			}
+		}
+	}
+
+	if matched != nil {
+		dist := 0.0
+		if matched.DistanceNM != nil {
+			dist = *matched.DistanceNM
+		}
+		dur := ""
+		if matched.DurationInterval != nil {
+			dur = *matched.DurationInterval
+		}
+		stopID := matched.VoyageStopID
+		if stopID == nil {
+			stopID = actual.VoyageStopID
+		}
+		return plannedRouteMatch{
+			plannedTrackID:   &matched.ID,
+			plannedTrackName: matched.Name,
+			plannedDist:      dist,
+			plannedDuration:  dur,
+			voyageStopID:     stopID,
+		}
+	}
+
+	// Strategy E: Fallback to voyage stops
+	if len(stops) >= 2 {
+		if actual.VoyageStopID != nil {
+			for i, s := range stops {
+				if s.ID == *actual.VoyageStopID {
+					prevIdx := i - 1
+					if prevIdx < 0 {
+						prevIdx = 0
+					}
+					prevStop := stops[prevIdx]
+					d := gpx.CalculateHaversineNM(prevStop.Latitude, prevStop.Longitude, s.Latitude, s.Longitude)
+					name := fmt.Sprintf("Planned Route: %s to %s", prevStop.LocationName, s.LocationName)
+					return plannedRouteMatch{
+						plannedTrackName: name,
+						plannedDist:      d,
+						voyageStopID:     &s.ID,
+					}
+				}
+			}
+		}
+
+		aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
+		if aOk {
+			sStartIdx := findClosestStop(aStartLat, aStartLng, stops, 10.0)
+			sEndIdx := findClosestStop(aEndLat, aEndLng, stops, 10.0)
+			if sStartIdx >= 0 && sEndIdx >= 0 && sStartIdx != sEndIdx {
+				startStop := stops[sStartIdx]
+				endStop := stops[sEndIdx]
+				d := gpx.CalculateHaversineNM(startStop.Latitude, startStop.Longitude, endStop.Latitude, endStop.Longitude)
+				name := fmt.Sprintf("Planned Route: %s to %s", startStop.LocationName, endStop.LocationName)
+				return plannedRouteMatch{
+					plannedTrackName: name,
+					plannedDist:      d,
+					voyageStopID:     &endStop.ID,
+				}
+			}
+		}
+	}
+
+	// Final Fallback: Direct rhumb line between actual track endpoints
+	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
+	if aOk {
+		d := gpx.CalculateHaversineNM(aStartLat, aStartLng, aEndLat, aEndLng)
+		if d > 0.1 {
+			return plannedRouteMatch{
+				plannedTrackName: "Direct Rhumb Line Course",
+				plannedDist:      d,
+				voyageStopID:     actual.VoyageStopID,
+			}
+		}
+	}
+
+	// Last resort fallback
+	recDist := 0.0
+	if actual.DistanceNM != nil {
+		recDist = *actual.DistanceNM
+	}
+	return plannedRouteMatch{
+		plannedTrackName: "Direct Rhumb Line Course",
+		plannedDist:      recDist * 0.88,
+		voyageStopID:     actual.VoyageStopID,
+	}
+}
+
+func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) *model.TrackDebrief {
+	match := pairActualWithPlanned(track, allTracks, stops)
+
 	recDist := 0.0
 	if track.DistanceNM != nil {
 		recDist = *track.DistanceNM
 	}
-	if plannedDist == 0 {
-		plannedDist = recDist * 0.88 // Rhumb-line estimate if no explicit planned route
+	plannedDist := match.plannedDist
+	distDelta := recDist - plannedDist
+	pctOver := 0.0
+	if plannedDist > 0 {
+		pctOver = (distDelta / plannedDist) * 100.0
 	}
 
-	distDelta := recDist - plannedDist
 	recDur := "N/A"
 	if track.DurationInterval != nil {
 		recDur = *track.DurationInterval
 	}
+	plannedDuration := match.plannedDuration
 	if plannedDuration == "" {
-		plannedDuration = recDur
+		if plannedDist > 0 {
+			plannedDuration = formatHoursMins(plannedDist / 5.5)
+		} else {
+			plannedDuration = recDur
+		}
 	}
 
 	avgSpd := 0.0
@@ -415,21 +639,36 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	debrief := model.TrackDebrief{
-		TrackID:            track.ID,
-		TrackName:          track.Name,
-		RecordedDistanceNM: recDist,
-		PlannedDistanceNM:  plannedDist,
-		DistanceDeltaNM:    distDelta,
-		RecordedDuration:   recDur,
-		PlannedDuration:    plannedDuration,
-		AvgSpeedKts:        avgSpd,
-		MaxSpeedKts:        maxSpd,
+		TrackID:             track.ID,
+		TrackName:           track.Name,
+		PlannedTrackID:      match.plannedTrackID,
+		PlannedTrackName:    match.plannedTrackName,
+		VoyageStopID:        match.voyageStopID,
+		RecordedDistanceNM:  recDist,
+		PlannedDistanceNM:   plannedDist,
+		DistanceDeltaNM:     distDelta,
+		DistanceVariancePct: pctOver,
+		RecordedDuration:    recDur,
+		PlannedDuration:     plannedDuration,
+		AvgSpeedKts:         avgSpd,
+		MaxSpeedKts:         maxSpd,
 	}
 
 	// Generate tactical insights using Pilot agent or rule-based fallback
 	prompt := fmt.Sprintf(
-		"Perform a post-voyage tactical pilot debrief for track '%s': Recorded Distance: %.2f NM, Planned Distance: %.2f NM (Delta: %+.2f NM), Recorded Duration: %s, Avg Speed: %.1f kts, Max Speed: %.1f kts. Evaluate tacking efficiency, leeway, and weather impact.",
-		track.Name, recDist, plannedDist, distDelta, recDur, avgSpd, maxSpd,
+		"Perform a post-voyage tactical pilot debrief comparing the ACTUAL recorded passage against the PLANNED route:\n"+
+			"- Actual Track: '%s'\n"+
+			"- Paired Planned Route: '%s'\n"+
+			"- Recorded Distance: %.2f NM vs Planned Distance: %.2f NM (Delta: %+.2f NM, %+.1f%% variance)\n"+
+			"- Recorded Duration: %s vs Planned Duration: %s\n"+
+			"- Vessel Speed: Average SOG %.1f kts, Maximum SOG %.1f kts\n\n"+
+			"Compare actual execution directly to the planned route and provide:\n"+
+			"1. Summary: 2-3 sentence overview comparing actual vs planned.\n"+
+			"2. Conclusions: In-depth conclusions explaining variances in distance, time, and tactical choices.\n"+
+			"3. Tacking Efficiency: Analysis of tacking overhead and leeway against the plan.\n"+
+			"4. Weather Impact: Atmospheric and sea state factors.\n"+
+			"5. Observations: 3-5 concrete tactical takeaways for the skipper.",
+		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, recDur, plannedDuration, avgSpd, maxSpd,
 	)
 
 	if h.Agent != nil {
@@ -438,12 +677,14 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		if err == nil && resp != "" {
 			var parsedResp struct {
 				Summary           string   `json:"summary"`
+				Conclusions       string   `json:"conclusions"`
 				TackingEfficiency string   `json:"tacking_efficiency"`
 				WeatherImpact     string   `json:"weather_impact"`
 				Observations      []string `json:"observations"`
 			}
 			if err := json.Unmarshal([]byte(cleanJSON(resp)), &parsedResp); err == nil && parsedResp.Summary != "" {
 				debrief.Summary = parsedResp.Summary
+				debrief.Conclusions = parsedResp.Conclusions
 				debrief.TackingEfficiency = parsedResp.TackingEfficiency
 				debrief.WeatherImpact = parsedResp.WeatherImpact
 				debrief.Observations = parsedResp.Observations
@@ -454,17 +695,55 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	if debrief.Summary == "" {
-		pctOver := 0.0
-		if plannedDist > 0 {
-			pctOver = (distDelta / plannedDist) * 100.0
+		debrief.Summary = fmt.Sprintf(
+			"Passage Debrief comparing actual '%s' against planned '%s': Sailed %.1f NM vs %.1f NM planned (%+.1f NM, %+.1f%% variance) in %s (avg speed %.1f kts, max %.1f kts).",
+			track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, recDur, avgSpd, maxSpd,
+		)
+	}
+
+	if debrief.Conclusions == "" {
+		if distDelta > 1.0 {
+			debrief.Conclusions = fmt.Sprintf(
+				"Actual passage '%s' required %.1f NM compared to the planned %.1f NM for '%s' (%+.1f%% variance). Slower transit time (%s vs %s planned) was driven by windward tacking angles and navigational leeway along the leg. SOG averaged %.1f kts (peak %.1f kts).",
+				track.Name, recDist, plannedDist, match.plannedTrackName, pctOver, recDur, plannedDuration, avgSpd, maxSpd,
+			)
+		} else if distDelta < -0.5 {
+			debrief.Conclusions = fmt.Sprintf(
+				"The vessel completed '%s' in %.1f NM, cutting %.1f NM off the planned %.1f NM route for '%s'. A direct course was maintained during favorable wind angles, finishing in %s with an average SOG of %.1f knots.",
+				track.Name, recDist, -distDelta, plannedDist, match.plannedTrackName, recDur, avgSpd,
+			)
+		} else {
+			debrief.Conclusions = fmt.Sprintf(
+				"The actual track '%s' closely tracked the planned route '%s' (%.1f NM actual vs %.1f NM planned, %+.1f%% variance). The passage was executed with high navigational discipline, finishing in %s at an average SOG of %.1f kts.",
+				track.Name, match.plannedTrackName, recDist, plannedDist, pctOver, recDur, avgSpd,
+			)
 		}
-		debrief.Summary = fmt.Sprintf("Passage completed %.1f NM over planned rhumb line (%.1f%% distance variance) with an average speed of %.1f knots.", distDelta, pctOver, avgSpd)
-		debrief.TackingEfficiency = fmt.Sprintf("Tacking overhead resulted in %.1f NM additional sailing distance.", distDelta)
-		debrief.WeatherImpact = "Favorable conditions observed along the majority of the passage."
+	}
+
+	if debrief.TackingEfficiency == "" {
+		if distDelta > 0.5 {
+			debrief.TackingEfficiency = fmt.Sprintf(
+				"Tacking overhead and course corrections added %.1f NM (%.1f%% extra distance) over the planned course '%s'.",
+				distDelta, pctOver, match.plannedTrackName,
+			)
+		} else {
+			debrief.TackingEfficiency = fmt.Sprintf(
+				"Direct course steered with minimal tacking overhead (%+.1f NM over plan '%s').",
+				distDelta, match.plannedTrackName,
+			)
+		}
+	}
+
+	if debrief.WeatherImpact == "" {
+		debrief.WeatherImpact = fmt.Sprintf("Conditions along the leg allowed an average speed of %.1f kts with peak velocity of %.1f kts.", avgSpd, maxSpd)
+	}
+
+	if len(debrief.Observations) == 0 {
 		debrief.Observations = []string{
-			fmt.Sprintf("Logged maximum speed over ground of %.1f knots.", maxSpd),
-			fmt.Sprintf("Total transit time recorded as %s.", recDur),
-			"Maintained steady heading relative to channel marks and destination waypoints.",
+			fmt.Sprintf("Recorded %s under way, compared to %s planned.", recDur, plannedDuration),
+			fmt.Sprintf("Average speed over ground maintained at %.1f knots with peak velocity of %.1f knots.", avgSpd, maxSpd),
+			fmt.Sprintf("Course deviation vs plan: %+.1f NM (%+.1f%% distance variance).", distDelta, pctOver),
+			"Tactical takeaway: review upwind VMG angles to optimize tacking efficiency on similar legs.",
 		}
 	}
 

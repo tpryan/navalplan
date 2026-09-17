@@ -282,17 +282,22 @@ type VoyageTrack struct {
 
 // TrackDebrief encapsulates comparative analysis metrics and AI observations.
 type TrackDebrief struct {
-	TrackID            string   `json:"track_id"`
-	TrackName          string   `json:"track_name"`
-	RecordedDistanceNM float64  `json:"recorded_distance_nm"`
-	PlannedDistanceNM  float64  `json:"planned_distance_nm"`
-	DistanceDeltaNM    float64  `json:"distance_delta_nm"`
-	RecordedDuration   string   `json:"recorded_duration"`
-	PlannedDuration    string   `json:"planned_duration"`
-	AvgSpeedKts        float64  `json:"avg_speed_kts"`
-	MaxSpeedKts        float64  `json:"max_speed_kts"`
-	Summary            string   `json:"summary"`
-	TackingEfficiency  string   `json:"tacking_efficiency"`
-	WeatherImpact      string   `json:"weather_impact"`
-	Observations       []string `json:"observations"`
+	TrackID             string   `json:"track_id"`
+	TrackName           string   `json:"track_name"`
+	PlannedTrackID      *string  `json:"planned_track_id,omitempty"`
+	PlannedTrackName    string   `json:"planned_track_name,omitempty"`
+	VoyageStopID        *int64   `json:"voyage_stop_id,omitempty"`
+	RecordedDistanceNM  float64  `json:"recorded_distance_nm"`
+	PlannedDistanceNM   float64  `json:"planned_distance_nm"`
+	DistanceDeltaNM     float64  `json:"distance_delta_nm"`
+	DistanceVariancePct float64  `json:"distance_variance_pct"`
+	RecordedDuration    string   `json:"recorded_duration"`
+	PlannedDuration     string   `json:"planned_duration"`
+	AvgSpeedKts         float64  `json:"avg_speed_kts"`
+	MaxSpeedKts         float64  `json:"max_speed_kts"`
+	Summary             string   `json:"summary"`
+	Conclusions         string   `json:"conclusions,omitempty"`
+	TackingEfficiency   string   `json:"tacking_efficiency"`
+	WeatherImpact       string   `json:"weather_impact"`
+	Observations        []string `json:"observations"`
 }
