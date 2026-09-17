@@ -856,10 +856,14 @@ func TestGetPilotReport(t *testing.T) {
 	voyageID := int64(123)
 
 	t.Run("Success", func(t *testing.T) {
+		debriefJSON := `{"track_id":"trk-1","track_name":"Leg 1","recorded_distance_nm":12.5,"planned_distance_nm":10.0,"summary":"Great sail"}`
 		mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 		mockStore.On("GetVoyageGuide", voyageID).Return(&model.VoyageGuide{Summary: "Test Guide"}, nil)
 		mockStore.On("ListVoyageRecommendations", voyageID).Return([]model.VoyageRecommendation{{Name: "Rec 1"}}, nil)
 		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
+		mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+			{ID: "trk-1", Name: "Leg 1", Debrief: model.RawJSON(debriefJSON)},
+		}, nil)
 
 		req := httptest.NewRequest("GET", "/api/v1/voyages/123/pilot_report", nil)
 		req = addPerson(req, personID)
@@ -872,6 +876,9 @@ func TestGetPilotReport(t *testing.T) {
 		json.NewDecoder(w.Body).Decode(&report)
 		assert.Equal(t, "Test Guide", report.Guide.Summary)
 		assert.Equal(t, 1, len(report.Recommendations))
+		assert.Equal(t, 1, len(report.Debriefs))
+		assert.Equal(t, "Leg 1", report.Debriefs[0].TrackName)
+		assert.Equal(t, 12.5, report.Debriefs[0].RecordedDistanceNM)
 		mockStore.AssertExpectations(t)
 	})
 }
