@@ -42,6 +42,7 @@ let voyageModalMode = 'multiday';
 let map = null;
 let markers = [];
 let routePolyline = null;
+let routePolylines = [];
 let facilityMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
 const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
@@ -102,18 +103,21 @@ async function startStopSweepSequence(stops) {
     }
 
     // Marching-ants route line
-    if (routePolyline) {
+    const activeRouteLines = routePolylines.length > 0 ? routePolylines : (routePolyline ? [routePolyline] : []);
+    if (activeRouteLines.length > 0) {
         let iconOffset = 0;
         if (_routeLineAnimInterval) clearInterval(_routeLineAnimInterval);
         _routeLineAnimInterval = setInterval(() => {
             iconOffset = (iconOffset + 1) % 20;
-            if (routePolyline) {
-                routePolyline.set('icons', [{
-                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
-                    offset: iconOffset + 'px',
-                    repeat: '20px'
-                }]);
-            }
+            activeRouteLines.forEach(pl => {
+                if (pl) {
+                    pl.set('icons', [{
+                        icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+                        offset: iconOffset + 'px',
+                        repeat: '20px'
+                    }]);
+                }
+            });
         }, 50);
     }
 }
@@ -134,13 +138,16 @@ function clearStopSweeps() {
     if (_routeLineAnimInterval) {
         clearInterval(_routeLineAnimInterval);
         _routeLineAnimInterval = null;
-        if (routePolyline) {
-            routePolyline.set('icons', [{
-                icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
-                offset: '0',
-                repeat: '20px'
-            }]);
-        }
+        const activeRouteLines = routePolylines.length > 0 ? routePolylines : (routePolyline ? [routePolyline] : []);
+        activeRouteLines.forEach(pl => {
+            if (pl) {
+                pl.set('icons', [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
+                    offset: '0',
+                    repeat: '20px'
+                }]);
+            }
+        });
     }
     markers.forEach(m => m.map = map);
 }
@@ -4364,24 +4371,8 @@ async function initMap() {
         }
     })();
 
-    // Draw route — dashed marching-ants polyline in --ink color
-    const coords = sortedStops.map(s => ({ lat: s.latitude, lng: s.longitude }));
-    if (coords.length > 1) {
-        const routeLineColor = tokenColor('ink') || '#0B1220';
-
-        routePolyline = new Polyline({
-          path: coords,
-          geodesic: true,
-          strokeColor: routeLineColor,
-          strokeOpacity: 0,
-          icons: [{
-            icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
-            offset: '0',
-            repeat: '14px'
-          }],
-          map: map
-        });
-    }
+    // Draw route — dashed marching-ants polyline for legs without a planned route
+    await updateRoutePolylines();
     } catch (err) {
         console.error("Error in renderMapStops:", err);
     }
@@ -4392,6 +4383,10 @@ async function initMap() {
       markers.forEach(m => m.map = null);
       markers = [];
 
+      routePolylines.forEach(tp => {
+          if (tp) tp.setMap(null);
+      });
+      routePolylines = [];
       if (routePolyline) {
           routePolyline.setMap(null);
           routePolyline = null;
@@ -4433,16 +4428,171 @@ function escapeTrackHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function voyageHasOverallPlannedRoute(tracks, stops) {
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) return false;
+    const plannedTracks = tracks.filter(t => t && t.kind === 'planned');
+    if (plannedTracks.length === 0) return false;
+
+    // If 2 or fewer stops, any planned track covers the route
+    if (!stops || stops.length <= 2) {
+        return plannedTracks.length > 0;
+    }
+
+    // Check if there is a voyage-level planned track (not assigned to a single stop)
+    // or a planned track whose endpoints span the entire itinerary
+    for (const t of plannedTracks) {
+        if (!t.voyage_stop_id) {
+            return true;
+        }
+
+        const rawGeo = t.simplified_geojson || t.geojson;
+        if (!rawGeo) continue;
+        let geoData = rawGeo;
+        if (typeof rawGeo === 'string') {
+            try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
+        }
+        const coords = geoData?.geometry?.coordinates;
+        if (coords && Array.isArray(coords) && coords.length >= 2) {
+            const firstStop = stops[0];
+            const lastStop = stops[stops.length - 1];
+            const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
+            const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
+            const dStart = nmBetween(firstStop, startPt);
+            const dEnd = nmBetween(lastStop, endPt);
+            if (dStart !== null && dStart < 15 && dEnd !== null && dEnd < 15) {
+                return true;
+            }
+        }
+    }
+
+    // Check if every leg has a matching planned track
+    const totalLegs = stops.length - 1;
+    let legsWithPlanned = 0;
+    for (let i = 0; i < totalLegs; i++) {
+        if (hasPlannedRouteForLeg(stops[i], stops[i + 1], i, stops, tracks, true)) {
+            legsWithPlanned++;
+        }
+    }
+    return legsWithPlanned === totalLegs;
+}
+
+function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOverallCheck = false) {
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) return false;
+    const plannedTracks = tracks.filter(t => t && t.kind === 'planned');
+    if (plannedTracks.length === 0) return false;
+
+    if (!skipOverallCheck && voyageHasOverallPlannedRoute(tracks, stops)) {
+        return true;
+    }
+
+    const legNum = legIdx + 1;
+
+    for (const t of plannedTracks) {
+        // 1. Explicit stop ID match
+        if (t.voyage_stop_id != null && (t.voyage_stop_id === fromStop.id || t.voyage_stop_id === toStop.id)) {
+            return true;
+        }
+
+        // 2. Name contains Leg X
+        if (t.name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(t.name)) {
+            return true;
+        }
+
+        // 3. Proximity: starts near fromStop (< 10 NM) and ends near toStop (< 10 NM)
+        const rawGeo = t.simplified_geojson || t.geojson;
+        if (rawGeo) {
+            let geoData = rawGeo;
+            if (typeof rawGeo === 'string') {
+                try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
+            }
+            const coords = geoData?.geometry?.coordinates;
+            if (coords && Array.isArray(coords) && coords.length >= 2) {
+                const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
+                const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
+                const dStart = nmBetween(fromStop, startPt);
+                const dEnd = nmBetween(toStop, endPt);
+                if (dStart !== null && dStart < 10 && dEnd !== null && dEnd < 10) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // 4. Sequential fallback: if number of planned tracks matches number of legs
+    if (stops && plannedTracks.length === stops.length - 1 && plannedTracks[legIdx]) {
+        return true;
+    }
+
+    return false;
+}
+
+async function updateRoutePolylines() {
+    routePolylines.forEach(p => {
+        if (p) p.setMap(null);
+    });
+    routePolylines = [];
+    routePolyline = null;
+
+    if (!map || !currentStops || currentStops.length < 2) return;
+
+    const sortedStops = [...currentStops].sort((a, b) =>
+        new Date(a.target_date) - new Date(b.target_date)
+    );
+    if (sortedStops.length < 2) return;
+
+    // If an overall planned route covers the voyage, suppress all direct lines between stops
+    if (voyageHasOverallPlannedRoute(currentTracks, sortedStops)) {
+        return;
+    }
+
+    const { Polyline } = await importLibrary("maps");
+    const routeLineColor = tokenColor('ink') || '#0B1220';
+
+    for (let i = 0; i < sortedStops.length - 1; i++) {
+        const fromStop = sortedStops[i];
+        const toStop = sortedStops[i + 1];
+
+        // Do not draw direct line for legs that have a planned route
+        if (hasPlannedRouteForLeg(fromStop, toStop, i, sortedStops, currentTracks)) {
+            continue;
+        }
+
+        const legCoords = [
+            { lat: fromStop.latitude, lng: fromStop.longitude },
+            { lat: toStop.latitude, lng: toStop.longitude }
+        ];
+
+        const poly = new Polyline({
+            path: legCoords,
+            geodesic: true,
+            strokeColor: routeLineColor,
+            strokeOpacity: 0,
+            icons: [{
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
+                offset: '0',
+                repeat: '14px'
+            }],
+            map: map
+        });
+
+        routePolylines.push(poly);
+    }
+
+    routePolyline = routePolylines[0] || null;
+}
+
 async function loadAndRenderTracks(voyageId) {
     if (!voyageId) return;
     try {
         currentTracks = await API.listVoyageTracks(voyageId);
         await renderTrackPolylines();
+        await updateRoutePolylines();
         updateTrackLayerControls();
     } catch (err) {
         console.warn('Failed to load voyage tracks:', err);
         currentTracks = [];
         await renderTrackPolylines();
+        await updateRoutePolylines();
         updateTrackLayerControls();
     }
 }
@@ -5132,11 +5282,18 @@ async function captureAndUploadMap(voyageId) {
             }
         }
 
-        // Draw path first so stop markers render on top
-        pathParam = "&path=color:0x999999ff|weight:1";
-        stopsToDraw.forEach(s => {
-            pathParam += `|${s.latitude},${s.longitude}`;
-        });
+        // Draw path first so stop markers render on top, omitting direct lines for legs with planned routes
+        pathParam = "";
+        const hasOverallPlanned = voyageHasOverallPlannedRoute(currentTracks, sortedStops);
+        if (!hasOverallPlanned) {
+            for (let i = 0; i < stopsToDraw.length - 1; i++) {
+                const from = stopsToDraw[i];
+                const to = stopsToDraw[i + 1];
+                if (!hasPlannedRouteForLeg(from, to, i, sortedStops, currentTracks)) {
+                    pathParam += `&path=color:0x999999ff|weight:1|${from.latitude},${from.longitude}|${to.latitude},${to.longitude}`;
+                }
+            }
+        }
 
         // If the last stop is very close to the first, omit it to avoid overlap
         const first = stopsToDraw[0];

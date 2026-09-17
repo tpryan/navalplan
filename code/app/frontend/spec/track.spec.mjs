@@ -434,4 +434,221 @@ describe('GPX Track UI & Rendering', () => {
       expect(remainingHtml).toContain('Master voyage passage');
     });
   });
+
+  describe('Direct Stop Lines Suppression when Planned Routes Exist', () => {
+    function nmBetween(p1, p2) {
+      if (!p1 || !p2 || p1.latitude == null || p2.latitude == null) return null;
+      const R = 3440.065;
+      const dLat = (p2.latitude - p1.latitude) * Math.PI / 180;
+      const dLon = (p2.longitude - p1.longitude) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(p1.latitude * Math.PI / 180) * Math.cos(p2.latitude * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function voyageHasOverallPlannedRoute(tracks, stops) {
+      if (!tracks || !Array.isArray(tracks) || tracks.length === 0) return false;
+      const plannedTracks = tracks.filter(t => t && t.kind === 'planned');
+      if (plannedTracks.length === 0) return false;
+
+      if (!stops || stops.length <= 2) {
+        return plannedTracks.length > 0;
+      }
+
+      for (const t of plannedTracks) {
+        if (!t.voyage_stop_id) {
+          return true;
+        }
+
+        const rawGeo = t.simplified_geojson || t.geojson;
+        if (!rawGeo) continue;
+        let geoData = rawGeo;
+        if (typeof rawGeo === 'string') {
+          try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
+        }
+        const coords = geoData?.geometry?.coordinates;
+        if (coords && Array.isArray(coords) && coords.length >= 2) {
+          const firstStop = stops[0];
+          const lastStop = stops[stops.length - 1];
+          const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
+          const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
+          const dStart = nmBetween(firstStop, startPt);
+          const dEnd = nmBetween(lastStop, endPt);
+          if (dStart !== null && dStart < 15 && dEnd !== null && dEnd < 15) {
+            return true;
+          }
+        }
+      }
+
+      const totalLegs = stops.length - 1;
+      let legsWithPlanned = 0;
+      for (let i = 0; i < totalLegs; i++) {
+        if (hasPlannedRouteForLeg(stops[i], stops[i + 1], i, stops, tracks, true)) {
+          legsWithPlanned++;
+        }
+      }
+      return legsWithPlanned === totalLegs;
+    }
+
+    function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOverallCheck = false) {
+      if (!tracks || !Array.isArray(tracks) || tracks.length === 0) return false;
+      const plannedTracks = tracks.filter(t => t && t.kind === 'planned');
+      if (plannedTracks.length === 0) return false;
+
+      if (!skipOverallCheck && voyageHasOverallPlannedRoute(tracks, stops)) {
+        return true;
+      }
+
+      const legNum = legIdx + 1;
+
+      for (const t of plannedTracks) {
+        if (t.voyage_stop_id != null && (t.voyage_stop_id === fromStop.id || t.voyage_stop_id === toStop.id)) {
+          return true;
+        }
+
+        if (t.name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(t.name)) {
+          return true;
+        }
+
+        const rawGeo = t.simplified_geojson || t.geojson;
+        if (rawGeo) {
+          let geoData = rawGeo;
+          if (typeof rawGeo === 'string') {
+            try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
+          }
+          const coords = geoData?.geometry?.coordinates;
+          if (coords && Array.isArray(coords) && coords.length >= 2) {
+            const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
+            const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
+            const dStart = nmBetween(fromStop, startPt);
+            const dEnd = nmBetween(toStop, endPt);
+            if (dStart !== null && dStart < 10 && dEnd !== null && dEnd < 10) {
+              return true;
+            }
+          }
+        }
+      }
+
+      if (stops && plannedTracks.length === stops.length - 1 && plannedTracks[legIdx]) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function getDrawnRouteSegments(stops, tracks) {
+      if (!stops || stops.length < 2) return [];
+      if (voyageHasOverallPlannedRoute(tracks, stops)) return [];
+
+      const segments = [];
+      for (let i = 0; i < stops.length - 1; i++) {
+        const from = stops[i];
+        const to = stops[i + 1];
+        if (!hasPlannedRouteForLeg(from, to, i, stops, tracks)) {
+          segments.push({ leg: i + 1, from: from.id, to: to.id });
+        }
+      }
+      return segments;
+    }
+
+    it('draws all direct lines when no planned tracks exist', () => {
+      const stops = [
+        { id: 1, name: 'San Francisco', latitude: 37.8, longitude: -122.4 },
+        { id: 2, name: 'Half Moon Bay', latitude: 37.5, longitude: -122.5 },
+        { id: 3, name: 'Santa Cruz', latitude: 36.9, longitude: -122.0 },
+      ];
+      const tracks = [
+        { id: 'trk-1', kind: 'recorded', name: 'Actual GPS Log' }
+      ];
+
+      const segments = getDrawnRouteSegments(stops, tracks);
+      expect(segments.length).toBe(2);
+      expect(segments[0].leg).toBe(1);
+      expect(segments[1].leg).toBe(2);
+    });
+
+    it('suppresses all direct lines when an overall planned route covers the voyage', () => {
+      const stops = [
+        { id: 1, name: 'San Francisco', latitude: 37.8, longitude: -122.4 },
+        { id: 2, name: 'Half Moon Bay', latitude: 37.5, longitude: -122.5 },
+        { id: 3, name: 'Santa Cruz', latitude: 36.9, longitude: -122.0 },
+      ];
+      const tracks = [
+        {
+          id: 'plan-1',
+          kind: 'planned',
+          name: 'SF to Santa Cruz Planned Route',
+          voyage_stop_id: null,
+        }
+      ];
+
+      const segments = getDrawnRouteSegments(stops, tracks);
+      expect(segments.length).toBe(0);
+    });
+
+    it('suppresses only the direct line for a leg that has a planned route', () => {
+      const stops = [
+        { id: 1, name: 'San Francisco', latitude: 37.8, longitude: -122.4 },
+        { id: 2, name: 'Half Moon Bay', latitude: 37.5, longitude: -122.5 },
+        { id: 3, name: 'Santa Cruz', latitude: 36.9, longitude: -122.0 },
+      ];
+      const tracks = [
+        {
+          id: 'plan-leg1',
+          kind: 'planned',
+          name: 'Leg 1 Plan',
+          voyage_stop_id: 1,
+        }
+      ];
+
+      const segments = getDrawnRouteSegments(stops, tracks);
+      expect(segments.length).toBe(1);
+      expect(segments[0].leg).toBe(2);
+      expect(segments[0].from).toBe(2);
+      expect(segments[0].to).toBe(3);
+    });
+
+    it('suppresses direct line for a 2-stop voyage when any planned track exists', () => {
+      const stops = [
+        { id: 10, name: 'Miami', latitude: 25.7, longitude: -80.1 },
+        { id: 20, name: 'Bimini', latitude: 25.7, longitude: -79.3 },
+      ];
+      const tracks = [
+        { id: 'plan-bimini', kind: 'planned', name: 'Bimini Crossing Route' }
+      ];
+
+      const segments = getDrawnRouteSegments(stops, tracks);
+      expect(segments.length).toBe(0);
+    });
+
+    it('suppresses static map path lines when planned routes exist', () => {
+      const stops = [
+        { id: 1, latitude: 37.8, longitude: -122.4 },
+        { id: 2, latitude: 37.5, longitude: -122.5 },
+      ];
+      const tracksWithPlan = [
+        { id: 'p1', kind: 'planned', name: 'Plan' }
+      ];
+      const tracksNoPlan = [];
+
+      function buildStaticPath(stopsToDraw, tracks) {
+        let pathParam = '';
+        const hasOverallPlanned = voyageHasOverallPlannedRoute(tracks, stopsToDraw);
+        if (!hasOverallPlanned) {
+          for (let i = 0; i < stopsToDraw.length - 1; i++) {
+            const from = stopsToDraw[i];
+            const to = stopsToDraw[i + 1];
+            if (!hasPlannedRouteForLeg(from, to, i, stopsToDraw, tracks)) {
+              pathParam += `&path=color:0x999999ff|weight:1|${from.latitude},${from.longitude}|${to.latitude},${to.longitude}`;
+            }
+          }
+        }
+        return pathParam;
+      }
+
+      expect(buildStaticPath(stops, tracksWithPlan)).toBe('');
+      expect(buildStaticPath(stops, tracksNoPlan)).toContain('&path=color:0x999999ff|weight:1|37.8,-122.4|37.5,-122.5');
+    });
+  });
 });
