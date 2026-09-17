@@ -4648,10 +4648,11 @@ function renderTracksList() {
               <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
             </div>
             <div class="flex gap-xs">
+              ${!isPlanned ? `
               <button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}" title="Run Passage Debrief">
                 <span class="material-symbols-outlined icon-align font-sm">analytics</span>
                 Debrief
-              </button>
+              </button>` : ''}
               <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}" title="Delete Track">
                 <span class="material-symbols-outlined font-sm">delete</span>
               </button>
@@ -4770,13 +4771,19 @@ function generateDebriefsHTML(debrief) {
               </h4>
               <span class="font-xs text-gray">${new Date().toLocaleDateString()}</span>
             </div>
+            ${parsed.planned_track_name ? `
+              <div class="debrief-pair-badge">
+                <span class="material-symbols-outlined font-xs">compare_arrows</span>
+                Compared against plan: <strong>${escapeTrackHtml(parsed.planned_track_name)}</strong>
+              </div>
+            ` : ''}
             <p class="debrief-summary font-sm mt-xs mb-sm">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
             
             <div class="debrief-stat-grid">
               ${parsed.recorded_distance_nm != null ? `
                 <div class="debrief-stat-item">
                   <div class="val rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>
-                  <div class="lbl">Recorded Dist</div>
+                  <div class="lbl">Actual Dist</div>
                 </div>` : ''}
               ${parsed.planned_distance_nm != null ? `
                 <div class="debrief-stat-item">
@@ -4790,12 +4797,29 @@ function generateDebriefsHTML(debrief) {
                   </div>
                   <div class="lbl">Variance (Tacking)</div>
                 </div>` : ''}
+              ${parsed.recorded_duration ? `
+                <div class="debrief-stat-item">
+                  <div class="val rec-dur">${escapeTrackHtml(parsed.recorded_duration)}</div>
+                  <div class="lbl">Actual Time</div>
+                </div>` : ''}
+              ${parsed.planned_duration ? `
+                <div class="debrief-stat-item">
+                  <div class="val plan-dur">${escapeTrackHtml(parsed.planned_duration)}</div>
+                  <div class="lbl">Planned Time</div>
+                </div>` : ''}
               ${avgSpdVal != null ? `
                 <div class="debrief-stat-item">
                   <div class="val avg-spd">${avgSpdVal.toFixed(1)} kt</div>
                   <div class="lbl">Avg Speed</div>
                 </div>` : ''}
             </div>
+
+            ${parsed.conclusions ? `
+              <div class="debrief-conclusions font-sm">
+                <strong>Debrief Conclusions &amp; Takeaways:</strong>
+                <p class="m-0 mt-xs">${escapeTrackHtml(parsed.conclusions)}</p>
+              </div>
+            ` : ''}
 
             ${parsed.tacking_efficiency ? `
               <p class="font-sm mb-xs tack-eff"><strong>Tacking Efficiency:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}</p>

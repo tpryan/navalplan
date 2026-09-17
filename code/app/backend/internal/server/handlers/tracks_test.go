@@ -204,61 +204,158 @@ func TestDebriefVoyageTrack(t *testing.T) {
 	voyageID := int64(10)
 	trackID := "track-uuid-1"
 	recDist := 12.5
+	planDist := 10.0
 	avgSpd := 6.2
 	maxSpd := 7.8
 	dur := "02:00:00"
+	planDur := "01:30:00"
+	stopID := int64(100)
 
-	t.Run("returns debrief analysis successfully", func(t *testing.T) {
-		mockStore := new(MockStore)
-		handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
+	tests := []struct {
+		name           string
+		setupMock      func(m *MockStore)
+		expectedStatus int
+		verifyDebrief  func(t *testing.T, d *model.TrackDebrief)
+	}{
+		{
+			name: "rejects debriefing planned track directly",
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+					ID:       trackID,
+					VoyageID: voyageID,
+					Kind:     "planned",
+					Name:     "Planned Route",
+				}, nil)
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "successfully pairs recorded track with planned track and generates conclusions",
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+					ID:               trackID,
+					VoyageID:         voyageID,
+					VoyageStopID:     &stopID,
+					Kind:             "recorded",
+					Name:             "Leg 1 Actual",
+					DistanceNM:       &recDist,
+					DurationInterval: &dur,
+					AvgSpeedKts:      &avgSpd,
+					MaxSpeedKts:      &maxSpd,
+				}, nil)
+				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+					{
+						ID:               "plan-1",
+						VoyageID:         voyageID,
+						VoyageStopID:     &stopID,
+						Kind:             "planned",
+						Name:             "Leg 1 Plan",
+						DistanceNM:       &planDist,
+						DurationInterval: &planDur,
+					},
+				}, nil)
+				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			verifyDebrief: func(t *testing.T, d *model.TrackDebrief) {
+				if d.TrackID != trackID {
+					t.Errorf("Debrief track ID = %s, want %s", d.TrackID, trackID)
+				}
+				if d.PlannedTrackID == nil || *d.PlannedTrackID != "plan-1" {
+					t.Errorf("Planned track ID = %v, want plan-1", d.PlannedTrackID)
+				}
+				if d.PlannedTrackName != "Leg 1 Plan" {
+					t.Errorf("Planned track name = %s, want Leg 1 Plan", d.PlannedTrackName)
+				}
+				if d.RecordedDistanceNM != recDist {
+					t.Errorf("Recorded distance = %v, want %v", d.RecordedDistanceNM, recDist)
+				}
+				if d.PlannedDistanceNM != planDist {
+					t.Errorf("Planned distance = %v, want %v", d.PlannedDistanceNM, planDist)
+				}
+				if d.DistanceDeltaNM != 2.5 {
+					t.Errorf("Distance delta = %v, want 2.5", d.DistanceDeltaNM)
+				}
+				if d.DistanceVariancePct != 25.0 {
+					t.Errorf("Variance pct = %v, want 25.0", d.DistanceVariancePct)
+				}
+				if d.Conclusions == "" {
+					t.Errorf("Expected non-empty conclusions comparing actual to planned")
+				}
+				if len(d.Observations) == 0 {
+					t.Errorf("Expected observations in debrief")
+				}
+			},
+		},
+		{
+			name: "falls back to direct rhumb line when no planned track exists",
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+					ID:               trackID,
+					VoyageID:         voyageID,
+					Kind:             "recorded",
+					Name:             "Passage Leg",
+					DistanceNM:       &recDist,
+					DurationInterval: &dur,
+					AvgSpeedKts:      &avgSpd,
+					MaxSpeedKts:      &maxSpd,
+				}, nil)
+				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil)
+				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			verifyDebrief: func(t *testing.T, d *model.TrackDebrief) {
+				if d.PlannedTrackName != "Direct Rhumb Line Course" {
+					t.Errorf("Planned track name = %s, want Direct Rhumb Line Course", d.PlannedTrackName)
+				}
+				if d.Conclusions == "" {
+					t.Errorf("Expected non-empty conclusions")
+				}
+			},
+		},
+	}
 
-		mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-		mockStore.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
-			ID:               trackID,
-			VoyageID:         voyageID,
-			Kind:             "recorded",
-			Name:             "Passage Leg",
-			DistanceNM:       &recDist,
-			DurationInterval: &dur,
-			AvgSpeedKts:      &avgSpd,
-			MaxSpeedKts:      &maxSpd,
-		}, nil)
-		mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil)
-		mockStore.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := new(MockStore)
+			tt.setupMock(mockStore)
+			handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/voyages/10/track/track-uuid-1/debrief", nil)
-		req.SetPathValue("id", "10")
-		req.SetPathValue("trackId", trackID)
-		req = addPerson(req, personID)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/voyages/10/track/track-uuid-1/debrief", nil)
+			req.SetPathValue("id", "10")
+			req.SetPathValue("trackId", trackID)
+			req = addPerson(req, personID)
 
-		w := httptest.NewRecorder()
-		handler.DebriefVoyageTrack(w, req)
+			w := httptest.NewRecorder()
+			handler.DebriefVoyageTrack(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("DebriefVoyageTrack() code = %d, want 200; body = %s", w.Code, w.Body.String())
-		}
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("DebriefVoyageTrack() code = %d, want %d; body = %s", w.Code, tt.expectedStatus, w.Body.String())
+			}
 
-		var debrief model.TrackDebrief
-		if err := json.Unmarshal(w.Body.Bytes(), &debrief); err != nil {
-			t.Fatal(err)
-		}
-		if debrief.TrackID != trackID {
-			t.Errorf("Debrief track ID = %s, want %s", debrief.TrackID, trackID)
-		}
-		if debrief.RecordedDistanceNM != recDist {
-			t.Errorf("Recorded distance = %v, want %v", debrief.RecordedDistanceNM, recDist)
-		}
-		if len(debrief.Observations) == 0 {
-			t.Errorf("Expected observations in debrief")
-		}
-		mockStore.AssertExpectations(t)
-	})
+			if tt.verifyDebrief != nil {
+				var debrief model.TrackDebrief
+				if err := json.Unmarshal(w.Body.Bytes(), &debrief); err != nil {
+					t.Fatal(err)
+				}
+				tt.verifyDebrief(t, &debrief)
+			}
+			mockStore.AssertExpectations(t)
+		})
+	}
 }
 
 func TestDebriefAllVoyageTracks(t *testing.T) {
 	personID := int64(1)
 	otherPersonID := int64(2)
 	voyageID := int64(10)
+	planDist := 10.0
+	planDur := "01:30:00"
 	recDist1 := 12.5
 	avgSpd1 := 6.2
 	maxSpd1 := 7.8
@@ -267,6 +364,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 	avgSpd2 := 7.0
 	maxSpd2 := 8.5
 	dur2 := "02:30:00"
+	stopID := int64(100)
 
 	tests := []struct {
 		name           string
@@ -276,6 +374,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 		setupMock      func(m *MockStore)
 		expectedStatus int
 		expectCount    int
+		verifyDebriefs func(t *testing.T, debriefs []*model.TrackDebrief)
 	}{
 		{
 			name:           "unauthorized when no person in context",
@@ -313,7 +412,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
-			name:         "successfully debriefs all tracks",
+			name:         "successfully debriefs only recorded tracks pairing with planned routes",
 			voyageID:     "10",
 			withAuth:     true,
 			authPersonID: personID,
@@ -321,20 +420,30 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 				tracks := []model.VoyageTrack{
 					{
-						ID:               "track-1",
+						ID:               "plan-track-1",
 						VoyageID:         voyageID,
+						VoyageStopID:     &stopID,
+						Kind:             "planned",
+						Name:             "Leg 1 Plan",
+						DistanceNM:       &planDist,
+						DurationInterval: &planDur,
+					},
+					{
+						ID:               "rec-track-1",
+						VoyageID:         voyageID,
+						VoyageStopID:     &stopID,
 						Kind:             "recorded",
-						Name:             "Leg 1",
+						Name:             "Leg 1 Actual",
 						DistanceNM:       &recDist1,
 						DurationInterval: &dur1,
 						AvgSpeedKts:      &avgSpd1,
 						MaxSpeedKts:      &maxSpd1,
 					},
 					{
-						ID:               "track-2",
+						ID:               "rec-track-2",
 						VoyageID:         voyageID,
 						Kind:             "recorded",
-						Name:             "Leg 2",
+						Name:             "Leg 2 Actual",
 						DistanceNM:       &recDist2,
 						DurationInterval: &dur2,
 						AvgSpeedKts:      &avgSpd2,
@@ -342,11 +451,35 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 					},
 				}
 				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
-				m.On("UpdateVoyageTrackDebrief", "track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
-				m.On("UpdateVoyageTrackDebrief", "track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
+				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("UpdateVoyageTrackDebrief", "rec-track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
+				m.On("UpdateVoyageTrackDebrief", "rec-track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectCount:    2,
+			verifyDebriefs: func(t *testing.T, debriefs []*model.TrackDebrief) {
+				if debriefs[0].TrackID != "rec-track-1" {
+					t.Errorf("Debrief 0 track ID = %s, want rec-track-1", debriefs[0].TrackID)
+				}
+				if debriefs[0].PlannedTrackID == nil || *debriefs[0].PlannedTrackID != "plan-track-1" {
+					t.Errorf("Debrief 0 planned track ID = %v, want plan-track-1", debriefs[0].PlannedTrackID)
+				}
+				if debriefs[0].PlannedTrackName != "Leg 1 Plan" {
+					t.Errorf("Debrief 0 planned name = %s, want Leg 1 Plan", debriefs[0].PlannedTrackName)
+				}
+				if debriefs[0].DistanceVariancePct != 25.0 {
+					t.Errorf("Debrief 0 variance pct = %v, want 25.0", debriefs[0].DistanceVariancePct)
+				}
+				if debriefs[0].Conclusions == "" {
+					t.Errorf("Debrief 0 missing conclusions")
+				}
+				if debriefs[1].TrackID != "rec-track-2" {
+					t.Errorf("Debrief 1 track ID = %s, want rec-track-2", debriefs[1].TrackID)
+				}
+				if debriefs[1].Conclusions == "" {
+					t.Errorf("Debrief 1 missing conclusions")
+				}
+			},
 		},
 	}
 
@@ -377,8 +510,8 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				if len(debriefs) != tt.expectCount {
 					t.Errorf("Debrief count = %d, want %d", len(debriefs), tt.expectCount)
 				}
-				if debriefs[0].TrackID != "track-1" || debriefs[1].TrackID != "track-2" {
-					t.Errorf("Unexpected track IDs in debriefs: %+v", debriefs)
+				if tt.verifyDebriefs != nil {
+					tt.verifyDebriefs(t, debriefs)
 				}
 			}
 			mockStore.AssertExpectations(t)
