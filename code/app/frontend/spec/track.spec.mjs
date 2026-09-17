@@ -45,7 +45,14 @@ describe('GPX Track UI & Rendering', () => {
     }
 
     if (countBadge) countBadge.textContent = `${tracks.length} track${tracks.length === 1 ? '' : 's'}`;
-    if (debriefAllBtn) debriefAllBtn.classList.remove('hidden');
+    const hasDebriefable = tracks.some(t => t.kind !== 'planned');
+    if (debriefAllBtn) {
+      if (hasDebriefable) {
+        debriefAllBtn.classList.remove('hidden');
+      } else {
+        debriefAllBtn.classList.add('hidden');
+      }
+    }
 
     let html = '<div class="flex flex-col gap-sm">';
     tracks.forEach(t => {
@@ -64,7 +71,6 @@ describe('GPX Track UI & Rendering', () => {
               <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
             </div>
             <div class="flex gap-xs">
-              ${!isPlanned ? `<button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}">Debrief</button>` : ''}
               <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}">Delete</button>
             </div>
           </div>
@@ -177,7 +183,8 @@ describe('GPX Track UI & Rendering', () => {
       // Check recorded track
       expect(items[1].querySelector('.track-badge-recorded')).not.toBeNull();
       expect(items[1].querySelector('.track-sog').textContent).toContain('5.1 kts');
-      expect(items[1].querySelector('.btn-track-debrief')).not.toBeNull();
+      expect(items[1].querySelector('.btn-track-debrief')).toBeNull();
+      expect(container.querySelectorAll('.btn-track-debrief').length).toBe(0);
     });
   });
 
@@ -243,9 +250,12 @@ describe('GPX Track UI & Rendering', () => {
       expect(cards[1].textContent).toContain('Leg 2');
     });
 
-    it('toggles debrief all button visibility based on track count', () => {
+    it('toggles single debrief button visibility based on debriefable track presence', () => {
       const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
       renderTracksList([]);
+      expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
+
+      renderTracksList([{ id: 't1', kind: 'planned', name: 'Plan only' }]);
       expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
 
       renderTracksList([{ id: 't1', kind: 'recorded', name: 'Leg 1' }]);

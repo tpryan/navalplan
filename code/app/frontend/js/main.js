@@ -4769,14 +4769,17 @@ function renderTracksList() {
     }
 
     if (countBadge) countBadge.textContent = `${currentTracks.length} track${currentTracks.length === 1 ? '' : 's'}`;
+    const hasDebriefable = currentTracks.some(t => t.kind !== 'planned');
     if (debriefAllBtn) {
-        debriefAllBtn.classList.remove('hidden');
+        if (hasDebriefable) {
+            debriefAllBtn.classList.remove('hidden');
+        } else {
+            debriefAllBtn.classList.add('hidden');
+        }
         debriefAllBtn.onclick = async () => {
             if (!currentVoyage) return;
             debriefAllBtn.disabled = true;
-            debriefAllBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing All...';
-            const trackDebriefBtns = container.querySelectorAll('.btn-track-debrief');
-            trackDebriefBtns.forEach(b => { b.disabled = true; });
+            debriefAllBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing...';
 
             try {
                 const res = await API.debriefAllVoyageTracks(currentVoyage.id);
@@ -4787,11 +4790,10 @@ function renderTracksList() {
                 });
                 renderDebriefCard(debriefList);
             } catch (err) {
-                showNotification('Debrief Error', err.message || 'Failed to debrief all tracks');
+                showNotification('Debrief Error', err.message || 'Failed to debrief tracks');
             } finally {
                 debriefAllBtn.disabled = false;
-                debriefAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief All';
-                trackDebriefBtns.forEach(b => { b.disabled = false; });
+                debriefAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief';
             }
         };
     }
@@ -4813,11 +4815,6 @@ function renderTracksList() {
               <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
             </div>
             <div class="flex gap-xs">
-              ${!isPlanned ? `
-              <button class="btn secondary p-xs font-xs btn-track-debrief" data-track-id="${t.id}" title="Run Passage Debrief">
-                <span class="material-symbols-outlined icon-align font-sm">analytics</span>
-                Debrief
-              </button>` : ''}
               <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}" title="Delete Track">
                 <span class="material-symbols-outlined font-sm">delete</span>
               </button>
@@ -4834,7 +4831,7 @@ function renderTracksList() {
     html += '</div>';
     container.innerHTML = html;
 
-    // Wire up delete and debrief buttons
+    // Wire up delete buttons
     container.querySelectorAll('.btn-track-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const trackId = e.currentTarget.dataset.trackId;
@@ -4855,27 +4852,6 @@ function renderTracksList() {
                 },
                 { label: 'Cancel' }
             ]);
-        });
-    });
-
-    container.querySelectorAll('.btn-track-debrief').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const trackId = e.currentTarget.dataset.trackId;
-            const debriefBtn = e.currentTarget;
-            debriefBtn.disabled = true;
-            debriefBtn.innerHTML = '<span class="material-symbols-outlined spin font-sm">sync</span> Analyzing...';
-            try {
-                const res = await API.debriefVoyageTrack(currentVoyage.id, trackId);
-                const debriefData = res.debrief || res;
-                const tr = currentTracks.find(x => x.id === trackId);
-                if (tr) tr.debrief = debriefData;
-                renderDebriefCard(debriefData);
-            } catch (err) {
-                showNotification('Debrief Error', err.message || 'Failed to run passage debrief');
-            } finally {
-                debriefBtn.disabled = false;
-                debriefBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief';
-            }
         });
     });
 
