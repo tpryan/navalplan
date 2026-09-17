@@ -342,35 +342,78 @@ describe('GPX Track UI & Rendering', () => {
     });
 
     function simulateReportStopDebriefs(stops, debriefs) {
-      const assignedDebriefIDs = new Set();
-      const result = [];
+      const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(Boolean);
+      const stopDebriefsMap = new Map();
+      const assignedDebriefs = new Set();
 
-      stops.forEach((stop, idx) => {
-        const legNum = idx + 1;
-        const stopDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => {
-          if (!d || assignedDebriefIDs.has(d.track_id || d)) return false;
-          if (d.start_stop_id != null && d.start_stop_id === stop.id) return true;
-          if (d.voyage_stop_id != null && d.voyage_stop_id === stop.id) return true;
-          const nameMatch = (d.track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.track_name)) ||
-                            (d.planned_track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.planned_track_name));
-          return !!nameMatch;
-        });
-        if (stopDebriefs.length === 0 && Array.isArray(debriefs) && idx < stops.length - 1) {
-          const candidate = debriefs[idx];
-          if (candidate && !assignedDebriefIDs.has(candidate.track_id || candidate) &&
-              candidate.start_stop_id == null && candidate.voyage_stop_id == null &&
-              !/\bLeg\s*\d+\b/i.test(candidate.track_name || '') &&
-              !/\bLeg\s*\d+\b/i.test(candidate.planned_track_name || '')) {
-            stopDebriefs.push(candidate);
+      // Pass 1: Explicit match by start_stop_id
+      allDebriefs.forEach(d => {
+        if (d.start_stop_id != null) {
+          const sIdx = stops.findIndex(s => String(s.id) === String(d.start_stop_id));
+          if (sIdx >= 0) {
+            if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+            stopDebriefsMap.get(sIdx).push(d);
+            assignedDebriefs.add(d);
           }
         }
-        stopDebriefs.forEach(d => assignedDebriefIDs.add(d.track_id || d));
+      });
 
+      // Pass 2: Leg number in track_name or planned_track_name
+      allDebriefs.forEach(d => {
+        if (assignedDebriefs.has(d)) return;
+        const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`;
+        const match = nameToTest.match(/\bLeg\s*#?\s*(\d+)\b/i);
+        if (match) {
+          const legNum = parseInt(match[1], 10);
+          const sIdx = legNum - 1;
+          if (sIdx >= 0 && sIdx < stops.length) {
+            if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+            stopDebriefsMap.get(sIdx).push(d);
+            assignedDebriefs.add(d);
+          }
+        }
+      });
+
+      // Pass 3: voyage_stop_id if set
+      allDebriefs.forEach(d => {
+        if (assignedDebriefs.has(d) || d.voyage_stop_id == null) return;
+        let sIdx = stops.findIndex(s => String(s.id) === String(d.voyage_stop_id));
+        if (sIdx > 0 && !stopDebriefsMap.has(sIdx - 1)) {
+          sIdx = sIdx - 1;
+        }
+        if (sIdx >= 0 && sIdx < stops.length) {
+          if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+          stopDebriefsMap.get(sIdx).push(d);
+          assignedDebriefs.add(d);
+        }
+      });
+
+      // Pass 4: Sequential fallback for unassigned debriefs
+      let nextStopIdx = 0;
+      allDebriefs.forEach(d => {
+        if (assignedDebriefs.has(d)) return;
+        while (nextStopIdx < stops.length - 1 && stopDebriefsMap.has(nextStopIdx)) {
+          nextStopIdx++;
+        }
+        const targetIdx = nextStopIdx < stops.length - 1 ? nextStopIdx : Math.min(nextStopIdx, stops.length - 1);
+        if (!stopDebriefsMap.has(targetIdx)) stopDebriefsMap.set(targetIdx, []);
+        stopDebriefsMap.get(targetIdx).push(d);
+        assignedDebriefs.add(d);
+        nextStopIdx++;
+      });
+
+      const result = [];
+      stops.forEach((stop, idx) => {
+        const legNum = idx + 1;
+        const stopDebriefs = stopDebriefsMap.get(idx) || [];
         let stopHtml = `<div class="np-report-stop" data-stop-id="${stop.id}"><h3>Stop ${legNum}: ${stop.name}</h3>`;
         if (stopDebriefs.length > 0) {
+          const debriefTitle = (idx < stops.length - 1)
+            ? `Passage Tactical Debrief — Leg ${legNum}`
+            : `Passage Tactical Debrief`;
           stopHtml += `
             <div class="np-report-stop-debrief">
-              <span class="np-facilities-header">Passage Tactical Debrief — Leg ${legNum}</span>
+              <span class="np-facilities-header">${debriefTitle}</span>
               ${generateDebriefsHTML(stopDebriefs)}
             </div>
           `;
@@ -379,20 +422,9 @@ describe('GPX Track UI & Rendering', () => {
         result.push(stopHtml);
       });
 
-      const remainingDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => !assignedDebriefIDs.has(d.track_id || d));
-      let remainingHtml = '';
-      if (remainingDebriefs.length > 0) {
-        remainingHtml = `
-          <div class="np-report-section np-report-debriefs">
-            <span class="np-section-label">Passage Tactical Debrief</span>
-            ${generateDebriefsHTML(remainingDebriefs)}
-          </div>
-        `;
-      }
-
       return {
         stopsHtml: result.join(''),
-        remainingHtml,
+        remainingHtml: '', // Consolidated bottom section is completely eliminated
       };
     }
 
@@ -414,12 +446,14 @@ describe('GPX Track UI & Rendering', () => {
       expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 2');
       expect(stopsHtml).toContain('Coastal reach to Avalon');
       expect(remainingHtml).toBe('');
+      expect(stopsHtml).not.toContain('np-report-item--non-sailing');
     });
 
-    it('renders unassigned debriefs in fallback bottom section', () => {
+    it('assigns unassigned debriefs to starting stops without creating a consolidated report at the end', () => {
       const stops = [
         { id: 101, name: 'Marina del Rey' },
         { id: 102, name: 'Isthmus Cove' },
+        { id: 103, name: 'Avalon Harbor' },
       ];
       const debriefs = [
         { track_id: 't1', track_name: 'Leg 1 Actual', start_stop_id: 101, summary: 'Leg 1 debrief' },
@@ -430,8 +464,9 @@ describe('GPX Track UI & Rendering', () => {
 
       expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 1');
       expect(stopsHtml).toContain('Leg 1 debrief');
-      expect(remainingHtml).toContain('Passage Tactical Debrief');
-      expect(remainingHtml).toContain('Master voyage passage');
+      expect(stopsHtml).toContain('Passage Tactical Debrief — Leg 2');
+      expect(stopsHtml).toContain('Master voyage passage');
+      expect(remainingHtml).toBe('');
     });
   });
 

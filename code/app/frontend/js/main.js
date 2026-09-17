@@ -267,7 +267,7 @@ function initApp() {
   }
 
   // Print View Handler
-  const printMatch = path.match(/^\/voyages\/(\d+)\/print$/);
+  const printMatch = path.match(/^\/voyages\/(\d+)\/print(?:\/sailing)?$/);
   if (printMatch) {
       initPrintMode(parseInt(printMatch[1], 10));
       return;
@@ -999,7 +999,10 @@ function initModalCloseListeners() {
     if (btnCloseReport) btnCloseReport.onclick = closeReport;
     if (btnCopyReport) btnCopyReport.onclick = handleCopyReport;
     if (btnPrintVoyage) btnPrintVoyage.addEventListener('click', () => {
-        if (currentVoyage) window.open(`/voyages/${currentVoyage.id}/print`, '_blank');
+        if (currentVoyage) {
+            const isSailing = document.getElementById('modal-report')?.classList.contains('np-report--sailing-only');
+            window.open(`/voyages/${currentVoyage.id}/print${isSailing ? '?sailing=1' : ''}`, '_blank');
+        }
     });
 
     // Notification modal
@@ -6711,36 +6714,77 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Daily Itinerary sections ──────────────────────────────────────────────
-    const assignedDebriefIDs = new Set();
-    if (hasBriefings) {
-        sortedStops.forEach((stop, idx) => {
-            const b = briefings.find(br => br && br.stop_id === stop.id);
-            if (!b) return;
-            const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
-            const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'});
-            const w = b.weather_summary || {};
-            const sun = b.sun_phase || {};
+    const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(Boolean);
+    const stopDebriefsMap = new Map(); // stopIndex -> [debriefs]
+    const assignedDebriefs = new Set();
 
-            // Match debriefs starting from this stop for this passage leg
-            const legNum = idx + 1;
-            const stopDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => {
-                if (!d || assignedDebriefIDs.has(d.track_id || d)) return false;
-                if (d.start_stop_id != null && d.start_stop_id === stop.id) return true;
-                if (d.voyage_stop_id != null && d.voyage_stop_id === stop.id) return true;
-                const nameMatch = (d.track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.track_name)) ||
-                                  (d.planned_track_name && new RegExp(`\\bLeg\\s*${legNum}\\b`, 'i').test(d.planned_track_name));
-                return !!nameMatch;
-            });
-            if (stopDebriefs.length === 0 && Array.isArray(debriefs) && idx < sortedStops.length - 1) {
-                const candidate = debriefs[idx];
-                if (candidate && !assignedDebriefIDs.has(candidate.track_id || candidate) &&
-                    candidate.start_stop_id == null && candidate.voyage_stop_id == null &&
-                    !/\bLeg\s*\d+\b/i.test(candidate.track_name || '') &&
-                    !/\bLeg\s*\d+\b/i.test(candidate.planned_track_name || '')) {
-                    stopDebriefs.push(candidate);
+    if (sortedStops.length > 0) {
+        // Pass 1: Explicit match by start_stop_id
+        allDebriefs.forEach(d => {
+            if (d.start_stop_id != null) {
+                const sIdx = sortedStops.findIndex(s => String(s.id) === String(d.start_stop_id));
+                if (sIdx >= 0) {
+                    if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+                    stopDebriefsMap.get(sIdx).push(d);
+                    assignedDebriefs.add(d);
                 }
             }
-            stopDebriefs.forEach(d => assignedDebriefIDs.add(d.track_id || d));
+        });
+
+        // Pass 2: Leg number in track_name or planned_track_name (e.g., "Leg 1", "Leg 2")
+        allDebriefs.forEach(d => {
+            if (assignedDebriefs.has(d)) return;
+            const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`;
+            const match = nameToTest.match(/\bLeg\s*#?\s*(\d+)\b/i);
+            if (match) {
+                const legNum = parseInt(match[1], 10);
+                const sIdx = legNum - 1; // Leg 1 starts at stop 0
+                if (sIdx >= 0 && sIdx < sortedStops.length) {
+                    if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+                    stopDebriefsMap.get(sIdx).push(d);
+                    assignedDebriefs.add(d);
+                }
+            }
+        });
+
+        // Pass 3: voyage_stop_id if set
+        allDebriefs.forEach(d => {
+            if (assignedDebriefs.has(d) || d.voyage_stop_id == null) return;
+            let sIdx = sortedStops.findIndex(s => String(s.id) === String(d.voyage_stop_id));
+            if (sIdx > 0 && !stopDebriefsMap.has(sIdx - 1)) {
+                sIdx = sIdx - 1;
+            }
+            if (sIdx >= 0 && sIdx < sortedStops.length) {
+                if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+                stopDebriefsMap.get(sIdx).push(d);
+                assignedDebriefs.add(d);
+            }
+        });
+
+        // Pass 4: Sequential fallback for unassigned debriefs (assigning to starting stops 0, 1, 2...)
+        let nextStopIdx = 0;
+        allDebriefs.forEach(d => {
+            if (assignedDebriefs.has(d)) return;
+            while (nextStopIdx < sortedStops.length - 1 && stopDebriefsMap.has(nextStopIdx)) {
+                nextStopIdx++;
+            }
+            const targetIdx = nextStopIdx < sortedStops.length - 1 ? nextStopIdx : Math.min(nextStopIdx, sortedStops.length - 1);
+            if (!stopDebriefsMap.has(targetIdx)) stopDebriefsMap.set(targetIdx, []);
+            stopDebriefsMap.get(targetIdx).push(d);
+            assignedDebriefs.add(d);
+            nextStopIdx++;
+        });
+
+        sortedStops.forEach((stop, idx) => {
+            const b = (briefings && briefings.find(br => br && (br.stop_id === stop.id || br.id === stop.id))) || {};
+            const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
+            const dateStr = stop.target_date
+                ? new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'})
+                : '';
+            const w = b.weather_summary || {};
+            const sun = b.sun_phase || {};
+            const legNum = idx + 1;
+            const stopDebriefs = stopDebriefsMap.get(idx) || [];
 
             html += `
                 <div class="np-report-stop" style="--accent:var(--${accent})">
@@ -6748,7 +6792,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         <div class="np-report-stop__number">${idx+1}</div>
                         <div>
                             <div class="np-report-stop__title">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
-                            <div class="np-report-stop__date">${dateStr}</div>
+                            ${dateStr ? `<div class="np-report-stop__date">${dateStr}</div>` : ''}
                         </div>
                     </div>
             `;
@@ -6851,9 +6895,12 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (stopDebriefs.length > 0) {
                 const stopDebriefHtml = generateDebriefsHTML(stopDebriefs);
                 if (stopDebriefHtml) {
+                    const debriefTitle = (idx < sortedStops.length - 1)
+                        ? `Passage Tactical Debrief — Leg ${legNum}`
+                        : `Passage Tactical Debrief`;
                     html += `
                         <div class="np-report-stop-debrief">
-                            <span class="np-facilities-header">Passage Tactical Debrief — Leg ${legNum}</span>
+                            <span class="np-facilities-header">${debriefTitle}</span>
                             ${stopDebriefHtml}
                         </div>
                     `;
@@ -6862,20 +6909,6 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             html += `</div>`;
         });
-    }
-
-    // ── Remaining / Unassigned Passage Tactical Debriefs ─────────────────────
-    const remainingDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => !assignedDebriefIDs.has(d.track_id || d));
-    if (remainingDebriefs.length > 0) {
-        const debriefContent = generateDebriefsHTML(remainingDebriefs);
-        if (debriefContent) {
-            html += `
-                <div class="np-report-section np-report-debriefs">
-                    <span class="np-section-label">Passage Tactical Debrief</span>
-                    ${debriefContent}
-                </div>
-            `;
-        }
     }
 
     html += `<footer class="np-report-footer"><p>Generated by NavalPlan</p></footer>`;
@@ -6963,6 +6996,10 @@ function renderSharedReport(data, container, sailing = false, token = '') {
 async function initPrintMode(voyageId) {
     document.body.classList.add('print-view');
     document.documentElement.classList.add('print-view');
+    const isSailing = new URLSearchParams(window.location.search).get('sailing') === '1' || window.location.pathname.endsWith('/sailing');
+    if (isSailing) {
+        document.body.classList.add('np-report--sailing-only');
+    }
     const app = document.getElementById('app');
     app.innerHTML = '<div class="loading-state"><span class="material-symbols-outlined spin loading-icon">sync</span><p>Preparing print view…</p></div>';
 
@@ -7006,9 +7043,15 @@ function renderPrintReport(data, container) {
     const hasBriefings = briefings.some(b => b !== null);
     const mapURL = data.map_url;
 
+    const isSailing = new URLSearchParams(window.location.search).get('sailing') === '1' || window.location.pathname.endsWith('/sailing');
+
     const printBar = `
         <div class="np-print-bar">
             <a href="/voyages/${voyage.id || ''}" class="btn secondary">← Back</a>
+            <button class="btn secondary ${isSailing ? 'active' : ''}" id="btn-print-toggle-sailing">
+                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:18px">sailing</span>
+                Sailing Mode
+            </button>
             <button class="btn primary" onclick="window.print()">
                 <span class="material-symbols-outlined" style="vertical-align:middle;font-size:18px">print</span>
                 Print / Save as PDF
@@ -7018,13 +7061,28 @@ function renderPrintReport(data, container) {
     const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL, debriefs);
 
     container.innerHTML = DOMPurify.sanitize(
-        `${printBar}<div class="print-report-content">${html}</div>`,
+        `${printBar}<div class="print-report-content ${isSailing ? 'np-report--sailing-only' : ''}">${html}</div>`,
         { ADD_ATTR: ['target'] }
     );
 
     // Re-attach print bar button (DOMPurify strips onclick; use event delegation instead)
     const printBtn = container.querySelector('.np-print-bar .btn.primary');
     if (printBtn) printBtn.addEventListener('click', () => window.print());
+
+    const toggleSailingBtn = container.querySelector('#btn-print-toggle-sailing');
+    if (toggleSailingBtn) {
+        toggleSailingBtn.addEventListener('click', () => {
+            const reportContent = container.querySelector('.print-report-content');
+            if (reportContent) {
+                const active = reportContent.classList.toggle('np-report--sailing-only');
+                toggleSailingBtn.classList.toggle('active', active);
+                document.body.classList.toggle('np-report--sailing-only', active);
+                const basePath = `/voyages/${voyage.id || ''}/print`;
+                const newPath = active ? `${basePath}/sailing` : basePath;
+                window.history.replaceState({}, '', newPath);
+            }
+        });
+    }
 
     // Move metric grid to sit beside the map in a flex row
     const metricGrid = container.querySelector('.np-metric-grid');
