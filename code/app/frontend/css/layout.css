@@ -347,6 +347,11 @@
   border-radius: 20px;
 }
 
+#modal-notification {
+  z-index: 2000 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+}
+
 .modal h2 {
   margin-top: 0;
   font-family: var(--font, var(--font-primary));
@@ -617,6 +622,10 @@ select.form-select:hover {
     border: none;
     z-index: 1001;
     padding: 1rem;
+  }
+
+  #modal-notification {
+    justify-content: center;
   }
 
   .form-row {
