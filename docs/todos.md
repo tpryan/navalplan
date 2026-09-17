@@ -44,7 +44,7 @@
 40. Done. Can we trigger a debrief job for all tracks at once instead of one by one?
 41. Done. Can we add the debrief content to the voyage report?
 42. Done. Debriefing step is not correct.  It should compare the actual to the planned, and come up with conclusions. so they should be paired between planned actual.
-43. When adding debriefing to a page of the report, can you add it along with the starting stop for each leg. I do not want a consolidated report at the end. I want one per stop. It should appear as part of the filtered sailing version of the report. 
+43. Done. When adding debriefing to a page of the report, can you add it along with the starting stop for each leg. I do not want a consolidated report at the end. I want one per stop. It should appear as part of the filtered sailing version of the report. 
 44. Done. When we have a planned route, can we not show the direct lines between stops as they are just straght lines between two points.
 45. After rerunning stop research the tracks on the map disappear, it should still be there. 
 46. There should only be one button for debriefing. Not one per gpx track. Debrief all at once and only do all at once. 
