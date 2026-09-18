@@ -60,6 +60,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "planned_route_tailored_alerts",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Audit safety for Stop 1 of 2: Location: Cowes (50.7620, -1.2980). Date: 2026-08-10. Next Destination: Yarmouth (50.7050, -1.5000). Distance to next stop: 10.5 nautical miles via planned route \"Solent Western Passage\" (direct course 245° to Yarmouth).\n\nPlanned Route Details (\"Solent Western Passage\"):\n- Total Planned Distance: 10.5 NM\n- Key Route Segments & Course Bearings:\n  * Segment 1: 4.2 NM on course 250° (WSW) from (50.7620, -1.2980) to (50.7300, -1.3900)\n  * Segment 2: 3.8 NM on course 270° (W) from (50.7300, -1.3900) to (50.7100, -1.4800)\n  * Segment 3: 2.5 NM on course 220° (SW) from (50.7100, -1.4800) to (50.7050, -1.5000)\n\nForecast wind is from 265° at 20 knots. Search sailing directions for Solent western passage hazards and evaluate adverse winds along planned route segments."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

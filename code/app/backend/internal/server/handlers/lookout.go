@@ -243,20 +243,16 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		}
 	}
 
-	var routeWaypoints string
+	var plannedRouteInfo string
+	var matchedPlannedTrack *model.VoyageTrack
 	if next != nil {
-		if stopTracks, err := h.DB.ListStopTracks(ctx, next.ID); err == nil {
-			for _, tr := range stopTracks {
-				if tr.Kind == string(model.TrackKindPlanned) && tr.DistanceNM != nil && *tr.DistanceNM > 0 {
-					distNM = *tr.DistanceNM
-					routeWaypoints = extractWaypointsSummary(tr.SimplifiedGeoJSON)
-					break
-				}
-			}
+		matchedPlannedTrack = h.findPlannedTrackForLeg(ctx, stop, next, stopPosition)
+		if matchedPlannedTrack != nil {
+			plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
 		}
 	}
 
-	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops, routeWaypoints)
+	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops, plannedRouteInfo)
 
 	const appName = "lookout"
 	const userID = "system"
@@ -290,10 +286,14 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 
 	if distNM > 0 && next != nil {
 		rows := buildTravelTable(distNM, briefing.SunPhase)
+		planMsg := fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, next.LocationName)
+		if matchedPlannedTrack != nil && matchedPlannedTrack.Name != "" {
+			planMsg = fmt.Sprintf("Travel Plan: %.1f NM via %s to %s", distNM, matchedPlannedTrack.Name, next.LocationName)
+		}
 		alerts = append(alerts, map[string]any{
 			"severity":     "info",
 			"category":     "navigation",
-			"message":      fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, next.LocationName),
+			"message":      planMsg,
 			"icon":         "explore",
 			"travel_table": rows,
 		})
@@ -308,19 +308,232 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
 }
 
-func extractWaypointsSummary(geoJSON model.RawJSON) string {
-	if len(geoJSON) == 0 {
-		return ""
+func extractCoordinates(raw model.RawJSON) [][]float64 {
+	if len(raw) == 0 {
+		return nil
 	}
 	var feat struct {
 		Geometry struct {
+			Type        string      `json:"type"`
 			Coordinates [][]float64 `json:"coordinates"`
 		} `json:"geometry"`
 	}
-	if err := json.Unmarshal(geoJSON, &feat); err != nil || len(feat.Geometry.Coordinates) == 0 {
+	if err := json.Unmarshal(raw, &feat); err == nil && len(feat.Geometry.Coordinates) > 0 {
+		return feat.Geometry.Coordinates
+	}
+	var geom struct {
+		Type        string      `json:"type"`
+		Coordinates [][]float64 `json:"coordinates"`
+	}
+	if err := json.Unmarshal(raw, &geom); err == nil && len(geom.Coordinates) > 0 {
+		return geom.Coordinates
+	}
+	var fc struct {
+		Features []struct {
+			Geometry struct {
+				Type        string      `json:"type"`
+				Coordinates [][]float64 `json:"coordinates"`
+			} `json:"geometry"`
+		} `json:"features"`
+	}
+	if err := json.Unmarshal(raw, &fc); err == nil {
+		var allCoords [][]float64
+		for _, f := range fc.Features {
+			if len(f.Geometry.Coordinates) > 0 {
+				allCoords = append(allCoords, f.Geometry.Coordinates...)
+			}
+		}
+		if len(allCoords) > 0 {
+			return allCoords
+		}
+	}
+	return nil
+}
+
+func bearingToCardinal(deg float64) string {
+	dirs := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
+	normalized := math.Mod(deg, 360)
+	if normalized < 0 {
+		normalized += 360
+	}
+	idx := int(math.Floor((normalized+11.25)/22.5)) % 16
+	return dirs[idx]
+}
+
+func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, next *model.Stop, stopPosition int) *model.VoyageTrack {
+	if stop == nil {
+		return nil
+	}
+	tracks, err := h.DB.ListVoyageTracks(ctx, stop.VoyageID)
+	if err != nil {
+		tracks = nil
+	}
+
+	var plannedTracks []model.VoyageTrack
+	for _, tr := range tracks {
+		if tr.Kind == string(model.TrackKindPlanned) {
+			plannedTracks = append(plannedTracks, tr)
+		}
+	}
+
+	if len(plannedTracks) == 0 {
+		if stopTracks, err := h.DB.ListStopTracks(ctx, stop.ID); err == nil {
+			for _, tr := range stopTracks {
+				if tr.Kind == string(model.TrackKindPlanned) {
+					plannedTracks = append(plannedTracks, tr)
+				}
+			}
+		}
+		if next != nil {
+			if nextTracks, err := h.DB.ListStopTracks(ctx, next.ID); err == nil {
+				for _, tr := range nextTracks {
+					if tr.Kind == string(model.TrackKindPlanned) {
+						plannedTracks = append(plannedTracks, tr)
+					}
+				}
+			}
+		}
+	}
+
+	if len(plannedTracks) == 0 {
+		return nil
+	}
+
+	// 1. Direct match on departing stop ID
+	for i := range plannedTracks {
+		if plannedTracks[i].VoyageStopID != nil && *plannedTracks[i].VoyageStopID == stop.ID {
+			return &plannedTracks[i]
+		}
+	}
+
+	// 2. Match on destination stop ID
+	if next != nil {
+		for i := range plannedTracks {
+			if plannedTracks[i].VoyageStopID != nil && *plannedTracks[i].VoyageStopID == next.ID {
+				return &plannedTracks[i]
+			}
+		}
+	}
+
+	// 3. Match on Leg number in track name (e.g. "Leg 1")
+	for i := range plannedTracks {
+		if legNum := extractLegNumber(plannedTracks[i].Name); legNum == stopPosition {
+			return &plannedTracks[i]
+		}
+	}
+
+	// 4. Match on start & end endpoint proximity (within 3 NM)
+	if next != nil && (stop.Latitude != 0 || stop.Longitude != 0) && (next.Latitude != 0 || next.Longitude != 0) {
+		for i := range plannedTracks {
+			startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(&plannedTracks[i])
+			if ok {
+				dStart := lookoutHaversineNM(startLat, startLng, stop.Latitude, stop.Longitude)
+				dEnd := lookoutHaversineNM(endLat, endLng, next.Latitude, next.Longitude)
+				if dStart <= 3.0 && dEnd <= 3.0 {
+					return &plannedTracks[i]
+				}
+			}
+		}
+	}
+
+	// 5. If exactly 1 planned track and 1 transit leg
+	if len(plannedTracks) == 1 && stopPosition == 1 {
+		return &plannedTracks[0]
+	}
+
+	// 6. Sequential index fallback
+	legIdx := stopPosition - 1
+	if legIdx >= 0 && legIdx < len(plannedTracks) {
+		return &plannedTracks[legIdx]
+	}
+
+	return nil
+}
+
+func formatPlannedRouteForLookout(tr *model.VoyageTrack, fallbackDist float64) (string, float64) {
+	if tr == nil {
+		return "", fallbackDist
+	}
+
+	distNM := fallbackDist
+	if tr.DistanceNM != nil && *tr.DistanceNM > 0 {
+		distNM = *tr.DistanceNM
+	}
+
+	raw := tr.SimplifiedGeoJSON
+	if len(raw) == 0 {
+		raw = tr.GeoJSON
+	}
+	coords := extractCoordinates(raw)
+
+	if distNM <= 0 && len(coords) >= 2 {
+		var calcDist float64
+		for i := 0; i < len(coords)-1; i++ {
+			calcDist += lookoutHaversineNM(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0])
+		}
+		if calcDist > 0 {
+			distNM = calcDist
+		}
+	}
+
+	routeName := strings.TrimSpace(tr.Name)
+	if routeName == "" {
+		routeName = "Planned Route"
+	}
+
+	if len(coords) < 2 {
+		if tr.Name != "" {
+			return fmt.Sprintf("Intended Planned Route: %q (Distance: %.1f NM)\n", routeName, distNM), distNM
+		}
+		return "", distNM
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Intended Planned Route: %q (Total Distance: %.1f NM)\n", routeName, distNM))
+
+	numPts := len(coords)
+	step := 1
+	if numPts > 8 {
+		step = numPts / 6
+		if step < 1 {
+			step = 1
+		}
+	}
+
+	var sampleIdxs []int
+	for i := 0; i < numPts; i += step {
+		sampleIdxs = append(sampleIdxs, i)
+	}
+	if sampleIdxs[len(sampleIdxs)-1] != numPts-1 {
+		sampleIdxs = append(sampleIdxs, numPts-1)
+	}
+
+	sb.WriteString("Key Route Segments & Bearings:\n")
+	for s := 0; s < len(sampleIdxs)-1; s++ {
+		idx1 := sampleIdxs[s]
+		idx2 := sampleIdxs[s+1]
+		lat1, lon1 := coords[idx1][1], coords[idx1][0]
+		lat2, lon2 := coords[idx2][1], coords[idx2][0]
+		segDist := lookoutHaversineNM(lat1, lon1, lat2, lon2)
+		segBearing := calculateBearing(lat1, lon1, lat2, lon2)
+		segCardinal := bearingToCardinal(segBearing)
+		sb.WriteString(fmt.Sprintf("  * Segment %d: %.1f NM on course %.0f° (%s) from (%.4f, %.4f) to (%.4f, %.4f)\n",
+			s+1, segDist, segBearing, segCardinal, lat1, lon1, lat2, lon2))
+	}
+
+	polySummary := extractWaypointsSummary(raw)
+	if polySummary != "" {
+		sb.WriteString(fmt.Sprintf("Full Planned Waypoints Sequence:\n  %s\n", polySummary))
+	}
+
+	return sb.String(), distNM
+}
+
+func extractWaypointsSummary(geoJSON model.RawJSON) string {
+	coords := extractCoordinates(geoJSON)
+	if len(coords) == 0 {
 		return ""
 	}
-	coords := feat.Geometry.Coordinates
 	step := 1
 	if len(coords) > 10 {
 		step = len(coords) / 10
@@ -394,10 +607,10 @@ func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Brie
 
 	var routeWaypointsInfo string
 	if len(routeWaypoints) > 0 && routeWaypoints[0] != "" {
-		routeWaypointsInfo = fmt.Sprintf("\nIntended Planned Route Waypoints (actual passage track):\n%s\n", routeWaypoints[0])
+		routeWaypointsInfo = fmt.Sprintf("\n%s\n", strings.TrimSpace(routeWaypoints[0]))
 	}
 
-	return fmt.Sprintf(`Analyze the following stop data and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. Return a JSON array of alerts.
+	return fmt.Sprintf(`Analyze the following stop data, planned passage route (if provided), and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. When an intended planned route is provided, evaluate safety, tidal streams, and adverse weather against the route's specific headings and waypoints. Return a JSON array of alerts.
 
 Location: %s
 Date: %s (Note: Weather and Tide data covers 48 hours starting from this date)
