@@ -386,18 +386,22 @@ type plannedRouteMatch struct {
 }
 
 func extractTrackEndpoints(t *model.VoyageTrack) (startLat, startLng, endLat, endLng float64, ok bool) {
-	if t == nil || len(t.GeoJSON) == 0 {
+	if t == nil {
 		return 0, 0, 0, 0, false
 	}
-	var feat struct {
-		Geometry struct {
-			Coordinates [][]float64 `json:"coordinates"`
-		} `json:"geometry"`
+	raw := t.SimplifiedGeoJSON
+	if len(raw) == 0 {
+		raw = t.GeoJSON
 	}
-	if err := json.Unmarshal(t.GeoJSON, &feat); err != nil || len(feat.Geometry.Coordinates) == 0 {
-		return 0, 0, 0, 0, false
+	coords := extractCoordinates(raw)
+	if len(coords) < 2 {
+		if len(t.GeoJSON) > 0 && len(t.SimplifiedGeoJSON) > 0 {
+			coords = extractCoordinates(t.GeoJSON)
+		}
+		if len(coords) < 2 {
+			return 0, 0, 0, 0, false
+		}
 	}
-	coords := feat.Geometry.Coordinates
 	startPt := coords[0]
 	endPt := coords[len(coords)-1]
 	if len(startPt) < 2 || len(endPt) < 2 {
