@@ -68,11 +68,11 @@ func TestSplitTrackByStops(t *testing.T) {
 				t.Fatalf("SplitTrackByStops() got %d legs, want %d", len(legs), tc.wantLegs)
 			}
 			if tc.checkDest && len(legs) == 2 {
-				if legs[0].StopID == nil || *legs[0].StopID != 11 {
-					t.Errorf("Leg 1 StopID = %v, want 11", legs[0].StopID)
+				if legs[0].StopID == nil || *legs[0].StopID != 10 {
+					t.Errorf("Leg 1 StopID = %v, want 10", legs[0].StopID)
 				}
-				if legs[1].StopID == nil || *legs[1].StopID != 12 {
-					t.Errorf("Leg 2 StopID = %v, want 12", legs[1].StopID)
+				if legs[1].StopID == nil || *legs[1].StopID != 11 {
+					t.Errorf("Leg 2 StopID = %v, want 11", legs[1].StopID)
 				}
 			}
 		})

@@ -6707,19 +6707,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     const assignedDebriefs = new Set();
 
     if (sortedStops.length > 0) {
-        // Pass 1: Explicit match by start_stop_id
-        allDebriefs.forEach(d => {
-            if (d.start_stop_id != null) {
-                const sIdx = sortedStops.findIndex(s => String(s.id) === String(d.start_stop_id));
-                if (sIdx >= 0) {
-                    if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
-                    stopDebriefsMap.get(sIdx).push(d);
-                    assignedDebriefs.add(d);
-                }
-            }
-        });
-
-        // Pass 2: Leg number in track_name or planned_track_name (e.g., "Leg 1", "Leg 2")
+        // Pass 1: Leg number in track_name or planned_track_name (e.g., "Leg 1", "Leg 2")
         allDebriefs.forEach(d => {
             if (assignedDebriefs.has(d)) return;
             const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`;
@@ -6735,11 +6723,41 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             }
         });
 
-        // Pass 3: voyage_stop_id if set
+        // Pass 2: Starting stop location name in track name (e.g. "Cowes to Newtown" starts at Cowes)
+        allDebriefs.forEach(d => {
+            if (assignedDebriefs.has(d)) return;
+            const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`.toLowerCase();
+            for (let i = 0; i < sortedStops.length - 1; i++) {
+                const locName = (sortedStops[i].location_name || sortedStops[i].name || '').toLowerCase();
+                if (locName && nameToTest.includes(locName)) {
+                    if (!stopDebriefsMap.has(i)) stopDebriefsMap.set(i, []);
+                    stopDebriefsMap.get(i).push(d);
+                    assignedDebriefs.add(d);
+                    break;
+                }
+            }
+        });
+
+        // Pass 3: Explicit match by start_stop_id
+        allDebriefs.forEach(d => {
+            if (assignedDebriefs.has(d) || d.start_stop_id == null) return;
+            let sIdx = sortedStops.findIndex(s => String(s.id) === String(d.start_stop_id));
+            if (sIdx >= 0) {
+                // If start_stop_id pointed to the final arrival stop, place with the preceding starting stop
+                if (sIdx === sortedStops.length - 1 && sortedStops.length > 1) {
+                    sIdx = sIdx - 1;
+                }
+                if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+                stopDebriefsMap.get(sIdx).push(d);
+                assignedDebriefs.add(d);
+            }
+        });
+
+        // Pass 4: voyage_stop_id if set
         allDebriefs.forEach(d => {
             if (assignedDebriefs.has(d) || d.voyage_stop_id == null) return;
             let sIdx = sortedStops.findIndex(s => String(s.id) === String(d.voyage_stop_id));
-            if (sIdx > 0 && !stopDebriefsMap.has(sIdx - 1)) {
+            if (sIdx > 0 && (sIdx === sortedStops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
                 sIdx = sIdx - 1;
             }
             if (sIdx >= 0 && sIdx < sortedStops.length) {
@@ -6749,7 +6767,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             }
         });
 
-        // Pass 4: Sequential fallback for unassigned debriefs (assigning to starting stops 0, 1, 2...)
+        // Pass 5: Sequential fallback for unassigned debriefs (assigning to starting stops 0, 1, 2...)
         let nextStopIdx = 0;
         allDebriefs.forEach(d => {
             if (assignedDebriefs.has(d)) return;

@@ -437,6 +437,77 @@ func formatHoursMins(hours float64) string {
 	return fmt.Sprintf("%02dh %02dm", hrs, mins)
 }
 
+// ResolveDebriefStartStop ensures that a debrief's StartStopID points to the starting stop of its passage leg,
+// never the arrival/ending stop.
+func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops []model.Stop) {
+	if len(stops) == 0 {
+		if d.StartStopID == nil && d.VoyageStopID != nil {
+			d.StartStopID = d.VoyageStopID
+		} else if d.StartStopID == nil && t != nil && t.VoyageStopID != nil {
+			d.StartStopID = t.VoyageStopID
+		}
+		return
+	}
+	trackName := d.TrackName
+	if trackName == "" && t != nil {
+		trackName = t.Name
+	}
+	plannedName := d.PlannedTrackName
+	// 1. Check for explicit leg number (e.g., "Leg 1", "Leg 2")
+	legNum := extractLegNumber(trackName)
+	if legNum == 0 && plannedName != "" {
+		legNum = extractLegNumber(plannedName)
+	}
+	if legNum >= 1 && legNum <= len(stops)-1 {
+		d.StartStopID = &stops[legNum-1].ID
+		return
+	}
+	// 2. Check if track name mentions starting stop location name (e.g. "Cowes to Newtown")
+	for i := 0; i < len(stops)-1; i++ {
+		loc := stops[i].LocationName
+		if loc != "" && (strings.Contains(trackName, loc) || (plannedName != "" && strings.Contains(plannedName, loc))) {
+			d.StartStopID = &stops[i].ID
+			return
+		}
+	}
+	// 3. Check track endpoints if track coordinates exist
+	if t != nil {
+		if startLat, startLng, _, _, ok := extractTrackEndpoints(t); ok {
+			sIdx := findClosestStop(startLat, startLng, stops, 10.0)
+			if sIdx >= 0 {
+				if sIdx == len(stops)-1 && len(stops) >= 2 {
+					sIdx = len(stops) - 2
+				}
+				d.StartStopID = &stops[sIdx].ID
+				return
+			}
+		}
+	}
+	// 4. Check existing StartStopID or VoyageStopID reference
+	refID := d.StartStopID
+	if refID == nil {
+		refID = d.VoyageStopID
+	}
+	if refID == nil && t != nil {
+		refID = t.VoyageStopID
+	}
+	if refID != nil {
+		for i, s := range stops {
+			if s.ID == *refID {
+				// If associated with the final stop, it was associated with arrival/destination; map to preceding starting stop
+				if i == len(stops)-1 && i > 0 {
+					d.StartStopID = &stops[i-1].ID
+				} else {
+					d.StartStopID = &stops[i].ID
+				}
+				return
+			}
+		}
+	}
+	// 5. Default to the first stop
+	d.StartStopID = &stops[0].ID
+}
+
 func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) plannedRouteMatch {
 	var plannedTracks []*model.VoyageTrack
 	for i := range allTracks {
@@ -446,6 +517,7 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 	}
 
 	var matched *model.VoyageTrack
+	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
 
 	// Strategy A: Match by VoyageStopID
 	if actual.VoyageStopID != nil {
@@ -518,41 +590,15 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 	}
 
 	// Determine starting stop ID for this leg
-	var startStopID *int64
-	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
-	if aOk && len(stops) > 0 {
-		sStartIdx := findClosestStop(aStartLat, aStartLng, stops, 10.0)
-		if sStartIdx >= 0 {
-			startStopID = &stops[sStartIdx].ID
-		}
+	tempDebrief := model.TrackDebrief{
+		TrackName:    actual.Name,
+		VoyageStopID: actual.VoyageStopID,
 	}
-	if startStopID == nil && len(stops) >= 2 {
-		legNum := extractLegNumber(actual.Name)
-		if legNum == 0 && matched != nil {
-			legNum = extractLegNumber(matched.Name)
-		}
-		if legNum >= 1 && legNum <= len(stops)-1 {
-			startStopID = &stops[legNum-1].ID
-		}
+	if matched != nil {
+		tempDebrief.PlannedTrackName = matched.Name
 	}
-	if startStopID == nil && len(stops) >= 2 {
-		refStopID := actual.VoyageStopID
-		if refStopID == nil && matched != nil {
-			refStopID = matched.VoyageStopID
-		}
-		if refStopID != nil {
-			for i, s := range stops {
-				if s.ID == *refStopID {
-					if i > 0 {
-						startStopID = &stops[i-1].ID
-					} else {
-						startStopID = &stops[0].ID
-					}
-					break
-				}
-			}
-		}
-	}
+	ResolveDebriefStartStop(&tempDebrief, actual, stops)
+	startStopID := tempDebrief.StartStopID
 	if startStopID == nil && len(stops) >= 2 {
 		var actualTracks []*model.VoyageTrack
 		for i := range allTracks {

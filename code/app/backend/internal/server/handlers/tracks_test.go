@@ -529,3 +529,90 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveDebriefStartStop(t *testing.T) {
+	stop100 := model.Stop{ID: 100, LocationName: "Marina"}
+	stop101 := model.Stop{ID: 101, LocationName: "Cove"}
+	stop102 := model.Stop{ID: 102, LocationName: "Harbor"}
+	stops := []model.Stop{stop100, stop101, stop102}
+
+	id100 := int64(100)
+	id101 := int64(101)
+	id102 := int64(102)
+
+	tests := []struct {
+		name       string
+		debrief    model.TrackDebrief
+		track      *model.VoyageTrack
+		stops      []model.Stop
+		wantStopID *int64
+	}{
+		{
+			name: "matches explicit Leg 1 to stop 0",
+			debrief: model.TrackDebrief{
+				TrackName: "Voyage - Leg 1: Marina to Cove",
+			},
+			stops:      stops,
+			wantStopID: &id100,
+		},
+		{
+			name: "matches explicit Leg 2 to stop 1",
+			debrief: model.TrackDebrief{
+				TrackName: "Voyage - Leg 2: Cove to Harbor",
+			},
+			stops:      stops,
+			wantStopID: &id101,
+		},
+		{
+			name: "corrects ending stop ID when debrief has destination stop",
+			debrief: model.TrackDebrief{
+				TrackName:    "Leg 1 Passage",
+				VoyageStopID: &id101,
+			},
+			stops:      stops,
+			wantStopID: &id100,
+		},
+		{
+			name: "corrects last stop reference to preceding starting stop",
+			debrief: model.TrackDebrief{
+				TrackName:    "Final Leg",
+				VoyageStopID: &id102,
+			},
+			stops:      stops,
+			wantStopID: &id101,
+		},
+		{
+			name: "matches stop by location name when no leg number present",
+			debrief: model.TrackDebrief{
+				TrackName: "Passage Cove to Harbor",
+			},
+			stops:      stops,
+			wantStopID: &id101,
+		},
+		{
+			name: "empty stops retains existing VoyageStopID safely",
+			debrief: model.TrackDebrief{
+				TrackName:    "Track",
+				VoyageStopID: &id100,
+			},
+			stops:      nil,
+			wantStopID: &id100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := tt.debrief
+			handlers.ResolveDebriefStartStop(&d, tt.track, tt.stops)
+			if tt.wantStopID == nil {
+				if d.StartStopID != nil {
+					t.Errorf("StartStopID = %v, want nil", d.StartStopID)
+				}
+			} else {
+				if d.StartStopID == nil || *d.StartStopID != *tt.wantStopID {
+					t.Errorf("StartStopID = %v, want %v", d.StartStopID, *tt.wantStopID)
+				}
+			}
+		})
+	}
+}

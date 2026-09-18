@@ -407,6 +407,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 
 	var debriefs []*model.TrackDebrief
 	if tracks, err := h.DB.ListVoyageTracks(r.Context(), voyage.ID); err == nil {
+		stops, _ := h.DB.ListStops(r.Context(), voyage.ID, 100, 0)
 		for _, t := range tracks {
 			if len(t.Debrief) > 0 && string(t.Debrief) != "null" {
 				var d model.TrackDebrief
@@ -420,9 +421,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 					if d.VoyageStopID == nil && t.VoyageStopID != nil {
 						d.VoyageStopID = t.VoyageStopID
 					}
-					if d.StartStopID == nil {
-						d.StartStopID = d.VoyageStopID
-					}
+					ResolveDebriefStartStop(&d, &t, stops)
 					debriefs = append(debriefs, &d)
 				}
 			}
