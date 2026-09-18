@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"app/internal/agent"
 	"app/internal/model"
@@ -614,6 +615,54 @@ func TestResolveDebriefStartStop(t *testing.T) {
 			stops:         nil,
 			wantStopID:    &id100,
 			wantStopTitle: "",
+		},
+		{
+			name: "round trip circuit correctly pairs leg 1 departure with stop 0 despite end stop proximity",
+			debrief: model.TrackDebrief{
+				TrackName: "Hodges Creek Marina - Anegada Reef Hotel",
+			},
+			track: &model.VoyageTrack{
+				Name: "Hodges Creek Marina - Anegada Reef Hotel",
+				SimplifiedGeoJSON: []byte(`{
+					"type": "Feature",
+					"geometry": {
+						"type": "LineString",
+						"coordinates": [[-64.5674, 18.4252], [-64.3848, 18.7229]]
+					}
+				}`),
+			},
+			stops: []model.Stop{
+				{ID: 26, LocationName: "Parham Town, Tortola", Latitude: 18.4329, Longitude: -64.5575, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+				{ID: 27, LocationName: "Anegada", Latitude: 18.7194, Longitude: -64.3847, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
+				{ID: 28, LocationName: "Belle Vue, Jost Van Dyke", Latitude: 18.4371, Longitude: -64.7496, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
+				{ID: 29, LocationName: "Parham Town, Tortola", Latitude: 18.4264, Longitude: -64.5559, TargetDate: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)},
+			},
+			wantStopID:    func() *int64 { id := int64(26); return &id }(),
+			wantStopTitle: "Parham Town, Tortola to Anegada",
+		},
+		{
+			name: "round trip circuit resolves leg 2 correctly",
+			debrief: model.TrackDebrief{
+				TrackName: "Anegada Reef Hotel - North Latitude Marina",
+			},
+			track: &model.VoyageTrack{
+				Name: "Anegada Reef Hotel - North Latitude Marina",
+				SimplifiedGeoJSON: []byte(`{
+					"type": "Feature",
+					"geometry": {
+						"type": "LineString",
+						"coordinates": [[-64.3855, 18.7238], [-64.7478, 18.4357]]
+					}
+				}`),
+			},
+			stops: []model.Stop{
+				{ID: 26, LocationName: "Parham Town, Tortola", Latitude: 18.4329, Longitude: -64.5575, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+				{ID: 27, LocationName: "Anegada", Latitude: 18.7194, Longitude: -64.3847, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
+				{ID: 28, LocationName: "Belle Vue, Jost Van Dyke", Latitude: 18.4371, Longitude: -64.7496, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
+				{ID: 29, LocationName: "Parham Town, Tortola", Latitude: 18.4264, Longitude: -64.5559, TargetDate: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)},
+			},
+			wantStopID:    func() *int64 { id := int64(27); return &id }(),
+			wantStopTitle: "Anegada to Belle Vue, Jost Van Dyke",
 		},
 	}
 

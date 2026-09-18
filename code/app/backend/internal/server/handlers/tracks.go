@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -467,24 +468,73 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 		d.StartStopID = &stops[legNum-1].ID
 		foundStop = true
 	}
-	// 2. Check if track name mentions starting stop location name (e.g. "Cowes to Newtown")
-	if !foundStop {
-		for i := 0; i < len(stops)-1; i++ {
-			loc := stops[i].LocationName
-			if loc != "" && (strings.Contains(trackName, loc) || (plannedName != "" && strings.Contains(plannedName, loc))) {
-				d.StartStopID = &stops[i].ID
+	// 2. Check track endpoints if track coordinates exist (GPS leg pair matching)
+	if !foundStop && t != nil {
+		if startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(t); ok {
+			bestLeg := -1
+			bestScore := 1e9
+			for i := 0; i < len(stops)-1; i++ {
+				dStart := gpx.CalculateHaversineNM(startLat, startLng, stops[i].Latitude, stops[i].Longitude)
+				dEnd := gpx.CalculateHaversineNM(endLat, endLng, stops[i+1].Latitude, stops[i+1].Longitude)
+				if dStart <= 15.0 && dEnd <= 15.0 {
+					score := dStart + dEnd
+					if t.StartTime != nil && !stops[i].TargetDate.IsZero() {
+						if stops[i].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
+							score -= 5.0
+						}
+					}
+					if score < bestScore {
+						bestScore = score
+						bestLeg = i
+					}
+				}
+			}
+			if bestLeg >= 0 {
+				d.StartStopID = &stops[bestLeg].ID
 				foundStop = true
-				break
 			}
 		}
 	}
-	// 3. Check track endpoints if track coordinates exist
+	// 3. Check if track name mentions starting stop location name (e.g. "Cowes to Newtown")
+	if !foundStop {
+		nameForLocationMatch := trackName
+		if plannedName != "" {
+			nameForLocationMatch = trackName + " " + plannedName
+		}
+		depPart := nameForLocationMatch
+		if parts := strings.Split(nameForLocationMatch, " to "); len(parts) > 1 {
+			depPart = parts[0]
+		} else if parts := strings.Split(nameForLocationMatch, " - "); len(parts) > 1 {
+			depPart = parts[0]
+		}
+		for i := 0; i < len(stops)-1; i++ {
+			loc := stops[i].LocationName
+			if loc != "" {
+				if strings.Contains(depPart, loc) || (depPart == nameForLocationMatch && strings.Contains(nameForLocationMatch, loc)) {
+					d.StartStopID = &stops[i].ID
+					foundStop = true
+					break
+				}
+			}
+		}
+	}
+	// 4. Fallback to closest single stop by coordinates
 	if !foundStop && t != nil {
 		if startLat, startLng, _, _, ok := extractTrackEndpoints(t); ok {
 			sIdx := findClosestStop(startLat, startLng, stops, 10.0)
 			if sIdx >= 0 {
 				if sIdx == len(stops)-1 && len(stops) >= 2 {
-					sIdx = len(stops) - 2
+					dFirst := gpx.CalculateHaversineNM(startLat, startLng, stops[0].Latitude, stops[0].Longitude)
+					dLast := gpx.CalculateHaversineNM(startLat, startLng, stops[len(stops)-1].Latitude, stops[len(stops)-1].Longitude)
+					if math.Abs(dFirst-dLast) < 2.0 {
+						if t.StartTime != nil && !stops[0].TargetDate.IsZero() && stops[0].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
+							sIdx = 0
+						} else {
+							sIdx = len(stops) - 2
+						}
+					} else {
+						sIdx = len(stops) - 2
+					}
 				}
 				d.StartStopID = &stops[sIdx].ID
 				foundStop = true
@@ -504,8 +554,13 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 			for i, s := range stops {
 				if s.ID == *refID {
 					// If associated with the final stop, it was associated with arrival/destination; map to preceding starting stop
+					// unless start time matches the first stop in a circuit
 					if i == len(stops)-1 && i > 0 {
-						d.StartStopID = &stops[i-1].ID
+						if t != nil && t.StartTime != nil && !stops[0].TargetDate.IsZero() && stops[0].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
+							d.StartStopID = &stops[0].ID
+						} else {
+							d.StartStopID = &stops[i-1].ID
+						}
 					} else {
 						d.StartStopID = &stops[i].ID
 					}
