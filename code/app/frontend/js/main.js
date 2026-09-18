@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -4864,7 +4864,7 @@ function renderTracksList() {
     }
 }
 
-function generateDebriefsHTML(debrief) {
+function generateDebriefsHTML(debrief, stopsContext = null) {
     if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
         return '';
     }
@@ -4891,9 +4891,17 @@ function generateDebriefsHTML(debrief) {
             `;
         }
 
-        const title = parsed.track_name
-            ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
-            : 'Passage Debrief Analysis';
+        const stopTitle = getDebriefStopTitle(
+            parsed,
+            stopsContext || (typeof currentStops !== 'undefined' ? currentStops : null),
+            typeof currentTracks !== 'undefined' ? currentTracks : null
+        );
+
+        const title = stopTitle
+            ? `Passage Debrief: ${escapeTrackHtml(stopTitle)}`
+            : (parsed.track_name
+                ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
+                : 'Passage Debrief Analysis');
 
         const varVal = parsed.distance_variance_pct != null
             ? `${parsed.distance_variance_pct > 0 ? '+' : ''}${parsed.distance_variance_pct.toFixed(1)}%`
@@ -4933,10 +4941,8 @@ function generateDebriefsHTML(debrief) {
                 </div>` : ''}
               ${varVal != null ? `
                 <div class="debrief-stat-item">
-                  <div class="val var-pct" style="color: ${(parsed.distance_variance_pct || 0) > 25 ? '#D84A1B' : '#0077B6'}">
-                    ${varVal}
-                  </div>
-                  <div class="lbl">Variance (Tacking)</div>
+                  <div class="val var-pct">${varVal}</div>
+                  <div class="lbl">Variance</div>
                 </div>` : ''}
               ${parsed.recorded_duration ? `
                 <div class="debrief-stat-item">
@@ -4953,20 +4959,29 @@ function generateDebriefsHTML(debrief) {
                   <div class="val avg-spd">${avgSpdVal.toFixed(1)} kt</div>
                   <div class="lbl">Avg Speed</div>
                 </div>` : ''}
+              ${parsed.max_speed_kts != null ? `
+                <div class="debrief-stat-item">
+                  <div class="val max-spd">${parsed.max_speed_kts.toFixed(1)} kt</div>
+                  <div class="lbl">Max Speed</div>
+                </div>` : ''}
             </div>
 
             ${parsed.conclusions ? `
-              <div class="debrief-conclusions font-sm">
-                <strong>Debrief Conclusions &amp; Takeaways:</strong>
-                <p class="m-0 mt-xs">${escapeTrackHtml(parsed.conclusions)}</p>
+              <div class="debrief-conclusions font-sm mt-xs mb-xs p-xs bg-surface-alt border-round">
+                <strong>Debrief Conclusions & Takeaways:</strong>
+                <p class="m-0 mt-2xs text-secondary">${escapeTrackHtml(parsed.conclusions)}</p>
               </div>
             ` : ''}
 
             ${parsed.tacking_efficiency ? `
-              <p class="font-sm mb-xs tack-eff"><strong>Tacking Efficiency:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}</p>
+              <p class="tack-eff font-xs text-secondary mt-xs mb-2xs">
+                <strong>Tacking & Maneuvers:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}
+              </p>
             ` : ''}
             ${parsed.weather_impact ? `
-              <p class="font-sm mb-xs"><strong>Weather &amp; Conditions:</strong> ${escapeTrackHtml(parsed.weather_impact)}</p>
+              <p class="weather-impact font-xs text-secondary mt-2xs mb-xs">
+                <strong>Weather Impact:</strong> ${escapeTrackHtml(parsed.weather_impact)}
+              </p>
             ` : ''}
             ${obsHtml}
           </div>
@@ -4979,7 +4994,7 @@ function generateDebriefsHTML(debrief) {
 function renderDebriefCard(debrief) {
     const container = document.getElementById('debrief-container');
     if (!container) return;
-    const html = generateDebriefsHTML(debrief);
+    const html = generateDebriefsHTML(debrief, typeof currentStops !== 'undefined' ? currentStops : null);
     if (!html) {
         container.classList.add('hidden');
         return;
@@ -6899,7 +6914,12 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             }
 
             if (stopDebriefs.length > 0) {
-                const stopDebriefHtml = generateDebriefsHTML(stopDebriefs);
+                stopDebriefs.forEach(d => {
+                    if (d && typeof d === 'object' && d.start_stop_id == null && stop.id != null) {
+                        d.start_stop_id = stop.id;
+                    }
+                });
+                const stopDebriefHtml = generateDebriefsHTML(stopDebriefs, sortedStops);
                 if (stopDebriefHtml) {
                     const debriefTitle = (idx < sortedStops.length - 1)
                         ? `Passage Tactical Debrief — Leg ${legNum}`

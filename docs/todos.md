@@ -50,4 +50,4 @@
 46. Done. There should only be one button for debriefing. Not one per gpx track. Debrief all at once and only do all at once.
 47. Done. Place debrief reports with the starting stop, not the ending stop in the report. 
 48. Done. Please alter the lookout agent to also take in and use the planned routes if they exist to tailor alterts.
-49. The title for debriefs in the ui should match the title of the stops, and not the title information from the uploaded tracks.  
+49. Done. The title for debriefs in the ui should match the title of the stops, and not the title information from the uploaded tracks.  

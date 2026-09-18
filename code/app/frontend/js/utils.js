@@ -76,3 +76,117 @@ export function formatVoyageDateRange(startDateStr, endDateStr, opts = {}) {
     const end = new Date(endDateStr).toLocaleDateString(undefined, { ...format, timeZone: 'UTC' });
     return `${start}${separator}${end}`;
 }
+
+/**
+ * Resolves the display title for a debrief based on voyage stops rather than raw track filenames.
+ * e.g., "Marina del Rey to Isthmus Cove", or "Cowes to Yarmouth".
+ *
+ * @param {Object|string} debrief Debrief object or JSON string
+ * @param {Array} [stopsContext] Optional array of stops
+ * @param {Array} [tracksContext] Optional array of tracks
+ * @returns {string} Formatted stop title or empty string if not resolvable
+ */
+export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext = null) {
+    if (!debrief) return '';
+    let parsed = debrief;
+    if (typeof debrief === 'string') {
+        try { parsed = JSON.parse(debrief); } catch (e) { parsed = { summary: debrief }; }
+    }
+    if (!parsed || typeof parsed !== 'object') return '';
+
+    // 1. Explicit stop_title or leg_title on debrief object
+    if (parsed.stop_title && typeof parsed.stop_title === 'string' && parsed.stop_title.trim()) {
+        return parsed.stop_title.trim();
+    }
+    if (parsed.leg_title && typeof parsed.leg_title === 'string' && parsed.leg_title.trim()) {
+        return parsed.leg_title.trim();
+    }
+
+    const stopsList = Array.isArray(stopsContext) && stopsContext.length > 0
+        ? stopsContext
+        : (typeof currentStops !== 'undefined' && Array.isArray(currentStops) ? currentStops : []);
+
+    if (!stopsList || stopsList.length === 0) return '';
+
+    // Sort stops chronologically / by order_index
+    const sorted = [...stopsList].sort((a, b) => {
+        const dateA = a.target_date ? new Date(a.target_date) : 0;
+        const dateB = b.target_date ? new Date(b.target_date) : 0;
+        if (dateA && dateB && dateA - dateB !== 0) return dateA - dateB;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+    });
+
+    let stopIdx = -1;
+
+    // 2. Match by start_stop_id or voyage_stop_id
+    const targetStopId = parsed.start_stop_id != null ? parsed.start_stop_id : parsed.voyage_stop_id;
+    if (targetStopId != null) {
+        stopIdx = sorted.findIndex(s => String(s.id) === String(targetStopId));
+        if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+            stopIdx = sorted.length - 2;
+        }
+    }
+
+    // 3. Match by track's voyage_stop_id
+    if (stopIdx === -1 && parsed.track_id) {
+        const tracksList = Array.isArray(tracksContext) && tracksContext.length > 0
+            ? tracksContext
+            : (typeof currentTracks !== 'undefined' && Array.isArray(currentTracks) ? currentTracks : []);
+        const tr = tracksList.find(t => t.id === parsed.track_id);
+        if (tr && tr.voyage_stop_id != null) {
+            stopIdx = sorted.findIndex(s => String(s.id) === String(tr.voyage_stop_id));
+            if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+                stopIdx = sorted.length - 2;
+            }
+        }
+    }
+
+    // 4. Match explicit leg numbers (e.g. "Leg 1", "Leg 2")
+    if (stopIdx === -1) {
+        const names = `${parsed.planned_track_name || ''} ${parsed.track_name || ''}`;
+        const legMatch = names.match(/\bLeg\s*#?\s*(\d+)\b/i);
+        if (legMatch) {
+            const legNum = parseInt(legMatch[1], 10);
+            if (legNum >= 1 && legNum <= sorted.length) {
+                stopIdx = legNum - 1;
+                if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+                    stopIdx = sorted.length - 2;
+                }
+            }
+        }
+    }
+
+    // 5. Match by stop location names mentioned in track names
+    if (stopIdx === -1) {
+        const names = `${parsed.planned_track_name || ''} ${parsed.track_name || ''}`.toLowerCase();
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const loc = displayLocationName(sorted[i].location_name || sorted[i].name || '').toLowerCase();
+            if (loc && names.includes(loc)) {
+                stopIdx = i;
+                break;
+            }
+        }
+    }
+
+    // 6. Default to first stop if multiple stops exist
+    if (stopIdx === -1) {
+        stopIdx = 0;
+    }
+
+    if (stopIdx >= 0 && stopIdx < sorted.length) {
+        const startStop = sorted[stopIdx];
+        const startName = displayLocationName(startStop.location_name || startStop.name || '');
+        if (stopIdx < sorted.length - 1) {
+            const nextStop = sorted[stopIdx + 1];
+            const nextName = displayLocationName(nextStop.location_name || nextStop.name || '');
+            if (startName && nextName) {
+                return `${startName} to ${nextName}`;
+            }
+        }
+        if (startName) {
+            return startName;
+        }
+    }
+
+    return '';
+}

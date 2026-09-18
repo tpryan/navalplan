@@ -1,3 +1,5 @@
+import { getDebriefStopTitle } from '../js/utils.js';
+
 describe('GPX Track UI & Rendering', () => {
   let container;
   let countBadge;
@@ -86,7 +88,7 @@ describe('GPX Track UI & Rendering', () => {
     container.innerHTML = html;
   }
 
-  function renderDebriefCard(debrief) {
+  function renderDebriefCard(debrief, stops = null) {
     if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
       debriefContainer.classList.add('hidden');
       return;
@@ -109,9 +111,16 @@ describe('GPX Track UI & Rendering', () => {
         `;
       }
 
+      const stopTitle = getDebriefStopTitle(parsed, stops);
+      const title = stopTitle
+        ? `Passage Debrief: ${escapeTrackHtml(stopTitle)}`
+        : (parsed.track_name
+          ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
+          : 'Passage Debrief Analysis');
+
       html += `
         <div class="debrief-card">
-          <h4>${escapeTrackHtml(parsed.track_name ? `Passage Debrief: ${parsed.track_name}` : 'Passage Debrief Analysis')}</h4>
+          <h4>${title}</h4>
           ${parsed.planned_track_name ? `
             <div class="debrief-pair-badge">
               Compared against plan: <strong>${escapeTrackHtml(parsed.planned_track_name)}</strong>
@@ -250,6 +259,44 @@ describe('GPX Track UI & Rendering', () => {
       expect(cards[1].textContent).toContain('Leg 2');
     });
 
+    it('matches debrief title in UI to stops instead of track title from uploaded tracks', () => {
+      const stops = [
+        { id: 10, location_name: '82GQ+6Q Marina del Rey, CA' },
+        { id: 11, location_name: 'Isthmus Cove, Santa Catalina Island' },
+        { id: 12, location_name: 'Avalon Harbor' },
+      ];
+      const debrief = {
+        track_id: 'rec-1',
+        track_name: '2024-08-12 14:23:10.gpx',
+        start_stop_id: 10,
+        summary: 'Smooth passage to Isthmus Cove',
+        recorded_distance_nm: 31.4,
+      };
+
+      renderDebriefCard(debrief, stops);
+      const card = debriefContainer.querySelector('.debrief-card');
+      const title = card.querySelector('h4').textContent;
+
+      expect(title).toBe('Passage Debrief: Marina del Rey, CA to Isthmus Cove, Santa Catalina Island');
+      expect(title).not.toContain('2024-08-12 14:23:10.gpx');
+    });
+
+    it('uses debrief stop_title directly when provided by backend', () => {
+      const debrief = {
+        track_id: 'rec-2',
+        track_name: 'Track_001.gpx',
+        stop_title: 'Cowes to Newtown River',
+        summary: 'Quiet anchorage reach',
+      };
+
+      renderDebriefCard(debrief);
+      const card = debriefContainer.querySelector('.debrief-card');
+      const title = card.querySelector('h4').textContent;
+
+      expect(title).toBe('Passage Debrief: Cowes to Newtown River');
+      expect(title).not.toContain('Track_001.gpx');
+    });
+
     it('toggles single debrief button visibility based on debriefable track presence', () => {
       const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
       renderTracksList([]);
@@ -297,7 +344,7 @@ describe('GPX Track UI & Rendering', () => {
   });
 
   describe('Voyage Report Debrief Integration', () => {
-    function generateDebriefsHTML(debrief) {
+    function generateDebriefsHTML(debrief, stops = null) {
       if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
         return '';
       }
@@ -309,9 +356,12 @@ describe('GPX Track UI & Rendering', () => {
           try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
         }
         if (!parsed) return;
-        const title = parsed.track_name
-          ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
-          : 'Passage Debrief Analysis';
+        const stopTitle = getDebriefStopTitle(parsed, stops);
+        const title = stopTitle
+          ? `Passage Debrief: ${escapeTrackHtml(stopTitle)}`
+          : (parsed.track_name
+            ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
+            : 'Passage Debrief Analysis');
         html += `
           <div class="debrief-card">
             <h4>${title}</h4>
@@ -322,9 +372,9 @@ describe('GPX Track UI & Rendering', () => {
       return html;
     }
 
-    function renderReportDebriefSection(debriefs) {
+    function renderReportDebriefSection(debriefs, stops = null) {
       if (!Array.isArray(debriefs) || debriefs.length === 0) return '';
-      const debriefContent = generateDebriefsHTML(debriefs);
+      const debriefContent = generateDebriefsHTML(debriefs, stops);
       if (!debriefContent) return '';
       return `
         <div class="np-report-section np-report-debriefs">
@@ -349,6 +399,19 @@ describe('GPX Track UI & Rendering', () => {
       expect(html).toContain('Leg 1: Harbor to Point');
       expect(html).toContain('Leg 2: Offshore run');
       expect(html).toContain('np-report-debriefs');
+    });
+
+    it('renders debrief titles matching stops rather than raw uploaded track filenames', () => {
+      const stops = [
+        { id: 1, location_name: 'Cowes' },
+        { id: 2, location_name: 'Yarmouth' },
+      ];
+      const debriefs = [
+        { track_id: 't1', track_name: 'activity_987654.gpx', start_stop_id: 1, summary: 'Reaching along the Solent' },
+      ];
+      const html = renderReportDebriefSection(debriefs, stops);
+      expect(html).toContain('Passage Debrief: Cowes to Yarmouth');
+      expect(html).not.toContain('Passage Debrief: activity_987654.gpx');
     });
 
     function simulateReportStopDebriefs(stops, debriefs) {
