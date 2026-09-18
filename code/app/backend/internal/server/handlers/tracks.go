@@ -442,7 +442,7 @@ func formatHoursMins(hours float64) string {
 }
 
 // ResolveDebriefStartStop ensures that a debrief's StartStopID points to the starting stop of its passage leg,
-// never the arrival/ending stop.
+// never the arrival/ending stop, and populates StopTitle matching the voyage stops.
 func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops []model.Stop) {
 	if len(stops) == 0 {
 		if d.StartStopID == nil && d.VoyageStopID != nil {
@@ -457,6 +457,7 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 		trackName = t.Name
 	}
 	plannedName := d.PlannedTrackName
+	foundStop := false
 	// 1. Check for explicit leg number (e.g., "Leg 1", "Leg 2")
 	legNum := extractLegNumber(trackName)
 	if legNum == 0 && plannedName != "" {
@@ -464,18 +465,21 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 	}
 	if legNum >= 1 && legNum <= len(stops)-1 {
 		d.StartStopID = &stops[legNum-1].ID
-		return
+		foundStop = true
 	}
 	// 2. Check if track name mentions starting stop location name (e.g. "Cowes to Newtown")
-	for i := 0; i < len(stops)-1; i++ {
-		loc := stops[i].LocationName
-		if loc != "" && (strings.Contains(trackName, loc) || (plannedName != "" && strings.Contains(plannedName, loc))) {
-			d.StartStopID = &stops[i].ID
-			return
+	if !foundStop {
+		for i := 0; i < len(stops)-1; i++ {
+			loc := stops[i].LocationName
+			if loc != "" && (strings.Contains(trackName, loc) || (plannedName != "" && strings.Contains(plannedName, loc))) {
+				d.StartStopID = &stops[i].ID
+				foundStop = true
+				break
+			}
 		}
 	}
 	// 3. Check track endpoints if track coordinates exist
-	if t != nil {
+	if !foundStop && t != nil {
 		if startLat, startLng, _, _, ok := extractTrackEndpoints(t); ok {
 			sIdx := findClosestStop(startLat, startLng, stops, 10.0)
 			if sIdx >= 0 {
@@ -483,33 +487,58 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 					sIdx = len(stops) - 2
 				}
 				d.StartStopID = &stops[sIdx].ID
-				return
+				foundStop = true
 			}
 		}
 	}
 	// 4. Check existing StartStopID or VoyageStopID reference
-	refID := d.StartStopID
-	if refID == nil {
-		refID = d.VoyageStopID
-	}
-	if refID == nil && t != nil {
-		refID = t.VoyageStopID
-	}
-	if refID != nil {
-		for i, s := range stops {
-			if s.ID == *refID {
-				// If associated with the final stop, it was associated with arrival/destination; map to preceding starting stop
-				if i == len(stops)-1 && i > 0 {
-					d.StartStopID = &stops[i-1].ID
-				} else {
-					d.StartStopID = &stops[i].ID
+	if !foundStop {
+		refID := d.StartStopID
+		if refID == nil {
+			refID = d.VoyageStopID
+		}
+		if refID == nil && t != nil {
+			refID = t.VoyageStopID
+		}
+		if refID != nil {
+			for i, s := range stops {
+				if s.ID == *refID {
+					// If associated with the final stop, it was associated with arrival/destination; map to preceding starting stop
+					if i == len(stops)-1 && i > 0 {
+						d.StartStopID = &stops[i-1].ID
+					} else {
+						d.StartStopID = &stops[i].ID
+					}
+					foundStop = true
+					break
 				}
-				return
 			}
 		}
 	}
 	// 5. Default to the first stop
-	d.StartStopID = &stops[0].ID
+	if !foundStop && d.StartStopID == nil {
+		d.StartStopID = &stops[0].ID
+	}
+	// Populate StopTitle based on resolved StartStopID
+	if d.StartStopID != nil {
+		for i, s := range stops {
+			if s.ID == *d.StartStopID {
+				if i < len(stops)-1 {
+					d.StopTitle = fmt.Sprintf("%s to %s", s.LocationName, stops[i+1].LocationName)
+				} else {
+					d.StopTitle = s.LocationName
+				}
+				break
+			}
+		}
+	}
+	if d.StopTitle == "" {
+		if len(stops) >= 2 {
+			d.StopTitle = fmt.Sprintf("%s to %s", stops[0].LocationName, stops[1].LocationName)
+		} else {
+			d.StopTitle = stops[0].LocationName
+		}
+	}
 }
 
 func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) plannedRouteMatch {
@@ -725,9 +754,29 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		maxSpd = *track.MaxSpeedKts
 	}
 
+	var stopTitle string
+	if match.startStopID != nil && len(stops) > 0 {
+		for i, s := range stops {
+			if s.ID == *match.startStopID {
+				if i < len(stops)-1 {
+					stopTitle = fmt.Sprintf("%s to %s", s.LocationName, stops[i+1].LocationName)
+				} else {
+					stopTitle = s.LocationName
+				}
+				break
+			}
+		}
+	}
+	if stopTitle == "" && len(stops) >= 2 {
+		stopTitle = fmt.Sprintf("%s to %s", stops[0].LocationName, stops[1].LocationName)
+	} else if stopTitle == "" && len(stops) == 1 {
+		stopTitle = stops[0].LocationName
+	}
+
 	debrief := model.TrackDebrief{
 		TrackID:             track.ID,
 		TrackName:           track.Name,
+		StopTitle:           stopTitle,
 		PlannedTrackID:      match.plannedTrackID,
 		PlannedTrackName:    match.plannedTrackName,
 		VoyageStopID:        match.startStopID,

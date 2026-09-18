@@ -284,6 +284,7 @@ type VoyageTrack struct {
 type TrackDebrief struct {
 	TrackID             string   `json:"track_id"`
 	TrackName           string   `json:"track_name"`
+	StopTitle           string   `json:"stop_title,omitempty"`
 	PlannedTrackID      *string  `json:"planned_track_id,omitempty"`
 	PlannedTrackName    string   `json:"planned_track_name,omitempty"`
 	VoyageStopID        *int64   `json:"voyage_stop_id,omitempty"`

@@ -541,27 +541,30 @@ func TestResolveDebriefStartStop(t *testing.T) {
 	id102 := int64(102)
 
 	tests := []struct {
-		name       string
-		debrief    model.TrackDebrief
-		track      *model.VoyageTrack
-		stops      []model.Stop
-		wantStopID *int64
+		name          string
+		debrief       model.TrackDebrief
+		track         *model.VoyageTrack
+		stops         []model.Stop
+		wantStopID    *int64
+		wantStopTitle string
 	}{
 		{
 			name: "matches explicit Leg 1 to stop 0",
 			debrief: model.TrackDebrief{
 				TrackName: "Voyage - Leg 1: Marina to Cove",
 			},
-			stops:      stops,
-			wantStopID: &id100,
+			stops:         stops,
+			wantStopID:    &id100,
+			wantStopTitle: "Marina to Cove",
 		},
 		{
 			name: "matches explicit Leg 2 to stop 1",
 			debrief: model.TrackDebrief{
 				TrackName: "Voyage - Leg 2: Cove to Harbor",
 			},
-			stops:      stops,
-			wantStopID: &id101,
+			stops:         stops,
+			wantStopID:    &id101,
+			wantStopTitle: "Cove to Harbor",
 		},
 		{
 			name: "corrects ending stop ID when debrief has destination stop",
@@ -569,8 +572,9 @@ func TestResolveDebriefStartStop(t *testing.T) {
 				TrackName:    "Leg 1 Passage",
 				VoyageStopID: &id101,
 			},
-			stops:      stops,
-			wantStopID: &id100,
+			stops:         stops,
+			wantStopID:    &id100,
+			wantStopTitle: "Marina to Cove",
 		},
 		{
 			name: "corrects last stop reference to preceding starting stop",
@@ -578,16 +582,28 @@ func TestResolveDebriefStartStop(t *testing.T) {
 				TrackName:    "Final Leg",
 				VoyageStopID: &id102,
 			},
-			stops:      stops,
-			wantStopID: &id101,
+			stops:         stops,
+			wantStopID:    &id101,
+			wantStopTitle: "Cove to Harbor",
 		},
 		{
 			name: "matches stop by location name when no leg number present",
 			debrief: model.TrackDebrief{
 				TrackName: "Passage Cove to Harbor",
 			},
-			stops:      stops,
-			wantStopID: &id101,
+			stops:         stops,
+			wantStopID:    &id101,
+			wantStopTitle: "Cove to Harbor",
+		},
+		{
+			name: "uploaded track with raw gpx name matches stop title from stops",
+			debrief: model.TrackDebrief{
+				TrackName:   "2024-08-12 14:23:10.gpx",
+				StartStopID: &id100,
+			},
+			stops:         stops,
+			wantStopID:    &id100,
+			wantStopTitle: "Marina to Cove",
 		},
 		{
 			name: "empty stops retains existing VoyageStopID safely",
@@ -595,8 +611,9 @@ func TestResolveDebriefStartStop(t *testing.T) {
 				TrackName:    "Track",
 				VoyageStopID: &id100,
 			},
-			stops:      nil,
-			wantStopID: &id100,
+			stops:         nil,
+			wantStopID:    &id100,
+			wantStopTitle: "",
 		},
 	}
 
@@ -612,6 +629,9 @@ func TestResolveDebriefStartStop(t *testing.T) {
 				if d.StartStopID == nil || *d.StartStopID != *tt.wantStopID {
 					t.Errorf("StartStopID = %v, want %v", d.StartStopID, *tt.wantStopID)
 				}
+			}
+			if d.StopTitle != tt.wantStopTitle {
+				t.Errorf("StopTitle = %q, want %q", d.StopTitle, tt.wantStopTitle)
 			}
 		})
 	}
