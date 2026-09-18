@@ -72,12 +72,12 @@ func SplitTrackByStops(master ParsedTrack, stops []model.Stop) []LegResult {
 		legPoints := master.Points[startPt : endPt+1]
 		fromName := stops[matches[i].stopIndex].LocationName
 		toName := stops[matches[i+1].stopIndex].LocationName
-		destStopID := stops[matches[i+1].stopIndex].ID
+		startStopID := stops[matches[i].stopIndex].ID
 
 		legName := fmt.Sprintf("%s - Leg %d: %s to %s", master.Name, i+1, fromName, toName)
 		legTrack := buildParsedTrack(legName, master.Kind, legPoints)
 		legs = append(legs, LegResult{
-			StopID: &destStopID,
+			StopID: &startStopID,
 			Track:  legTrack,
 		})
 	}

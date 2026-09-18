@@ -48,6 +48,6 @@
 44. Done. When we have a planned route, can we not show the direct lines between stops as they are just straght lines between two points.
 45. Done. After rerunning stop research the tracks on the map disappear, it should still be there. 
 46. Done. There should only be one button for debriefing. Not one per gpx track. Debrief all at once and only do all at once.
-47. Place debrief reports with the starting stop, not the ending stop in the report. 
+47. Done. Place debrief reports with the starting stop, not the ending stop in the report. 
 48. Please alter the lookout agent to also take in and use the planned routes if they exist to tailor alterts.
 49. The title for debriefs in the ui should match the title of the stops, and not the title information from the uploaded tracks.  

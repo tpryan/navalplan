@@ -861,6 +861,7 @@ func TestGetPilotReport(t *testing.T) {
 		mockStore.On("GetVoyageGuide", voyageID).Return(&model.VoyageGuide{Summary: "Test Guide"}, nil)
 		mockStore.On("ListVoyageRecommendations", voyageID).Return([]model.VoyageRecommendation{{Name: "Rec 1"}}, nil)
 		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
+		mockStore.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
 		mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
 			{ID: "trk-1", Name: "Leg 1", Debrief: model.RawJSON(debriefJSON)},
 		}, nil)
@@ -880,6 +881,47 @@ func TestGetPilotReport(t *testing.T) {
 		assert.Equal(t, "Leg 1", report.Debriefs[0].TrackName)
 		assert.Equal(t, 12.5, report.Debriefs[0].RecordedDistanceNM)
 		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("Associates debrief with starting stop", func(t *testing.T) {
+		localMock := new(MockStore)
+		localHandler := handlers.New(localMock, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
+		localMux := http.NewServeMux()
+		localMux.HandleFunc("GET /api/v1/voyages/{id}/pilot_report", localHandler.GetPilotReport)
+
+		stop1 := model.Stop{ID: 10, LocationName: "Cowes"}
+		stop2 := model.Stop{ID: 11, LocationName: "Newtown"}
+		stop3 := model.Stop{ID: 12, LocationName: "Yarmouth"}
+		dest11 := int64(11)
+		dest12 := int64(12)
+		debrief1JSON := `{"track_id":"trk-1","track_name":"Full Voyage - Leg 1: Cowes to Newtown","voyage_stop_id":11}`
+		debrief2JSON := `{"track_id":"trk-2","track_name":"Full Voyage - Leg 2: Newtown to Yarmouth","voyage_stop_id":12}`
+
+		localMock.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+		localMock.On("GetVoyageGuide", voyageID).Return(&model.VoyageGuide{Summary: "Test Guide"}, nil)
+		localMock.On("ListVoyageRecommendations", voyageID).Return([]model.VoyageRecommendation{}, nil)
+		localMock.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
+		localMock.On("ListStops", voyageID, 100, 0).Return([]model.Stop{stop1, stop2, stop3}, nil)
+		localMock.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+			{ID: "trk-1", Name: "Full Voyage - Leg 1: Cowes to Newtown", VoyageStopID: &dest11, Debrief: model.RawJSON(debrief1JSON)},
+			{ID: "trk-2", Name: "Full Voyage - Leg 2: Newtown to Yarmouth", VoyageStopID: &dest12, Debrief: model.RawJSON(debrief2JSON)},
+		}, nil)
+
+		req := httptest.NewRequest("GET", "/api/v1/voyages/123/pilot_report", nil)
+		req = addPerson(req, personID)
+		w := httptest.NewRecorder()
+
+		localMux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var report model.PilotReport
+		json.NewDecoder(w.Body).Decode(&report)
+		assert.Equal(t, 2, len(report.Debriefs))
+		assert.NotNil(t, report.Debriefs[0].StartStopID)
+		assert.Equal(t, int64(10), *report.Debriefs[0].StartStopID)
+		assert.NotNil(t, report.Debriefs[1].StartStopID)
+		assert.Equal(t, int64(11), *report.Debriefs[1].StartStopID)
+		localMock.AssertExpectations(t)
 	})
 }
 

@@ -356,19 +356,7 @@ describe('GPX Track UI & Rendering', () => {
       const stopDebriefsMap = new Map();
       const assignedDebriefs = new Set();
 
-      // Pass 1: Explicit match by start_stop_id
-      allDebriefs.forEach(d => {
-        if (d.start_stop_id != null) {
-          const sIdx = stops.findIndex(s => String(s.id) === String(d.start_stop_id));
-          if (sIdx >= 0) {
-            if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
-            stopDebriefsMap.get(sIdx).push(d);
-            assignedDebriefs.add(d);
-          }
-        }
-      });
-
-      // Pass 2: Leg number in track_name or planned_track_name
+      // Pass 1: Leg number in track_name or planned_track_name
       allDebriefs.forEach(d => {
         if (assignedDebriefs.has(d)) return;
         const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`;
@@ -384,11 +372,40 @@ describe('GPX Track UI & Rendering', () => {
         }
       });
 
-      // Pass 3: voyage_stop_id if set
+      // Pass 2: Starting stop location name in track name
+      allDebriefs.forEach(d => {
+        if (assignedDebriefs.has(d)) return;
+        const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`.toLowerCase();
+        for (let i = 0; i < stops.length - 1; i++) {
+          const locName = (stops[i].location_name || stops[i].name || '').toLowerCase();
+          if (locName && nameToTest.includes(locName)) {
+            if (!stopDebriefsMap.has(i)) stopDebriefsMap.set(i, []);
+            stopDebriefsMap.get(i).push(d);
+            assignedDebriefs.add(d);
+            break;
+          }
+        }
+      });
+
+      // Pass 3: Explicit match by start_stop_id
+      allDebriefs.forEach(d => {
+        if (assignedDebriefs.has(d) || d.start_stop_id == null) return;
+        let sIdx = stops.findIndex(s => String(s.id) === String(d.start_stop_id));
+        if (sIdx >= 0) {
+          if (sIdx === stops.length - 1 && stops.length > 1) {
+            sIdx = sIdx - 1;
+          }
+          if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
+          stopDebriefsMap.get(sIdx).push(d);
+          assignedDebriefs.add(d);
+        }
+      });
+
+      // Pass 4: voyage_stop_id if set
       allDebriefs.forEach(d => {
         if (assignedDebriefs.has(d) || d.voyage_stop_id == null) return;
         let sIdx = stops.findIndex(s => String(s.id) === String(d.voyage_stop_id));
-        if (sIdx > 0 && !stopDebriefsMap.has(sIdx - 1)) {
+        if (sIdx > 0 && (sIdx === stops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
           sIdx = sIdx - 1;
         }
         if (sIdx >= 0 && sIdx < stops.length) {
@@ -398,7 +415,7 @@ describe('GPX Track UI & Rendering', () => {
         }
       });
 
-      // Pass 4: Sequential fallback for unassigned debriefs
+      // Pass 5: Sequential fallback for unassigned debriefs
       let nextStopIdx = 0;
       allDebriefs.forEach(d => {
         if (assignedDebriefs.has(d)) return;
@@ -457,6 +474,28 @@ describe('GPX Track UI & Rendering', () => {
       expect(stopsHtml).toContain('Coastal reach to Avalon');
       expect(remainingHtml).toBe('');
       expect(stopsHtml).not.toContain('np-report-item--non-sailing');
+    });
+
+    it('places debriefs with starting stop even if legacy debrief was stored with ending stop', () => {
+      const stops = [
+        { id: 101, name: 'Cowes' },
+        { id: 102, name: 'Newtown' },
+        { id: 103, name: 'Yarmouth' },
+      ];
+      // Leg 1 ending stop is Newtown (102), Leg 2 ending stop is Yarmouth (103)
+      const debriefs = [
+        { track_id: 't1', track_name: 'Full Voyage - Leg 1: Cowes to Newtown', voyage_stop_id: 102, summary: 'First leg crossing' },
+        { track_id: 't2', track_name: 'Full Voyage - Leg 2: Newtown to Yarmouth', voyage_stop_id: 103, summary: 'Second leg run' },
+      ];
+
+      const { stopsHtml } = simulateReportStopDebriefs(stops, debriefs);
+
+      // Stop 1 (Cowes) should receive Leg 1 debrief
+      expect(stopsHtml).toMatch(/Stop 1: Cowes[\s\S]*?Passage Tactical Debrief — Leg 1[\s\S]*?First leg crossing/);
+      // Stop 2 (Newtown) should receive Leg 2 debrief
+      expect(stopsHtml).toMatch(/Stop 2: Newtown[\s\S]*?Passage Tactical Debrief — Leg 2[\s\S]*?Second leg run/);
+      // Stop 3 (Yarmouth) is the final arrival and should have NO debrief
+      expect(stopsHtml).not.toMatch(/Stop 3: Yarmouth[\s\S]*?Passage Tactical Debrief/);
     });
 
     it('assigns unassigned debriefs to starting stops without creating a consolidated report at the end', () => {
