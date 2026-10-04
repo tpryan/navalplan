@@ -7,52 +7,67 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
-		name       string
-		env        map[string]string
-		wantProj   string
-		wantRegion string
-		wantBucket string
-		wantCoast  string
-		wantNGA    string
+		name             string
+		env              map[string]string
+		wantProj         string
+		wantRegion       string
+		wantBucket       string
+		wantCoast        string
+		wantNGA          string
+		wantBatchSize    int
+		wantChunkSize    int
+		wantChunkOverlap int
 	}{
 		{
-			name: "all environment variables set with gs prefix",
+			name: "all environment variables set with gs prefix and custom rag settings",
 			env: map[string]string{
 				"PROJECT_ID":                    "navallog",
 				"VERTEX_LOCATION":               "us-west1",
 				"NAVALPLAN_PUBLICATIONS_BUCKET": "gs://navallog-nautical-publications",
 				"COAST_PILOT_CORPUS_ID":         "coast-pilot-corpus",
 				"NGA_CORPUS_ID":                 "nga-sailing-directions-corpus",
+				"RAG_BATCH_SIZE":                "2",
+				"RAG_CHUNK_SIZE":                "1536",
+				"RAG_CHUNK_OVERLAP":             "200",
 			},
-			wantProj:   "navallog",
-			wantRegion: "us-west1",
-			wantBucket: "navallog-nautical-publications",
-			wantCoast:  "coast-pilot-corpus",
-			wantNGA:    "nga-sailing-directions-corpus",
+			wantProj:         "navallog",
+			wantRegion:       "us-west1",
+			wantBucket:       "navallog-nautical-publications",
+			wantCoast:        "coast-pilot-corpus",
+			wantNGA:          "nga-sailing-directions-corpus",
+			wantBatchSize:    2,
+			wantChunkSize:    1536,
+			wantChunkOverlap: 200,
 		},
 		{
-			name: "fallback to GOOGLE_CLOUD_PROJECT and REGION without gs prefix",
+			name: "fallback to GOOGLE_CLOUD_PROJECT and defaults",
 			env: map[string]string{
 				"GOOGLE_CLOUD_PROJECT": "fallback-project",
 				"REGION":               "us-central1",
 				"GCS_BUCKET":           "my-custom-bucket",
 			},
-			wantProj:   "fallback-project",
-			wantRegion: "us-central1",
-			wantBucket: "my-custom-bucket",
-			wantCoast:  "",
-			wantNGA:    "",
+			wantProj:         "fallback-project",
+			wantRegion:       "us-central1",
+			wantBucket:       "my-custom-bucket",
+			wantCoast:        "",
+			wantNGA:          "",
+			wantBatchSize:    1,
+			wantChunkSize:    1024,
+			wantChunkOverlap: 128,
 		},
 		{
-			name: "default region when none provided",
+			name: "default region and default rag config when none provided",
 			env: map[string]string{
 				"GCP_PROJECT": "another-project",
 			},
-			wantProj:   "another-project",
-			wantRegion: "us-central1",
-			wantBucket: "",
-			wantCoast:  "",
-			wantNGA:    "",
+			wantProj:         "another-project",
+			wantRegion:       "us-central1",
+			wantBucket:       "",
+			wantCoast:        "",
+			wantNGA:          "",
+			wantBatchSize:    1,
+			wantChunkSize:    1024,
+			wantChunkOverlap: 128,
 		},
 	}
 
@@ -77,6 +92,15 @@ func TestLoadConfig(t *testing.T) {
 			}
 			if cfg.NGACorpusID != tc.wantNGA {
 				t.Errorf("NGACorpusID = %q, want %q", cfg.NGACorpusID, tc.wantNGA)
+			}
+			if cfg.BatchSize != tc.wantBatchSize {
+				t.Errorf("BatchSize = %d, want %d", cfg.BatchSize, tc.wantBatchSize)
+			}
+			if cfg.ChunkSize != tc.wantChunkSize {
+				t.Errorf("ChunkSize = %d, want %d", cfg.ChunkSize, tc.wantChunkSize)
+			}
+			if cfg.ChunkOverlap != tc.wantChunkOverlap {
+				t.Errorf("ChunkOverlap = %d, want %d", cfg.ChunkOverlap, tc.wantChunkOverlap)
 			}
 		})
 	}

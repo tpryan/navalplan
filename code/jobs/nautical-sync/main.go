@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,9 @@ type Config struct {
 	GCSBucket          string
 	CoastPilotCorpusID string
 	NGACorpusID        string
+	BatchSize          int
+	ChunkSize          int
+	ChunkOverlap       int
 }
 
 type NGAStoredPub struct {
@@ -105,7 +110,7 @@ func main() {
 		for vol := 1; vol <= 10; vol++ {
 			gcsURIs = append(gcsURIs, fmt.Sprintf("gs://%s/noaa-coast-pilot/latest/CPB%d_WEB.pdf", cfg.GCSBucket, vol))
 		}
-		if err := triggerRagImport(ctx, cfg.ProjectID, cfg.Region, cfg.CoastPilotCorpusID, gcsURIs); err != nil {
+		if err := triggerRagImport(ctx, cfg, cfg.CoastPilotCorpusID, gcsURIs); err != nil {
 			slog.Error("Failed to import Coast Pilot to Vertex AI RAG corpus", "error", err)
 		} else {
 			slog.Info("Coast Pilot RAG import triggered successfully")
@@ -120,7 +125,7 @@ func main() {
 			slog.Warn("No NGA publications synced, skipping RAG import")
 		} else {
 			slog.Info("Triggering Vertex AI RAG import for NGA Sailing Directions...", "corpusID", cfg.NGACorpusID, "fileCount", len(ngaURIs))
-			if err := triggerRagImport(ctx, cfg.ProjectID, cfg.Region, cfg.NGACorpusID, ngaURIs); err != nil {
+			if err := triggerRagImport(ctx, cfg, cfg.NGACorpusID, ngaURIs); err != nil {
 				slog.Error("Failed to import NGA Sailing Directions to Vertex AI RAG corpus", "error", err)
 			} else {
 				slog.Info("NGA Sailing Directions RAG import triggered successfully")
@@ -177,39 +182,51 @@ func resolveCorpusResourceName(ctx context.Context, client *http.Client, project
 	return fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", projectID, region, corpusID), nil
 }
 
-func triggerRagImport(ctx context.Context, projectID, region, corpusID string, gcsURIs []string) error {
+func triggerRagImport(ctx context.Context, cfg Config, corpusID string, gcsURIs []string) error {
 	client, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining google auth client: %w", err)
 	}
-
-	corpusResource, err := resolveCorpusResourceName(ctx, client, projectID, region, corpusID)
+	corpusResource, err := resolveCorpusResourceName(ctx, client, cfg.ProjectID, cfg.Region, corpusID)
 	if err != nil {
 		slog.Warn("Could not resolve corpus resource name dynamically, using fallback", "error", err)
-		corpusResource = fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", projectID, region, corpusID)
+		corpusResource = fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", cfg.ProjectID, cfg.Region, corpusID)
+	}
+	endpoint := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/%s/ragFiles:import", cfg.Region, corpusResource)
+
+	batchSize := cfg.BatchSize
+	if batchSize <= 0 {
+		batchSize = 1
+	}
+	chunkSize := cfg.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 1024
+	}
+	chunkOverlap := cfg.ChunkOverlap
+	if chunkOverlap < 0 {
+		chunkOverlap = 128
 	}
 
-	endpoint := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/%s/ragFiles:import", region, corpusResource)
-
-	const batchSize = 20
+	var importErrors []error
+	totalBatches := (len(gcsURIs) + batchSize - 1) / batchSize
 	for i := 0; i < len(gcsURIs); i += batchSize {
 		end := i + batchSize
 		if end > len(gcsURIs) {
 			end = len(gcsURIs)
 		}
 		batch := gcsURIs[i:end]
-		slog.Info("Importing batch to RAG corpus", "batchIndex", i/batchSize+1, "count", len(batch))
+		batchIndex := i/batchSize + 1
+		slog.Info("Importing batch to RAG corpus", "batchIndex", batchIndex, "totalBatches", totalBatches, "count", len(batch), "uris", batch)
 
 		var reqBody ragImportRequest
 		reqBody.ImportRagFilesConfig.GcsSource.Uris = batch
-		reqBody.ImportRagFilesConfig.RagFileChunkingConfig.FixedLengthChunking.ChunkSize = 768
-		reqBody.ImportRagFilesConfig.RagFileChunkingConfig.FixedLengthChunking.ChunkOverlap = 128
+		reqBody.ImportRagFilesConfig.RagFileChunkingConfig.FixedLengthChunking.ChunkSize = chunkSize
+		reqBody.ImportRagFilesConfig.RagFileChunkingConfig.FixedLengthChunking.ChunkOverlap = chunkOverlap
 
 		payload, err := json.Marshal(reqBody)
 		if err != nil {
 			return err
 		}
-
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 		if err != nil {
 			return err
@@ -220,12 +237,13 @@ func triggerRagImport(ctx context.Context, projectID, region, corpusID string, g
 		if err != nil {
 			return fmt.Errorf("POST ragFiles:import failed: %w", err)
 		}
-
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-			return fmt.Errorf("ragFiles:import error (%d): %s", resp.StatusCode, string(body))
+			slog.Error("ragFiles:import API error", "status", resp.StatusCode, "body", string(body))
+			importErrors = append(importErrors, fmt.Errorf("ragFiles:import HTTP %d: %s", resp.StatusCode, string(body)))
+			continue
 		}
 
 		var op struct {
@@ -236,12 +254,25 @@ func triggerRagImport(ctx context.Context, projectID, region, corpusID string, g
 			slog.Warn("Failed parsing import operation response", "body", string(body), "error", err)
 		}
 
-		if end < len(gcsURIs) && op.Name != "" {
-			slog.Info("Waiting for RAG import operation to finish before next batch...", "operation", op.Name)
-			if err := waitForRagOperation(ctx, client, region, op.Name); err != nil {
-				return fmt.Errorf("waiting for RAG import batch: %w", err)
+		if op.Name != "" {
+			slog.Info("Waiting for RAG import operation to finish...", "operation", op.Name, "batchIndex", batchIndex, "totalBatches", totalBatches)
+			if err := waitForRagOperation(ctx, client, cfg.Region, op.Name); err != nil {
+				slog.Error("RAG import batch failed", "batchIndex", batchIndex, "operation", op.Name, "error", err)
+				importErrors = append(importErrors, fmt.Errorf("operation %s: %w", op.Name, err))
 			}
 		}
+
+		if end < len(gcsURIs) {
+			slog.Info("Cooling down before next batch to prevent rate limit exhaustion...", "cooldownSeconds", 5)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	if len(importErrors) > 0 {
+		return fmt.Errorf("encountered %d import errors: %w", len(importErrors), errors.Join(importErrors...))
 	}
 	return nil
 }
@@ -272,6 +303,19 @@ func waitForRagOperation(ctx context.Context, client *http.Client, region, opNam
 				Code    int    `json:"code"`
 				Message string `json:"message"`
 			} `json:"error"`
+			Metadata *struct {
+				GenericMetadata *struct {
+					PartialFailures []struct {
+						Code    int    `json:"code"`
+						Message string `json:"message"`
+					} `json:"partialFailures"`
+				} `json:"genericMetadata"`
+			} `json:"metadata"`
+			Response *struct {
+				ImportedRagFilesCount string `json:"importedRagFilesCount"`
+				FailedRagFilesCount   string `json:"failedRagFilesCount"`
+				SkippedRagFilesCount  string `json:"skippedRagFilesCount"`
+			} `json:"response"`
 		}
 		if err := json.Unmarshal(body, &status); err != nil {
 			slog.Warn("Failed parsing operation status", "error", err)
@@ -281,7 +325,24 @@ func waitForRagOperation(ctx context.Context, client *http.Client, region, opNam
 			if status.Error != nil {
 				return fmt.Errorf("operation failed (%d): %s", status.Error.Code, status.Error.Message)
 			}
-			slog.Info("RAG import operation completed successfully", "operation", opName)
+			if status.Metadata != nil && status.Metadata.GenericMetadata != nil {
+				for _, pf := range status.Metadata.GenericMetadata.PartialFailures {
+					slog.Warn("Partial failure in RAG import", "code", pf.Code, "message", pf.Message)
+				}
+			}
+			if status.Response != nil {
+				slog.Info("RAG import operation completed",
+					"imported", status.Response.ImportedRagFilesCount,
+					"failed", status.Response.FailedRagFilesCount,
+					"skipped", status.Response.SkippedRagFilesCount,
+					"operation", opName,
+				)
+				if status.Response.FailedRagFilesCount != "" && status.Response.FailedRagFilesCount != "0" {
+					return fmt.Errorf("RAG import failed for %s files in operation %s", status.Response.FailedRagFilesCount, opName)
+				}
+			} else {
+				slog.Info("RAG import operation completed successfully", "operation", opName)
+			}
 			return nil
 		}
 	}
@@ -310,12 +371,35 @@ func loadConfig() Config {
 		bucket = os.Getenv("GCS_BUCKET")
 	}
 	bucket = strings.TrimPrefix(bucket, "gs://")
+
+	batchSize := 1
+	if bs := os.Getenv("RAG_BATCH_SIZE"); bs != "" {
+		if n, err := strconv.Atoi(bs); err == nil && n > 0 {
+			batchSize = n
+		}
+	}
+	chunkSize := 1024
+	if cs := os.Getenv("RAG_CHUNK_SIZE"); cs != "" {
+		if n, err := strconv.Atoi(cs); err == nil && n > 0 {
+			chunkSize = n
+		}
+	}
+	chunkOverlap := 128
+	if co := os.Getenv("RAG_CHUNK_OVERLAP"); co != "" {
+		if n, err := strconv.Atoi(co); err == nil && n >= 0 {
+			chunkOverlap = n
+		}
+	}
+
 	return Config{
 		ProjectID:          projectID,
 		Region:             region,
 		GCSBucket:          bucket,
 		CoastPilotCorpusID: os.Getenv("COAST_PILOT_CORPUS_ID"),
 		NGACorpusID:        os.Getenv("NGA_CORPUS_ID"),
+		BatchSize:          batchSize,
+		ChunkSize:          chunkSize,
+		ChunkOverlap:       chunkOverlap,
 	}
 }
 
