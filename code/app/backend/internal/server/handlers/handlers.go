@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -270,6 +271,8 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 	return nil
 }
 
+var bulletKeyRegex = regexp.MustCompile(`(?m)^(\s*)[-*]\s*("[\w_-]+"\s*:)`)
+
 func cleanJSON(s string) string {
 	s = strings.TrimSpace(s)
 
@@ -299,6 +302,7 @@ func cleanJSON(s string) string {
 		return ""
 	}
 
+	s = bulletKeyRegex.ReplaceAllString(s, "$1$2")
 	s = strings.ReplaceAll(s, `\'`, `'`)
 	return strings.TrimSpace(s)
 }

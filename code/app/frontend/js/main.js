@@ -2147,7 +2147,7 @@ async function handlePilotSuggestionsClick() {
                 if (evt.stage === 'done') {
                     console.log('[progress] done received — finishing pilot research');
                     finishPilotResearch();
-                } else if (evt.stage === 'error') {
+                } else if (evt.stage === 'error' || (typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
                     clearInterval(_pilotPoll); _pilotPoll = null;
                     if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
                     if (_pilotProgressES) { _pilotProgressES.close(); _pilotProgressES = null; }
@@ -2156,7 +2156,10 @@ async function handlePilotSuggestionsClick() {
                     icon.classList.remove('spin');
                     btn.disabled = false;
                     renderItinerary();
-                    showNotification('Research Failed', evt.message || 'The Local Pilot agent was unable to complete. Please try again.');
+                    let title = 'Research Failed';
+                    if (evt.stage === 'error_429') title = 'Rate Limit Reached';
+                    else if (evt.stage === 'error_503') title = 'Model Busy';
+                    showNotification(title, evt.message || 'The Local Pilot agent was unable to complete. Please try again.');
                 }
             });
         }
@@ -3827,12 +3830,15 @@ async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
                 if (evt.stage === 'done') {
                     clearTimeout(timeout);
                     await finish();
-                } else if (evt.stage === 'error') {
+                } else if (evt.stage === 'error' || (typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
                     clearTimeout(timeout);
                     if (progressES) { progressES.close(); progressES = null; }
                     btn.disabled = false;
                     btn.innerHTML = originalHTML;
-                    showNotification('Safety Audit', 'Safety audit encountered an error.');
+                    let title = 'Safety Audit';
+                    if (evt.stage === 'error_429') title = 'Rate Limit Reached';
+                    else if (evt.stage === 'error_503') title = 'Model Busy';
+                    showNotification(title, evt.message || 'Safety audit encountered an error.');
                 }
             });
         } else {
@@ -5713,7 +5719,7 @@ async function redoGuide(oldGuide, btn) {
         let redoGuideProgressES = null;
         if (redoGuideRes && redoGuideRes.session_id) {
             redoGuideProgressES = API.streamProgress(redoGuideRes.session_id, (evt) => {
-                if (evt.stage === 'error') {
+                if (evt.stage === 'error' || (typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
                     clearInterval(poll);
                     redoGuideProgressES.close();
                     btn.disabled = false;

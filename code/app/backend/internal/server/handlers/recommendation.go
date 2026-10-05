@@ -49,18 +49,25 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 	eLng := centerLng + lngDeg
 	wLng := centerLng - lngDeg
 
-	fmtLng := func(lng float64) string {
-		if lng <= 0 {
-			return fmt.Sprintf("%.2f°W", math.Abs(lng))
+	fmtLat := func(lat float64) string {
+		if lat >= 0 {
+			return fmt.Sprintf("%.2f°N", lat)
 		}
-		return fmt.Sprintf("%.2f°E", lng)
+		return fmt.Sprintf("%.2f°S", math.Abs(lat))
+	}
+
+	fmtLng := func(lng float64) string {
+		if lng >= 0 {
+			return fmt.Sprintf("%.2f°E", lng)
+		}
+		return fmt.Sprintf("%.2f°W", math.Abs(lng))
 	}
 
 	return fmt.Sprintf(
-		"The circle boundary reaches approximately: N %.2f°N, S %.2f°N, E %s, W %s. "+
+		"The circle boundary reaches approximately: N %s, S %s, E %s, W %s. "+
 			"Make sure to include sailing spots near ALL four edges of this boundary, "+
 			"not only near the center or the most prominent harbour.",
-		nLat, sLat, fmtLng(eLng), fmtLng(wLng),
+		fmtLat(nLat), fmtLat(sLat), fmtLng(eLng), fmtLng(wLng),
 	)
 }
 
@@ -306,9 +313,22 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	radiusNM := radiusToNM(v.SearchRadius, v.SearchRadiusUnit)
 	boundaryHint := searchBoundaryHint(*v.Latitude, *v.Longitude, radiusNM)
 
+	var latStr string
+	if *v.Latitude >= 0 {
+		latStr = fmt.Sprintf("%.4f°N", *v.Latitude)
+	} else {
+		latStr = fmt.Sprintf("%.4f°S", math.Abs(*v.Latitude))
+	}
+	var lngStr string
+	if *v.Longitude >= 0 {
+		lngStr = fmt.Sprintf("%.4f°E", *v.Longitude)
+	} else {
+		lngStr = fmt.Sprintf("%.4f°W", math.Abs(*v.Longitude))
+	}
+
 	prompt := fmt.Sprintf(
-		"Recommend %d anchorages, moorings, and marinas within %d %s of %.4f°N, %.4f°W (%s). %s",
-		count, v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, math.Abs(*v.Longitude), locInfo,
+		"Recommend %d anchorages, moorings, and marinas within %d %s of coordinates (latitude: %.4f, longitude: %.4f, approximately %s, %s, %s). %s",
+		count, v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
 		boundaryHint)
 
 	if v.StartDate != nil && v.EndDate != nil && v.StartDate.Equal(*v.EndDate) {
@@ -322,9 +342,17 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
 			h.broadcastProgress(progressSessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
+		} else if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") || strings.Contains(err.Error(), "Resource exhausted") {
+			h.broadcastProgress(progressSessionID, "error_429", "Model rate limit exceeded. Please wait a moment and try again.")
 		} else {
 			h.broadcastProgress(progressSessionID, "error", "Research agent failed to respond")
 		}
+		return
+	}
+
+	if strings.TrimSpace(fullText) == "" {
+		slog.ErrorContext(ctx, "Agent returned empty response")
+		h.broadcastProgress(progressSessionID, "error", "Research agent returned an empty response — please try again")
 		return
 	}
 

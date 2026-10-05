@@ -122,9 +122,11 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 	resp := runr.Run(r.Context(), userID, sessionID, genai.NewContentFromText(message, "user"), agent.RunConfig{})
 
 	var finalContent string
+	var lastErr error
 	for event, err := range resp {
 		if err != nil {
 			slog.Error("reasoning engine run error", "error", err, "appName", appName, "sessionID", sessionID)
+			lastErr = err
 			continue
 		}
 		if event.Content != nil && (event.Content.Role == "" || event.Content.Role == "model") {
@@ -134,6 +136,15 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 				}
 			}
 		}
+	}
+
+	if lastErr != nil && finalContent == "" {
+		code := http.StatusInternalServerError
+		if strings.Contains(lastErr.Error(), "429") || strings.Contains(lastErr.Error(), "RESOURCE_EXHAUSTED") || strings.Contains(lastErr.Error(), "Resource exhausted") {
+			code = http.StatusTooManyRequests
+		}
+		http.Error(w, lastErr.Error(), code)
+		return
 	}
 
 	res := reasoningEngineResponse{
