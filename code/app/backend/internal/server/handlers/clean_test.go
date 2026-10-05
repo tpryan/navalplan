@@ -51,6 +51,11 @@ func TestCleanJSON(t *testing.T) {
 			input:    `garbage {"a": 1}`,
 			expected: `{"a": 1}`,
 		},
+		{
+			name:     "Markdown bullets preceding keys",
+			input:    "{\n  - \"name\": \"Marina\",\n  * \"type\": \"marina\"\n}",
+			expected: "{\n  \"name\": \"Marina\",\n  \"type\": \"marina\"\n}",
+		},
 	}
 
 	for _, tt := range tests {

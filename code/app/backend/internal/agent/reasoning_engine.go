@@ -77,48 +77,88 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 		return "", err
 	}
 
-	return extractTextFromValue(output), nil
+	text := extractTextFromValue(output)
+	if text == "" {
+		err := fmt.Errorf("reasoning engine returned empty text content")
+		span.RecordError(err)
+		return "", err
+	}
+	return text, nil
 }
 
 func parseAndAppendChunk(ctx context.Context, line string, sb *strings.Builder) {
 	var event AgentEvent
-	if err := json.Unmarshal([]byte(line), &event); err == nil {
-		if (event.Content.Role == "" || event.Content.Role == "model") && len(event.Content.Parts) > 0 {
+	if err := json.Unmarshal([]byte(line), &event); err == nil && len(event.Content.Parts) > 0 {
+		if event.Content.Role == "" || event.Content.Role == "model" {
 			for _, p := range event.Content.Parts {
 				if p.Text != "" && !p.Thought {
 					sb.WriteString(p.Text)
 				}
 			}
+			return
 		}
-	} else {
-		var generic struct {
+	}
+
+	var generic struct {
+		Content string `json:"content"`
+		Text    string `json:"text"`
+		Output  struct {
 			Content string `json:"content"`
 			Text    string `json:"text"`
-			Output  struct {
-				Content string `json:"content"`
-				Text    string `json:"text"`
-			} `json:"output"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal([]byte(line), &generic); err == nil {
+		if generic.Output.Content != "" {
+			sb.WriteString(generic.Output.Content)
+			return
 		}
-		if err := json.Unmarshal([]byte(line), &generic); err == nil && (generic.Content != "" || generic.Text != "" || generic.Output.Content != "" || generic.Output.Text != "") {
-			if generic.Content != "" {
-				sb.WriteString(generic.Content)
-			} else if generic.Text != "" {
-				sb.WriteString(generic.Text)
-			} else if generic.Output.Content != "" {
-				sb.WriteString(generic.Output.Content)
-			} else if generic.Output.Text != "" {
-				sb.WriteString(generic.Output.Text)
+		if generic.Output.Text != "" {
+			sb.WriteString(generic.Output.Text)
+			return
+		}
+		if generic.Content != "" {
+			sb.WriteString(generic.Content)
+			return
+		}
+		if generic.Text != "" {
+			sb.WriteString(generic.Text)
+			return
+		}
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(line), &raw); err == nil {
+		if out, ok := raw["output"].(string); ok && out != "" {
+			sb.WriteString(out)
+			return
+		}
+		if text, ok := raw["text"].(string); ok && text != "" {
+			sb.WriteString(text)
+			return
+		}
+		if content, ok := raw["content"].(string); ok && content != "" {
+			sb.WriteString(content)
+			return
+		}
+		if outputMap, ok := raw["output"].(map[string]any); ok {
+			if content, ok := outputMap["content"].(string); ok && content != "" {
+				sb.WriteString(content)
+				return
 			}
-		} else {
-			if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
-				if ctx != nil {
-					slog.DebugContext(ctx, "Failed to unmarshal stream chunk line, writing raw plain text", "data", line)
-				}
-				sb.WriteString(line)
-			} else if ctx != nil {
-				slog.WarnContext(ctx, "Failed to unmarshal JSON stream chunk line", "data", line)
+			if text, ok := outputMap["text"].(string); ok && text != "" {
+				sb.WriteString(text)
+				return
 			}
 		}
+	}
+
+	if !strings.HasPrefix(line, "{") && !strings.HasPrefix(line, "[") {
+		if ctx != nil {
+			slog.DebugContext(ctx, "Failed to unmarshal stream chunk line, writing raw plain text", "data", line)
+		}
+		sb.WriteString(line)
+	} else if ctx != nil {
+		slog.WarnContext(ctx, "Failed to unmarshal JSON stream chunk line", "data", line)
 	}
 }
 
@@ -158,6 +198,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 
 	var sb strings.Builder
 	var lineBuf bytes.Buffer
+	var streamErr error
 
 	for {
 		resp, err := stream.Recv()
@@ -186,15 +227,30 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 				}
 
 				line := strings.TrimSpace(string(lineBytes))
-				if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
+				if line == "" || strings.HasPrefix(line, ":") {
+					continue
+				}
+
+				if strings.HasPrefix(line, "event: error") {
+					streamErr = fmt.Errorf("stream returned error event")
+					continue
+				}
+
+				if strings.HasPrefix(line, "event:") {
 					continue
 				}
 
 				if strings.HasPrefix(line, "data:") {
-					line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-					if line == "" || line == "[DONE]" {
+					data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+					if data == "" || data == "[DONE]" {
 						continue
 					}
+					if streamErr != nil {
+						streamErr = fmt.Errorf("stream error: %s", data)
+						continue
+					}
+					parseAndAppendChunk(ctx, data, &sb)
+					continue
 				}
 
 				parseAndAppendChunk(ctx, line, &sb)
@@ -215,6 +271,10 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 	}
 
 	if sb.Len() == 0 {
+		if streamErr != nil {
+			slog.WarnContext(ctx, "StreamQueryReasoningEngine failed with stream error", "error", streamErr, "appName", appName)
+			return "", streamErr
+		}
 		slog.WarnContext(ctx, "StreamQueryReasoningEngine returned no text, falling back to RunSync", "appName", appName)
 		return r.RunSync(ctx, resourceName, appName, userID, sessionID, prompt)
 	}
