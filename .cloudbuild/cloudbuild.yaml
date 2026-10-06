@@ -49,6 +49,7 @@ steps:
   - '--project'
   - '${PROJECT_ID}'
   - '--allow-unauthenticated' # Publicly accessible
+  - '--timeout=600s'
   - '--set-secrets=NAVALPLAN_AGENT_URL=NAVALPLAN_AGENT_URL:latest'
   - '--set-secrets=NAVALPLAN_DB_USER=NAVALPLAN_DB_USER:latest'
   - '--set-secrets=NAVALPLAN_DB_PASS=NAVALPLAN_DB_PASS:latest'

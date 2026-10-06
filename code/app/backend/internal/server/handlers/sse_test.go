@@ -74,6 +74,39 @@ func TestRecStreams_NilMap_DoesNotPanic(t *testing.T) {
 	h.broadcastRecommendation("any-session", model.VoyageRecommendation{Name: "X"})
 }
 
+func TestEnsureRecChannel(t *testing.T) {
+	tests := []struct {
+		name      string
+		sessionID string
+		ttl       time.Duration
+	}{
+		{
+			name:      "creates new buffered channel",
+			sessionID: "sess-1",
+			ttl:       1 * time.Minute,
+		},
+		{
+			name:      "reuses existing channel",
+			sessionID: "sess-2",
+			ttl:       1 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHandlerForSSETest()
+			ch1 := h.ensureRecChannel(tt.sessionID, tt.ttl)
+			if cap(ch1) < 100 {
+				t.Errorf("expected channel cap >= 100, got %d", cap(ch1))
+			}
+			ch2 := h.ensureRecChannel(tt.sessionID, tt.ttl)
+			if ch1 != ch2 {
+				t.Errorf("ensureRecChannel returned different channels for same session")
+			}
+		})
+	}
+}
+
 func newHandlerForSSETest() *Handler {
 	return &Handler{
 		recStreams:  make(map[string]chan model.VoyageRecommendation),

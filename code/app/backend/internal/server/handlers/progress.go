@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"app/internal/model"
@@ -54,23 +53,16 @@ func (h *Handler) StreamProgress(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	rc := http.NewResponseController(w)
+	fmt.Fprintf(w, ": connected\n\n")
+	_ = rc.Flush()
 
 	ch := h.ensureProgressChannel(sessionID, 30*time.Minute)
 
-	var once sync.Once
-	closeCh := func() { once.Do(func() { close(ch) }) }
-
-	defer func() {
-		h.muProgressStreams.Lock()
-		delete(h.progressStreams, sessionID)
-		closeCh()
-		h.muProgressStreams.Unlock()
-	}()
-
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {

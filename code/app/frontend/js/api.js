@@ -372,6 +372,7 @@ export const API = {
     streamProgress(sessionID, onProgress) {
     console.log('[progress] connecting', sessionID);
     const es = new EventSource(`${API_BASE}/progress/stream?session_id=${encodeURIComponent(sessionID)}`);
+    let retryCount = 0;
     es.addEventListener('progress', (e) => {
       try {
         const evt = JSON.parse(e.data);
@@ -380,8 +381,11 @@ export const API = {
       } catch (_) { /* ignore parse errors */ }
     });
     es.onerror = (err) => {
-      console.warn('[progress] stream error, closing', err);
-      es.close();
+      retryCount++;
+      console.warn(`[progress] stream error (attempt ${retryCount})`, err);
+      if (retryCount > 5 || es.readyState === EventSource.CLOSED) {
+        es.close();
+      }
     };
     return es;
   },
