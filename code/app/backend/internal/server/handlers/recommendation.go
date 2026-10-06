@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"app/internal/model"
@@ -63,12 +62,16 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 		return fmt.Sprintf("%.2f°W", math.Abs(lng))
 	}
 
-	return fmt.Sprintf(
+	hint := fmt.Sprintf(
 		"The circle boundary reaches approximately: N %s, S %s, E %s, W %s. "+
 			"Make sure to include sailing spots near ALL four edges of this boundary, "+
 			"not only near the center or the most prominent harbour.",
 		fmtLat(nLat), fmtLat(sLat), fmtLng(eLng), fmtLng(wLng),
 	)
+	if radiusNM > 27.0 {
+		hint += " For this large search area (>27 NM), execute your parallel searches in Turn 1 across both central and outer compass sectors."
+	}
+	return hint
 }
 
 func repairMathInJSON(s string) string {
@@ -164,6 +167,28 @@ func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) ensureRecChannel(sessionID string, ttl time.Duration) chan model.VoyageRecommendation {
+	h.muRecStreams.Lock()
+	if ch, ok := h.recStreams[sessionID]; ok {
+		h.muRecStreams.Unlock()
+		return ch
+	}
+	ch := make(chan model.VoyageRecommendation, 100)
+	h.recStreams[sessionID] = ch
+	h.muRecStreams.Unlock()
+
+	go func(sid string, created chan model.VoyageRecommendation) {
+		time.Sleep(ttl)
+		h.muRecStreams.Lock()
+		if existing, ok := h.recStreams[sid]; ok && existing == created {
+			delete(h.recStreams, sid)
+		}
+		h.muRecStreams.Unlock()
+	}(sessionID, ch)
+
+	return ch
+}
+
 func (h *Handler) broadcastRecommendation(sessionID string, rec model.VoyageRecommendation) {
 	h.muRecStreams.RLock()
 	defer h.muRecStreams.RUnlock()
@@ -185,26 +210,16 @@ func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	rc := http.NewResponseController(w)
+	fmt.Fprintf(w, ": connected\n\n")
+	_ = rc.Flush()
 
-	ch := make(chan model.VoyageRecommendation, 10)
-	var once sync.Once
-	closeCh := func() { once.Do(func() { close(ch) }) }
+	ch := h.ensureRecChannel(sessionID, 30*time.Minute)
 
-	h.muRecStreams.Lock()
-	h.recStreams[sessionID] = ch
-	h.muRecStreams.Unlock()
-
-	defer func() {
-		h.muRecStreams.Lock()
-		delete(h.recStreams, sessionID)
-		closeCh()
-		h.muRecStreams.Unlock()
-	}()
-
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -254,6 +269,7 @@ func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request
 	progressSessionID := fmt.Sprintf("rec_progress_%d_%d", voyage.ID, ts)
 
 	h.ensureProgressChannel(progressSessionID, 25*time.Minute)
+	h.ensureRecChannel(sessionID, 25*time.Minute)
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -337,7 +353,30 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	var parsedCount int
+	progressStop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(10 * time.Second)
+		defer t.Stop()
+		messages := []string{
+			"Consulting regional nautical charts and pilot guides",
+			"Evaluating anchorages and mooring fields across sectors",
+			"Assessing shelter, depth, and nautical facilities",
+			"Synthesizing recommendations for navigational review",
+		}
+		msgIdx := 0
+		for {
+			select {
+			case <-progressStop:
+				return
+			case <-t.C:
+				msg := messages[msgIdx%len(messages)]
+				msgIdx++
+				h.broadcastProgress(progressSessionID, "agent", msg)
+			}
+		}
+	}()
 	fullText, err := h.Agent.RunStreaming(ctx, appName, userID, sessionID, prompt)
+	close(progressStop)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {

@@ -2183,9 +2183,13 @@ async function handlePilotSuggestionsClick() {
                 }
             });
 
+            let recRetryCount = 0;
             _pilotEventSource.onerror = (e) => {
-                console.warn('[rec-stream] stream closed or error', e);
-                if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
+                recRetryCount++;
+                console.warn(`[rec-stream] stream error (attempt ${recRetryCount})`, e);
+                if (recRetryCount > 5 || (_pilotEventSource && _pilotEventSource.readyState === EventSource.CLOSED)) {
+                    if (_pilotEventSource) { _pilotEventSource.close(); _pilotEventSource = null; }
+                }
             };
         }
 

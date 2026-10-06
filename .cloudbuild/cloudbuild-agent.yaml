@@ -44,6 +44,7 @@ steps:
   - '--project'
   - '${PROJECT_ID}'
   - '--no-allow-unauthenticated'
+  - '--timeout=600s'
   - '--set-secrets=NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY:latest'
   - '--set-secrets=GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY:latest'
   - '--set-secrets=NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY:latest'
