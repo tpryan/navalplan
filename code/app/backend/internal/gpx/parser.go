@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	EarthRadiusNM        = 3440.065
-	MaxPlausibleSpeedKts = 70.0 // filter out GPS jitter/glitches
+	EarthRadiusNM            = 3440.065
+	MaxPlausibleSpeedKts     = 45.0 // filter out GPS jitter/glitches
+	MaxAccelerationKtsPerSec = 2.0  // max plausible boat speed change rate
+	MaxGlitchWindowSec       = 30.0 // time window for acceleration check
 )
 
 // ParseGPX parses raw GPX XML and produces one or more processed ParsedTrack models.
@@ -121,6 +123,7 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 	var startTime *time.Time
 	var endTime *time.Time
 
+	lastValidIdx := -1
 	for i := range points {
 		if points[i].Time != nil {
 			if startTime == nil || points[i].Time.Before(*startTime) {
@@ -147,19 +150,41 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 				dtHours := points[i].Time.Sub(*prev.Time).Hours()
 				if dtHours > 0 {
 					calcSpeed := dist / dtHours
-					if calcSpeed <= MaxPlausibleSpeedKts {
-						points[i].SpeedKts = &calcSpeed
-					}
+					points[i].SpeedKts = &calcSpeed
 				}
 			}
 
-			if points[i].SpeedKts != nil && *points[i].SpeedKts <= MaxPlausibleSpeedKts {
-				if *points[i].SpeedKts > maxSpeed {
-					maxSpeed = *points[i].SpeedKts
+			if points[i].SpeedKts != nil {
+				spd := *points[i].SpeedKts
+				isGlitch := false
+				if spd > MaxPlausibleSpeedKts {
+					isGlitch = true
+				} else if lastValidIdx >= 0 && points[lastValidIdx].SpeedKts != nil && points[lastValidIdx].Time != nil && points[i].Time != nil {
+					dtSec := points[i].Time.Sub(*points[lastValidIdx].Time).Seconds()
+					if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
+						deltaV := math.Abs(spd - *points[lastValidIdx].SpeedKts)
+						if deltaV/dtSec > MaxAccelerationKtsPerSec {
+							isGlitch = true
+						}
+					}
 				}
-				speedSum += *points[i].SpeedKts
-				speedPointsCount++
+
+				if !isGlitch {
+					lastValidIdx = i
+					if spd > maxSpeed {
+						maxSpeed = spd
+					}
+					speedSum += spd
+					speedPointsCount++
+				}
 			}
+		} else if points[0].SpeedKts != nil && *points[0].SpeedKts <= MaxPlausibleSpeedKts {
+			lastValidIdx = 0
+			if *points[0].SpeedKts > maxSpeed {
+				maxSpeed = *points[0].SpeedKts
+			}
+			speedSum += *points[0].SpeedKts
+			speedPointsCount++
 		}
 	}
 

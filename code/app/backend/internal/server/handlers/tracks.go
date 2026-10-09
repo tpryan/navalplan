@@ -945,6 +945,10 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd,
 	)
 
+	if track.RawGPX != nil && len(*track.RawGPX) > 0 && len(*track.RawGPX) < 100000 {
+		prompt += fmt.Sprintf("\n\nGPX Track Data:\n```xml\n%s\n```\nExecute the FilterGPXData tool to filter out any GPS speed glitches before concluding your analysis.\n", *track.RawGPX)
+	}
+
 	if h.Agent != nil {
 		agentSessionID := fmt.Sprintf("debrief_%s_%d", track.ID, time.Now().UnixNano())
 		resp, err := h.Agent.RunSync(ctx, "pilot", "system", agentSessionID, prompt)
