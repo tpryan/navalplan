@@ -13,11 +13,15 @@ const (
 	EarthRadiusNM            = 3440.065
 	MaxPlausibleSpeedKts     = 45.0 // filter out GPS jitter/glitches
 	MaxAccelerationKtsPerSec = 2.0  // max plausible boat speed change rate
-	MaxGlitchWindowSec       = 30.0 // time window for acceleration check
+	MaxGlitchWindowSec       = 60.0 // time window for acceleration check
 )
 
 // ParseGPX parses raw GPX XML and produces one or more processed ParsedTrack models.
 func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
+	if cleanData, glitches, err := FilterGPX(data); err == nil && glitches > 0 {
+		data = cleanData
+	}
+
 	var g GPX
 	if err := xml.Unmarshal(data, &g); err != nil {
 		return nil, fmt.Errorf("failed to parse GPX XML: %w", err)
@@ -115,6 +119,8 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 }
 
 func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
+	points, _ = FilterTrackPoints(points)
+
 	var totalDist float64
 	var maxSpeed float64
 	var speedSum float64
