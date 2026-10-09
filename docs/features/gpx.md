@@ -264,3 +264,7 @@ recordedTrack.addListener('mousemove', (event) => {
 * Implement `FilterGPXData` tool in researcher agent service to detect and eliminate sudden GPS speed spikes and acceleration glitches (speed change over short time window, or speed exceeding plausible cutoff).
 * Instruct Pilot Agent in `pilot.md` to invoke `FilterGPXData` before evaluating track performance and top speed whenever GPX data is present.
 * Integrate speed change glitch detection directly into the backend `buildParsedTrack` parser to ensure stored `max_speed_kts` metrics are clean.
+
+* **Phase 7: Strict Planned-to-Actual Track Debriefing (v1.2.0)**
+* Require both planned routes and actual recorded tracks for debrief generation; debrief actions and UI triggers are disabled/hidden unless both track kinds are present on the voyage.
+* All comparative metrics (distance delta/variance, duration delta/variance, tacking efficiency) are computed strictly between the matched planned route and recorded track, removing synthetic fallback routes and rhumb-line estimates.

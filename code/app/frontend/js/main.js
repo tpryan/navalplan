@@ -4779,7 +4779,9 @@ function renderTracksList() {
     }
 
     if (countBadge) countBadge.textContent = `${currentTracks.length} track${currentTracks.length === 1 ? '' : 's'}`;
-    const hasDebriefable = currentTracks.some(t => t.kind !== 'planned');
+    const hasPlanned = currentTracks.some(t => t.kind === 'planned');
+    const hasActual = currentTracks.some(t => t.kind !== 'planned');
+    const hasDebriefable = hasPlanned && hasActual;
     if (debriefAllBtn) {
         if (hasDebriefable) {
             debriefAllBtn.classList.remove('hidden');
@@ -4865,10 +4867,14 @@ function renderTracksList() {
         });
     });
 
-    // Check if any track has debrief data already
-    const tracksWithDebrief = currentTracks.filter(t => t.debrief != null);
-    if (tracksWithDebrief.length > 0) {
-        renderDebriefCard(tracksWithDebrief.map(t => t.debrief));
+    // Check if any track has debrief data already (only if debriefable)
+    if (hasDebriefable) {
+        const tracksWithDebrief = currentTracks.filter(t => t.debrief != null && (t.debrief.planned_track_id || t.debrief.planned_track_name));
+        if (tracksWithDebrief.length > 0) {
+            renderDebriefCard(tracksWithDebrief.map(t => t.debrief));
+        } else {
+            renderDebriefCard(null);
+        }
     } else {
         renderDebriefCard(null);
     }
@@ -6600,7 +6606,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Daily Itinerary sections ──────────────────────────────────────────────
-    const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(Boolean);
+    const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => d && (d.planned_track_id || d.planned_track_name));
     const stopDebriefsMap = new Map(); // stopIndex -> [debriefs]
     const assignedDebriefs = new Set();
 
