@@ -47,7 +47,9 @@ describe('GPX Track UI & Rendering', () => {
     }
 
     if (countBadge) countBadge.textContent = `${tracks.length} track${tracks.length === 1 ? '' : 's'}`;
-    const hasDebriefable = tracks.some(t => t.kind !== 'planned');
+    const hasPlanned = tracks.some(t => t.kind === 'planned');
+    const hasActual = tracks.some(t => t.kind !== 'planned');
+    const hasDebriefable = hasPlanned && hasActual;
     if (debriefAllBtn) {
       if (hasDebriefable) {
         debriefAllBtn.classList.remove('hidden');
@@ -309,7 +311,7 @@ describe('GPX Track UI & Rendering', () => {
       expect(title).not.toContain('Track_001.gpx');
     });
 
-    it('toggles single debrief button visibility based on debriefable track presence', () => {
+    it('toggles single debrief button visibility based on debriefable track presence (requires both planned and recorded)', () => {
       const debriefAllBtn = document.getElementById('btn-debrief-all-tracks');
       renderTracksList([]);
       expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
@@ -317,7 +319,13 @@ describe('GPX Track UI & Rendering', () => {
       renderTracksList([{ id: 't1', kind: 'planned', name: 'Plan only' }]);
       expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
 
-      renderTracksList([{ id: 't1', kind: 'recorded', name: 'Leg 1' }]);
+      renderTracksList([{ id: 't1', kind: 'recorded', name: 'Leg 1 Actual' }]);
+      expect(debriefAllBtn.classList.contains('hidden')).toBe(true);
+
+      renderTracksList([
+        { id: 'p1', kind: 'planned', name: 'Leg 1 Plan' },
+        { id: 't1', kind: 'recorded', name: 'Leg 1 Actual' }
+      ]);
       expect(debriefAllBtn.classList.contains('hidden')).toBe(false);
     });
   });

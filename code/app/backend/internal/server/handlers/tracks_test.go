@@ -293,7 +293,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 			},
 		},
 		{
-			name: "falls back to direct rhumb line when no planned track exists",
+			name: "rejects debrief when no planned track exists",
 			setupMock: func(m *MockStore) {
 				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
@@ -308,17 +308,8 @@ func TestDebriefVoyageTrack(t *testing.T) {
 				}, nil)
 				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil)
 				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
-				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},
-			expectedStatus: http.StatusOK,
-			verifyDebrief: func(t *testing.T, d *model.TrackDebrief) {
-				if d.PlannedTrackName != "Direct Rhumb Line Course" {
-					t.Errorf("Planned track name = %s, want Direct Rhumb Line Course", d.PlannedTrackName)
-				}
-				if d.Conclusions == "" {
-					t.Errorf("Expected non-empty conclusions")
-				}
-			},
+			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -414,6 +405,44 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
+			name:         "rejects debrief all when no planned tracks exist",
+			voyageID:     "10",
+			withAuth:     true,
+			authPersonID: personID,
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				tracks := []model.VoyageTrack{
+					{
+						ID:       "rec-track-1",
+						VoyageID: voyageID,
+						Kind:     "recorded",
+						Name:     "Leg 1 Actual",
+					},
+				}
+				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:         "rejects debrief all when only planned tracks exist",
+			voyageID:     "10",
+			withAuth:     true,
+			authPersonID: personID,
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				tracks := []model.VoyageTrack{
+					{
+						ID:       "plan-track-1",
+						VoyageID: voyageID,
+						Kind:     "planned",
+						Name:     "Leg 1 Plan",
+					},
+				}
+				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
 			name:         "successfully debriefs only recorded tracks pairing with planned routes",
 			voyageID:     "10",
 			withAuth:     true,
@@ -427,6 +456,14 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 						VoyageStopID:     &stopID,
 						Kind:             "planned",
 						Name:             "Leg 1 Plan",
+						DistanceNM:       &planDist,
+						DurationInterval: &planDur,
+					},
+					{
+						ID:               "plan-track-2",
+						VoyageID:         voyageID,
+						Kind:             "planned",
+						Name:             "Leg 2 Plan",
 						DistanceNM:       &planDist,
 						DurationInterval: &planDur,
 					},
@@ -491,6 +528,12 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				}
 				if debriefs[1].TrackID != "rec-track-2" {
 					t.Errorf("Debrief 1 track ID = %s, want rec-track-2", debriefs[1].TrackID)
+				}
+				if debriefs[1].PlannedTrackID == nil || *debriefs[1].PlannedTrackID != "plan-track-2" {
+					t.Errorf("Debrief 1 planned track ID = %v, want plan-track-2", debriefs[1].PlannedTrackID)
+				}
+				if debriefs[1].PlannedTrackName != "Leg 2 Plan" {
+					t.Errorf("Debrief 1 planned name = %s, want Leg 2 Plan", debriefs[1].PlannedTrackName)
 				}
 				if debriefs[1].StartStopID == nil || *debriefs[1].StartStopID != 102 {
 					t.Errorf("Debrief 1 start stop ID = %v, want 102", debriefs[1].StartStopID)

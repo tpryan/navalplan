@@ -322,6 +322,10 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 	allTracks, _ := h.DB.ListVoyageTracks(r.Context(), voyageID)
 	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
 	debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
+	if debrief == nil {
+		writeError(w, http.StatusBadRequest, "Debrief requires both a planned route and an actual recorded track.")
+		return
+	}
 	debriefBytes, _ := json.Marshal(debrief)
 	_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
 
@@ -360,6 +364,20 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	hasPlanned := false
+	hasActual := false
+	for _, t := range allTracks {
+		if t.Kind == string(model.TrackKindPlanned) {
+			hasPlanned = true
+		} else {
+			hasActual = true
+		}
+	}
+	if !hasPlanned || !hasActual {
+		writeError(w, http.StatusBadRequest, "Debrief requires both a planned route and an actual recorded track.")
+		return
+	}
+
 	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
 	debriefs := make([]*model.TrackDebrief, 0, len(allTracks))
 	for i := range allTracks {
@@ -368,9 +386,17 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 		debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
+		if debrief == nil {
+			continue
+		}
 		debriefBytes, _ := json.Marshal(debrief)
 		_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
 		debriefs = append(debriefs, debrief)
+	}
+
+	if len(debriefs) == 0 {
+		writeError(w, http.StatusBadRequest, "Debrief requires both a planned route and an actual recorded track.")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -649,7 +675,6 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 	}
 
 	var matched *model.VoyageTrack
-	aStartLat, aStartLng, aEndLat, aEndLng, aOk := extractTrackEndpoints(actual)
 
 	// Strategy A: Match by VoyageStopID
 	if actual.VoyageStopID != nil {
@@ -721,13 +746,15 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		}
 	}
 
+	if matched == nil {
+		return plannedRouteMatch{}
+	}
+
 	// Determine starting stop ID for this leg
 	tempDebrief := model.TrackDebrief{
-		TrackName:    actual.Name,
-		VoyageStopID: actual.VoyageStopID,
-	}
-	if matched != nil {
-		tempDebrief.PlannedTrackName = matched.Name
+		TrackName:        actual.Name,
+		PlannedTrackName: matched.Name,
+		VoyageStopID:     actual.VoyageStopID,
 	}
 	ResolveDebriefStartStop(&tempDebrief, actual, stops)
 	startStopID := tempDebrief.StartStopID
@@ -753,65 +780,19 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		startStopID = &stops[0].ID
 	}
 
-	if matched != nil {
-		dist := 0.0
-		if matched.DistanceNM != nil {
-			dist = *matched.DistanceNM
-		}
-		dur := ""
-		if matched.DurationInterval != nil {
-			dur = *matched.DurationInterval
-		}
-		return plannedRouteMatch{
-			plannedTrackID:   &matched.ID,
-			plannedTrackName: matched.Name,
-			plannedDist:      dist,
-			plannedDuration:  dur,
-			voyageStopID:     startStopID,
-			startStopID:      startStopID,
-		}
+	dist := 0.0
+	if matched.DistanceNM != nil {
+		dist = *matched.DistanceNM
 	}
-
-	// Strategy E: Fallback to voyage stops
-	if len(stops) >= 2 {
-		if startStopID != nil {
-			for i, s := range stops {
-				if s.ID == *startStopID && i < len(stops)-1 {
-					nextStop := stops[i+1]
-					d := gpx.CalculateHaversineNM(s.Latitude, s.Longitude, nextStop.Latitude, nextStop.Longitude)
-					name := fmt.Sprintf("Planned Route: %s to %s", s.LocationName, nextStop.LocationName)
-					return plannedRouteMatch{
-						plannedTrackName: name,
-						plannedDist:      d,
-						voyageStopID:     startStopID,
-						startStopID:      startStopID,
-					}
-				}
-			}
-		}
-	}
-
-	// Final Fallback: Direct rhumb line between actual track endpoints
-	if aOk {
-		d := gpx.CalculateHaversineNM(aStartLat, aStartLng, aEndLat, aEndLng)
-		if d > 0.1 {
-			return plannedRouteMatch{
-				plannedTrackName: "Direct Rhumb Line Course",
-				plannedDist:      d,
-				voyageStopID:     startStopID,
-				startStopID:      startStopID,
-			}
-		}
-	}
-
-	// Last resort fallback
-	recDist := 0.0
-	if actual.DistanceNM != nil {
-		recDist = *actual.DistanceNM
+	dur := ""
+	if matched.DurationInterval != nil {
+		dur = *matched.DurationInterval
 	}
 	return plannedRouteMatch{
-		plannedTrackName: "Direct Rhumb Line Course",
-		plannedDist:      recDist * 0.88,
+		plannedTrackID:   &matched.ID,
+		plannedTrackName: matched.Name,
+		plannedDist:      dist,
+		plannedDuration:  dur,
 		voyageStopID:     startStopID,
 		startStopID:      startStopID,
 	}
@@ -819,6 +800,9 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 
 func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) *model.TrackDebrief {
 	match := pairActualWithPlanned(track, allTracks, stops)
+	if match.plannedTrackID == nil {
+		return nil
+	}
 
 	recDist := 0.0
 	if track.DistanceNM != nil {
@@ -994,7 +978,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 
 	if debrief.TackingEfficiency == "" {
 		if distDelta > 0.5 {
-			debrief.TackingEfficiency = "Tacking overhead and course corrections added extra distance over the planned rhumb line."
+			debrief.TackingEfficiency = "Tacking overhead and course corrections added extra distance over the planned route."
 		} else {
 			debrief.TackingEfficiency = "Direct course steered with minimal tacking overhead."
 		}
