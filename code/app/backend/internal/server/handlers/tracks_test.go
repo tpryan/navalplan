@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -479,6 +480,12 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				if debriefs[0].DistanceVariancePct != 25.0 {
 					t.Errorf("Debrief 0 variance pct = %v, want 25.0", debriefs[0].DistanceVariancePct)
 				}
+				if debriefs[0].DurationVariancePct == nil || math.Abs(*debriefs[0].DurationVariancePct-33.33) > 0.1 {
+					t.Errorf("Debrief 0 duration variance pct = %v, want ~33.3", debriefs[0].DurationVariancePct)
+				}
+				if debriefs[0].DurationDelta != "+30m" {
+					t.Errorf("Debrief 0 duration delta = %s, want +30m", debriefs[0].DurationDelta)
+				}
 				if debriefs[0].Conclusions == "" {
 					t.Errorf("Debrief 0 missing conclusions")
 				}
@@ -681,6 +688,35 @@ func TestResolveDebriefStartStop(t *testing.T) {
 			}
 			if d.StopTitle != tt.wantStopTitle {
 				t.Errorf("StopTitle = %q, want %q", d.StopTitle, tt.wantStopTitle)
+			}
+		})
+	}
+}
+
+func TestParseDurationMinutes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantMins float64
+		wantOk   bool
+	}{
+		{name: "empty", input: "", wantMins: 0, wantOk: false},
+		{name: "NA", input: "N/A", wantMins: 0, wantOk: false},
+		{name: "hh:mm:ss", input: "05:18:06", wantMins: 318.1, wantOk: true},
+		{name: "hh:mm", input: "01:30", wantMins: 90.0, wantOk: true},
+		{name: "hours and minutes string", input: "03h 48m", wantMins: 228.0, wantOk: true},
+		{name: "minutes only", input: "45m", wantMins: 45.0, wantOk: true},
+		{name: "decimal hours", input: "2.5h", wantMins: 150.0, wantOk: true},
+		{name: "full words", input: "2 hours 15 minutes", wantMins: 135.0, wantOk: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotMins, gotOk := handlers.ParseDurationMinutes(tc.input)
+			if gotOk != tc.wantOk {
+				t.Fatalf("ParseDurationMinutes(%q) ok = %v, want %v", tc.input, gotOk, tc.wantOk)
+			}
+			if tc.wantOk && math.Abs(gotMins-tc.wantMins) > 0.2 {
+				t.Errorf("ParseDurationMinutes(%q) = %v, want %v", tc.input, gotMins, tc.wantMins)
 			}
 		})
 	}

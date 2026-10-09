@@ -442,6 +442,50 @@ func formatHoursMins(hours float64) string {
 	return fmt.Sprintf("%02dh %02dm", hrs, mins)
 }
 
+var (
+	durColonRegex = regexp.MustCompile(`^(\d+):(\d{2})(?::(\d{2}))?$`)
+	durHoursRegex = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b`)
+	durMinsRegex  = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)\b`)
+	durSecsRegex  = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b`)
+)
+
+func ParseDurationMinutes(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "N/A" {
+		return 0, false
+	}
+	if m := durColonRegex.FindStringSubmatch(s); len(m) > 0 {
+		hrs, _ := strconv.ParseFloat(m[1], 64)
+		mins, _ := strconv.ParseFloat(m[2], 64)
+		secs := 0.0
+		if len(m) > 3 && m[3] != "" {
+			secs, _ = strconv.ParseFloat(m[3], 64)
+		}
+		return hrs*60.0 + mins + secs/60.0, true
+	}
+	totalMins := 0.0
+	found := false
+	if m := durHoursRegex.FindStringSubmatch(s); len(m) > 1 {
+		if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+			totalMins += v * 60.0
+			found = true
+		}
+	}
+	if m := durMinsRegex.FindStringSubmatch(s); len(m) > 1 {
+		if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+			totalMins += v
+			found = true
+		}
+	}
+	if m := durSecsRegex.FindStringSubmatch(s); len(m) > 1 {
+		if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+			totalMins += v / 60.0
+			found = true
+		}
+	}
+	return totalMins, found
+}
+
 // ResolveDebriefStartStop ensures that a debrief's StartStopID points to the starting stop of its passage leg,
 // never the arrival/ending stop, and populates StopTitle matching the voyage stops.
 func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops []model.Stop) {
@@ -828,6 +872,33 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		stopTitle = stops[0].LocationName
 	}
 
+	var durVarPct *float64
+	var durDelta string
+	if recMins, okRec := ParseDurationMinutes(recDur); okRec {
+		if planMins, okPlan := ParseDurationMinutes(plannedDuration); okPlan && planMins > 0 {
+			diffMins := recMins - planMins
+			pct := (diffMins / planMins) * 100.0
+			durVarPct = &pct
+
+			absDiff := math.Abs(diffMins)
+			hrs := int(absDiff) / 60
+			mins := int(math.Round(absDiff)) % 60
+			deltaBody := ""
+			if hrs > 0 && mins > 0 {
+				deltaBody = fmt.Sprintf("%dh %dm", hrs, mins)
+			} else if hrs > 0 {
+				deltaBody = fmt.Sprintf("%dh", hrs)
+			} else {
+				deltaBody = fmt.Sprintf("%dm", mins)
+			}
+			if diffMins >= 0 {
+				durDelta = "+" + deltaBody
+			} else {
+				durDelta = "-" + deltaBody
+			}
+		}
+	}
+
 	debrief := model.TrackDebrief{
 		TrackID:             track.ID,
 		TrackName:           track.Name,
@@ -842,8 +913,15 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		DistanceVariancePct: pctOver,
 		RecordedDuration:    recDur,
 		PlannedDuration:     plannedDuration,
+		DurationDelta:       durDelta,
+		DurationVariancePct: durVarPct,
 		AvgSpeedKts:         avgSpd,
 		MaxSpeedKts:         maxSpd,
+	}
+
+	durComparison := fmt.Sprintf("- Recorded Duration: %s vs Planned Duration: %s", recDur, plannedDuration)
+	if durVarPct != nil {
+		durComparison += fmt.Sprintf(" (Delta: %s, %+.1f%% variance)", durDelta, *durVarPct)
 	}
 
 	// Generate tactical insights using Pilot agent or rule-based fallback
@@ -852,15 +930,19 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 			"- Actual Track: '%s'\n"+
 			"- Paired Planned Route: '%s'\n"+
 			"- Recorded Distance: %.2f NM vs Planned Distance: %.2f NM (Delta: %+.2f NM, %+.1f%% variance)\n"+
-			"- Recorded Duration: %s vs Planned Duration: %s\n"+
+			"%s\n"+
 			"- Vessel Speed: Average SOG %.1f kts, Maximum SOG %.1f kts\n\n"+
-			"Compare actual execution directly to the planned route and provide:\n"+
-			"1. Summary: 2-3 sentence overview comparing actual vs planned.\n"+
-			"2. Conclusions: In-depth conclusions explaining variances in distance, time, and tactical choices.\n"+
-			"3. Tacking Efficiency: Analysis of tacking overhead and leeway against the plan.\n"+
-			"4. Weather Impact: Atmospheric and sea state factors.\n"+
-			"5. Observations: 3-5 concrete tactical takeaways for the skipper.",
-		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, recDur, plannedDuration, avgSpd, maxSpd,
+			"Guidelines:\n"+
+			"- Be concise, direct, and tactical. Keep each section to 1-2 brief sentences.\n"+
+			"- DO NOT repeat raw numbers, percentages, or statistics already displayed in the metric cards (e.g. do not restate exact distance, duration, or speed values).\n"+
+			"- Focus on actionable tactical reasons: weather, leeway, tacking choices, and sea state.\n\n"+
+			"Output JSON matching:\n"+
+			"1. summary: Brief 1-2 sentence tactical overview of passage execution.\n"+
+			"2. conclusions: 1-2 crisp sentences explaining why actual differed from plan.\n"+
+			"3. tacking_efficiency: 1 sentence on maneuvers, tacking angles, or leeway.\n"+
+			"4. weather_impact: 1 sentence on wind, sea state, or current effects.\n"+
+			"5. observations: 2-3 short, bulleted tactical takeaways for the skipper.",
+		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd,
 	)
 
 	if h.Agent != nil {
@@ -887,55 +969,41 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	if debrief.Summary == "" {
-		debrief.Summary = fmt.Sprintf(
-			"Passage Debrief comparing actual '%s' against planned '%s': Sailed %.1f NM vs %.1f NM planned (%+.1f NM, %+.1f%% variance) in %s (avg speed %.1f kts, max %.1f kts).",
-			track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, recDur, avgSpd, maxSpd,
-		)
+		if distDelta > 1.0 {
+			debrief.Summary = fmt.Sprintf("Passage completed with extra distance sailed due to windward maneuvering and navigational course adjustments compared to '%s'.", match.plannedTrackName)
+		} else if distDelta < -0.5 {
+			debrief.Summary = fmt.Sprintf("Direct, efficient passage maintained on favorable angles compared to planned '%s'.", match.plannedTrackName)
+		} else {
+			debrief.Summary = fmt.Sprintf("Passage executed closely aligned with planned route '%s'.", match.plannedTrackName)
+		}
 	}
 
 	if debrief.Conclusions == "" {
 		if distDelta > 1.0 {
-			debrief.Conclusions = fmt.Sprintf(
-				"Actual passage '%s' required %.1f NM compared to the planned %.1f NM for '%s' (%+.1f%% variance). Slower transit time (%s vs %s planned) was driven by windward tacking angles and navigational leeway along the leg. SOG averaged %.1f kts (peak %.1f kts).",
-				track.Name, recDist, plannedDist, match.plannedTrackName, pctOver, recDur, plannedDuration, avgSpd, maxSpd,
-			)
+			debrief.Conclusions = "Upwind tacking angles and navigational leeway accounted for the extended passage time and distance."
 		} else if distDelta < -0.5 {
-			debrief.Conclusions = fmt.Sprintf(
-				"The vessel completed '%s' in %.1f NM, cutting %.1f NM off the planned %.1f NM route for '%s'. A direct course was maintained during favorable wind angles, finishing in %s with an average SOG of %.1f knots.",
-				track.Name, recDist, -distDelta, plannedDist, match.plannedTrackName, recDur, avgSpd,
-			)
+			debrief.Conclusions = "Favorable wind direction and efficient helming cut down passage distance and transit time."
 		} else {
-			debrief.Conclusions = fmt.Sprintf(
-				"The actual track '%s' closely tracked the planned route '%s' (%.1f NM actual vs %.1f NM planned, %+.1f%% variance). The passage was executed with high navigational discipline, finishing in %s at an average SOG of %.1f kts.",
-				track.Name, match.plannedTrackName, recDist, plannedDist, pctOver, recDur, avgSpd,
-			)
+			debrief.Conclusions = "High navigational discipline maintained throughout the leg with minimal course deviation."
 		}
 	}
 
 	if debrief.TackingEfficiency == "" {
 		if distDelta > 0.5 {
-			debrief.TackingEfficiency = fmt.Sprintf(
-				"Tacking overhead and course corrections added %.1f NM (%.1f%% extra distance) over the planned course '%s'.",
-				distDelta, pctOver, match.plannedTrackName,
-			)
+			debrief.TackingEfficiency = "Tacking overhead and course corrections added extra distance over the planned rhumb line."
 		} else {
-			debrief.TackingEfficiency = fmt.Sprintf(
-				"Direct course steered with minimal tacking overhead (%+.1f NM over plan '%s').",
-				distDelta, match.plannedTrackName,
-			)
+			debrief.TackingEfficiency = "Direct course steered with minimal tacking overhead."
 		}
 	}
 
 	if debrief.WeatherImpact == "" {
-		debrief.WeatherImpact = fmt.Sprintf("Conditions along the leg allowed an average speed of %.1f kts with peak velocity of %.1f kts.", avgSpd, maxSpd)
+		debrief.WeatherImpact = "Conditions allowed steady progress along the leg."
 	}
 
 	if len(debrief.Observations) == 0 {
 		debrief.Observations = []string{
-			fmt.Sprintf("Recorded %s under way, compared to %s planned.", recDur, plannedDuration),
-			fmt.Sprintf("Average speed over ground maintained at %.1f knots with peak velocity of %.1f knots.", avgSpd, maxSpd),
-			fmt.Sprintf("Course deviation vs plan: %+.1f NM (%+.1f%% distance variance).", distDelta, pctOver),
-			"Tactical takeaway: review upwind VMG angles to optimize tacking efficiency on similar legs.",
+			"Review upwind VMG angles to optimize tacking overhead on similar legs.",
+			"Verify current and tidal stream timing against planned departure windows.",
 		}
 	}
 

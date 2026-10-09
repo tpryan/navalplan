@@ -295,6 +295,8 @@ type TrackDebrief struct {
 	DistanceVariancePct float64  `json:"distance_variance_pct"`
 	RecordedDuration    string   `json:"recorded_duration"`
 	PlannedDuration     string   `json:"planned_duration"`
+	DurationDelta       string   `json:"duration_delta,omitempty"`
+	DurationVariancePct *float64 `json:"duration_variance_pct,omitempty"`
 	AvgSpeedKts         float64  `json:"avg_speed_kts"`
 	MaxSpeedKts         float64  `json:"max_speed_kts"`
 	Summary             string   `json:"summary"`
