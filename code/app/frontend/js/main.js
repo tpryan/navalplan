@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -4872,133 +4872,6 @@ function renderTracksList() {
     } else {
         renderDebriefCard(null);
     }
-}
-
-function generateDebriefsHTML(debrief, stopsContext = null) {
-    if (!debrief || (Array.isArray(debrief) && debrief.length === 0)) {
-        return '';
-    }
-
-    const debriefs = Array.isArray(debrief) ? debrief : [debrief];
-    let html = '';
-
-    debriefs.forEach((item, index) => {
-        let parsed = item;
-        if (typeof item === 'string') {
-            try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
-        }
-        if (!parsed) return;
-
-        let obsHtml = '';
-        if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
-            obsHtml = `
-              <div class="mt-sm">
-                <h5 class="m-0 mb-xs">Tactical Pilot Observations:</h5>
-                <ul class="m-0 pl-md font-sm">
-                  ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
-                </ul>
-              </div>
-            `;
-        }
-
-        const stopTitle = getDebriefStopTitle(
-            parsed,
-            stopsContext || (typeof currentStops !== 'undefined' ? currentStops : null),
-            typeof currentTracks !== 'undefined' ? currentTracks : null
-        );
-
-        const title = stopTitle
-            ? `Passage Debrief: ${escapeTrackHtml(stopTitle)}`
-            : (parsed.track_name
-                ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
-                : 'Passage Debrief Analysis');
-
-        const varVal = parsed.distance_variance_pct != null
-            ? `${parsed.distance_variance_pct > 0 ? '+' : ''}${parsed.distance_variance_pct.toFixed(1)}%`
-            : (parsed.distance_delta_nm != null
-                ? `${parsed.distance_delta_nm > 0 ? '+' : ''}${parsed.distance_delta_nm.toFixed(1)} NM`
-                : null);
-
-        const avgSpdVal = parsed.average_speed_kts ?? parsed.avg_speed_kts;
-
-        html += `
-          <div class="debrief-card ${index > 0 ? 'mt-md' : ''}">
-            <div class="flex justify-between align-center">
-              <h4 class="m-0 flex align-center gap-xs">
-                <span class="material-symbols-outlined text-brand-medium">flag</span>
-                ${title}
-              </h4>
-              <span class="font-xs text-gray">${new Date().toLocaleDateString()}</span>
-            </div>
-            ${parsed.planned_track_name ? `
-              <div class="debrief-pair-badge">
-                <span class="material-symbols-outlined font-xs">compare_arrows</span>
-                Compared against plan: <strong>${escapeTrackHtml(parsed.planned_track_name)}</strong>
-              </div>
-            ` : ''}
-            <p class="debrief-summary font-sm mt-xs mb-sm">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
-            
-            <div class="debrief-stat-grid">
-              ${parsed.recorded_distance_nm != null ? `
-                <div class="debrief-stat-item">
-                  <div class="val rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>
-                  <div class="lbl">Actual Dist</div>
-                </div>` : ''}
-              ${parsed.planned_distance_nm != null ? `
-                <div class="debrief-stat-item">
-                  <div class="val plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>
-                  <div class="lbl">Planned Dist</div>
-                </div>` : ''}
-              ${varVal != null ? `
-                <div class="debrief-stat-item">
-                  <div class="val var-pct">${varVal}</div>
-                  <div class="lbl">Variance</div>
-                </div>` : ''}
-              ${parsed.recorded_duration ? `
-                <div class="debrief-stat-item">
-                  <div class="val rec-dur">${escapeTrackHtml(parsed.recorded_duration)}</div>
-                  <div class="lbl">Actual Time</div>
-                </div>` : ''}
-              ${parsed.planned_duration ? `
-                <div class="debrief-stat-item">
-                  <div class="val plan-dur">${escapeTrackHtml(parsed.planned_duration)}</div>
-                  <div class="lbl">Planned Time</div>
-                </div>` : ''}
-              ${avgSpdVal != null ? `
-                <div class="debrief-stat-item">
-                  <div class="val avg-spd">${avgSpdVal.toFixed(1)} kt</div>
-                  <div class="lbl">Avg Speed</div>
-                </div>` : ''}
-              ${parsed.max_speed_kts != null ? `
-                <div class="debrief-stat-item">
-                  <div class="val max-spd">${parsed.max_speed_kts.toFixed(1)} kt</div>
-                  <div class="lbl">Max Speed</div>
-                </div>` : ''}
-            </div>
-
-            ${parsed.conclusions ? `
-              <div class="debrief-conclusions font-sm mt-xs mb-xs p-xs bg-surface-alt border-round">
-                <strong>Debrief Conclusions & Takeaways:</strong>
-                <p class="m-0 mt-2xs text-secondary">${escapeTrackHtml(parsed.conclusions)}</p>
-              </div>
-            ` : ''}
-
-            ${parsed.tacking_efficiency ? `
-              <p class="tack-eff font-xs text-secondary mt-xs mb-2xs">
-                <strong>Tacking & Maneuvers:</strong> ${escapeTrackHtml(parsed.tacking_efficiency)}
-              </p>
-            ` : ''}
-            ${parsed.weather_impact ? `
-              <p class="weather-impact font-xs text-secondary mt-2xs mb-xs">
-                <strong>Weather Impact:</strong> ${escapeTrackHtml(parsed.weather_impact)}
-              </p>
-            ` : ''}
-            ${obsHtml}
-          </div>
-        `;
-    });
-
-    return html;
 }
 
 function renderDebriefCard(debrief) {

@@ -1,4 +1,4 @@
-import { getDebriefStopTitle } from '../js/utils.js';
+import { getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, parseDurationToMinutes } from '../js/utils.js';
 
 describe('GPX Track UI & Rendering', () => {
   let container;
@@ -93,59 +93,11 @@ describe('GPX Track UI & Rendering', () => {
       debriefContainer.classList.add('hidden');
       return;
     }
-
-    const debriefs = Array.isArray(debrief) ? debrief : [debrief];
-    let html = '';
-    debriefs.forEach(item => {
-      let parsed = item;
-      if (typeof item === 'string') {
-        try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
-      }
-
-      let obsHtml = '';
-      if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
-        obsHtml = `
-          <ul class="m-0 pl-md font-sm">
-            ${parsed.observations.map(o => `<li>${escapeTrackHtml(o)}</li>`).join('')}
-          </ul>
-        `;
-      }
-
-      const stopTitle = getDebriefStopTitle(parsed, stops);
-      const title = stopTitle
-        ? `Passage Debrief: ${escapeTrackHtml(stopTitle)}`
-        : (parsed.track_name
-          ? `Passage Debrief: ${escapeTrackHtml(parsed.track_name)}`
-          : 'Passage Debrief Analysis');
-
-      html += `
-        <div class="debrief-card">
-          <h4>${title}</h4>
-          ${parsed.planned_track_name ? `
-            <div class="debrief-pair-badge">
-              Compared against plan: <strong>${escapeTrackHtml(parsed.planned_track_name)}</strong>
-            </div>
-          ` : ''}
-          <p class="debrief-summary">${escapeTrackHtml(parsed.summary || 'Debrief complete.')}</p>
-          <div class="debrief-stat-grid">
-            ${parsed.recorded_distance_nm != null ? `<div class="rec-dist">${parsed.recorded_distance_nm.toFixed(1)} NM</div>` : ''}
-            ${parsed.planned_distance_nm != null ? `<div class="plan-dist">${parsed.planned_distance_nm.toFixed(1)} NM</div>` : ''}
-            ${parsed.distance_variance_pct != null ? `<div class="var-pct">${parsed.distance_variance_pct.toFixed(1)}%</div>` : ''}
-            ${parsed.recorded_duration ? `<div class="rec-dur">${escapeTrackHtml(parsed.recorded_duration)}</div>` : ''}
-            ${parsed.planned_duration ? `<div class="plan-dur">${escapeTrackHtml(parsed.planned_duration)}</div>` : ''}
-            ${parsed.average_speed_kts != null ? `<div class="avg-spd">${parsed.average_speed_kts.toFixed(1)} kt</div>` : ''}
-          </div>
-          ${parsed.conclusions ? `
-            <div class="debrief-conclusions">
-              <strong>Debrief Conclusions &amp; Takeaways:</strong>
-              <p>${escapeTrackHtml(parsed.conclusions)}</p>
-            </div>
-          ` : ''}
-          ${parsed.tacking_efficiency ? `<p class="tack-eff">${escapeTrackHtml(parsed.tacking_efficiency)}</p>` : ''}
-          ${obsHtml}
-        </div>
-      `;
-    });
+    const html = generateDebriefsHTML(debrief, stops);
+    if (!html) {
+      debriefContainer.classList.add('hidden');
+      return;
+    }
     debriefContainer.innerHTML = html;
     debriefContainer.classList.remove('hidden');
   }
@@ -237,13 +189,73 @@ describe('GPX Track UI & Rendering', () => {
 
       expect(debriefContainer.classList.contains('hidden')).toBe(false);
       expect(debriefContainer.querySelector('.debrief-summary').textContent).toContain('Solid downwind passage');
-      expect(debriefContainer.querySelector('.var-pct').textContent).toBe('14.5%');
+      expect(debriefContainer.querySelector('.var-pct').textContent).toContain('14.5%');
       expect(debriefContainer.querySelector('.rec-dist').textContent).toBe('25.2 NM');
       expect(debriefContainer.querySelector('.tack-eff').textContent).toContain('Minimal jibes');
 
       const lis = debriefContainer.querySelectorAll('li');
       expect(lis.length).toBe(2);
       expect(lis[0].textContent).toContain('Strong ebb tide');
+    });
+
+    it('groups metrics into distance row (actual, planned, variance) and time row (actual, planned, variance)', () => {
+      const debrief = {
+        summary: 'Crossed channel with favorable wind.',
+        recorded_distance_nm: 25.2,
+        planned_distance_nm: 22.0,
+        distance_variance_pct: 14.5,
+        recorded_duration: '05:18:06',
+        planned_duration: '03h 48m',
+        average_speed_kts: 5.9,
+        max_speed_kts: 7.8
+      };
+
+      renderDebriefCard(debrief);
+
+      const statRows = debriefContainer.querySelectorAll('.debrief-stat-row');
+      expect(statRows.length).toBe(3); // Distance row, Time row, Speed row
+
+      // Distance Row
+      const distRow = statRows[0];
+      const distLabels = Array.from(distRow.querySelectorAll('.lbl')).map(el => el.textContent);
+      expect(distLabels).toEqual(['Actual Dist', 'Planned Dist', 'Variance']);
+      expect(distRow.querySelector('.rec-dist').textContent).toBe('25.2 NM');
+      expect(distRow.querySelector('.plan-dist').textContent).toBe('22.0 NM');
+      expect(distRow.querySelector('.var-pct').textContent).toBe('+14.5%');
+
+      // Time Row
+      const timeRow = statRows[1];
+      const timeLabels = Array.from(timeRow.querySelectorAll('.lbl')).map(el => el.textContent);
+      expect(timeLabels).toEqual(['Actual Time', 'Planned Time', 'Variance']);
+      expect(timeRow.querySelector('.rec-dur').textContent).toBe('05:18:06');
+      expect(timeRow.querySelector('.plan-dur').textContent).toBe('03h 48m');
+      expect(timeRow.querySelector('.time-var-pct').textContent).toBe('+39.5%');
+      expect(timeRow.querySelector('.time-var-pct').getAttribute('title')).toContain('+1h 30m');
+
+      // Speed Row
+      const speedRow = statRows[2];
+      expect(speedRow.classList.contains('debrief-stat-row--speed')).toBe(true);
+      expect(speedRow.querySelector('.avg-spd').textContent).toBe('5.9 kt');
+      expect(speedRow.querySelector('.max-spd').textContent).toBe('7.8 kt');
+    });
+
+    it('correctly calculates duration variance between recorded and planned time', () => {
+      expect(parseDurationToMinutes('05:18:06')).toBeCloseTo(318.1, 1);
+      expect(parseDurationToMinutes('05:18')).toBe(318);
+      expect(parseDurationToMinutes('03h 48m')).toBe(228);
+      expect(parseDurationToMinutes('45m')).toBe(45);
+      expect(parseDurationToMinutes('2.5h')).toBe(150);
+      expect(parseDurationToMinutes(null)).toBeNull();
+
+      const faster = calculateTimeVariance('03:00:00', '04h 00m');
+      expect(faster.pct).toBeCloseTo(-25.0, 1);
+      expect(faster.pctStr).toBe('-25.0%');
+      expect(faster.deltaStr).toBe('-1h');
+
+      const slower = calculateTimeVariance('05:18:06', '03h 48m');
+      expect(slower.pct).toBeCloseTo(39.5, 1);
+      expect(slower.pctStr).toBe('+39.5%');
+      expect(slower.deltaStr).toBe('+1h 30m');
     });
 
     it('renders multiple debrief cards when given an array of debriefs', () => {
@@ -275,7 +287,7 @@ describe('GPX Track UI & Rendering', () => {
 
       renderDebriefCard(debrief, stops);
       const card = debriefContainer.querySelector('.debrief-card');
-      const title = card.querySelector('h4').textContent;
+      const title = (card.querySelector('.debrief-title-text') || card.querySelector('h4')).textContent.trim();
 
       expect(title).toBe('Passage Debrief: Marina del Rey, CA to Isthmus Cove, Santa Catalina Island');
       expect(title).not.toContain('2024-08-12 14:23:10.gpx');
@@ -291,7 +303,7 @@ describe('GPX Track UI & Rendering', () => {
 
       renderDebriefCard(debrief);
       const card = debriefContainer.querySelector('.debrief-card');
-      const title = card.querySelector('h4').textContent;
+      const title = (card.querySelector('.debrief-title-text') || card.querySelector('h4')).textContent.trim();
 
       expect(title).toBe('Passage Debrief: Cowes to Newtown River');
       expect(title).not.toContain('Track_001.gpx');
