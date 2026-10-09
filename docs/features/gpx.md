@@ -259,3 +259,8 @@ recordedTrack.addListener('mousemove', (event) => {
 
 
 * Surface tactical post-sail debriefs and performance metrics on the voyage dashboard.
+
+* **Phase 6: GPS Speed Glitch Filtering & Agent Tooling (v1.1.0)**
+* Implement `FilterGPXData` tool in researcher agent service to detect and eliminate sudden GPS speed spikes and acceleration glitches (speed change over short time window, or speed exceeding plausible cutoff).
+* Instruct Pilot Agent in `pilot.md` to invoke `FilterGPXData` before evaluating track performance and top speed whenever GPX data is present.
+* Integrate speed change glitch detection directly into the backend `buildParsedTrack` parser to ensure stored `max_speed_kts` metrics are clean.

@@ -371,3 +371,8 @@ func (s *NauticalToolService) FetchHeading(ctx agent.Context, req HeadingRequest
 	}
 	return CalculateHeadingResult(req), nil
 }
+
+// FetchFilterGPXData filters GPX data to eliminate GPS glitches and sudden speed spikes.
+func (s *NauticalToolService) FetchFilterGPXData(ctx agent.Context, req FilterGPXRequest) (*FilterGPXResponse, error) {
+	return FilterGPXDataResult(req)
+}

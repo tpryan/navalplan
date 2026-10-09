@@ -200,3 +200,63 @@ func TestFormatPostgresInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestSpeedGlitchFiltering(t *testing.T) {
+	tests := []struct {
+		name       string
+		xml        string
+		wantMaxKts float64
+	}{
+		{
+			name: "smooth speeds",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <trk><name>Smooth</name><trkseg>
+    <trkpt lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time><speed>2.572</speed></trkpt>
+    <trkpt lat="50.001" lon="-1.001"><time>2026-07-01T10:00:10Z</time><speed>3.086</speed></trkpt>
+    <trkpt lat="50.002" lon="-1.002"><time>2026-07-01T10:00:20Z</time><speed>3.601</speed></trkpt>
+  </trkseg></trk>
+</gpx>`,
+			wantMaxKts: 7.0,
+		},
+		{
+			name: "sudden spike in 2 seconds is filtered out",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <trk><name>Glitchy</name><trkseg>
+    <trkpt lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time><speed>2.572</speed></trkpt>
+    <trkpt lat="50.001" lon="-1.001"><time>2026-07-01T10:00:02Z</time><speed>18.006</speed></trkpt>
+    <trkpt lat="50.002" lon="-1.002"><time>2026-07-01T10:00:05Z</time><speed>3.086</speed></trkpt>
+  </trkseg></trk>
+</gpx>`,
+			wantMaxKts: 6.0,
+		},
+		{
+			name: "speed above max plausible speed is filtered",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <trk><name>Excessive</name><trkseg>
+    <trkpt lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time><speed>2.572</speed></trkpt>
+    <trkpt lat="50.001" lon="-1.001"><time>2026-07-01T10:01:00Z</time><speed>30.866</speed></trkpt>
+    <trkpt lat="50.002" lon="-1.002"><time>2026-07-01T10:02:00Z</time><speed>3.601</speed></trkpt>
+  </trkseg></trk>
+</gpx>`,
+			wantMaxKts: 7.0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tracks, err := ParseGPX([]byte(tc.xml), "recorded")
+			if err != nil {
+				t.Fatalf("ParseGPX failed: %v", err)
+			}
+			if len(tracks) != 1 {
+				t.Fatalf("Expected 1 track, got %d", len(tracks))
+			}
+			if tracks[0].MaxSpeedKts != tc.wantMaxKts {
+				t.Errorf("MaxSpeedKts = %v, want %v", tracks[0].MaxSpeedKts, tc.wantMaxKts)
+			}
+		})
+	}
+}

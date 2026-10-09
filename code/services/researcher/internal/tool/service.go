@@ -130,9 +130,17 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("CalculateHeading: %w", err))
 	}
 
+	filterGPXTool, err := functiontool.New(functiontool.Config{
+		Name:        "FilterGPXData",
+		Description: "Filters GPX track data or track points to detect and remove GPS glitches, sudden acceleration spikes, and unrealistic speed jumps over short periods of time. Returns clean maximum speed, clean average speed, detected glitches, and sanitized GPX data.",
+	}, s.FetchFilterGPXData)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("FilterGPXData: %w", err))
+	}
+
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool}, nil
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool, filterGPXTool}, nil
 }
