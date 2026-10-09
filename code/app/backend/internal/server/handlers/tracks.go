@@ -48,6 +48,14 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cleanData, glitches, err := gpx.FilterGPX(data); err == nil && glitches > 0 {
+		slog.InfoContext(r.Context(), "Filtered GPS glitches from uploaded GPX",
+			"voyage_id", voyageID,
+			"glitches_removed", glitches,
+		)
+		data = cleanData
+	}
+
 	parsedTracks, err := gpx.ParseGPX(data, kindOverride)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse GPX: %v", err))
@@ -158,6 +166,15 @@ func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if cleanData, glitches, err := gpx.FilterGPX(data); err == nil && glitches > 0 {
+		slog.InfoContext(r.Context(), "Filtered GPS glitches from uploaded stop GPX",
+			"voyage_id", voyageID,
+			"stop_id", stopID,
+			"glitches_removed", glitches,
+		)
+		data = cleanData
 	}
 
 	parsedTracks, err := gpx.ParseGPX(data, kindOverride)
@@ -949,7 +966,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	)
 
 	if track.RawGPX != nil && len(*track.RawGPX) > 0 && len(*track.RawGPX) < 100000 {
-		prompt += fmt.Sprintf("\n\nGPX Track Data:\n```xml\n%s\n```\nExecute the FilterGPXData tool to filter out any GPS speed glitches before concluding your analysis.\n", *track.RawGPX)
+		prompt += fmt.Sprintf("\n\nGPX Track Data (Pre-filtered and smoothed for GPS glitches upon import):\n```xml\n%s\n```\n", *track.RawGPX)
 	}
 
 	if h.Agent != nil {

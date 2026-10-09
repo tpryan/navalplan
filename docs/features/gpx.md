@@ -275,3 +275,9 @@ recordedTrack.addListener('mousemove', (event) => {
 * Cap all calculated speeds to `MaxPlausibleSpeedKts` (45.0 kts), guard against `NaN`/`Inf`/negative values, and clamp all database fields in `buildModelTrack` to ensure values never exceed PostgreSQL precision limits.
 * Clamp Haversine great-circle parameter `a` between 0.0 and 1.0 to prevent floating-point `NaN` errors on edge coordinates.
 * Add comprehensive error log attributes to track upload database failures.
+
+* **Phase 9: Import-Time GPX Smoothing & Glitch Elimination (v1.4.0)**
+* Filter GPS speed glitches, acceleration spikes, and coordinate jumps directly upon file upload in `UploadVoyageTrack` and `UploadStopTrack`.
+* Eliminate glitches before GPX XML is persisted to `voyage_track.raw_gpx`, ensuring raw data stored in PostgreSQL, GeoJSON polylines, and debrief prompts contain clean, smoothed coordinates.
+* Filter track points within `buildParsedTrack` so total distance, duration, simplified polylines, and debrief metrics never aggregate anomalous jump distances or produce odd variance percentages.
+* Update `pilot.md` debrief instructions to rely directly on pre-smoothed track data and metrics.
