@@ -268,3 +268,10 @@ recordedTrack.addListener('mousemove', (event) => {
 * **Phase 7: Strict Planned-to-Actual Track Debriefing (v1.2.0)**
 * Require both planned routes and actual recorded tracks for debrief generation; debrief actions and UI triggers are disabled/hidden unless both track kinds are present on the voyage.
 * All comparative metrics (distance delta/variance, duration delta/variance, tacking efficiency) are computed strictly between the matched planned route and recorded track, removing synthetic fallback routes and rhumb-line estimates.
+
+* **Phase 8: Numeric Overflow Prevention & Database Resiliency (v1.3.0)**
+* Add migration `000025_widen_track_numeric_columns.up.sql` to expand `voyage_track` columns (`distance_nm` to `NUMERIC(12,2)`, `max_speed_kts` and `avg_speed_kts` to `NUMERIC(8,2)`).
+* In backend GPX parser (`buildParsedTrack`), automatically set speeds to 0 for planned tracks where waypoint export timestamps produce astronomical average speeds.
+* Cap all calculated speeds to `MaxPlausibleSpeedKts` (45.0 kts), guard against `NaN`/`Inf`/negative values, and clamp all database fields in `buildModelTrack` to ensure values never exceed PostgreSQL precision limits.
+* Clamp Haversine great-circle parameter `a` between 0.0 and 1.0 to prevent floating-point `NaN` errors on edge coordinates.
+* Add comprehensive error log attributes to track upload database failures.

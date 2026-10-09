@@ -195,10 +195,32 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 		durationInterval = FormatPostgresInterval(dur)
 		durHours := dur.Hours()
 		if durHours > 0 && totalDist > 0 {
-			avgSpeed = totalDist / durHours
+			calcAvg := totalDist / durHours
+			if calcAvg <= MaxPlausibleSpeedKts {
+				avgSpeed = calcAvg
+			}
 		}
-	} else if speedPointsCount > 0 {
-		avgSpeed = speedSum / float64(speedPointsCount)
+	}
+	if avgSpeed == 0 && speedPointsCount > 0 {
+		calcAvg := speedSum / float64(speedPointsCount)
+		if calcAvg <= MaxPlausibleSpeedKts {
+			avgSpeed = calcAvg
+		}
+	}
+	if kind == "planned" {
+		maxSpeed = 0
+		avgSpeed = 0
+	}
+	if avgSpeed < 0 || avgSpeed > MaxPlausibleSpeedKts || math.IsNaN(avgSpeed) || math.IsInf(avgSpeed, 0) {
+		avgSpeed = 0
+	}
+	if maxSpeed < 0 || maxSpeed > MaxPlausibleSpeedKts || math.IsNaN(maxSpeed) || math.IsInf(maxSpeed, 0) {
+		maxSpeed = 0
+	}
+	if totalDist < 0 || math.IsNaN(totalDist) || math.IsInf(totalDist, 0) {
+		totalDist = 0
+	} else if totalDist > 999999.99 {
+		totalDist = 999999.99
 	}
 
 	// Generate GeoJSON and Simplified GeoJSON
@@ -286,6 +308,11 @@ func CalculateHaversineNM(lat1, lon1, lat2, lon2 float64) float64 {
 	a := math.Sin(dLat/2.0)*math.Sin(dLat/2.0) +
 		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
 			math.Sin(dLon/2.0)*math.Sin(dLon/2.0)
+	if a > 1.0 {
+		a = 1.0
+	} else if a < 0.0 {
+		a = 0.0
+	}
 
 	c := 2.0 * math.Atan2(math.Sqrt(a), math.Sqrt(1.0-a))
 	return EarthRadiusNM * c
