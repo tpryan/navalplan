@@ -260,3 +260,114 @@ func TestSpeedGlitchFiltering(t *testing.T) {
 		})
 	}
 }
+
+func TestNumericOverflowProtection(t *testing.T) {
+	tests := []struct {
+		name          string
+		xml           string
+		preferredKind string
+		wantMaxCap    float64
+		wantAvgCap    float64
+		wantMaxDist   float64
+	}{
+		{
+			name: "planned route with 1-second timestamps over large distance does not overflow avg speed",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <rte><name>Fast Route</name>
+    <rtept lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time></rtept>
+    <rtept lat="51.0" lon="-1.0"><time>2026-07-01T10:00:01Z</time></rtept>
+  </rte>
+</gpx>`,
+			preferredKind: "planned",
+			wantMaxCap:    0.0,
+			wantAvgCap:    0.0,
+			wantMaxDist:   100.0,
+		},
+		{
+			name: "recorded track with 1-second timestamps over 10nm does not exceed plausible speed limit",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <trk><name>Glitch Track</name><trkseg>
+    <trkpt lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time></trkpt>
+    <trkpt lat="50.166" lon="-1.0"><time>2026-07-01T10:00:01Z</time></trkpt>
+  </trkseg></trk>
+</gpx>`,
+			preferredKind: "recorded",
+			wantMaxCap:    MaxPlausibleSpeedKts,
+			wantAvgCap:    MaxPlausibleSpeedKts,
+			wantMaxDist:   999999.99,
+		},
+		{
+			name: "recorded track with reasonable speeds respects plausible bounds",
+			xml: `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS">
+  <trk><name>Normal Track</name><trkseg>
+    <trkpt lat="50.0" lon="-1.0"><time>2026-07-01T10:00:00Z</time><speed>3.086</speed></trkpt>
+    <trkpt lat="50.01" lon="-1.0"><time>2026-07-01T10:10:00Z</time><speed>3.086</speed></trkpt>
+  </trkseg></trk>
+</gpx>`,
+			preferredKind: "recorded",
+			wantMaxCap:    MaxPlausibleSpeedKts,
+			wantAvgCap:    MaxPlausibleSpeedKts,
+			wantMaxDist:   999999.99,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tracks, err := ParseGPX([]byte(tc.xml), tc.preferredKind)
+			if err != nil {
+				t.Fatalf("ParseGPX failed: %v", err)
+			}
+			if len(tracks) != 1 {
+				t.Fatalf("Expected 1 track, got %d", len(tracks))
+			}
+			track := tracks[0]
+			if math.IsNaN(track.MaxSpeedKts) || math.IsInf(track.MaxSpeedKts, 0) || track.MaxSpeedKts > tc.wantMaxCap || track.MaxSpeedKts > 999.99 {
+				t.Errorf("MaxSpeedKts = %v exceeds cap %v or 999.99", track.MaxSpeedKts, tc.wantMaxCap)
+			}
+			if math.IsNaN(track.AvgSpeedKts) || math.IsInf(track.AvgSpeedKts, 0) || track.AvgSpeedKts > tc.wantAvgCap || track.AvgSpeedKts > 999.99 {
+				t.Errorf("AvgSpeedKts = %v exceeds cap %v or 999.99", track.AvgSpeedKts, tc.wantAvgCap)
+			}
+			if math.IsNaN(track.DistanceNM) || math.IsInf(track.DistanceNM, 0) || track.DistanceNM > tc.wantMaxDist || track.DistanceNM > 999999.99 {
+				t.Errorf("DistanceNM = %v exceeds cap %v or 999999.99", track.DistanceNM, tc.wantMaxDist)
+			}
+		})
+	}
+}
+
+func TestCalculateHaversineNMEdgeCases(t *testing.T) {
+	tests := []struct {
+		name                   string
+		lat1, lon1, lat2, lon2 float64
+	}{
+		{
+			name: "identical coordinates",
+			lat1: 50.0, lon1: -1.0,
+			lat2: 50.0, lon2: -1.0,
+		},
+		{
+			name: "antipodal coordinates",
+			lat1: 90.0, lon1: 0.0,
+			lat2: -90.0, lon2: 0.0,
+		},
+		{
+			name: "equatorial opposite",
+			lat1: 0.0, lon1: 0.0,
+			lat2: 0.0, lon2: 180.0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dist := CalculateHaversineNM(tc.lat1, tc.lon1, tc.lat2, tc.lon2)
+			if math.IsNaN(dist) || math.IsInf(dist, 0) {
+				t.Fatalf("CalculateHaversineNM returned invalid distance: %v", dist)
+			}
+			if dist < 0 {
+				t.Fatalf("CalculateHaversineNM returned negative distance: %v", dist)
+			}
+		})
+	}
+}

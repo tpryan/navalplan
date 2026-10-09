@@ -69,7 +69,13 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 			// Save the master track as well
 			masterTrack := buildModelTrack(voyageID, nil, fileName, rawGPXStr, pt)
 			if err := h.DB.CreateVoyageTrack(r.Context(), &masterTrack); err != nil {
-				slog.ErrorContext(r.Context(), "Failed to save master track", "error", err)
+				slog.ErrorContext(r.Context(), "Failed to save master track",
+					"error", err,
+					"name", masterTrack.Name,
+					"distance_nm", masterTrack.DistanceNM,
+					"max_speed_kts", masterTrack.MaxSpeedKts,
+					"avg_speed_kts", masterTrack.AvgSpeedKts,
+				)
 			} else {
 				savedTracks = append(savedTracks, masterTrack)
 			}
@@ -78,7 +84,13 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 			for _, leg := range legsToSave {
 				mTrack := buildModelTrack(voyageID, leg.StopID, fileName, "", leg.Track)
 				if err := h.DB.CreateVoyageTrack(r.Context(), &mTrack); err != nil {
-					slog.ErrorContext(r.Context(), "Failed to save leg track", "error", err)
+					slog.ErrorContext(r.Context(), "Failed to save leg track",
+						"error", err,
+						"name", mTrack.Name,
+						"distance_nm", mTrack.DistanceNM,
+						"max_speed_kts", mTrack.MaxSpeedKts,
+						"avg_speed_kts", mTrack.AvgSpeedKts,
+					)
 					continue
 				}
 				savedTracks = append(savedTracks, mTrack)
@@ -86,7 +98,14 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		} else {
 			mTrack := buildModelTrack(voyageID, nil, fileName, rawGPXStr, pt)
 			if err := h.DB.CreateVoyageTrack(r.Context(), &mTrack); err != nil {
-				slog.ErrorContext(r.Context(), "Failed to save track", "error", err)
+				slog.ErrorContext(r.Context(), "Failed to save track",
+					"error", err,
+					"name", mTrack.Name,
+					"distance_nm", mTrack.DistanceNM,
+					"max_speed_kts", mTrack.MaxSpeedKts,
+					"avg_speed_kts", mTrack.AvgSpeedKts,
+					"duration", mTrack.DurationInterval,
+				)
 				writeError(w, http.StatusInternalServerError, "Failed to save track")
 				return
 			}
@@ -1062,6 +1081,27 @@ func buildModelTrack(voyageID int64, stopID *int64, fileName, rawGPX string, pt 
 		dur = &pt.DurationInterval
 	}
 
+	distNM := pt.DistanceNM
+	if distNM < 0 || math.IsNaN(distNM) || math.IsInf(distNM, 0) {
+		distNM = 0
+	} else if distNM > 999999.99 {
+		distNM = 999999.99
+	}
+
+	maxSpd := pt.MaxSpeedKts
+	if maxSpd < 0 || math.IsNaN(maxSpd) || math.IsInf(maxSpd, 0) {
+		maxSpd = 0
+	} else if maxSpd > 999.99 {
+		maxSpd = 999.99
+	}
+
+	avgSpd := pt.AvgSpeedKts
+	if avgSpd < 0 || math.IsNaN(avgSpd) || math.IsInf(avgSpd, 0) {
+		avgSpd = 0
+	} else if avgSpd > 999.99 {
+		avgSpd = 999.99
+	}
+
 	return model.VoyageTrack{
 		VoyageID:          voyageID,
 		VoyageStopID:      stopID,
@@ -1070,10 +1110,10 @@ func buildModelTrack(voyageID int64, stopID *int64, fileName, rawGPX string, pt 
 		FileName:          fn,
 		StartTime:         pt.StartTime,
 		EndTime:           pt.EndTime,
-		DistanceNM:        &pt.DistanceNM,
+		DistanceNM:        &distNM,
 		DurationInterval:  dur,
-		MaxSpeedKts:       &pt.MaxSpeedKts,
-		AvgSpeedKts:       &pt.AvgSpeedKts,
+		MaxSpeedKts:       &maxSpd,
+		AvgSpeedKts:       &avgSpd,
 		GeoJSON:           model.RawJSON(pt.GeoJSON),
 		SimplifiedGeoJSON: model.RawJSON(pt.SimplifiedGeoJSON),
 		RawGPX:            raw,
