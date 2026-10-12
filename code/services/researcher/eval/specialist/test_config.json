@@ -16,7 +16,7 @@
         {
           "rubric_id": "json_format",
           "rubric_content": {
-            "text_property": "The response is a valid JSON array of objects."
+            "text_property": "The response is a valid JSON object with a top-level 'recommendations' key whose value is an array of recommendation objects, with no text outside the JSON block."
           }
         },
         {
