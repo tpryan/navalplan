@@ -21,9 +21,9 @@ The Go backend (`code/app/backend/internal/agent/agent.go`) orchestrates calls v
 | **`harbourmaster`** | Destination briefing (weather, sun, tides, pilot notes, facilities). | `0.25` | All 9 Nautical Tools + Batch Search | `handlers/research.go` (`POST /api/v1/stop/{id}/research`) |
 | **`pilot`** | **Dual Role**: (1) Post-voyage tactical GPX debrief; (2) Regional cruising guide. | `0.25` | All 9 Nautical Tools + Batch Search | `handlers/tracks.go` (Debrief) & `handlers/guide.go` (Regional Guide) |
 | **`commodore`** | Global seasonal discovery (peak seasons, hidden gems, challenging waters). | `0.25` | All 9 Nautical Tools + Batch Search | `handlers/discovery.go` (`GET /api/v1/discovery/mine`) |
-| **`specialist`** | Local pilot for anchorage & facility recommendations across 8 compass sectors. | `0.25` | All 9 Nautical Tools + Batch Search | `handlers/recommendation.go` (`POST /api/v1/voyage/{id}/recommendation`) |
+| **`specialist`** | Local pilot for anchorage & facility recommendations across 8 compass sectors. | `0.25` | All 9 Nautical Tools + Batch Search | `handlers/recommendation.go` (`POST /api/v1/voyage/{id}/recommendation`), invoked via `RunStreaming` (all other agents use `RunSync`) |
 | **`lookout`** | Maritime safety auditor (weather, tides, adverse wind headings, hazards). | `0.10` | All 9 Nautical Tools (Search excluded) | `handlers/lookout.go` (On stop research & on-demand) |
-| **`search_specialist`** | Shared sub-agent wrapping Google Search for grounding and links. | `0.40` | `geminitool.GoogleSearch` | Wrapped as tool via `agenttool.New` on all agents except `lookout` |
+| **`<name>_search_specialist`** | Per-agent sub-agent wrapping Google Search for grounding and links. One instance is built per parent agent via `createSearchTools` (e.g. `harbourmaster_search_specialist`); it is **not** a single shared instance. | `0.40` | `geminitool.GoogleSearch` | Wrapped as a tool via `agenttool.New` and attached to every agent whose spec sets `includeSearch: true` (currently all except `lookout`) |
 
 ---
 
@@ -50,6 +50,13 @@ Both `harbourmaster.md` and `specialist.md` contain 60+ lines of identical promp
 ### Anti-Pattern 4: Overloaded Deterministic Computation in `lookout`
 In `lookout.md`, the LLM is tasked with performing strict numeric threshold comparisons (e.g. `wind > 33 kts = Danger`, `wave > 13 ft = Danger`, `tide range > 10 ft = Warning`, `wind within 45° of course & speed > 15 kts = Warning`). 
 While `lookout` excels at qualitative reasoning (synthesizing bridge clearances, entrance bar hazards, and local currents from Sailing Directions), consuming model inference tokens on basic arithmetic comparisons is slow, expensive, and fragile.
+
+### Anti-Pattern 5: Orphaned & Stubbed `GetSafetyAlerts`
+`GetSafetyAlerts` (`FetchSafetyAlerts` in `internal/tool/adapters.go:293`) is registered as an ADK function tool and exposed over MCP, with the stated goal of *"extracting active global navigational warnings and localized security alerts"* (returns `active_hazards[]` + `security_level`). Its goal is **not currently being achieved**, on two counts:
+- **Orphaned**: no agent prompt references `GetSafetyAlerts`, so the `lookout` LLM never invokes it. The `safety_alerts` column populated by `handlers/lookout.go:303` (`UpsertSafetyAlerts`) is the lookout agent's own *synthesized* JSON alert output — it is unrelated to this tool's navigational-warnings feed.
+- **Stubbed**: `FetchSafetyAlerts` returns hard-coded mock data (always `["Shoaling reported near channel marker 4"]` / `"Normal"`), per its own comment *"we don't have a safety tool yet."*
+
+This tool is navigationally important and MUST be preserved. Milestones 1 and 5 below keep it on `lookout` and add the work required to make its goal actually occur (prompt wiring + a real data source), rather than silently dropping it.
 
 ---
 
@@ -164,7 +171,7 @@ To ensure continuous system operation, the implementation must proceed in five s
   ```
 * [ ] Assign only relevant tools per agent:
   - `commodore`: Google Search only (remove all 9 nautical tools).
-  - `lookout`: `GetTides`, `GetWeather`, `GetSunriseSunset`, `QuerySailingDirections`, `QueryCoastPilot`, `CalculateHeading` (remove Places and GPX filter).
+  - `lookout`: `GetTides`, `GetWeather`, `GetSunriseSunset`, `QuerySailingDirections`, `QueryCoastPilot`, `CalculateHeading`, **`GetSafetyAlerts`** (remove Places and GPX filter only). `GetSafetyAlerts` is retained deliberately — it is the safety auditor's navigational-warnings feed (see Anti-Pattern 5); do **not** drop it.
   - `specialist`: `FindPlacesNearby`, `QuerySailingDirections`, `QueryCoastPilot`, Batch Search (remove Weather, Tides, Sun, GPX filter).
 * [ ] Remove `FilterGPXData` from LLM tool definitions (it is handled in Go during upload).
 * [ ] Run `make test` and verify agent startup.
@@ -199,6 +206,7 @@ To ensure continuous system operation, the implementation must proceed in five s
 * [ ] Wrap the sub-agent as an ADK tool using `agenttool.New(facilityAgent, nil)`.
 * [ ] Update `harbourmaster.md` and `specialist.md`: replace repetitive multi-query search instructions with a single delegated call to the facility discovery tool.
 * [ ] Add unit tests and an eval dataset for facility discovery.
+* [ ] **Streaming caution:** `specialist` is invoked via `RunStreaming` (`handlers/recommendation.go:378`), unlike the other agents that use `RunSync`. Verify that delegating to the `facility_discovery` sub-agent tool mid-stream does not break the streamed response (sub-agent tool calls must resolve before the parent emits its final JSON).
 
 ### Milestone 4: Extract `HydrographicPilotage` Sub-Agent Skill
 **Goal**: Standardize RAG retrieval from Coast Pilot and Sailing Directions.
@@ -221,6 +229,10 @@ To ensure continuous system operation, the implementation must proceed in five s
   - Adverse headwind: course bearing vs wind direction <= 45° with speed > 15 kts (`warning`).
 * [ ] Feed the deterministic rule output directly into the `lookout` prompt context as pre-evaluated constraints.
 * [ ] Refactor `lookout.md` prompt: instruct the LLM to focus purely on **qualitative hazard synthesis** from Coast Pilot notes (e.g. overhead power cables, shoaling channels, inlet bars, traffic schemes).
+* [ ] **Activate `GetSafetyAlerts` (make its goal occur — see Anti-Pattern 5):**
+  - Wire `GetSafetyAlerts` into `lookout.md` so the LLM actually calls it and folds its `active_hazards` and `security_level` into the safety audit (today no prompt references it, so it is never invoked).
+  - Replace the stub `FetchSafetyAlerts` (`adapters.go:293`), which returns hard-coded mock data, with a real navigational-warnings source (e.g. NAVTEX / USCG Local Notice to Mariners / MSI feed). Until a live source exists, have it return an explicit "no data available" response rather than canned hazards, so the audit is never seeded with a fake "Shoaling reported near channel marker 4".
+  - Keep `GetSafetyAlerts` on the `lookout` tool bundle from Milestone 1.
 
 ---
 
@@ -238,7 +250,9 @@ Each milestone must pass the following verification gates before proceeding:
    - `scripts/agent_tests/test_researcher_agent.sh`
    - `scripts/agent_tests/test_guide_agent.sh`
    - `scripts/agent_tests/test_navigator_agent.sh`
+   - `scripts/agent_tests/test_discovery_agent.sh`
    - `scripts/agent_tests/test_coast_pilot.sh`
    - `scripts/agent_tests/test_sailing_directions.sh`
 4. **ADK Agent Evaluation**:
    - `make test-all` or `google-adk` eval suite execution against `code/services/researcher/eval/` to verify no regression in accuracy or rubric scores.
+

@@ -51,3 +51,4 @@
 47. Done. Place debrief reports with the starting stop, not the ending stop in the report. 
 48. Done. Please alter the lookout agent to also take in and use the planned routes if they exist to tailor alterts.
 49. Done. The title for debriefs in the ui should match the title of the stops, and not the title information from the uploaded tracks.  
+50. Bit of a UI fix. When stop planning has been done, the report is the most important compoenent and include things in teh guide. I'd like to remove guide from the ui at that point and emphasize the report control. 
