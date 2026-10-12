@@ -40,6 +40,7 @@ func Build(ctx context.Context, deps Deps) (http.Handler, error) {
 	loader, err := adkagent.NewMultiLoader(
 		deps.Agents[agent.Harbourmaster],
 		deps.Agents[agent.Pilot],
+		deps.Agents[agent.Debrief],
 		deps.Agents[agent.Commodore],
 		deps.Agents[agent.Specialist],
 		deps.Agents[agent.Lookout],

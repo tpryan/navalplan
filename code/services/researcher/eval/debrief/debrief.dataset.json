@@ -1,0 +1,53 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "newport_block_island_debrief",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Perform a post-voyage tactical pilot debrief comparing the ACTUAL recorded passage against the PLANNED route:\n- Actual Track: 'Newport to Block Island (recorded)'\n- Paired Planned Route: 'Newport to Block Island (plan)'\n- Recorded Distance: 28.40 NM vs Planned Distance: 24.10 NM (Delta: +4.30 NM, +17.8% variance)\n- Recorded Duration: 5h 20m vs Planned Duration: 4h 00m (Delta: +1h 20m, +33.3% variance)\n- Vessel Speed: Average SOG 5.3 kts, Maximum SOG 7.1 kts\n\nGuidelines:\n- Be concise, direct, and tactical. Keep each section to 1-2 brief sentences.\n- DO NOT repeat raw numbers, percentages, or statistics already displayed in the metric cards.\n- Focus on actionable tactical reasons: weather, leeway, tacking choices, and sea state.\n\nOutput JSON matching:\n1. summary\n2. conclusions\n3. tacking_efficiency\n4. weather_impact\n5. observations"
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON object and contains no text outside the JSON block."
+                }
+              }
+            },
+            {
+              "rubric_id": "has_debrief_fields",
+              "content": {
+                "property": {
+                  "description": "The JSON object contains the fields 'summary', 'conclusions', 'tacking_efficiency', 'weather_impact', and an 'observations' array."
+                }
+              }
+            },
+            {
+              "rubric_id": "explains_variance",
+              "content": {
+                "property": {
+                  "description": "The 'conclusions' give a plausible tactical reason (e.g. tacking, leeway, current, sea state) for why the actual passage was longer/slower than planned."
+                }
+              }
+            },
+            {
+              "rubric_id": "concise_no_number_restatement",
+              "content": {
+                "property": {
+                  "description": "Each section is 1-2 brief sentences and does NOT restate the exact distance, duration, or speed numbers already provided in the prompt."
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

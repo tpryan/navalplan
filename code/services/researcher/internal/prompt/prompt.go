@@ -12,6 +12,9 @@ var Harbourmaster string
 //go:embed pilot.md
 var Pilot string
 
+//go:embed debrief.md
+var Debrief string
+
 //go:embed commodore.md
 var Commodore string
 
@@ -29,6 +32,7 @@ func Validate() error {
 	prompts := map[string]string{
 		"harbourmaster":     Harbourmaster,
 		"pilot":             Pilot,
+		"debrief":           Debrief,
 		"commodore":         Commodore,
 		"specialist":        Specialist,
 		"search_specialist": SearchSpecialist,

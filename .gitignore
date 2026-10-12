@@ -45,3 +45,5 @@ venv/
 .venv/
 code/services/researcher/.gocache/*
 code/services/researcher/.gotmp/*
+code/app/backend/.gocache/*
+code/app/backend/.gotmp/*

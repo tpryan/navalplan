@@ -30,6 +30,7 @@ const maxOutputTokens = 8192
 const (
 	Harbourmaster = "harbourmaster"
 	Pilot         = "pilot"
+	Debrief       = "debrief"
 	Commodore     = "commodore"
 	Specialist    = "specialist"
 	Lookout       = "lookout"
@@ -65,7 +66,7 @@ var allNauticalTools = []string{
 	toolCalculateHeading,
 }
 
-var Order = []string{Harbourmaster, Pilot, Commodore, Specialist, Lookout}
+var Order = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout}
 
 type spec struct {
 	name          string
@@ -84,6 +85,17 @@ var specs = []spec{
 		temperature:   0.25,
 		toolNames:     allNauticalTools,
 		includeSearch: true,
+	},
+	{
+		// Debrief performs a post-voyage tactical review of a recorded track
+		// against its planned route. All telemetry is supplied directly in the
+		// prompt, so it needs no tools and no web search.
+		name:          Debrief,
+		description:   "A post-voyage tactical pilot that debriefs a recorded passage against its planned route.",
+		instruction:   prompt.Debrief,
+		temperature:   0.25,
+		toolNames:     nil,
+		includeSearch: false,
 	},
 	{
 		name:          Harbourmaster,

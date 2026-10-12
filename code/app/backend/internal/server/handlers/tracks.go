@@ -971,7 +971,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 
 	if h.Agent != nil {
 		agentSessionID := fmt.Sprintf("debrief_%s_%d", track.ID, time.Now().UnixNano())
-		resp, err := h.Agent.RunSync(ctx, "pilot", "system", agentSessionID, prompt)
+		resp, err := h.Agent.RunSync(ctx, "debrief", "system", agentSessionID, prompt)
 		if err == nil && resp != "" {
 			var parsedResp struct {
 				Summary           string   `json:"summary"`

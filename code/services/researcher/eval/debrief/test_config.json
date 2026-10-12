@@ -1,0 +1,31 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON object with no text outside the JSON block."
+          }
+        },
+        {
+          "rubric_id": "has_debrief_fields",
+          "rubric_content": {
+            "text_property": "The JSON contains 'summary', 'conclusions', 'tacking_efficiency', 'weather_impact', and an 'observations' array."
+          }
+        },
+        {
+          "rubric_id": "concise_no_number_restatement",
+          "rubric_content": {
+            "text_property": "Each section is 1-2 brief sentences and does not restate the exact distance, duration, or speed numbers from the prompt."
+          }
+        }
+      ]
+    }
+  }
+}
