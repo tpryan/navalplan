@@ -20,9 +20,9 @@
           }
         },
         {
-          "rubric_id": "radius_check",
+          "rubric_id": "facility_discovery_radius",
           "rubric_content": {
-            "text_property": "The agent calls 'find_places_nearby' with a radius that matches the nautical miles mentioned in the user prompt (converted to meters)."
+            "text_property": "The agent delegates facility discovery by calling the 'facility_discovery' tool/sub-agent, passing the search radius (in nautical miles or miles) from the user prompt. (The facility_discovery sub-agent performs the underlying find_places_nearby calls and radius-to-meters conversion internally.)"
           }
         }
       ]

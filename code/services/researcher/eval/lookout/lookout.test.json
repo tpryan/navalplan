@@ -8,11 +8,20 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 3: Position 41.42°N, 70.92°W (Cuttyhunk). Forecast winds 36 knots gusting to 48 knots, wave height 14 ft. Distance to next stop is 15 nm at course 220°."
+                "text": "Audit safety for Stop 1 of 3: Position 41.42\u00b0N, 70.92\u00b0W (Cuttyhunk). Forecast winds 36 knots gusting to 48 knots, wave height 14 ft. Distance to next stop is 15 nm at course 220\u00b0."
               }
             ],
             "role": "user"
           }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "danger_severity_flagged",
+          "rubric_content": {
+            "text_property": "The response flags a danger-level severity alert for the severe wind (> 33 knots) or wave height (> 13 ft) given in the prompt."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
     },
@@ -23,11 +32,20 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 2 of 2: Position 41.38°N, -70.61°W (Oak Bluffs). Forecast wind 8 knots, waves 1-2 ft, tides normal, distance to next stop is none."
+                "text": "Audit safety for Stop 2 of 2: Position 41.38\u00b0N, -70.61\u00b0W (Oak Bluffs). Forecast wind 8 knots, waves 1-2 ft, tides normal, distance to next stop is none."
               }
             ],
             "role": "user"
           }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "no_false_danger_alerts",
+          "rubric_content": {
+            "text_property": "Given the calm conditions (light wind ~8 knots, waves 1-2 ft, normal tides, no onward passage), the response does NOT raise any danger- or warning-level weather or wave alerts. An empty array `[]`, or only genuinely noteworthy info-level items, is acceptable."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
     },
@@ -38,11 +56,20 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Distance to next stop is 12 nm at course 060°. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
+                "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Distance to next stop is 12 nm at course 060\u00b0. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
               }
             ],
             "role": "user"
           }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "hydrographic_hazards_addressed",
+          "rubric_content": {
+            "text_property": "The response surfaces navigation- or hydrographic-related guidance for the location (e.g. Cape Cod Canal currents, channel or bridge constraints, pilotage/regulations), or appropriately notes that official sailing-directions data was unavailable. It need not raise a weather danger in these calm conditions."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
     },
@@ -53,11 +80,20 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 2: Location: Cuttyhunk (41.4200, -70.9200). Date: 2026-08-01. Next Destination: Vineyard Haven (41.4500, -70.5800). Distance to next stop: 15.2 nautical miles at a course of 83° to Vineyard Haven. Forecast wind is from 085° at 18 knots."
+                "text": "Audit safety for Stop 1 of 2: Location: Cuttyhunk (41.4200, -70.9200). Date: 2026-08-01. Next Destination: Vineyard Haven (41.4500, -70.5800). Distance to next stop: 15.2 nautical miles at a course of 83\u00b0 to Vineyard Haven. Forecast wind is from 085\u00b0 at 18 knots."
               }
             ],
             "role": "user"
           }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "transit_headwind_alert",
+          "rubric_content": {
+            "text_property": "The response emits a navigation alert that identifies the transit course/heading to the next destination and the adverse head-wind condition (wind from ~085\u00b0 within ~45\u00b0 of the ~83\u00b0 course at 18 knots), i.e. a warning that the leg is a beat into the wind."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
     },
@@ -68,11 +104,20 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 2: Location: Cowes (50.7620, -1.2980). Date: 2026-08-10. Next Destination: Yarmouth (50.7050, -1.5000). Distance to next stop: 10.5 nautical miles via planned route \"Solent Western Passage\" (direct course 245° to Yarmouth).\n\nPlanned Route Details (\"Solent Western Passage\"):\n- Total Planned Distance: 10.5 NM\n- Key Route Segments & Course Bearings:\n  * Segment 1: 4.2 NM on course 250° (WSW) from (50.7620, -1.2980) to (50.7300, -1.3900)\n  * Segment 2: 3.8 NM on course 270° (W) from (50.7300, -1.3900) to (50.7100, -1.4800)\n  * Segment 3: 2.5 NM on course 220° (SW) from (50.7100, -1.4800) to (50.7050, -1.5000)\n\nForecast wind is from 265° at 20 knots. Search sailing directions for Solent western passage hazards and evaluate adverse winds along planned route segments."
+                "text": "Audit safety for Stop 1 of 2: Location: Cowes (50.7620, -1.2980). Date: 2026-08-10. Next Destination: Yarmouth (50.7050, -1.5000). Distance to next stop: 10.5 nautical miles via planned route \"Solent Western Passage\" (direct course 245\u00b0 to Yarmouth).\n\nPlanned Route Details (\"Solent Western Passage\"):\n- Total Planned Distance: 10.5 NM\n- Key Route Segments & Course Bearings:\n  * Segment 1: 4.2 NM on course 250\u00b0 (WSW) from (50.7620, -1.2980) to (50.7300, -1.3900)\n  * Segment 2: 3.8 NM on course 270\u00b0 (W) from (50.7300, -1.3900) to (50.7100, -1.4800)\n  * Segment 3: 2.5 NM on course 220\u00b0 (SW) from (50.7100, -1.4800) to (50.7050, -1.5000)\n\nForecast wind is from 265\u00b0 at 20 knots. Search sailing directions for Solent western passage hazards and evaluate adverse winds along planned route segments."
               }
             ],
             "role": "user"
           }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "planned_route_headwind_alert",
+          "rubric_content": {
+            "text_property": "The response flags a navigation alert that specifically references the planned route and the adverse headwind along a route segment (e.g. identifying a leg bearing near the wind direction of 265\u00b0 at 20 knots that requires tacking/beating)."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
     }

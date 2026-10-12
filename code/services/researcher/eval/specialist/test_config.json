@@ -35,9 +35,9 @@
       },
       "rubrics": [
         {
-          "rubric_id": "find_places_called",
+          "rubric_id": "facility_discovery_called",
           "rubric_content": {
-            "text_property": "The agent calls 'find_places_nearby' to locate anchorages or marinas."
+            "text_property": "The agent calls the 'facility_discovery' tool/sub-agent to locate anchorages or marinas. (facility_discovery performs the underlying find_places_nearby calls internally.)"
           }
         }
       ]

@@ -8,15 +8,9 @@
       },
       "rubrics": [
         {
-          "rubric_id": "danger_severity_flagged",
-          "rubric_content": {
-            "text_property": "The response flags a danger-level severity alert for severe wind or waves."
-          }
-        },
-        {
           "rubric_id": "json_array_format",
           "rubric_content": {
-            "text_property": "The response is a valid JSON array of alert objects."
+            "text_property": "The response is a valid JSON array of alert objects (or an empty array), with no markdown fences or extraneous prose."
           }
         }
       ]

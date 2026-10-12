@@ -417,9 +417,11 @@ eval-agent:
 		exit 1; \
 	fi; \
 	if [ "$$AGENT" = "harbourmaster" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$AGENT/agent-card.json"; fi; \
-	echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > code/services/researcher/agent.py; \
-	echo "agent = RemoteA2aAgent(name='$${AGENT}_agent', agent_card='$$CARD', use_legacy=False)" >> code/services/researcher/agent.py; \
-	echo "root_agent = agent" >> code/services/researcher/agent.py; \
+	echo "import os, sys" > code/services/researcher/agent.py; \
+	echo "_d = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, _d); sys.path.insert(0, os.path.join(_d, os.pardir))" >> code/services/researcher/agent.py; \
+	echo "from eval_a2a_shim import make_root_agent" >> code/services/researcher/agent.py; \
+	echo "root_agent = make_root_agent(name='$${AGENT}_agent', agent_card='$$CARD')" >> code/services/researcher/agent.py; \
+	echo "agent = root_agent" >> code/services/researcher/agent.py; \
 	CONFIG_FLAG=""; \
 	if [ -f "code/services/researcher/eval/$$AGENT/test_config.json" ]; then \
 		CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$AGENT/test_config.json"; \
@@ -471,9 +473,11 @@ eval-all:
 			echo "from . import agent" > $$TEMP_DIR/__init__.py; \
 			ln -sf $$(pwd)/.env $$TEMP_DIR/.env; \
 			if [ "$$agent" = "harbourmaster" ]; then CARD="http://localhost:8081/invoke/agent-card.json"; else CARD="http://localhost:8081/invoke/$$agent/agent-card.json"; fi; \
-			echo "from google.adk.agents.remote_a2a_agent import RemoteA2aAgent" > $$TEMP_DIR/agent.py; \
-			echo "agent = RemoteA2aAgent(name='$${agent}_agent', agent_card='$$CARD', use_legacy=False)" >> $$TEMP_DIR/agent.py; \
-			echo "root_agent = agent" >> $$TEMP_DIR/agent.py; \
+			echo "import os, sys" > $$TEMP_DIR/agent.py; \
+			echo "_d = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, _d); sys.path.insert(0, os.path.join(_d, os.pardir))" >> $$TEMP_DIR/agent.py; \
+			echo "from eval_a2a_shim import make_root_agent" >> $$TEMP_DIR/agent.py; \
+			echo "root_agent = make_root_agent(name='$${agent}_agent', agent_card='$$CARD')" >> $$TEMP_DIR/agent.py; \
+			echo "agent = root_agent" >> $$TEMP_DIR/agent.py; \
 			CONFIG_FLAG=""; \
 			if [ -f "code/services/researcher/eval/$$agent/test_config.json" ]; then \
 				CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$agent/test_config.json"; \
