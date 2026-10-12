@@ -69,12 +69,13 @@ var allNauticalTools = []string{
 var Order = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout}
 
 type spec struct {
-	name          string
-	description   string
-	instruction   string
-	temperature   float32
-	toolNames     []string
-	includeSearch bool
+	name                     string
+	description              string
+	instruction              string
+	temperature              float32
+	toolNames                []string
+	includeSearch            bool
+	includeFacilityDiscovery bool
 }
 
 var specs = []spec{
@@ -98,12 +99,24 @@ var specs = []spec{
 		includeSearch: false,
 	},
 	{
-		name:          Harbourmaster,
-		description:   "A Virtual Harbourmaster that researches sailing destinations.",
-		instruction:   prompt.Harbourmaster,
-		temperature:   0.25,
-		toolNames:     allNauticalTools,
-		includeSearch: true,
+		// Harbourmaster delegates facility/anchorage discovery to the
+		// facility_discovery sub-agent, so it no longer holds FindPlacesNearby
+		// directly.
+		name:        Harbourmaster,
+		description: "A Virtual Harbourmaster that researches sailing destinations.",
+		instruction: prompt.Harbourmaster,
+		temperature: 0.25,
+		toolNames: []string{
+			toolGetTides,
+			toolGetWeather,
+			toolGetSunriseSunset,
+			toolGetSafetyAlerts,
+			toolQuerySailingDirections,
+			toolQueryCoastPilot,
+			toolCalculateHeading,
+		},
+		includeSearch:            true,
+		includeFacilityDiscovery: true,
 	},
 	{
 		// Commodore performs global seasonal discovery from the open web only;
@@ -116,14 +129,17 @@ var specs = []spec{
 		includeSearch: true,
 	},
 	{
-		// Specialist recommends anchorages and facilities: places discovery
-		// plus hydrographic pilotage. No weather/tides/sun.
-		name:          Specialist,
-		description:   "A Local Pilot and Navigation Specialist.",
-		instruction:   prompt.Specialist,
-		temperature:   0.25,
-		toolNames:     []string{toolFindPlacesNearby, toolQuerySailingDirections, toolQueryCoastPilot},
-		includeSearch: true,
+		// Specialist recommends anchorages and facilities. Facility/anchorage
+		// discovery is delegated to the facility_discovery sub-agent; the
+		// specialist keeps hydrographic pilotage plus web search for reviews
+		// and cruising-guide context.
+		name:                     Specialist,
+		description:              "A Local Pilot and Navigation Specialist.",
+		instruction:              prompt.Specialist,
+		temperature:              0.25,
+		toolNames:                []string{toolQuerySailingDirections, toolQueryCoastPilot},
+		includeSearch:            true,
+		includeFacilityDiscovery: true,
 	},
 	{
 		// Lookout audits safety: environment, pilotage, heading geometry, and
@@ -198,7 +214,58 @@ func toolsFor(ctx context.Context, cfg *config.Config, before llmagent.BeforeToo
 		}
 		agentTools = append(agentTools, searchTools...)
 	}
+	if sp.includeFacilityDiscovery {
+		facilityTool, err := createFacilityDiscoveryTool(ctx, cfg, before, after, researcherTools)
+		if err != nil {
+			return nil, err
+		}
+		agentTools = append(agentTools, facilityTool)
+	}
 	return agentTools, nil
+}
+
+// toolByName returns the registered tool with the given name, or an error if
+// no such tool exists in the provided set.
+func toolByName(tools []adktool.Tool, name string) (adktool.Tool, error) {
+	for _, t := range tools {
+		if t.Name() == name {
+			return t, nil
+		}
+	}
+	return nil, fmt.Errorf("tool %q is not registered", name)
+}
+
+// createFacilityDiscoveryTool builds the facility_discovery sub-agent and wraps
+// it as a single ADK tool that harbourmaster and specialist delegate to for
+// marine facility and wild-anchorage discovery. The sub-agent combines
+// FindPlacesNearby with the wrapped Google Search sub-agent (not raw
+// geminitool.GoogleSearch), so it never mixes grounded search with function
+// calling in a single model request.
+func createFacilityDiscoveryTool(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (adktool.Tool, error) {
+	placesTool, err := toolByName(researcherTools, toolFindPlacesNearby)
+	if err != nil {
+		return nil, fmt.Errorf("facility_discovery: %w", err)
+	}
+
+	searchTools, err := createSearchTools(ctx, cfg, before, after, "facility_discovery_search_specialist")
+	if err != nil {
+		return nil, err
+	}
+
+	tools := append([]adktool.Tool{placesTool}, searchTools...)
+
+	facilityAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
+		name:        "facility_discovery",
+		description: "Searches, validates, dedupes, and geocodes marine facilities and anchorages (marinas, moorings, yacht clubs, fuel docks, boat launches, and wild anchorages) within a geographic radius.",
+		instruction: prompt.FacilityDiscovery,
+		tools:       tools,
+		temperature: 0.25,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return agenttool.New(facilityAgent, nil), nil
 }
 
 func createAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, acfg *agentConfig) (agent.Agent, error) {

@@ -1,0 +1,46 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON object with a top-level 'facilities' array and no text outside the JSON block."
+          }
+        },
+        {
+          "rubric_id": "facilities_have_coordinates",
+          "rubric_content": {
+            "text_property": "Every entry in 'facilities' has numeric 'latitude' and 'longitude' values and a 'type'."
+          }
+        }
+      ]
+    },
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "places_called",
+          "rubric_content": {
+            "text_property": "The agent calls 'FindPlacesNearby' to discover facilities."
+          }
+        },
+        {
+          "rubric_id": "search_called",
+          "rubric_content": {
+            "text_property": "The agent calls a web search tool to find wild/natural anchorages missing from POI databases."
+          }
+        }
+      ]
+    }
+  }
+}

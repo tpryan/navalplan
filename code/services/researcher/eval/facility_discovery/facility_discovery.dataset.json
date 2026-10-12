@@ -1,0 +1,61 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "newport_ri_facilities",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Discover marine facilities and anchorages for Newport, Rhode Island at latitude 41.4901, longitude -71.3128. Search Radius: 10 NM. Trip type: overnight."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON object with a top-level 'facilities' array and no text outside the JSON block."
+                }
+              }
+            },
+            {
+              "rubric_id": "places_tool_called",
+              "content": {
+                "property": {
+                  "description": "The agent calls 'FindPlacesNearby' (with the radius converted to meters) to discover facilities."
+                }
+              }
+            },
+            {
+              "rubric_id": "web_search_for_wild_anchorages",
+              "content": {
+                "property": {
+                  "description": "The agent calls a web search tool (e.g. batch_google_search) to find wild/natural anchorages that commercial POI databases miss."
+                }
+              }
+            },
+            {
+              "rubric_id": "facilities_have_coordinates",
+              "content": {
+                "property": {
+                  "description": "Every entry in 'facilities' has numeric 'latitude' and 'longitude' values and a 'type'."
+                }
+              }
+            },
+            {
+              "rubric_id": "superset_fields_present",
+              "content": {
+                "property": {
+                  "description": "Facility entries carry the superset fields where available (e.g. 'website', 'rating', 'business_status', 'is_wild', 'references')."
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
