@@ -43,3 +43,5 @@ code/services/researcher/eval_temp_specialist/*
 artifacts/grade_results/*
 venv/
 .venv/
+code/services/researcher/.gocache/*
+code/services/researcher/.gotmp/*

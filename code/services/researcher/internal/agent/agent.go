@@ -35,57 +35,101 @@ const (
 	Lookout       = "lookout"
 )
 
+// Nautical tool names, exactly as registered in
+// tool.NauticalToolService.AsTools(). Agents opt into tools by name via
+// spec.toolNames, so each agent receives only the tools its task needs
+// instead of the full "kitchen-sink" bundle.
+const (
+	toolGetTides               = "GetTides"
+	toolGetWeather             = "GetWeather"
+	toolGetSunriseSunset       = "GetSunriseSunset"
+	toolFindPlacesNearby       = "FindPlacesNearby"
+	toolGetSafetyAlerts        = "GetSafetyAlerts"
+	toolQuerySailingDirections = "QuerySailingDirections"
+	toolQueryCoastPilot        = "QueryCoastPilot"
+	toolCalculateHeading       = "CalculateHeading"
+)
+
+// allNauticalTools is the full briefing-grade bundle (environment, facilities,
+// safety, pilotage, and heading geometry) shared by the destination-research
+// agents. FilterGPXData is intentionally excluded: GPX smoothing runs
+// deterministically in Go on upload, not via an LLM tool call.
+var allNauticalTools = []string{
+	toolGetTides,
+	toolGetWeather,
+	toolGetSunriseSunset,
+	toolFindPlacesNearby,
+	toolGetSafetyAlerts,
+	toolQuerySailingDirections,
+	toolQueryCoastPilot,
+	toolCalculateHeading,
+}
+
 var Order = []string{Harbourmaster, Pilot, Commodore, Specialist, Lookout}
 
 type spec struct {
-	name              string
-	description       string
-	instruction       string
-	temperature       float32
-	includeResearcher bool
-	includeSearch     bool
+	name          string
+	description   string
+	instruction   string
+	temperature   float32
+	toolNames     []string
+	includeSearch bool
 }
 
 var specs = []spec{
 	{
-		name:              Pilot,
-		description:       "A Local Knowledge Expert and Sailing Guide.",
-		instruction:       prompt.Pilot,
-		temperature:       0.25,
-		includeResearcher: true,
-		includeSearch:     true,
+		name:          Pilot,
+		description:   "A Local Knowledge Expert and Sailing Guide.",
+		instruction:   prompt.Pilot,
+		temperature:   0.25,
+		toolNames:     allNauticalTools,
+		includeSearch: true,
 	},
 	{
-		name:              Harbourmaster,
-		description:       "A Virtual Harbourmaster that researches sailing destinations.",
-		instruction:       prompt.Harbourmaster,
-		temperature:       0.25,
-		includeResearcher: true,
-		includeSearch:     true,
+		name:          Harbourmaster,
+		description:   "A Virtual Harbourmaster that researches sailing destinations.",
+		instruction:   prompt.Harbourmaster,
+		temperature:   0.25,
+		toolNames:     allNauticalTools,
+		includeSearch: true,
 	},
 	{
-		name:              Commodore,
-		description:       "The Commodore - Global Seasonal Discovery Expert.",
-		instruction:       prompt.Commodore,
-		temperature:       0.25,
-		includeResearcher: true,
-		includeSearch:     true,
+		// Commodore performs global seasonal discovery from the open web only;
+		// it needs no station-level nautical tools.
+		name:          Commodore,
+		description:   "The Commodore - Global Seasonal Discovery Expert.",
+		instruction:   prompt.Commodore,
+		temperature:   0.25,
+		toolNames:     nil,
+		includeSearch: true,
 	},
 	{
-		name:              Specialist,
-		description:       "A Local Pilot and Navigation Specialist.",
-		instruction:       prompt.Specialist,
-		temperature:       0.25,
-		includeResearcher: true,
-		includeSearch:     true,
+		// Specialist recommends anchorages and facilities: places discovery
+		// plus hydrographic pilotage. No weather/tides/sun.
+		name:          Specialist,
+		description:   "A Local Pilot and Navigation Specialist.",
+		instruction:   prompt.Specialist,
+		temperature:   0.25,
+		toolNames:     []string{toolFindPlacesNearby, toolQuerySailingDirections, toolQueryCoastPilot},
+		includeSearch: true,
 	},
 	{
-		name:              Lookout,
-		description:       "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
-		instruction:       prompt.Lookout,
-		temperature:       0.1,
-		includeResearcher: true,
-		includeSearch:     false,
+		// Lookout audits safety: environment, pilotage, heading geometry, and
+		// navigational warnings. No places discovery and no web search.
+		name:        Lookout,
+		description: "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
+		instruction: prompt.Lookout,
+		temperature: 0.1,
+		toolNames: []string{
+			toolGetTides,
+			toolGetWeather,
+			toolGetSunriseSunset,
+			toolQuerySailingDirections,
+			toolQueryCoastPilot,
+			toolCalculateHeading,
+			toolGetSafetyAlerts,
+		},
+		includeSearch: false,
 	},
 }
 
@@ -122,8 +166,18 @@ func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCa
 
 func toolsFor(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, sp spec, researcherTools []adktool.Tool) ([]adktool.Tool, error) {
 	var agentTools []adktool.Tool
-	if sp.includeResearcher {
-		agentTools = append(agentTools, researcherTools...)
+	if len(sp.toolNames) > 0 {
+		byName := make(map[string]adktool.Tool, len(researcherTools))
+		for _, t := range researcherTools {
+			byName[t.Name()] = t
+		}
+		for _, name := range sp.toolNames {
+			t, ok := byName[name]
+			if !ok {
+				return nil, fmt.Errorf("tool %q requested by agent %q is not registered", name, sp.name)
+			}
+			agentTools = append(agentTools, t)
+		}
 	}
 	if sp.includeSearch {
 		searchTools, err := createSearchTools(ctx, cfg, before, after, sp.name+"_search_specialist")
