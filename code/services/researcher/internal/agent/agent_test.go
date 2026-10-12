@@ -65,3 +65,44 @@ func TestFacilityDiscoveryDelegation(t *testing.T) {
 		t.Errorf("pilot: includeFacilityDiscovery = true, want false")
 	}
 }
+
+// TestHydrographicPilotDelegation guards the M4 invariant: harbourmaster,
+// specialist, and lookout delegate hydrographic/RAG retrieval to the
+// hydrographic_pilot sub-agent and therefore must NOT hold QuerySailingDirections
+// or QueryCoastPilot directly; pilot keeps them directly and does not delegate.
+func TestHydrographicPilotDelegation(t *testing.T) {
+	byName := make(map[string]spec, len(specs))
+	for _, sp := range specs {
+		byName[sp.name] = sp
+	}
+
+	for _, name := range []string{Harbourmaster, Specialist, Lookout} {
+		sp, ok := byName[name]
+		if !ok {
+			t.Fatalf("spec %q not found", name)
+		}
+		if !sp.includeHydrographicPilot {
+			t.Errorf("%s: includeHydrographicPilot = false, want true", name)
+		}
+		for _, tn := range sp.toolNames {
+			if tn == toolQuerySailingDirections || tn == toolQueryCoastPilot {
+				t.Errorf("%s: still holds %q directly; it should delegate to hydrographic_pilot", name, tn)
+			}
+		}
+	}
+
+	// Pilot keeps the RAG tools directly and does not use the sub-agent.
+	pilot := byName[Pilot]
+	if pilot.includeHydrographicPilot {
+		t.Errorf("pilot: includeHydrographicPilot = true, want false")
+	}
+	var hasSailing bool
+	for _, tn := range pilot.toolNames {
+		if tn == toolQuerySailingDirections {
+			hasSailing = true
+		}
+	}
+	if !hasSailing {
+		t.Errorf("pilot: expected to keep %q directly", toolQuerySailingDirections)
+	}
+}

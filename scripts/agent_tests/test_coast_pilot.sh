@@ -1,7 +1,11 @@
 #!/bin/bash
 
+# Smoke test for the hydrographic_pilot skill (NOAA Coast Pilot path).
+# hydrographic_pilot is a sub-agent tool, so we exercise it through the
+# harbourmaster agent, which delegates its pilotage lookup to it.
+
 BASEURL="http://localhost:8081"
-APPNAME="pilot"
+APPNAME="harbourmaster"
 USER="testuser"
 SESSION="testsession-coast-pilot"
 
@@ -20,12 +24,12 @@ QUERY="{
     \"newMessage\": {
         \"role\": \"user\",
         \"parts\": [{
-            \"text\": \"What are the channel depths, navigation hazards, and bridge clearances for Buzzards Bay and Cape Cod Canal according to Coast Pilot?\"
+            \"text\": \"Produce a destination briefing for Cape Cod Canal / Buzzards Bay near 41.7400, -70.5700 with a Search Radius of 10 NM. Emphasize the pilot_notes: channel depths, navigation hazards, and bridge clearances from NOAA Coast Pilot. Do not research facilities.\"
         }]
     }
 }"
 
-echo "Querying ${APPNAME} for Coast Pilot information..."
+echo "Querying ${APPNAME} (exercises the hydrographic_pilot skill) for NOAA Coast Pilot information..."
 curl -X POST \
      -H "Content-Type: application/json" \
      -d "$QUERY" \

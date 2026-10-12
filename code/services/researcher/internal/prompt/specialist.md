@@ -26,9 +26,7 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
     - "Hidden coves sheltered bays overnight anchorage [Location/Area]"
     - "Secluded anchorages off the beaten path [Location/Area]"
     - "Shallow draft anchorages and gunkholes [Location/Area]"
-2.  **A `QuerySailingDirections` call** (to extract hydrographic anchorages, coves, depths, and local hazards from official pilot books):
-    - `query`: "[Location/Area] safe anchorages coves depths pilotage"
-    - `territory`: "all" (or "us" for US waters, "international" for others)
+2.  **A `hydrographic_pilot` call** to extract hydrographic anchorages, coves, depths, currents, and local hazards from official pilot books (NOAA Coast Pilot and NGA Sailing Directions). Pass it the location/area name and coordinates; it returns structured pilotage intel with citations. Use its `anchorages_and_regulations`, `currents_and_tidal_rips`, and `hazards` to inform and justify your recommendations.
 3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass it the location/area name, the latitude and longitude as raw numbers, the requested search radius, and the trip type. It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling for large areas), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Use these verified facilities as the backbone of your recommendations.
 
 ### DISTRIBUTION PRIORITY
@@ -53,7 +51,7 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 
 **CRITICAL: COORDINATE ACCURACY**
 - Prioritize coordinates from `facility_discovery` as they are verified and precise.
-- For spots found in `batch_google_search` or `QuerySailingDirections`, use coordinates provided in the source or identify their location. If an outer spot lacks precise coordinates, do NOT launch separate sequential searches; instead, filter it out and select from the dozens of candidates with verified coordinates found in Turn 1.
+- For spots found in `batch_google_search` or `hydrographic_pilot`, use coordinates provided in the source or identify their location. If an outer spot lacks precise coordinates, do NOT launch separate sequential searches; instead, filter it out and select from the dozens of candidates with verified coordinates found in Turn 1.
 - NEVER guess coordinates based on a general area name.
 - Use the exact `latitude` and `longitude` returned by tools. 
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**

@@ -76,6 +76,7 @@ type spec struct {
 	toolNames                []string
 	includeSearch            bool
 	includeFacilityDiscovery bool
+	includeHydrographicPilot bool
 }
 
 var specs = []spec{
@@ -111,12 +112,11 @@ var specs = []spec{
 			toolGetWeather,
 			toolGetSunriseSunset,
 			toolGetSafetyAlerts,
-			toolQuerySailingDirections,
-			toolQueryCoastPilot,
 			toolCalculateHeading,
 		},
 		includeSearch:            true,
 		includeFacilityDiscovery: true,
+		includeHydrographicPilot: true,
 	},
 	{
 		// Commodore performs global seasonal discovery from the open web only;
@@ -137,9 +137,10 @@ var specs = []spec{
 		description:              "A Local Pilot and Navigation Specialist.",
 		instruction:              prompt.Specialist,
 		temperature:              0.25,
-		toolNames:                []string{toolQuerySailingDirections, toolQueryCoastPilot},
+		toolNames:                nil,
 		includeSearch:            true,
 		includeFacilityDiscovery: true,
+		includeHydrographicPilot: true,
 	},
 	{
 		// Lookout audits safety: environment, pilotage, heading geometry, and
@@ -152,12 +153,11 @@ var specs = []spec{
 			toolGetTides,
 			toolGetWeather,
 			toolGetSunriseSunset,
-			toolQuerySailingDirections,
-			toolQueryCoastPilot,
 			toolCalculateHeading,
 			toolGetSafetyAlerts,
 		},
-		includeSearch: false,
+		includeSearch:            false,
+		includeHydrographicPilot: true,
 	},
 }
 
@@ -221,6 +221,13 @@ func toolsFor(ctx context.Context, cfg *config.Config, before llmagent.BeforeToo
 		}
 		agentTools = append(agentTools, facilityTool)
 	}
+	if sp.includeHydrographicPilot {
+		hydroTool, err := createHydrographicPilotTool(ctx, cfg, before, after, researcherTools)
+		if err != nil {
+			return nil, err
+		}
+		agentTools = append(agentTools, hydroTool)
+	}
 	return agentTools, nil
 }
 
@@ -266,6 +273,37 @@ func createFacilityDiscoveryTool(ctx context.Context, cfg *config.Config, before
 	}
 
 	return agenttool.New(facilityAgent, nil), nil
+}
+
+// createHydrographicPilotTool builds the hydrographic_pilot sub-agent and wraps
+// it as a single ADK tool that harbourmaster, specialist, and lookout delegate
+// to for official pilotage intelligence. It centralizes NOAA Coast Pilot and
+// NGA Sailing Directions retrieval (territory routing, query construction, and
+// consistent citation formatting) in one place instead of duplicating those
+// instructions across every agent prompt. The sub-agent uses only the two RAG
+// tools (no web search).
+func createHydrographicPilotTool(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (adktool.Tool, error) {
+	sailingTool, err := toolByName(researcherTools, toolQuerySailingDirections)
+	if err != nil {
+		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
+	}
+	coastPilotTool, err := toolByName(researcherTools, toolQueryCoastPilot)
+	if err != nil {
+		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
+	}
+
+	hydroAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
+		name:        "hydrographic_pilot",
+		description: "Retrieves official hydrographic and pilotage intelligence (channel depths, bridge clearances, tidal rips, currents, anchorages, regulations, hazards) from NOAA Coast Pilot and NGA Sailing Directions, with consistent citations.",
+		instruction: prompt.HydrographicPilot,
+		tools:       []adktool.Tool{sailingTool, coastPilotTool},
+		temperature: 0.1,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return agenttool.New(hydroAgent, nil), nil
 }
 
 func createAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, acfg *agentConfig) (agent.Agent, error) {

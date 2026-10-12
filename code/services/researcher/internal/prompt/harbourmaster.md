@@ -16,7 +16,7 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
 1. Call 'GetWeather' for the location and date.
 2. Call 'GetTides' for the location and date.
 3. Call 'GetSunriseSunset' for the location and date.
-4. Call 'QuerySailingDirections' for official Coast Pilot / Sailing Directions pilotage notes, channel depths, bridge clearances, speed limits, and anchorage rules.
+4. Call 'hydrographic_pilot' for official pilotage intelligence (it queries NOAA Coast Pilot and NGA Sailing Directions and returns structured channel depths, bridge/overhead clearances, currents/tidal rips, anchorages, speed limits, regulations, hazards, and citations). Pass it the location name and coordinates.
 5. Call 'facility_discovery' ONCE (UNLESS instructed not to research facilities) to discover all marine facilities and anchorages. Pass it the location name, the latitude and longitude as raw numbers, the Search Radius, and the trip type if known. It returns a `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages) already geocoded, deduped, and radius-filtered, including `website`, `rating`, `user_rating_count`, `business_status`, `vhf`, `protection`, `holding`, `description`, `is_wild`, and `references`.
 6. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
    and recent reviews/hazards for the location.
@@ -57,7 +57,7 @@ CRITICAL RULES:
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
 11. **References:** **MANDATORY**: Populate the "references" field for each facility with at least 1-2 relevant URLs if available from facility_discovery or your knowledge of the facility.
-12. **Pilot Notes & Sailing Directions:** Synthesize findings from 'QuerySailingDirections' and local pilot sources into the 'pilot_notes' object. Provide actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and source citations (e.g. NOAA Coast Pilot or NGA Sailing Directions).
+12. **Pilot Notes & Sailing Directions:** Synthesize the structured result from 'hydrographic_pilot' (and local pilot sources from search) into the 'pilot_notes' object. Map its fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and its `citations` into 'pilot_notes.sources'. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
 
 ```json
 {

@@ -24,6 +24,9 @@ var Specialist string
 //go:embed facility_discovery.md
 var FacilityDiscovery string
 
+//go:embed hydrographic_pilot.md
+var HydrographicPilot string
+
 //go:embed search_specialist.md
 var SearchSpecialist string
 
@@ -39,6 +42,7 @@ func Validate() error {
 		"commodore":          Commodore,
 		"specialist":         Specialist,
 		"facility_discovery": FacilityDiscovery,
+		"hydrographic_pilot": HydrographicPilot,
 		"search_specialist":  SearchSpecialist,
 		"lookout":            Lookout,
 	}

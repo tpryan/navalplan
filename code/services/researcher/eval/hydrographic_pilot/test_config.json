@@ -1,0 +1,19 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "json_object_format",
+          "rubric_content": {
+            "text_property": "The response is a single valid JSON object with no text outside the JSON block, containing keys such as overview, hazards, citations, and data_available."
+          }
+        }
+      ]
+    }
+  }
+}
