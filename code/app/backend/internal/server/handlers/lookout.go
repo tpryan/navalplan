@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"app/internal/model"
+	"app/internal/safety"
 )
 
 func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
@@ -600,6 +601,11 @@ func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Brie
 		tidesJSON = string(briefing.Tides)
 	}
 
+	// Deterministic numeric threshold checks (wind/wave/wave-period/tide) are
+	// computed in Go and injected as pre-evaluated constraints so the LLM does
+	// not have to redo the arithmetic and can focus on qualitative hazards.
+	constraintsBlock := formatSafetyConstraints(safety.Evaluate(briefing.WeatherSummary, briefing.Tides))
+
 	locationInfo := stop.LocationName
 	if stop.Latitude != 0 || stop.Longitude != 0 {
 		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", stop.LocationName, stop.Latitude, stop.Longitude)
@@ -626,6 +632,8 @@ Sun Phase:
 Tides (48h hourly forecast):
 %s
 
+%s
+
 Return ONLY the JSON array of alerts. If no concerns or significant trends, return [].`,
 		locationInfo,
 		stop.TargetDate.Format("January 2, 2006"),
@@ -638,7 +646,24 @@ Return ONLY the JSON array of alerts. If no concerns or significant trends, retu
 		weatherJSON,
 		sunJSON,
 		tidesJSON,
+		constraintsBlock,
 	)
+}
+
+// formatSafetyConstraints renders the deterministic safety alerts as a prompt
+// block the lookout agent treats as authoritative pre-evaluated constraints. It
+// always states that the numeric thresholds were checked, so the LLM does not
+// recompute them even when nothing triggered.
+func formatSafetyConstraints(alerts []safety.Alert) string {
+	const header = "Pre-evaluated safety constraints (computed deterministically from the forecast above — treat as AUTHORITATIVE: include each of these alerts in your output as-is, and do NOT recompute wind, wave, wave-period, or tidal-range numeric thresholds yourself):"
+	if len(alerts) == 0 {
+		return header + "\n[] (deterministic wind/wave/wave-period/tide checks ran and triggered no alerts)"
+	}
+	b, err := json.Marshal(alerts)
+	if err != nil {
+		return header + "\n[]"
+	}
+	return header + "\n" + string(b)
 }
 
 func calculateBearing(lat1, lon1, lat2, lon2 float64) float64 {

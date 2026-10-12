@@ -291,10 +291,14 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 
 // FetchSafetyAlerts extracts active global navigational warnings and localized security alerts.
 func (s *NauticalToolService) FetchSafetyAlerts(ctx agent.Context, req SafetyRequest) (*SafetyResponse, error) {
-	// Initially provides mock data as per geap.md recommendations as we don't have a safety tool yet.
+	// No live navigational-warnings source is wired up yet (e.g. NAVTEX, USCG
+	// Local Notice to Mariners, or an MSI feed). Return an explicit "no data"
+	// response rather than fabricated hazards, so the safety audit is never
+	// seeded with mock data like a canned shoaling report. When a real feed is
+	// integrated, populate ActiveHazards and SecurityLevel from it here.
 	return &SafetyResponse{
-		ActiveHazards: []string{"Shoaling reported near channel marker 4"},
-		SecurityLevel: "Normal",
+		ActiveHazards: []string{},
+		SecurityLevel: "unknown",
 	}, nil
 }
 
