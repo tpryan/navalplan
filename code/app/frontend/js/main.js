@@ -2026,6 +2026,20 @@ async function checkItineraryFullness(isManualAction = false) {
         }
     }
 
+    // Once all stop planning/research is complete, the Voyage Report becomes the
+    // primary artifact: remove the Guide control from the toolbar and promote the
+    // Report control to the primary button style. Reverts if research is no longer
+    // complete (e.g. the itinerary is edited).
+    const btnGuide = document.getElementById('btn-view-guide');
+    if (btnGuide) btnGuide.classList.toggle('hidden', allResearchDone);
+    const tabGuide = document.getElementById('tab-guide');
+    if (tabGuide) tabGuide.classList.toggle('hidden', allResearchDone);
+    const btnReport = document.getElementById('btn-export-voyage');
+    if (btnReport) {
+        btnReport.classList.toggle('primary', allResearchDone);
+        btnReport.classList.toggle('secondary', !allResearchDone);
+    }
+
     // Pilot Suggestions button is not shown in the dated view — control lives in the sidebar list
     const btnPilot = document.getElementById('btn-pilot-suggestions');
     if (btnPilot) btnPilot.classList.add('hidden');
