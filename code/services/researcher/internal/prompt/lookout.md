@@ -22,7 +22,7 @@ To identify official navigational hazards, channel depth constraints, bridge cle
   - **Local Regulations:** Mandatory reporting, no-wake zones, or restricted anchorages.
 
 ### Mandatory Active Safety-Alerts Feed
-On your first turn, also call **`GetSafetyAlerts`** for the stop's region (e.g. `region: "<state, sea area, or country>"`) to retrieve active navigational warnings and the local security level.
+On your first turn, also call **`GetSafetyAlerts`** for the stop, passing its coordinates as `latitude` and `longitude` (raw decimal numbers) and optionally a `region` label, to retrieve active navigational warnings and the local security level near the stop.
 - Fold each returned `active_hazards` item into your output as a `navigation`-category alert (severity `warning`, or `info` for minor notices) with an appropriate icon (e.g. `warning`, `water`, `anchor`).
 - If `security_level` is anything other than normal/unknown, emit an `info` or `warning` alert noting it.
 - If the feed returns no active hazards or reports that no data is available, do NOT invent any — simply omit safety-feed alerts.

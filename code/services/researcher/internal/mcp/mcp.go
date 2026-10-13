@@ -111,13 +111,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				},
 				{
 					"name":        "GetSafetyAlerts",
-					"description": "Extracts active global navigational warnings and localized security alerts.",
+					"description": "Extracts active navigational warnings and localized security alerts near a location.",
 					"inputSchema": map[string]interface{}{
 						"type": "object",
 						"properties": map[string]interface{}{
-							"region": map[string]string{"type": "string"},
+							"region":    map[string]string{"type": "string"},
+							"latitude":  map[string]string{"type": "number"},
+							"longitude": map[string]string{"type": "number"},
+							"radius_nm": map[string]string{"type": "number"},
 						},
-						"required": []string{"region"},
+						"required": []string{"latitude", "longitude"},
 					},
 				},
 				{

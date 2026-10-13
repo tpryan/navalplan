@@ -87,8 +87,10 @@ func TestHandler_ServeHTTP_CallTool(t *testing.T) {
 		t.Fatalf("expected map result, got %T", resp.Result)
 	}
 
-	if result["security_level"] != "Normal" {
-		t.Errorf("expected security_level Normal, got %v", result["security_level"])
+	// With the live navigational-warnings feed disabled (default), GetSafetyAlerts
+	// returns an explicit no-data response rather than fabricated hazards.
+	if result["security_level"] != "unknown" {
+		t.Errorf("expected security_level unknown (feed disabled), got %v", result["security_level"])
 	}
 }
 

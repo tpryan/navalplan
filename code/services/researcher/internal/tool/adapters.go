@@ -116,7 +116,10 @@ type McpPlacesResponse struct {
 
 // SafetyRequest represents the input for the GetSafetyAlerts MCP tool.
 type SafetyRequest struct {
-	Region string `json:"region"`
+	Region    string  `json:"region"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	RadiusNM  float64 `json:"radius_nm"`
 }
 
 // SafetyResponse represents the output for the GetSafetyAlerts MCP tool.
@@ -291,14 +294,17 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 
 // FetchSafetyAlerts extracts active global navigational warnings and localized security alerts.
 func (s *NauticalToolService) FetchSafetyAlerts(ctx agent.Context, req SafetyRequest) (*SafetyResponse, error) {
-	// No live navigational-warnings source is wired up yet (e.g. NAVTEX, USCG
-	// Local Notice to Mariners, or an MSI feed). Return an explicit "no data"
-	// response rather than fabricated hazards, so the safety audit is never
-	// seeded with mock data like a canned shoaling report. When a real feed is
-	// integrated, populate ActiveHazards and SecurityLevel from it here.
+	// Live navigational-warnings feed (NGA MSI). This is OFF by default and only
+	// reaches the network when NAVALPLAN_SAFETY_ALERTS_ENABLED is set; otherwise,
+	// and on any error, it returns an explicit "no data" response rather than
+	// fabricated hazards, so the safety audit is never seeded with mock data.
+	hazards, level := fetchSafetyAlerts(ctx, req.Latitude, req.Longitude, req.RadiusNM)
+	if hazards == nil {
+		hazards = []string{}
+	}
 	return &SafetyResponse{
-		ActiveHazards: []string{},
-		SecurityLevel: "unknown",
+		ActiveHazards: hazards,
+		SecurityLevel: level,
 	}, nil
 }
 
