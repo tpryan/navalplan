@@ -413,3 +413,23 @@ func TestParseGPXRouteIgnoresWaypointTimes(t *testing.T) {
 		t.Errorf("route should carry no timing, got start=%v end=%v dur=%q", tr.StartTime, tr.EndTime, tr.DurationInterval)
 	}
 }
+
+// TestRecordedMaxSpeedIgnoresJitter: a 1 Hz track at a steady 6 kts with
+// periodic ~20 m position jumps must not report a 20-35 kt max speed.
+func TestRecordedMaxSpeedIgnoresJitter(t *testing.T) {
+	start := time.Date(2025, 5, 2, 13, 0, 0, 0, time.UTC)
+	const degPerSec = 6.0 / 3600.0 / 60.0 // 6 kts northward, in degrees latitude per second
+	var pts []Point
+	for s := 0; s <= 1800; s++ {
+		lat := 26.0 + float64(s)*degPerSec
+		if s%30 == 0 && s > 0 {
+			lat += 0.00018 // ~20 m jitter spike
+		}
+		ts := start.Add(time.Duration(s) * time.Second)
+		pts = append(pts, Point{Lat: lat, Lng: -80.0, Time: &ts})
+	}
+	tr := buildParsedTrack("Jitter", "recorded", pts)
+	if tr.MaxSpeedKts < 5.5 || tr.MaxSpeedKts > 7.0 {
+		t.Errorf("MaxSpeedKts = %.1f, want ~6", tr.MaxSpeedKts)
+	}
+}

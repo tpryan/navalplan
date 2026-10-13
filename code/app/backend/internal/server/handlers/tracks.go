@@ -498,10 +498,32 @@ func findClosestStop(lat, lon float64, stops []model.Stop, maxDistNM float64) in
 	return bestIdx
 }
 
-func formatHoursMins(hours float64) string {
-	hrs := int(hours)
-	mins := int((hours - float64(hrs)) * 60)
-	return fmt.Sprintf("%02dh %02dm", hrs, mins)
+// formatHMS renders a duration given in minutes as "8h 8m 8s".
+func formatHMS(totalMins float64) string {
+	secs := int(math.Round(totalMins * 60))
+	if secs < 0 {
+		secs = 0
+	}
+	return fmt.Sprintf("%dh %dm %ds", secs/3600, (secs%3600)/60, secs%60)
+}
+
+var durDaysRegex = regexp.MustCompile(`(?i)^(\d+)\s*days?\s+`)
+
+// normalizeDuration converts a duration string (Postgres interval such as
+// "02:46:58" or "1 day 02:00:00", or "2h 46m") to "8h 8m 8s". Unparseable
+// values are returned unchanged.
+func normalizeDuration(s string) string {
+	s = strings.TrimSpace(s)
+	days := 0.0
+	if m := durDaysRegex.FindStringSubmatch(s); len(m) > 1 {
+		days, _ = strconv.ParseFloat(m[1], 64)
+		s = s[len(m[0]):]
+	}
+	mins, ok := ParseDurationMinutes(s)
+	if !ok {
+		return s
+	}
+	return formatHMS(days*24*60 + mins)
 }
 
 var (
@@ -853,12 +875,12 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 
 	recDur := "N/A"
 	if track.DurationInterval != nil {
-		recDur = *track.DurationInterval
+		recDur = normalizeDuration(*track.DurationInterval)
 	}
-	plannedDuration := match.plannedDuration
+	plannedDuration := normalizeDuration(match.plannedDuration)
 	if plannedDuration == "" {
 		if plannedDist > 0 {
-			plannedDuration = formatHoursMins(plannedDist / 5.5)
+			plannedDuration = formatHMS(plannedDist / 5.5 * 60)
 		} else {
 			plannedDuration = recDur
 		}

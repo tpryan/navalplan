@@ -14,6 +14,7 @@ const (
 	MaxPlausibleSpeedKts     = 45.0 // filter out GPS jitter/glitches
 	MaxAccelerationKtsPerSec = 2.0  // max plausible boat speed change rate
 	MaxGlitchWindowSec       = 60.0 // time window for acceleration check
+	SustainedSpeedWindowSec  = 60.0 // max speed is measured over at least this span to suppress GPS jitter
 )
 
 // ParseGPX parses raw GPX XML and produces one or more processed ParsedTrack models.
@@ -121,6 +122,13 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 
 func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 	points, _ = FilterTrackPoints(points)
+	hasReportedSpeed := false
+	for i := range points {
+		if points[i].SpeedKts != nil {
+			hasReportedSpeed = true
+			break
+		}
+	}
 
 	var totalDist float64
 	var maxSpeed float64
@@ -195,6 +203,15 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 		}
 	}
 
+	// Speeds derived from position deltas on short sample intervals amplify
+	// GPS jitter (a 10 m error over 1 s reads as ~19 kts), so when the device
+	// did not report SOG, the max is the highest speed sustained over
+	// SustainedSpeedWindowSec.
+	if !hasReportedSpeed {
+		if sustained, ok := sustainedMaxSpeed(points, SustainedSpeedWindowSec); ok {
+			maxSpeed = sustained
+		}
+	}
 	var durationInterval string
 	var avgSpeed float64
 	if startTime != nil && endTime != nil {
@@ -350,4 +367,39 @@ func FormatPostgresInterval(d time.Duration) string {
 	minutes := int(d.Minutes()) % 60
 	seconds := int(d.Seconds()) % 60
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+// sustainedMaxSpeed returns the highest speed (kts) held over any span of at
+// least windowSec, measured as straight-line displacement over elapsed time.
+// Displacement (not path length) is used so per-sample jitter does not
+// accumulate. Returns false when no pair of timed points spans the window.
+func sustainedMaxSpeed(points []Point, windowSec float64) (float64, bool) {
+	var timed []Point
+	for _, p := range points {
+		if p.Time != nil {
+			timed = append(timed, p)
+		}
+	}
+	maxSpd := 0.0
+	found := false
+	j := 0
+	for i := 1; i < len(timed); i++ {
+		// Advance j to the latest point that is still at least windowSec before i.
+		for j+1 < i && timed[i].Time.Sub(*timed[j+1].Time).Seconds() >= windowSec {
+			j++
+		}
+		dtSec := timed[i].Time.Sub(*timed[j].Time).Seconds()
+		if dtSec < windowSec {
+			continue
+		}
+		spd := CalculateHaversineNM(timed[j].Lat, timed[j].Lng, timed[i].Lat, timed[i].Lng) / (dtSec / 3600.0)
+		if spd > MaxPlausibleSpeedKts {
+			continue
+		}
+		found = true
+		if spd > maxSpd {
+			maxSpd = spd
+		}
+	}
+	return maxSpd, found
 }
