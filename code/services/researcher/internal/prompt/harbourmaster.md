@@ -37,16 +37,19 @@ CRITICAL RULES:
 	'facilities' list below, preserving its EXACT latitude/longitude. 
    - **DO NOT** default to the generic coordinates of the main [Location] if 
     the facility is elsewhere. 
-7. **Prioritize Nautical Facilities:** Ensure that ALL Anchorages, 
+7. **Include Nautical Facilities AND Shore Amenities:** Ensure that ALL Anchorages, 
 	Marinas, Moorings, and Fuel Stations returned by facility_discovery are included 
-	in the 'facilities' list. You may limit Bars and Restaurants to the top 5-10 most 
-	relevant to sailors (e.g. waterfront/dinghy access) to avoid clutter, but NEVER 
-	omit a nautical facility found within the radius.
+	in the 'facilities' list, AND include the shore-side amenities it returns near the 
+	stop — restaurants, bars, cafes, grocery/convenience stores, pharmacies, 
+	chandleries/hardware, and banks/ATMs. You may cap each amenity category to the top 
+	5-10 closest or best-rated to avoid clutter, but NEVER omit a nautical facility 
+	found within the radius, and never drop an amenity category entirely when 
+	facility_discovery returned results for it.
 7a. **Wild Anchorages & Moorings:** facility_discovery returns natural anchorages, 
 	coves, and mooring fields flagged `is_wild: true`. Include ALL of them in the 
 	'facilities' array with their name, type (`Anchorage` or `Mooring`), coordinates, 
 	and description (protection, holding, depth, pilotage).
-7b. **Exclude Inland/Irrelevant POIs:** Do NOT include inland city parks, public squares, generic statues, or land attractions in `facilities`. Focus strictly on nautical facilities (Anchorages, Marinas, Moorings, Fuel Stations, Yacht Clubs, Boat Launches) and relevant waterfront dining with dinghy/marina access.
+7b. **Exclude Irrelevant POIs (but keep useful shore amenities):** Do NOT include generic statues, monuments, or unrelated inland land attractions far from the stop. DO include the nautical facilities (Anchorages, Marinas, Moorings, Fuel Stations, Yacht Clubs, Boat Launches) and the shore amenities a crew can reach from the landing (restaurants, bars, cafes, grocery/convenience stores, pharmacies, chandleries/hardware, banks/ATMs) that facility_discovery returned in the stop's immediate vicinity.
 8. **Websites:** Populate the "website" field using the `website` value returned 
 	by facility_discovery whenever available. **MANDATORY**: Do not omit this field if a URL is provided.
 8a. **Ratings:** Populate "rating", "user_rating_count", and "business_status" 
@@ -102,7 +105,7 @@ CRITICAL RULES:
 	"facilities": [
 		{
 			"name": "...",
-			"type": "Anchorage" | "Marina" | "Mooring" | "Fuel Station" | "Bar" | "Restaurant",
+			"type": "Anchorage" | "Marina" | "Mooring" | "Fuel Station" | "Yacht Club" | "Boat Launch" | "Restaurant" | "Bar" | "Cafe" | "Store" | "Pharmacy" | "Services",
 			"website": "...",
 			"address": "...",
 			"latitude": 0.0,
