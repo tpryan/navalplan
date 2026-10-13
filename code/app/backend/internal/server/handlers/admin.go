@@ -55,30 +55,38 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
-	// view selects the active (default) or expired set of accounts.
-	expired := r.URL.Query().Get("view") == "expired"
+	// view selects which set to return:
+	//   "pending" -> outstanding invitations (no provisioned accounts)
+	//   "expired" -> provisioned accounts past their expiration
+	//   default   -> active provisioned accounts
+	viewParam := r.URL.Query().Get("view")
 
-	people, err := h.DB.ListPeople(r.Context(), expired, limit, offset)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list people", "error", err)
-		writeError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
+	var (
+		people      []model.Person
+		totalPeople int
+		invites     []model.Invitation
+		err         error
+	)
 
-	totalPeople, err := h.DB.CountPeople(r.Context(), expired)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to count people", "error", err)
-		writeError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-
-	// Pending invitations belong to the active view only; the expired tab
-	// shows provisioned accounts that have lapsed.
-	var invites []model.Invitation
-	if !expired {
+	switch viewParam {
+	case "pending":
 		invites, err = h.DB.ListInvitations(r.Context())
 		if err != nil {
 			slog.ErrorContext(r.Context(), "Failed to list invitations", "error", err)
+			writeError(w, http.StatusInternalServerError, "Internal Server Error")
+			return
+		}
+	default:
+		expired := viewParam == "expired"
+		people, err = h.DB.ListPeople(r.Context(), expired, limit, offset)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to list people", "error", err)
+			writeError(w, http.StatusInternalServerError, "Internal Server Error")
+			return
+		}
+		totalPeople, err = h.DB.CountPeople(r.Context(), expired)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to count people", "error", err)
 			writeError(w, http.StatusInternalServerError, "Internal Server Error")
 			return
 		}

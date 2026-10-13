@@ -23,13 +23,9 @@ func TestListUsers_Success(t *testing.T) {
 		{ID: 1, Email: "alice@example.com", Name: "Alice"},
 		{ID: 2, Email: "bob@example.com", Name: "Bob"},
 	}
-	invites := []model.Invitation{
-		{Email: "carol@example.com"},
-	}
 
 	store.On("ListPeople", false, 20, 0).Return(people, nil)
 	store.On("CountPeople", false).Return(2, nil)
-	store.On("ListInvitations").Return(invites, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
 	w := httptest.NewRecorder()
@@ -46,10 +42,41 @@ func TestListUsers_Success(t *testing.T) {
 	data := users["data"].([]any)
 	assert.Len(t, data, 2)
 
+	// Pending invitations no longer appear in the active view.
+	assert.Empty(t, resp["invites"])
+
+	store.AssertExpectations(t)
+	store.AssertNotCalled(t, "ListInvitations")
+}
+
+func TestListUsers_Pending(t *testing.T) {
+	store := new(MockStore)
+	h := &handlers.Handler{DB: store}
+
+	invites := []model.Invitation{
+		{Email: "carol@example.com"},
+	}
+	store.On("ListInvitations").Return(invites, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/users?view=pending", nil)
+	w := httptest.NewRecorder()
+	h.ListUsers(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+
 	inviteData := resp["invites"].([]any)
 	assert.Len(t, inviteData, 1)
 
+	users := resp["users"].(map[string]any)
+	assert.Equal(t, float64(0), users["total"])
+	assert.Empty(t, users["data"])
+
 	store.AssertExpectations(t)
+	store.AssertNotCalled(t, "ListPeople")
+	store.AssertNotCalled(t, "CountPeople")
 }
 
 func TestListUsers_ListPeopleError(t *testing.T) {
@@ -88,16 +115,16 @@ func TestListUsers_ListInvitationsError(t *testing.T) {
 	store := new(MockStore)
 	h := &handlers.Handler{DB: store}
 
-	store.On("ListPeople", false, 20, 0).Return([]model.Person{}, nil)
-	store.On("CountPeople", false).Return(0, nil)
 	store.On("ListInvitations").Return(nil, errors.New("db error"))
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/users?view=pending", nil)
 	w := httptest.NewRecorder()
 	h.ListUsers(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	store.AssertExpectations(t)
+	store.AssertNotCalled(t, "ListPeople")
+	store.AssertNotCalled(t, "CountPeople")
 }
 
 func TestInviteUser_Success(t *testing.T) {

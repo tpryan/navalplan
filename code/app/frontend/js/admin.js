@@ -144,22 +144,24 @@ async function loadAdminUsers() {
 
         tbody.innerHTML = '';
 
-        if (currentAdminPage === 1 && invites.length) {
-            invites.forEach(i => {
-                const safeEmail = DOMPurify.sanitize(i.email);
-                const tr = document.createElement('tr');
-                tr.className = 'border-b bg-gray-light';
-                tr.innerHTML = `
-                    <td class="p-sm">${safeEmail}</td>
-                    <td class="p-sm"><span class="badge badge-standard">Pending Invite</span>${expiryStatusBadge(i.expires_at)}</td>
-                    <td class="p-sm"><button class="btn-text btn-danger font-sm p-0" data-revoke="${safeEmail}">Revoke</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        if (!users.length && !invites.length) {
-            const emptyMsg = currentAdminView === 'expired' ? 'No expired users' : 'No users found';
+        if (currentAdminView === 'pending') {
+            if (!invites.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No pending invites</td></tr>';
+            } else {
+                invites.forEach(i => {
+                    const safeEmail = DOMPurify.sanitize(i.email);
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b';
+                    tr.innerHTML = `
+                        <td class="p-sm">${safeEmail}</td>
+                        <td class="p-sm"><span class="badge badge-standard">Pending Invite</span>${expiryStatusBadge(i.expires_at)}</td>
+                        <td class="p-sm"><button class="btn-text btn-danger font-sm p-0" data-revoke="${safeEmail}">Revoke</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } else if (!users.length) {
+            const emptyMsg = currentAdminView === 'expired' ? 'No expired users' : 'No active users found';
             tbody.innerHTML = `<tr><td colspan="3" class="p-sm text-center">${emptyMsg}</td></tr>`;
         } else {
             users.forEach(u => {
