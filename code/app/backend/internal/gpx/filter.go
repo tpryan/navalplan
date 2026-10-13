@@ -88,21 +88,9 @@ func FilterGPX(data []byte) ([]byte, int, error) {
 		trk.Segments = cleanSegments
 	}
 
-	// 2. Filter route points if no tracks are present
-	if len(doc.Tracks) == 0 && len(doc.Routes) > 0 {
-		for rIdx := range doc.Routes {
-			rte := &doc.Routes[rIdx]
-			if len(rte.RoutePoints) == 0 {
-				continue
-			}
-			cleanPts, glitches := filterPointSlice(rte.RoutePoints)
-			totalGlitches += glitches
-			if len(cleanPts) > 0 {
-				rte.RoutePoints = cleanPts
-			}
-		}
-	}
-
+	// Routes (<rte>) are intentionally not filtered: route points are planned
+	// waypoints, and their <time> (e.g. OpenCPN waypoint creation time) is not
+	// a travel timestamp, so speed-based glitch detection would drop real legs.
 	if totalGlitches == 0 {
 		return data, 0, nil
 	}

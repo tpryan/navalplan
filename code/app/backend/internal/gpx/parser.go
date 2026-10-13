@@ -35,13 +35,14 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 		if name == "" {
 			name = fmt.Sprintf("Route %d", i+1)
 		}
+		// Route point <time> values are waypoint metadata (often creation
+		// time, in arbitrary order), not travel times, so they are dropped.
 		var pts []Point
 		for _, pt := range r.RoutePoints {
 			pts = append(pts, Point{
-				Lat:  pt.Lat,
-				Lng:  pt.Lon,
-				Ele:  pt.Ele,
-				Time: pt.Time,
+				Lat: pt.Lat,
+				Lng: pt.Lon,
+				Ele: pt.Ele,
 			})
 		}
 		if len(pts) > 0 {

@@ -371,3 +371,45 @@ func TestCalculateHaversineNMEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// TestParseGPXRouteIgnoresWaypointTimes guards against route points being
+// dropped by speed-based glitch filtering. OpenCPN writes waypoint creation
+// times into <rtept><time>, which are out of order and seconds apart across
+// tens of miles, so they must not be treated as travel timestamps.
+func TestParseGPXRouteIgnoresWaypointTimes(t *testing.T) {
+	routeXML := []byte(`<?xml version="1.0"?>
+<gpx version="1.1" creator="OpenCPN" xmlns="http://www.topografix.com/GPX/1/1">
+  <rte><name>Plan A - Friday - To Bimini Anchor</name>
+    <rtept lat="26.108425359" lon="-80.120534325"><time>2025-04-27T00:41:06Z</time><name>NM002</name></rtept>
+    <rtept lat="26.103085672" lon="-80.119535345"><time>2025-04-27T00:40:52Z</time><name>NM001</name></rtept>
+    <rtept lat="26.093774697" lon="-80.116889011"><time>2025-01-24T06:19:02Z</time><name>005</name></rtept>
+    <rtept lat="26.093774835" lon="-80.113195215"><time>2025-01-24T06:19:04Z</time><name>006</name></rtept>
+    <rtept lat="26.093051166" lon="-80.064554320"><time>2025-01-24T06:19:09Z</time><name>007</name></rtept>
+    <rtept lat="25.827796481" lon="-79.211260659"><time>2025-01-24T06:19:23Z</time><name>008</name></rtept>
+    <rtept lat="25.764503039" lon="-79.231858984"><time>2025-01-24T06:19:28Z</time><name>009</name></rtept>
+  </rte>
+</gpx>`)
+	if _, glitches, err := FilterGPX(routeXML); err != nil || glitches != 0 {
+		t.Fatalf("FilterGPX on route: glitches=%d err=%v, want 0, nil", glitches, err)
+	}
+	tracks, err := ParseGPX(routeXML, "")
+	if err != nil {
+		t.Fatalf("ParseGPX error: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("got %d tracks, want 1", len(tracks))
+	}
+	tr := tracks[0]
+	if tr.Kind != "planned" {
+		t.Errorf("Kind = %q, want planned", tr.Kind)
+	}
+	if len(tr.Points) != 7 {
+		t.Errorf("got %d points, want 7 (no route points dropped)", len(tr.Points))
+	}
+	if tr.DistanceNM < 55 || tr.DistanceNM > 60 {
+		t.Errorf("DistanceNM = %.1f, want ~57", tr.DistanceNM)
+	}
+	if tr.StartTime != nil || tr.EndTime != nil || tr.DurationInterval != "" {
+		t.Errorf("route should carry no timing, got start=%v end=%v dur=%q", tr.StartTime, tr.EndTime, tr.DurationInterval)
+	}
+}
