@@ -1850,9 +1850,9 @@
 /* Admin table */
 #admin-users-table              { border-collapse: collapse; table-layout: fixed; }
 #admin-users-table thead tr     { background-color: rgba(0,0,0,.03); }
-#admin-users-table th:nth-child(1) { width: 50%; }
-#admin-users-table th:nth-child(2) { width: 30%; }
-#admin-users-table th:nth-child(3) { width: 20%; }
+#admin-users-table th:nth-child(1) { width: 40%; }
+#admin-users-table th:nth-child(2) { width: 28%; }
+#admin-users-table th:nth-child(3) { width: 32%; }
 
 /* Inline icon in onboarding text */
 .icon-inline-sm { font-size: 1.2em; vertical-align: bottom; }

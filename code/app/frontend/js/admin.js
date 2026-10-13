@@ -121,8 +121,8 @@ async function loadAdminUsers() {
                     <td class="p-sm truncate" title="${safeEmail}">${safeEmail}</td>
                     <td class="p-sm">${status}</td>
                     <td class="p-sm">
-                        <div class="flex gap-xs items-center">
-                            <input type="date" class="font-sm p-xs border border-radius" data-expiry-input="${u.id}" value="${expiryDateValue(u.expires_at)}" title="Account expiration (blank = permanent)" />
+                        <div class="flex flex-col gap-xs items-start">
+                            <input type="date" class="font-sm p-xs border border-radius w-full" data-expiry-input="${u.id}" value="${expiryDateValue(u.expires_at)}" title="Account expiration (blank = permanent)" />
                             <button class="btn-text font-sm p-0" data-set-expiry="${u.id}">Save</button>
                         </div>
                     </td>
