@@ -29,6 +29,7 @@ emitted (no duplicate).
 
 from __future__ import annotations
 
+import os
 from typing import AsyncGenerator, Optional
 
 from google.adk.agents.invocation_context import InvocationContext
@@ -72,12 +73,42 @@ class NormalizedRemoteA2aAgent(RemoteA2aAgent):
             )
 
 
+# A2A HTTP timeout for eval, in seconds. RemoteA2aAgent defaults to 600s; slower
+# models (e.g. larger Gemini variants) on tool-heavy agents like harbourmaster
+# can exceed that and otherwise return an EMPTY response that fails every rubric.
+# Override with the NAVALPLAN_EVAL_A2A_TIMEOUT env var.
+_DEFAULT_EVAL_A2A_TIMEOUT = 1800.0
+
+
+def _eval_a2a_timeout(explicit: Optional[float]) -> float:
+    if explicit is not None:
+        return explicit
+    env = os.environ.get("NAVALPLAN_EVAL_A2A_TIMEOUT", "").strip()
+    if env:
+        try:
+            return float(env)
+        except ValueError:
+            pass
+    return _DEFAULT_EVAL_A2A_TIMEOUT
+
+
 def make_root_agent(
-    name: str, agent_card: str, use_legacy: bool = False
+    name: str,
+    agent_card: str,
+    use_legacy: bool = False,
+    timeout: Optional[float] = None,
 ) -> NormalizedRemoteA2aAgent:
-    """Build the eval root agent that talks to the Go service's A2A endpoint."""
+    """Build the eval root agent that talks to the Go service's A2A endpoint.
+
+    The A2A HTTP timeout defaults to NAVALPLAN_EVAL_A2A_TIMEOUT (or 1800s) rather
+    than RemoteA2aAgent's 600s, so a slow model isn't scored on an empty,
+    timed-out response.
+    """
     return NormalizedRemoteA2aAgent(
-        name=name, agent_card=agent_card, use_legacy=use_legacy
+        name=name,
+        agent_card=agent_card,
+        use_legacy=use_legacy,
+        timeout=_eval_a2a_timeout(timeout),
     )
 
 

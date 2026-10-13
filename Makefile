@@ -43,7 +43,7 @@ MIGRATE_BIN=.bin/migrate
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout eval-results eval-list eval-runs build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-compare eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout eval-results eval-list eval-runs build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -394,6 +394,12 @@ eval-specialist:
 
 eval-lookout:
 	@$(MAKE) eval-agent AGENT=lookout
+
+# Compare one or more agent models on the full suite (pass/fail + timing).
+# Defaults to the three models below; override with MODELS="m1 m2 ...".
+MODELS?=gemini-3.5-flash-lite gemini-3.8-flash gemini-4-argon
+eval-compare:
+	@bash code/services/researcher/eval/compare_models.sh $(MODELS)
 
 eval-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
