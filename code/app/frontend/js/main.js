@@ -44,7 +44,7 @@ let markers = [];
 let routePolyline = null;
 let routePolylines = [];
 let facilityMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
-const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel']);
+const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel', 'cafe', 'store', 'pharmacy', 'services']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
 const activeFilters = new Set(['anchorage', 'mooring', 'hub', 'fuel']);
 let voyageRecommendations = [];
@@ -3605,8 +3605,13 @@ async function showBriefing(briefing, doPushState = true) {
             if (tl.includes('anchor'))      icon = 'anchor';
             else if (tl.includes('marina')) icon = 'storefront';
             else if (tl.includes('moor'))   icon = 'link';
-            else if (tl.includes('bar'))    icon = 'local_bar';
             else if (tl.includes('restaurant')) icon = 'restaurant';
+            else if (tl.includes('cafe'))   icon = 'local_cafe';
+            else if (tl.includes('bar'))    icon = 'local_bar';
+            else if (tl.includes('pharmac')) icon = 'local_pharmacy';
+            else if (tl.includes('store') || tl.includes('grocery') || tl.includes('market') || tl.includes('provision')) icon = 'shopping_cart';
+            else if (tl.includes('service') || tl.includes('hardware') || tl.includes('chandler') || tl.includes('bank') || tl.includes('atm')) icon = 'handyman';
+            else if (tl.includes('fuel'))   icon = 'local_gas_station';
 
             const li = document.createElement('li');
             li.className = 'facility-item np-facility-briefing-item';
@@ -4368,7 +4373,11 @@ async function initMap() {
                                  : type.includes('marina') ? 'marina'
                                  : type.includes('moor') ? 'mooring'
                                  : type.includes('restaurant') ? 'restaurant'
+                                 : type.includes('cafe') ? 'cafe'
                                  : type.includes('bar') ? 'bar'
+                                 : type.includes('pharmac') ? 'pharmacy'
+                                 : (type.includes('store') || type.includes('grocery') || type.includes('market') || type.includes('provision')) ? 'store'
+                                 : (type.includes('service') || type.includes('hardware') || type.includes('chandler') || type.includes('bank') || type.includes('atm')) ? 'services'
                                  : type.includes('fuel') ? 'fuel'
                                  : 'other';
 

@@ -10,6 +10,10 @@ export const MARKER_ACCENTS = {
     'yacht club': 'amber',
     restaurant:   'green',
     bar:          'coral',
+    cafe:         'cafe',
+    store:        'store',
+    pharmacy:     'pharmacy',
+    services:     'muted',
     fuel:         'sky',
     default:      'sky',
 };
@@ -21,6 +25,10 @@ export const MARKER_ICONS = {
     mooring:    'link',
     restaurant: 'restaurant',
     bar:        'local_bar',
+    cafe:       'local_cafe',
+    store:      'shopping_cart',
+    pharmacy:   'local_pharmacy',
+    services:   'handyman',
     hub:        'build',
     fuel:       'local_gas_station',
 };
@@ -35,7 +43,11 @@ export function markerAccent(type) {
     if (t.includes('hub'))        return MARKER_ACCENTS.hub;
     if (t.includes('yacht'))      return MARKER_ACCENTS['yacht club'];
     if (t.includes('restaurant')) return MARKER_ACCENTS.restaurant;
+    if (t.includes('cafe'))       return MARKER_ACCENTS.cafe;
     if (t.includes('bar'))        return MARKER_ACCENTS.bar;
+    if (t.includes('pharmac'))    return MARKER_ACCENTS.pharmacy;
+    if (t.includes('store') || t.includes('grocery') || t.includes('market') || t.includes('provision')) return MARKER_ACCENTS.store;
+    if (t.includes('service') || t.includes('hardware') || t.includes('chandler') || t.includes('bank') || t.includes('atm')) return MARKER_ACCENTS.services;
     if (t.includes('fuel'))       return MARKER_ACCENTS.fuel;
     return MARKER_ACCENTS.default;
 }

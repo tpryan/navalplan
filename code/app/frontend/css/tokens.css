@@ -16,6 +16,9 @@
   --violet: #5B3BD4;
   --sky: #1A5BCE;
   --green: #116A3D;
+  --cafe: #6F4A1C;
+  --store: #9A2D86;
+  --pharmacy: #B11E4B;
 
   /* focus + state */
   --focus: #1A5BCE;
@@ -52,6 +55,9 @@
   --violet: #C2A9FF;
   --sky: #8BB8FF;
   --green: #7BE0A8;
+  --cafe: #E0A96B;
+  --store: #EE9BE0;
+  --pharmacy: #FF93B0;
 
   --focus: #8BB8FF;
   --danger: #FF9E9E;
@@ -75,6 +81,9 @@
     --violet: #C2A9FF;
     --sky: #8BB8FF;
     --green: #7BE0A8;
+    --cafe: #E0A96B;
+    --store: #EE9BE0;
+    --pharmacy: #FF93B0;
     --focus: #8BB8FF;
     --danger: #FF9E9E;
     --shadow: 0 2px 8px rgba(0, 0, 0, .2), 0 20px 40px -20px rgba(0, 0, 0, .5);

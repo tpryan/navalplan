@@ -1749,6 +1749,10 @@
 [data-type="bar"]        .pilot-dot { background: var(--coral); }
 [data-type="fuel"]       .pilot-dot { background: var(--sky); }
 [data-type="hub"]        .pilot-dot { background: var(--amber); }
+[data-type="cafe"]       .pilot-dot { background: var(--cafe); }
+[data-type="store"]      .pilot-dot { background: var(--store); }
+[data-type="pharmacy"]   .pilot-dot { background: var(--pharmacy); }
+[data-type="services"]   .pilot-dot { background: var(--muted); }
 
 /* ─── Voyage modal form ──────────────────────────────────────────────────── */
 #modal-new-voyage      { max-width: 440px; padding: 26px; }
