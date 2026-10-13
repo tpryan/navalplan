@@ -3,6 +3,7 @@ import { API } from './api.js';
 import { showNotification } from './notifications.js';
 
 let currentAdminPage = 1;
+let currentAdminView = 'active';
 const ADMIN_PAGE_LIMIT = 20;
 
 export function initAdminUI() {
@@ -15,8 +16,22 @@ export function initAdminUI() {
             modal.classList.remove('hidden');
             overlay.classList.remove('hidden');
             currentAdminPage = 1;
+            currentAdminView = 'active';
+            syncAdminTabs();
             loadAdminUsers();
         }
+    });
+
+    // Active / Expired tab switching.
+    document.getElementById('admin-view-tabs')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.admin-tab');
+        if (!tab) return;
+        const view = tab.dataset.view;
+        if (!view || view === currentAdminView) return;
+        currentAdminView = view;
+        currentAdminPage = 1;
+        syncAdminTabs();
+        loadAdminUsers();
     });
 
     const btnClose = document.getElementById('btn-close-admin');
@@ -58,6 +73,42 @@ export function initAdminUI() {
             btn.textContent = originalText;
         }
     });
+
+    document.getElementById('form-bulk-invite')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const emailsInput = document.getElementById('bulk-invite-emails');
+        const expiresInput = document.getElementById('bulk-invite-expires');
+        const emails = emailsInput ? emailsInput.value : '';
+        const expiresAt = expiresInput ? expiresInput.value : '';
+        const btn = e.currentTarget.querySelector('button[type="submit"]');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Inviting...';
+        try {
+            const result = await API.bulkInviteUsers(emails, expiresAt);
+            const invited = (result.invited || []).length;
+            const failed = (result.failed || []).length;
+            if (emailsInput) emailsInput.value = '';
+            if (expiresInput) expiresInput.value = '';
+            loadAdminUsers();
+            let msg = `${invited} user${invited === 1 ? '' : 's'} added to the allowlist${expiresAt ? ` (expires ${expiresAt})` : ''}.`;
+            if (failed) msg += ` ${failed} could not be invited.`;
+            showNotification('Users Invited', msg);
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', 'Failed to bulk invite users');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
+}
+
+// Reflects the active view on the tab buttons.
+function syncAdminTabs() {
+    document.querySelectorAll('#admin-view-tabs .admin-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.view === currentAdminView);
+    });
 }
 
 // Returns an ISO expiry as a YYYY-MM-DD value for a date input, or '' if none.
@@ -86,7 +137,7 @@ async function loadAdminUsers() {
     tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">Loading...</td></tr>';
 
     try {
-        const data    = await API.listAdminUsers(currentAdminPage, ADMIN_PAGE_LIMIT);
+        const data    = await API.listAdminUsers(currentAdminPage, ADMIN_PAGE_LIMIT, currentAdminView);
         const users   = data.users.data || [];
         const total   = data.users.total || 0;
         const invites = data.invites || [];
@@ -108,11 +159,14 @@ async function loadAdminUsers() {
         }
 
         if (!users.length && !invites.length) {
-            tbody.innerHTML = '<tr><td colspan="3" class="p-sm text-center">No users found</td></tr>';
+            const emptyMsg = currentAdminView === 'expired' ? 'No expired users' : 'No users found';
+            tbody.innerHTML = `<tr><td colspan="3" class="p-sm text-center">${emptyMsg}</td></tr>`;
         } else {
             users.forEach(u => {
                 const safeEmail = DOMPurify.sanitize(u.email);
-                let status = '<span class="badge badge-regional">Active User</span>';
+                let status = currentAdminView === 'expired'
+                    ? '<span class="badge badge-standard">User</span>'
+                    : '<span class="badge badge-regional">Active User</span>';
                 if (u.is_admin) status += ' <span class="badge badge-gem">Admin</span>';
                 status += expiryStatusBadge(u.expires_at);
                 const tr = document.createElement('tr');

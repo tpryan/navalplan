@@ -96,6 +96,14 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Expired accounts may not log in. Middleware also blocks their API
+	// access, but refusing the session here stops the login outright.
+	if person.ExpiresAt != nil && person.ExpiresAt.Before(time.Now()) {
+		log.Info("expired user attempted to log in", "email", gUser.Email)
+		http.Redirect(w, r, "/unauthorized.html", http.StatusTemporaryRedirect)
+		return
+	}
+
 	token, err := generateSessionToken()
 	if err != nil {
 		log.Error("failed to generate session token", "error", err)

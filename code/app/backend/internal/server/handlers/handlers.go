@@ -68,8 +68,8 @@ type DBStore interface {
 	FindPersonByEmail(ctx context.Context, email string) (*model.Person, error)
 	GetPersonByID(ctx context.Context, id int64) (*model.Person, error)
 	CreatePerson(ctx context.Context, googleID, email, name string, pictureURL *string, invitedBy *int64, isAdmin bool) (*model.Person, error)
-	ListPeople(ctx context.Context, limit, offset int) ([]model.Person, error)
-	CountPeople(ctx context.Context) (int, error)
+	ListPeople(ctx context.Context, expired bool, limit, offset int) ([]model.Person, error)
+	CountPeople(ctx context.Context, expired bool) (int, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
 	UpdatePersonExpiration(ctx context.Context, id int64, expiresAt *time.Time) error
 	SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error

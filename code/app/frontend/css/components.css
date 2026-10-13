@@ -2227,3 +2227,25 @@
 }
 
 
+
+
+/* Admin console Active/Expired tabs */
+.admin-tab {
+    padding: var(--space-xs, 6px) var(--space-md, 12px);
+    font-weight: 600;
+    color: var(--muted, #6b7280);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    cursor: pointer;
+}
+
+.admin-tab.active {
+    color: var(--ink, #111827);
+    border-bottom-color: var(--accent, #2563eb);
+}
+
+.admin-tab:focus-visible {
+    outline: 3px solid var(--focus, #2563eb);
+    outline-offset: 2px;
+}

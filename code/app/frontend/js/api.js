@@ -345,8 +345,8 @@ export const API = {
       },
 
     // Admin
-    async listAdminUsers(page = 1, limit = 20) {
-        const res = await apiFetch(`/api/admin/users?page=${page}&limit=${limit}`);
+    async listAdminUsers(page = 1, limit = 20, view = 'active') {
+        const res = await apiFetch(`/api/admin/users?page=${page}&limit=${limit}&view=${encodeURIComponent(view)}`);
         if (!res.ok) throw new Error('Failed to load users');
         return res.json();
     },
@@ -358,6 +358,18 @@ export const API = {
             body: JSON.stringify({ email, expires_at: expiresAt })
         });
         if (!res.ok) throw new Error('Failed to invite user');
+        return res.json();
+    },
+
+    // Invite a comma/newline-separated list of users with one shared expiry.
+    // Returns { invited: [...], failed: [...] }.
+    async bulkInviteUsers(emails, expiresAt = '') {
+        const res = await apiFetch('/api/admin/invite/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails, expires_at: expiresAt })
+        });
+        if (!res.ok) throw new Error('Failed to bulk invite users');
         return res.json();
     },
 

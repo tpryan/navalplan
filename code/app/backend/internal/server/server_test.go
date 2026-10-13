@@ -263,16 +263,16 @@ func (m *MockStore) ListInvitations(ctx context.Context) ([]model.Invitation, er
 	return args.Get(0).([]model.Invitation), args.Error(1)
 }
 
-func (m *MockStore) ListPeople(ctx context.Context, limit, offset int) ([]model.Person, error) {
-	args := m.Called(limit, offset)
+func (m *MockStore) ListPeople(ctx context.Context, expired bool, limit, offset int) ([]model.Person, error) {
+	args := m.Called(expired, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]model.Person), args.Error(1)
 }
 
-func (m *MockStore) CountPeople(ctx context.Context) (int, error) {
-	args := m.Called()
+func (m *MockStore) CountPeople(ctx context.Context, expired bool) (int, error) {
+	args := m.Called(expired)
 	return args.Int(0), args.Error(1)
 }
 

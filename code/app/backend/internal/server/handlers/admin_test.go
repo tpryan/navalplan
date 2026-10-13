@@ -27,8 +27,8 @@ func TestListUsers_Success(t *testing.T) {
 		{Email: "carol@example.com"},
 	}
 
-	store.On("ListPeople", 20, 0).Return(people, nil)
-	store.On("CountPeople").Return(2, nil)
+	store.On("ListPeople", false, 20, 0).Return(people, nil)
+	store.On("CountPeople", false).Return(2, nil)
 	store.On("ListInvitations").Return(invites, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
@@ -56,7 +56,7 @@ func TestListUsers_ListPeopleError(t *testing.T) {
 	store := new(MockStore)
 	h := &handlers.Handler{DB: store}
 
-	store.On("ListPeople", 20, 0).Return(nil, errors.New("db error"))
+	store.On("ListPeople", false, 20, 0).Return(nil, errors.New("db error"))
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
 	w := httptest.NewRecorder()
@@ -72,8 +72,8 @@ func TestListUsers_CountPeopleError(t *testing.T) {
 	store := new(MockStore)
 	h := &handlers.Handler{DB: store}
 
-	store.On("ListPeople", 20, 0).Return([]model.Person{}, nil)
-	store.On("CountPeople").Return(0, errors.New("db error"))
+	store.On("ListPeople", false, 20, 0).Return([]model.Person{}, nil)
+	store.On("CountPeople", false).Return(0, errors.New("db error"))
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
 	w := httptest.NewRecorder()
@@ -88,8 +88,8 @@ func TestListUsers_ListInvitationsError(t *testing.T) {
 	store := new(MockStore)
 	h := &handlers.Handler{DB: store}
 
-	store.On("ListPeople", 20, 0).Return([]model.Person{}, nil)
-	store.On("CountPeople").Return(0, nil)
+	store.On("ListPeople", false, 20, 0).Return([]model.Person{}, nil)
+	store.On("CountPeople", false).Return(0, nil)
 	store.On("ListInvitations").Return(nil, errors.New("db error"))
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)

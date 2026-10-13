@@ -42,16 +42,28 @@ func (db *DB) ListInvitations(ctx context.Context) ([]model.Invitation, error) {
 	return invitations, err
 }
 
-func (db *DB) ListPeople(ctx context.Context, limit, offset int) ([]model.Person, error) {
+// expiryFilter returns the SQL predicate selecting either expired or active
+// (non-expired, including permanent) accounts.
+func expiryFilter(expired bool) string {
+	if expired {
+		return `expires_at IS NOT NULL AND expires_at <= NOW()`
+	}
+	return `(expires_at IS NULL OR expires_at > NOW())`
+}
+
+// ListPeople returns a page of people, filtered to either expired or active
+// accounts based on the expired flag.
+func (db *DB) ListPeople(ctx context.Context, expired bool, limit, offset int) ([]model.Person, error) {
 	var people []model.Person
-	query := `SELECT * FROM person ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	query := `SELECT * FROM person WHERE ` + expiryFilter(expired) + ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 	err := db.SelectContext(ctx, &people, query, limit, offset)
 	return people, err
 }
 
-func (db *DB) CountPeople(ctx context.Context) (int, error) {
+// CountPeople counts people in either the expired or active set.
+func (db *DB) CountPeople(ctx context.Context, expired bool) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM person`
+	query := `SELECT COUNT(*) FROM person WHERE ` + expiryFilter(expired)
 	err := db.GetContext(ctx, &count, query)
 	return count, err
 }

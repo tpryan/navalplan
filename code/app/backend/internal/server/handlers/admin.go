@@ -5,7 +5,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"app/internal/model"
 )
 
 type AdminUserView struct {
@@ -52,25 +55,33 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
-	people, err := h.DB.ListPeople(r.Context(), limit, offset)
+	// view selects the active (default) or expired set of accounts.
+	expired := r.URL.Query().Get("view") == "expired"
+
+	people, err := h.DB.ListPeople(r.Context(), expired, limit, offset)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list people", "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
-	totalPeople, err := h.DB.CountPeople(r.Context())
+	totalPeople, err := h.DB.CountPeople(r.Context(), expired)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to count people", "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
-	invites, err := h.DB.ListInvitations(r.Context())
-	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list invitations", "error", err)
-		writeError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
+	// Pending invitations belong to the active view only; the expired tab
+	// shows provisioned accounts that have lapsed.
+	var invites []model.Invitation
+	if !expired {
+		invites, err = h.DB.ListInvitations(r.Context())
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to list invitations", "error", err)
+			writeError(w, http.StatusInternalServerError, "Internal Server Error")
+			return
+		}
 	}
 
 	var view []AdminUserView
@@ -136,6 +147,81 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "invited"}`))
+}
+
+// splitEmails parses a comma- or newline-separated list into a de-duplicated,
+// trimmed, lower-cased slice of email addresses, preserving input order.
+func splitEmails(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(r rune) bool {
+		switch r {
+		case ',', '\n', '\r', '\t', ';', ' ':
+			return true
+		}
+		return false
+	})
+	seen := make(map[string]struct{}, len(fields))
+	var out []string
+	for _, f := range fields {
+		e := strings.ToLower(strings.TrimSpace(f))
+		if e == "" {
+			continue
+		}
+		if _, ok := seen[e]; ok {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// BulkInviteUsers invites a comma- or newline-separated list of users, applying
+// a single optional expiration to all of them.
+func (h *Handler) BulkInviteUsers(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Emails    string `json:"emails"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	currentUser := GetPersonFromContext(r.Context())
+	if currentUser == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	expiresAt, ok := parseExpiry(req.ExpiresAt)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid expires_at (use RFC3339 or YYYY-MM-DD)")
+		return
+	}
+
+	emails := splitEmails(req.Emails)
+	if len(emails) == 0 {
+		writeError(w, http.StatusBadRequest, "No valid email addresses provided")
+		return
+	}
+
+	invited := make([]string, 0, len(emails))
+	failed := make([]string, 0)
+	for _, email := range emails {
+		if err := h.DB.CreateInvitation(r.Context(), email, currentUser.ID, false, expiresAt); err != nil {
+			slog.ErrorContext(r.Context(), "Failed to create bulk invitation", "email", email, "error", err)
+			failed = append(failed, email)
+			continue
+		}
+		invited = append(invited, email)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"invited": invited,
+		"failed":  failed,
+	})
 }
 
 func (h *Handler) RevokeInvitation(w http.ResponseWriter, r *http.Request) {

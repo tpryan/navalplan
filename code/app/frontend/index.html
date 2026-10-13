@@ -361,8 +361,22 @@
            <input type="date" id="invite-expires" name="expires" title="Optional: access expires at the end of this day. Leave blank for a permanent account." class="p-sm border-radius border" />
            <button type="submit" class="btn primary">Invite</button>
         </form>
-        
+
+        <h3>Bulk Invite Users</h3>
+        <form id="form-bulk-invite" class="flex flex-col gap-sm mb-lg">
+           <textarea id="bulk-invite-emails" name="emails" required rows="4" placeholder="Paste emails separated by commas or new lines&#10;alice@example.com, bob@example.com&#10;carol@example.com" class="w-full p-sm border-radius border"></textarea>
+           <div class="flex gap-sm align-center">
+              <label for="bulk-invite-expires" class="font-sm text-gray">Expiration (applies to all):</label>
+              <input type="date" id="bulk-invite-expires" name="expires" title="Optional: access expires at the end of this day for every user in the list. Leave blank for permanent accounts." class="p-sm border-radius border" />
+              <button type="submit" class="btn primary">Invite All</button>
+           </div>
+        </form>
+
         <h3>Users & Invites</h3>
+        <div id="admin-view-tabs" class="flex gap-sm mb-sm border-b">
+            <button type="button" class="btn-text admin-tab active" data-view="active">Active</button>
+            <button type="button" class="btn-text admin-tab" data-view="expired">Expired</button>
+        </div>
         <table id="admin-users-table" class="w-full text-left mt-md">
             <thead>
                 <tr class="border-b">

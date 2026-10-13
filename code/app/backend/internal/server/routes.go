@@ -117,6 +117,7 @@ func (s *Server) Routes(staticPath string) {
 
 		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},
 		{http.MethodPost, "/api/admin/invite", http.HandlerFunc(s.Handler.InviteUser), 2},
+		{http.MethodPost, "/api/admin/invite/bulk", http.HandlerFunc(s.Handler.BulkInviteUsers), 2},
 		{http.MethodDelete, "/api/admin/invite/{email}", http.HandlerFunc(s.Handler.RevokeInvitation), 2},
 		{http.MethodPatch, "/api/admin/users/{id}/expiration", http.HandlerFunc(s.Handler.SetUserExpiration), 2},
 		{http.MethodPost, "/api/admin/weather/update-future", http.HandlerFunc(s.Handler.UpdateAllFutureWeather), 2},
