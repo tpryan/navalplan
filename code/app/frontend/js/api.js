@@ -351,11 +351,11 @@ export const API = {
         return res.json();
     },
 
-    async inviteUser(email) {
+    async inviteUser(email, expiresAt = '') {
         const res = await apiFetch('/api/admin/invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+            body: JSON.stringify({ email, expires_at: expiresAt })
         });
         if (!res.ok) throw new Error('Failed to invite user');
         return res.json();
@@ -366,6 +366,17 @@ export const API = {
             method: 'DELETE'
         });
         if (!res.ok) throw new Error('Failed to revoke invitation');
+        return true;
+    },
+
+    // Set (or clear, when expiresAt is '') a user's account expiration.
+    async setUserExpiration(id, expiresAt = '') {
+        const res = await apiFetch(`/api/admin/users/${id}/expiration`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expires_at: expiresAt })
+        });
+        if (!res.ok) throw new Error('Failed to update expiration');
         return true;
     },
 

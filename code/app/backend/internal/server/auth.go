@@ -82,6 +82,15 @@ func (s *Server) oauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Carry a temporary-invite expiration onto the new account.
+		if invitation.ExpiresAt != nil {
+			if err := s.DB.UpdatePersonExpiration(r.Context(), person.ID, invitation.ExpiresAt); err != nil {
+				log.Error("failed to set person expiration", "email", gUser.Email, "error", err)
+			} else {
+				person.ExpiresAt = invitation.ExpiresAt
+			}
+		}
+
 		if err := s.DB.DeleteInvitation(r.Context(), gUser.Email); err != nil {
 			log.Error("failed to delete invitation", "email", gUser.Email, "error", err)
 		}

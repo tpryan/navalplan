@@ -236,8 +236,8 @@ func (m *MockStore) GetInvitation(ctx context.Context, email string) (*model.Inv
 	return args.Get(0).(*model.Invitation), args.Error(1)
 }
 
-func (m *MockStore) CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool) error {
-	args := m.Called(email, invitedBy, isAdmin)
+func (m *MockStore) CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool, expiresAt *time.Time) error {
+	args := m.Called(email, invitedBy, isAdmin, expiresAt)
 	return args.Error(0)
 }
 
@@ -269,6 +269,11 @@ func (m *MockStore) CountPeople(ctx context.Context) (int, error) {
 
 func (m *MockStore) UpdatePersonName(ctx context.Context, id int64, name string) error {
 	args := m.Called(id, name)
+	return args.Error(0)
+}
+
+func (m *MockStore) UpdatePersonExpiration(ctx context.Context, id int64, expiresAt *time.Time) error {
+	args := m.Called(id, expiresAt)
 	return args.Error(0)
 }
 

@@ -37,16 +37,19 @@ export function initAdminUI() {
     document.getElementById('form-invite-user')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = document.getElementById('invite-email');
+        const expiresInput = document.getElementById('invite-expires');
         const email = input.value;
+        const expiresAt = expiresInput ? expiresInput.value : '';
         const btn = e.currentTarget.querySelector('button');
         const originalText = btn.textContent;
         btn.disabled = true;
         btn.textContent = 'Inviting...';
         try {
-            await API.inviteUser(email);
+            await API.inviteUser(email, expiresAt);
             input.value = '';
+            if (expiresInput) expiresInput.value = '';
             loadAdminUsers();
-            showNotification('User Invited', `${email} has been added to the allowlist.`);
+            showNotification('User Invited', `${email} has been added to the allowlist${expiresAt ? ` (expires ${expiresAt})` : ''}.`);
         } catch (err) {
             console.error(err);
             showNotification('Error', 'Failed to invite user');
@@ -55,6 +58,23 @@ export function initAdminUI() {
             btn.textContent = originalText;
         }
     });
+}
+
+// Returns an ISO expiry as a YYYY-MM-DD value for a date input, or '' if none.
+function expiryDateValue(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().split('T')[0];
+}
+
+// Returns an HTML badge describing an expiry (expired vs upcoming), or '' if none.
+function expiryStatusBadge(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    if (d.getTime() < Date.now()) return ' <span class="error-text font-sm">Expired</span>';
+    return ` <span class="badge badge-standard">Expires ${d.toLocaleDateString()}</span>`;
 }
 
 async function loadAdminUsers() {
@@ -80,7 +100,7 @@ async function loadAdminUsers() {
                 tr.className = 'border-b bg-gray-light';
                 tr.innerHTML = `
                     <td class="p-sm">${safeEmail}</td>
-                    <td class="p-sm"><span class="badge badge-standard">Pending Invite</span></td>
+                    <td class="p-sm"><span class="badge badge-standard">Pending Invite</span>${expiryStatusBadge(i.expires_at)}</td>
                     <td class="p-sm"><button class="btn-text btn-danger font-sm p-0" data-revoke="${safeEmail}">Revoke</button></td>
                 `;
                 tbody.appendChild(tr);
@@ -94,12 +114,18 @@ async function loadAdminUsers() {
                 const safeEmail = DOMPurify.sanitize(u.email);
                 let status = '<span class="badge badge-regional">Active User</span>';
                 if (u.is_admin) status += ' <span class="badge badge-gem">Admin</span>';
+                status += expiryStatusBadge(u.expires_at);
                 const tr = document.createElement('tr');
                 tr.className = 'border-b';
                 tr.innerHTML = `
                     <td class="p-sm truncate" title="${safeEmail}">${safeEmail}</td>
                     <td class="p-sm">${status}</td>
-                    <td class="p-sm"><span class="text-gray font-sm">-</span></td>
+                    <td class="p-sm">
+                        <div class="flex gap-xs items-center">
+                            <input type="date" class="font-sm p-xs border border-radius" data-expiry-input="${u.id}" value="${expiryDateValue(u.expires_at)}" title="Account expiration (blank = permanent)" />
+                            <button class="btn-text font-sm p-0" data-set-expiry="${u.id}">Save</button>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -138,4 +164,24 @@ document.addEventListener('click', async (e) => {
         },
         { label: 'Cancel', type: 'secondary' },
     ]);
+});
+
+// Delegated handler for the per-user "Save" expiration buttons.
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-set-expiry]');
+    if (!btn) return;
+    const id = btn.dataset.setExpiry;
+    const input = document.querySelector(`[data-expiry-input="${id}"]`);
+    const value = input ? input.value : '';
+    btn.disabled = true;
+    try {
+        await API.setUserExpiration(id, value);
+        showNotification('Expiration Updated', value ? `Account expires ${value}.` : 'Expiration cleared — account is now permanent.');
+        loadAdminUsers();
+    } catch (err) {
+        console.error(err);
+        showNotification('Error', 'Failed to update expiration');
+    } finally {
+        btn.disabled = false;
+    }
 });

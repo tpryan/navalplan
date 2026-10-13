@@ -104,7 +104,7 @@ func TestInviteUser_Success(t *testing.T) {
 	store := new(MockStore)
 	h := &handlers.Handler{DB: store}
 
-	store.On("CreateInvitation", "dave@example.com", mock.AnythingOfType("int64"), false).Return(nil)
+	store.On("CreateInvitation", "dave@example.com", mock.AnythingOfType("int64"), false, mock.Anything).Return(nil)
 
 	body := strings.NewReader(`{"email":"dave@example.com"}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/invite", body)

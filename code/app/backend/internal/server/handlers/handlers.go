@@ -71,11 +71,12 @@ type DBStore interface {
 	ListPeople(ctx context.Context, limit, offset int) ([]model.Person, error)
 	CountPeople(ctx context.Context) (int, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
+	UpdatePersonExpiration(ctx context.Context, id int64, expiresAt *time.Time) error
 	SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error
 
 	// Invitations
 	GetInvitation(ctx context.Context, email string) (*model.Invitation, error)
-	CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool) error
+	CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool, expiresAt *time.Time) error
 	DeleteInvitation(ctx context.Context, email string) error
 	ListInvitations(ctx context.Context) ([]model.Invitation, error)
 

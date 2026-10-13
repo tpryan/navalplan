@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"app/internal/model"
 )
@@ -73,5 +74,13 @@ func (db *DB) SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error 
 func (db *DB) UpdatePersonName(ctx context.Context, id int64, name string) error {
 	query := `UPDATE "person" SET name = $1 WHERE id = $2`
 	_, err := db.ExecContext(ctx, query, name, id)
+	return err
+}
+
+// UpdatePersonExpiration sets (or clears, when expiresAt is nil) the account
+// expiration timestamp for a person. A nil value makes the account permanent.
+func (db *DB) UpdatePersonExpiration(ctx context.Context, id int64, expiresAt *time.Time) error {
+	query := `UPDATE "person" SET expires_at = $1 WHERE id = $2`
+	_, err := db.ExecContext(ctx, query, expiresAt, id)
 	return err
 }

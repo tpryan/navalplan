@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"app/internal/model"
 )
@@ -22,9 +23,9 @@ func (db *DB) GetInvitation(ctx context.Context, email string) (*model.Invitatio
 	return &invitation, nil
 }
 
-func (db *DB) CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool) error {
-	query := `INSERT INTO invitation (email, invited_by, is_admin) VALUES ($1, $2, $3)`
-	_, err := db.ExecContext(ctx, query, email, invitedBy, isAdmin)
+func (db *DB) CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool, expiresAt *time.Time) error {
+	query := `INSERT INTO invitation (email, invited_by, is_admin, expires_at) VALUES ($1, $2, $3, $4)`
+	_, err := db.ExecContext(ctx, query, email, invitedBy, isAdmin, expiresAt)
 	return err
 }
 

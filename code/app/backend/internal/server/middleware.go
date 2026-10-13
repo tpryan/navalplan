@@ -169,6 +169,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		// Temporary accounts: once past their expiration, deny access.
+		if person.ExpiresAt != nil && person.ExpiresAt.Before(time.Now()) {
+			http.Error(w, "account expired", http.StatusUnauthorized)
+			return
+		}
+
 		ctx := handlers.AddPersonToContext(r.Context(), person)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
