@@ -42,6 +42,51 @@ type Facility struct {
 	References      []string        `json:"references"`
 }
 
+// facilityRingsNM is the escalating "search area" ladder in nautical miles.
+// Facilities display within the tightest ring that contains any of them; the
+// radius only widens when a ring comes up empty, and never past the top rung
+// (20 nm) or the stop's configured radius, whichever is smaller.
+var facilityRingsNM = []float64{2.5, 5, 10, 20}
+
+// nearbyFacilities keeps only the facilities within the tightest non-empty ring
+// of facilityRingsNM around (lat,lng), capped at maxNM. Facilities without
+// coordinates are always retained (they cannot be distance-tested). The result
+// is never nil.
+func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
+	coordless := []Facility{}
+	withCoords := []Facility{}
+	for _, f := range facs {
+		if f.Latitude == 0 && f.Longitude == 0 {
+			coordless = append(coordless, f)
+		} else {
+			withCoords = append(withCoords, f)
+		}
+	}
+
+	rings := []float64{}
+	for _, r := range facilityRingsNM {
+		if r <= maxNM {
+			rings = append(rings, r)
+		}
+	}
+	if len(rings) == 0 {
+		rings = []float64{maxNM}
+	}
+
+	for _, ring := range rings {
+		kept := []Facility{}
+		for _, f := range withCoords {
+			if haversine(lat, lng, f.Latitude, f.Longitude, "nm") <= ring {
+				kept = append(kept, f)
+			}
+		}
+		if len(kept) > 0 {
+			return append(kept, coordless...)
+		}
+	}
+	return coordless
+}
+
 func (h *Handler) getStaticMap(ctx context.Context, lat, lng float64) ([]byte, error) {
 	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
 	if apiKey == "" {
@@ -345,6 +390,8 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		}
 		wg.Wait()
 
+		facilities = nearbyFacilities(facilities, stop.Latitude, stop.Longitude, radiusToNM(stop.SearchRadius, stop.SearchRadiusUnit))
+
 		sort.Slice(facilities, func(i, j int) bool {
 			if facilities[i].Type != facilities[j].Type {
 				return facilities[i].Type < facilities[j].Type
@@ -411,6 +458,18 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 	if voyage.PersonID != person.ID {
 		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
+	}
+
+	// Clip facilities to the stop's search area on the way out, so existing
+	// briefings honor the current radius without needing to be re-researched.
+	if len(briefing.Facilities) > 0 {
+		var facs []Facility
+		if err := json.Unmarshal(briefing.Facilities, &facs); err == nil {
+			facs = nearbyFacilities(facs, stop.Latitude, stop.Longitude, radiusToNM(stop.SearchRadius, stop.SearchRadiusUnit))
+			if b, err := json.Marshal(facs); err == nil {
+				briefing.Facilities = model.RawJSON(b)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

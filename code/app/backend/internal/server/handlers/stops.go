@@ -109,7 +109,7 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.SearchRadius == 0 {
-		s.SearchRadius = 60
+		s.SearchRadius = 20
 	}
 	switch s.SearchRadiusUnit {
 	case "nm", "km", "mi":

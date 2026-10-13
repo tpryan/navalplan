@@ -163,7 +163,7 @@ func (h *Handler) CreateVoyage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.SearchRadius == 0 {
-		v.SearchRadius = 60
+		v.SearchRadius = 20
 	}
 	switch v.SearchRadiusUnit {
 	case "nm", "km", "mi":

@@ -44,6 +44,11 @@ let markers = [];
 let routePolyline = null;
 let routePolylines = [];
 let facilityMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
+let facilityClusters = []; // per-stop: { position, clusterMarker, markers: [{marker,type}] }
+let facilityClusterListener = null;
+// At/above this zoom, individual facility markers are shown (filtered by type);
+// below it, each stop's facilities collapse into a single cluster bubble.
+const FACILITY_CLUSTER_ZOOM = 12;
 const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel', 'cafe', 'store', 'pharmacy', 'services']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
 const activeFilters = new Set(['anchorage', 'mooring', 'hub', 'fuel']);
@@ -93,7 +98,7 @@ async function startStopSweepSequence(stops) {
     // Animated outer ring around the full voyage search area
     if (map && currentVoyage && currentVoyage.latitude != null && currentVoyage.longitude != null) {
         if (searchRing) { searchRing.stop(); searchRing = null; }
-        const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
+        const radiusMeters = (currentVoyage.search_radius || 20) * 1852;
         const SearchRingClass = await getSearchRingClass();
         searchRing = new SearchRingClass(
             map,
@@ -607,9 +612,7 @@ function initPilotAndFilterListeners() {
                 activeFacilityFilters.add(type);
                 btn.classList.add('active');
             }
-            facilityMarkers.forEach(({ marker, type: markerType }) => {
-                marker.map = activeFacilityFilters.has(markerType) ? map : null;
-            });
+            applyFacilityClustering();
         });
     });
 
@@ -930,7 +933,7 @@ function initVoyageModalListeners() {
             precise_location: formData.get('precise_location'),
             latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
             longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
-            search_radius: parseInt(formData.get('search_radius')) || 60,
+            search_radius: parseInt(formData.get('search_radius')) || 20,
             search_radius_unit: 'nm'
         };
         try {
@@ -1564,8 +1567,8 @@ function openEditModal(voyage) {
     applyVoyageModalMode(isDayTrip(voyage) ? 'daytrip' : 'multiday');
     document.getElementById('voyage-date-fields').classList.remove('hidden');
     document.getElementById('voyage-location-name').value = voyage.location_name || '';
-    document.getElementById('voyage-radius').value = voyage.search_radius || 60;
-    document.getElementById('voyage-radius-display').textContent = voyage.search_radius || 60;
+    document.getElementById('voyage-radius').value = voyage.search_radius || 20;
+    document.getElementById('voyage-radius-display').textContent = voyage.search_radius || 20;
     document.getElementById('voyage-precise-location').value = voyage.precise_location || '';
     
     if (voyage.latitude != null && voyage.longitude != null) {
@@ -1739,7 +1742,7 @@ async function loadStops() {
                 // If we have no stops yet, zoom to the search radius
                 if (currentStops.length === 0) {
                     const { Circle } = await importLibrary("maps");
-                    const radiusMeters = (currentVoyage.search_radius || 60) * 1852;
+                    const radiusMeters = (currentVoyage.search_radius || 20) * 1852;
                     const tempCircle = new Circle({
                         center: { lat: currentVoyage.latitude, lng: currentVoyage.longitude },
                         radius: radiusMeters
@@ -4366,6 +4369,7 @@ async function initMap() {
             try {
                 const b = await API.getBriefing(stop.id);
                 if (b && b.facilities) {
+                    const stopMarkers = [];
                     b.facilities.forEach(f => {
                          if (f.latitude && f.longitude) {
                              const type = (f.type || '').toLowerCase();
@@ -4382,10 +4386,10 @@ async function initMap() {
                                  : 'other';
 
                              const accent = markerAccent(f.type);
-                             const dot = accentDot(accent, 24, filterKey);
+                              const dot = accentDot(accent, 34, filterKey);
 
                              const fMarker = new AdvancedMarkerElement({
-                                 map: activeFacilityFilters.has(filterKey) ? map : null,
+                                 map: null, // visibility managed by applyFacilityClustering()
                                  position: { lat: f.latitude, lng: f.longitude },
                                  content: dot,
                                  title: f.name,
@@ -4396,8 +4400,27 @@ async function initMap() {
                                  showFacilityInfoWindow(f, fMarker, accent);
                              });
                              facilityMarkers.push({ marker: fMarker, type: filterKey });
+                             stopMarkers.push({ marker: fMarker, type: filterKey });
                          }
                     });
+                    if (stopMarkers.length > 0) {
+                        // Bubble sits at the stop's own coords (guaranteed valid; the
+                        // numbered pin renders there). zIndex:101 + the CSS offset in
+                        // facilityClusterBubble() keep it clear of that pin.
+                        const pos = { lat: stop.latitude, lng: stop.longitude };
+                        const clusterMarker = new AdvancedMarkerElement({
+                            map: null, // visibility managed by applyFacilityClustering()
+                            position: pos,
+                            content: facilityClusterBubble(stopMarkers.length),
+                            title: `${stopMarkers.length} facilities near ${displayLocationName(stop.location_name)}`,
+                            zIndex: 101,
+                        });
+                        clusterMarker.addListener('gmp-click', () => {
+                            map.panTo(pos);
+                            map.setZoom(Math.max((map.getZoom() || 0) + 2, FACILITY_CLUSTER_ZOOM));
+                        });
+                        facilityClusters.push({ position: pos, clusterMarker, markers: stopMarkers });
+                    }
                 }
             } catch (err) {
                // Ignore errors
@@ -4405,6 +4428,10 @@ async function initMap() {
         }
         if (facilityMarkers.length > 0) {
             document.getElementById('facility-controls').classList.remove('hidden');
+        }
+        applyFacilityClustering();
+        if (map && !facilityClusterListener) {
+            facilityClusterListener = map.addListener('zoom_changed', applyFacilityClustering);
         }
     })();
 
@@ -4423,6 +4450,34 @@ async function initMap() {
     }
 }
   
+// Builds a round cluster bubble showing a stop's facility count.
+function facilityClusterBubble(count) {
+    const d = document.createElement('div');
+    d.textContent = String(count);
+    d.style.cssText = [
+        'width:32px', 'height:32px', 'box-sizing:border-box',
+        'border-radius:50%', 'background:var(--ink2)', 'color:#fff',
+        'border:2.5px solid var(--surface)', 'box-shadow:0 2px 6px rgba(0,0,0,.3)',
+        'font:600 13px/32px system-ui,sans-serif', 'text-align:center',
+        'cursor:pointer', 'user-select:none',
+        // Shift the bubble up-and-right of its anchor so it clears the stop flag.
+        'transform:translate(22px,-20px)',
+    ].join(';');
+    return d;
+}
+
+// Clusters facility markers around their stops: below FACILITY_CLUSTER_ZOOM a
+// single bubble per stop is shown; at/above it the individual markers appear,
+// filtered by the active facility type filters.
+function applyFacilityClustering() {
+    if (!map) return;
+    const expanded = (map.getZoom() || 0) >= FACILITY_CLUSTER_ZOOM;
+    facilityClusters.forEach((c) => { c.clusterMarker.map = expanded ? null : map; });
+    facilityMarkers.forEach(({ marker, type }) => {
+        marker.map = (expanded && activeFacilityFilters.has(type)) ? map : null;
+    });
+}
+
 function clearMap(options = {}) {
     const { clearTracks = true } = options;
     if (activeInfoWindow) activeInfoWindow.close();
@@ -4451,6 +4506,8 @@ function clearMap(options = {}) {
 
     facilityMarkers.forEach(({ marker }) => marker.map = null);
     facilityMarkers = [];
+    facilityClusters.forEach(({ clusterMarker }) => { clusterMarker.map = null; });
+    facilityClusters = [];
     document.getElementById('facility-controls').classList.add('hidden');
 
     if (map && map.data) {
@@ -5239,7 +5296,7 @@ async function captureAndUploadMap(voyageId) {
     // map matches the search circle the user sees on the map.
     let centerZoomParam = '';
     if (sortedStops.length === 0 && currentVoyage.latitude && currentVoyage.longitude) {
-        const radiusNm = currentVoyage.search_radius || 60;
+        const radiusNm = currentVoyage.search_radius || 20;
         const radiusM  = radiusNm * 1852;
         const lat      = currentVoyage.latitude;
         // Google Static Maps: at zoom z the map width in metres is
