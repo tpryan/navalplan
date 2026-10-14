@@ -83,6 +83,8 @@ func main() {
 	slog.Info("config", "GoogleClientSecret", config.ObscureString(cfg.GoogleClientSecret))
 	slog.Info("config", "BaseURL", cfg.BaseURL)
 	slog.Info("config", "NavalPlanAgentURL", cfg.NavalPlanAgentURL)
+	slog.Info("config", "AgentModel", cfg.AgentModel)
+	slog.Info("config", "CommodoreModel", cfg.CommodoreModel)
 	slog.Info("config", "SystemAPIKey", config.ObscureString(cfg.SystemAPIKey))
 	slog.Info("config", "GoogleMapsAPIKey", config.ObscureString(cfg.GoogleMapsAPIKey))
 

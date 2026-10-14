@@ -104,6 +104,7 @@ func main() {
 
 func logConfig(cfg *config.Config) {
 	slog.Info("config", "modelName", cfg.ModelName)
+	slog.Info("config", "commodoreModelName", cfg.CommodoreModelName)
 	slog.Info("config", "port", cfg.Port)
 	if len(cfg.MapsAPIKey) > 5 {
 		slog.Info("config", "MapsAPIKey", cfg.MapsAPIKey[:5]+"...")

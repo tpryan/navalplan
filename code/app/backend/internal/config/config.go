@@ -29,6 +29,8 @@ type Config struct {
 	// External Services
 	NavalPlanAgentURL string
 	GoogleMapsAPIKey  string
+	AgentModel        string
+	CommodoreModel    string
 
 	// System
 	SystemAPIKey string
@@ -164,6 +166,16 @@ func New(getEnv func(string) string) (*Config, error) {
 		}
 	}
 
+	agentModel := getEnv("NAVALPLAN_AGENT_MODEL")
+	if agentModel == "" {
+		agentModel = "gemini-3.5-flash-lite"
+	}
+
+	commodoreModel := getEnv("NAVALPLAN_COMMODORE_MODEL")
+	if commodoreModel == "" {
+		commodoreModel = "gemini-4-argon"
+	}
+
 	result := &Config{
 		Env:                  getEnv("ENV"),
 		Project:              project,
@@ -174,6 +186,8 @@ func New(getEnv func(string) string) (*Config, error) {
 		GoogleClientSecret:   getEnv("NAVALPLAN_OA_SECRET"),
 		BaseURL:              baseURL,
 		NavalPlanAgentURL:    strings.TrimSpace(agentURL),
+		AgentModel:           agentModel,
+		CommodoreModel:       commodoreModel,
 		SystemAPIKey:         strings.TrimSpace(getEnv("NAVALPLAN_SYSTEM_KEY")),
 		GoogleMapsAPIKey:     getEnv("NAVALPLAN_BACKEND_MAPS_API_KEY"),
 		DisableTracing:       getEnv("NAVALPLAN_DISABLE_TRACING") == "true",

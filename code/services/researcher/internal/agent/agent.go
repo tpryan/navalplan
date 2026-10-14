@@ -185,6 +185,7 @@ func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCa
 		if sp.name == Commodore && cfg.CommodoreModelName != "" {
 			modelName = cfg.CommodoreModelName
 		}
+		slog.Info("config", "agent", sp.name, "model", modelName)
 
 		a, err := createAgent(ctx, cfg, before, after, &agentConfig{
 			name:        sp.name,
