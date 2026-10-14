@@ -43,6 +43,8 @@ let map = null;
 let currentMapTypeId = 'roadmap';
 let voyagePreviewCircle = null;
 let voyagePreviewMarker = null;
+let voyagePreviewRadiusMarker = null;
+let voyagePreviewRadiusLabel = null;
 let markers = [];
 let routePolyline = null;
 let routePolylines = [];
@@ -901,6 +903,16 @@ function clearVoyageModalMapPreview() {
         voyagePreviewMarker.map = null;
         voyagePreviewMarker = null;
     }
+    if (voyagePreviewRadiusMarker) {
+        voyagePreviewRadiusMarker.map = null;
+        voyagePreviewRadiusMarker = null;
+    }
+    voyagePreviewRadiusLabel = null;
+    if (pilotCircle && currentVoyage) {
+        pilotCircle.setMap(map);
+        if (pilotCenterMarker) pilotCenterMarker.map = map;
+        if (pilotRadiusMarker) pilotRadiusMarker.map = map;
+    }
 }
 
 async function setVoyageModalTargetCoords(lat, lng, { pan = false, geocode = true } = {}) {
@@ -934,9 +946,15 @@ async function updateVoyageModalMapPreview() {
         return;
     }
 
+    // Hide underlying voyage pilotCircle while modal preview is active so they don't stack
+    if (pilotCircle) pilotCircle.setMap(null);
+    if (pilotCenterMarker) pilotCenterMarker.map = null;
+    if (pilotRadiusMarker) pilotRadiusMarker.map = null;
+
     const inputLat = document.getElementById('voyage-lat');
     const inputLng = document.getElementById('voyage-lng');
     const inputRadius = document.getElementById('voyage-radius');
+    const radiusDisplay = document.getElementById('voyage-radius-display');
 
     let lat = parseFloat(inputLat?.value);
     let lng = parseFloat(inputLng?.value);
@@ -947,23 +965,25 @@ async function updateVoyageModalMapPreview() {
         lng = center.lng();
     }
 
-    const radiusNm = parseFloat(inputRadius?.value) || 20;
+    const radiusNm = Math.max(1, Math.min(150, Math.round(parseFloat(inputRadius?.value) || 20)));
     const radiusMeters = radiusNm * 1852;
     const position = { lat, lng };
+    const skyColor = tokenColor('sky') || '#1A5BCE';
 
     const { Circle } = await importLibrary('maps');
     const { AdvancedMarkerElement } = await importLibrary('marker');
+    const { spherical } = await importLibrary('geometry');
 
     if (!voyagePreviewCircle) {
         voyagePreviewCircle = new Circle({
             map,
             center: position,
             radius: radiusMeters,
-            strokeColor: '#D94E34',
-            strokeOpacity: 0.85,
-            strokeWeight: 2,
-            fillColor: '#D94E34',
-            fillOpacity: 0.12,
+            strokeColor: skyColor,
+            strokeOpacity: 0.6,
+            strokeWeight: 2.5,
+            fillColor: skyColor,
+            fillOpacity: 0.06,
             clickable: false,
             zIndex: 5
         });
@@ -973,18 +993,47 @@ async function updateVoyageModalMapPreview() {
         voyagePreviewCircle.setRadius(radiusMeters);
     }
 
+    const handlePos = spherical.computeOffset(position, radiusMeters, 90);
+
     if (!voyagePreviewMarker) {
-        const pinEl = MapPin({ glyph: 'my_location', color: '#D94E34', size: 'md' });
+        const centerContainer = document.createElement('div');
+        centerContainer.className = 'pilot-center-container';
+
+        const centerDot = document.createElement('div');
+        centerDot.style.cssText = 'width:18px;height:18px;border-radius:50%;background:var(--sky);border:2.5px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:move';
+
+        voyagePreviewRadiusLabel = document.createElement('span');
+        voyagePreviewRadiusLabel.className = 'pilot-radius-label';
+        voyagePreviewRadiusLabel.textContent = `${radiusNm} nm`;
+
+        centerContainer.appendChild(centerDot);
+        centerContainer.appendChild(voyagePreviewRadiusLabel);
+
         voyagePreviewMarker = new AdvancedMarkerElement({
             map,
             position,
-            content: pinEl,
-            title: 'Voyage Center (drag to reposition)',
+            content: centerContainer,
+            title: 'Drag to move search area',
             gmpDraggable: true,
-            zIndex: 50
+            zIndex: 100
         });
-        voyagePreviewMarker.addListener('dragend', async () => {
-            const pos = voyagePreviewMarker.position;
+
+        voyagePreviewMarker.addListener('drag', (e) => {
+            const newCenter = e.latLng;
+            if (!newCenter || !voyagePreviewCircle) return;
+            voyagePreviewCircle.setCenter(newCenter);
+            const currentRadius = voyagePreviewCircle.getRadius();
+            if (voyagePreviewRadiusMarker) {
+                voyagePreviewRadiusMarker.position = spherical.computeOffset(newCenter, currentRadius, 90);
+            }
+            const displayCoords = document.getElementById('voyage-coords-display');
+            if (displayCoords) {
+                displayCoords.textContent = `Lat: ${newCenter.lat().toFixed(4)}, Lng: ${newCenter.lng().toFixed(4)}`;
+            }
+        });
+
+        voyagePreviewMarker.addListener('dragend', async (e) => {
+            const pos = e?.latLng || voyagePreviewMarker.position;
             if (!pos) return;
             const dLat = typeof pos.lat === 'function' ? pos.lat() : pos.lat;
             const dLng = typeof pos.lng === 'function' ? pos.lng() : pos.lng;
@@ -993,6 +1042,57 @@ async function updateVoyageModalMapPreview() {
     } else {
         voyagePreviewMarker.map = map;
         voyagePreviewMarker.position = position;
+        if (voyagePreviewRadiusLabel) {
+            voyagePreviewRadiusLabel.textContent = `${radiusNm} nm`;
+        }
+    }
+
+    if (!voyagePreviewRadiusMarker) {
+        const handleDot = document.createElement('div');
+        handleDot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:var(--surface);border:2.5px solid var(--sky);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:ew-resize';
+
+        voyagePreviewRadiusMarker = new AdvancedMarkerElement({
+            map,
+            position: handlePos,
+            content: handleDot,
+            title: 'Drag to resize search radius',
+            gmpDraggable: true,
+            zIndex: 101
+        });
+
+        voyagePreviewRadiusMarker.addListener('drag', (e) => {
+            if (!e.latLng || !voyagePreviewCircle) return;
+            const currentCenter = voyagePreviewCircle.getCenter();
+            const newRadiusMeters = spherical.computeDistanceBetween(currentCenter, e.latLng);
+            const clampedNm = Math.max(1, Math.min(150, Math.round(newRadiusMeters / 1852)));
+            const clampedMeters = clampedNm * 1852;
+            voyagePreviewCircle.setRadius(clampedMeters);
+            if (voyagePreviewRadiusLabel) {
+                voyagePreviewRadiusLabel.textContent = `${clampedNm} nm`;
+            }
+            const rInput = document.getElementById('voyage-radius');
+            const rDisplay = document.getElementById('voyage-radius-display');
+            if (rInput) rInput.value = clampedNm;
+            if (rDisplay) rDisplay.textContent = clampedNm;
+            if (!inputLat?.value || !inputLng?.value) {
+                if (inputLat) inputLat.value = currentCenter.lat();
+                if (inputLng) inputLng.value = currentCenter.lng();
+                const displayCoords = document.getElementById('voyage-coords-display');
+                if (displayCoords) {
+                    displayCoords.textContent = `Lat: ${currentCenter.lat().toFixed(4)}, Lng: ${currentCenter.lng().toFixed(4)}`;
+                }
+            }
+        });
+
+        voyagePreviewRadiusMarker.addListener('dragend', () => {
+            if (!voyagePreviewCircle) return;
+            const currentCenter = voyagePreviewCircle.getCenter();
+            const currentRadius = voyagePreviewCircle.getRadius();
+            voyagePreviewRadiusMarker.position = spherical.computeOffset(currentCenter, currentRadius, 90);
+        });
+    } else {
+        voyagePreviewRadiusMarker.map = map;
+        voyagePreviewRadiusMarker.position = handlePos;
     }
 }
 
