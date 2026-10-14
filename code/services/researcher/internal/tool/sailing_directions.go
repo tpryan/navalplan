@@ -63,9 +63,7 @@ func (p *SailingDirectionsProvider) Close() error {
 func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus string) (tool.Tool, *SailingDirectionsProvider, error) {
 	var client HTTPDoer = http.DefaultClient
 	if projectID != "" && projectID != "your-project-id" {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		googleClient, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
+		googleClient, err := google.DefaultClient(context.Background(), "https://www.googleapis.com/auth/cloud-platform")
 		if err == nil {
 			client = googleClient
 		}
@@ -105,19 +103,22 @@ type retrieveContextsRequest struct {
 		RagResources []ragResource `json:"ragResources"`
 	} `json:"vertexRagStore"`
 	Query struct {
-		Text string `json:"text"`
+		Text           string `json:"text"`
+		SimilarityTopK int    `json:"similarityTopK,omitempty"`
 	} `json:"query"`
+}
+
+type ragContextChunk struct {
+	SourceURI         string  `json:"sourceUri"`
+	SourceDisplayName string  `json:"sourceDisplayName"`
+	Text              string  `json:"text"`
+	Score             float64 `json:"score,omitempty"`
+	Distance          float64 `json:"distance,omitempty"`
 }
 
 type retrieveContextsResponse struct {
 	Contexts struct {
-		Contexts []struct {
-			SourceURI         string  `json:"sourceUri"`
-			SourceDisplayName string  `json:"sourceDisplayName"`
-			Text              string  `json:"text"`
-			Score             float64 `json:"score,omitempty"`
-			Distance          float64 `json:"distance,omitempty"`
-		} `json:"contexts"`
+		Contexts []ragContextChunk `json:"contexts"`
 	} `json:"contexts"`
 }
 
@@ -221,10 +222,6 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 	endpoint := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s:retrieveContexts",
 		p.location, p.projectID, p.location)
 
-	var reqBody retrieveContextsRequest
-	reqBody.VertexRagStore.RagResources = resources
-	reqBody.Query.Text = args.Query
-
 	slog.InfoContext(reqCtx, "RAG query starting",
 		"query", args.Query,
 		"territory", territory,
@@ -233,50 +230,123 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 		"endpoint", endpoint,
 	)
 
-	payload, err := json.Marshal(reqBody)
-	if err != nil {
-		slog.ErrorContext(reqCtx, "RAG query request marshal failed",
-			"query", args.Query,
-			"error", err,
-		)
-		return SailingDirectionsResult{}, fmt.Errorf("marshaling retrieveContexts request: %w", err)
+	type corpusOutcome struct {
+		chunks    []ragContextChunk
+		httpErr   error
+		statusErr int
+		decodeErr error
+	}
+	outcomes := make([]corpusOutcome, len(resources))
+	var wg sync.WaitGroup
+	for i, res := range resources {
+		wg.Add(1)
+		go func(idx int, r ragResource) {
+			defer wg.Done()
+			var reqBody retrieveContextsRequest
+			reqBody.VertexRagStore.RagResources = []ragResource{r}
+			reqBody.Query.Text = args.Query
+			reqBody.Query.SimilarityTopK = topK
+
+			payload, err := json.Marshal(reqBody)
+			if err != nil {
+				slog.ErrorContext(reqCtx, "RAG query request marshal failed",
+					"query", args.Query,
+					"corpus", r.RagCorpus,
+					"error", err,
+				)
+				outcomes[idx].decodeErr = fmt.Errorf("marshaling retrieveContexts request: %w", err)
+				return
+			}
+
+			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
+			if err != nil {
+				slog.ErrorContext(reqCtx, "RAG query HTTP request creation failed",
+					"query", args.Query,
+					"corpus", r.RagCorpus,
+					"error", err,
+				)
+				outcomes[idx].decodeErr = fmt.Errorf("creating http request: %w", err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := p.client.Do(req)
+			if err != nil {
+				slog.WarnContext(reqCtx, "RAG retrieveContexts HTTP call failed, falling back to graceful notice",
+					"query", args.Query,
+					"corpus", r.RagCorpus,
+					"endpoint", endpoint,
+					"duration_ms", time.Since(start).Milliseconds(),
+					"error", err,
+				)
+				outcomes[idx].httpErr = err
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				slog.WarnContext(reqCtx, "RAG retrieveContexts returned error status, falling back to graceful notice",
+					"query", args.Query,
+					"corpus", r.RagCorpus,
+					"status_code", resp.StatusCode,
+					"duration_ms", time.Since(start).Milliseconds(),
+					"body", string(body),
+				)
+				outcomes[idx].statusErr = resp.StatusCode
+				return
+			}
+
+			var parsed retrieveContextsResponse
+			if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+				slog.ErrorContext(reqCtx, "RAG retrieveContexts response decode error",
+					"query", args.Query,
+					"corpus", r.RagCorpus,
+					"duration_ms", time.Since(start).Milliseconds(),
+					"error", err,
+				)
+				outcomes[idx].decodeErr = fmt.Errorf("decoding retrieveContexts response: %w", err)
+				return
+			}
+			outcomes[idx].chunks = parsed.Contexts.Contexts
+		}(i, res)
+	}
+	wg.Wait()
+
+	var allChunks []ragContextChunk
+	var successCount, httpFailCount, statusFailCount int
+	var firstDecodeErr error
+	for _, o := range outcomes {
+		if o.decodeErr != nil {
+			if firstDecodeErr == nil {
+				firstDecodeErr = o.decodeErr
+			}
+			continue
+		}
+		if o.httpErr != nil {
+			httpFailCount++
+			continue
+		}
+		if o.statusErr != 0 {
+			statusFailCount++
+			continue
+		}
+		successCount++
+		allChunks = append(allChunks, o.chunks...)
 	}
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
-	if err != nil {
-		slog.ErrorContext(reqCtx, "RAG query HTTP request creation failed",
-			"query", args.Query,
-			"error", err,
-		)
-		return SailingDirectionsResult{}, fmt.Errorf("creating http request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		slog.WarnContext(reqCtx, "RAG retrieveContexts HTTP call failed, falling back to graceful notice",
-			"query", args.Query,
-			"endpoint", endpoint,
-			"duration_ms", time.Since(start).Milliseconds(),
-			"error", err,
-		)
-		return SailingDirectionsResult{
-			Query:           args.Query,
-			Territory:       territory,
-			Contexts:        "Official hydrographic sailing directions are currently unreachable; rely on Google Search results and nautical charts.",
-			DebugDurationMS: time.Since(start).Milliseconds(),
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.WarnContext(reqCtx, "RAG retrieveContexts returned error status, falling back to graceful notice",
-			"query", args.Query,
-			"status_code", resp.StatusCode,
-			"duration_ms", time.Since(start).Milliseconds(),
-			"body", string(body),
-		)
+	if successCount == 0 {
+		if firstDecodeErr != nil {
+			return SailingDirectionsResult{}, firstDecodeErr
+		}
+		if httpFailCount > 0 && statusFailCount == 0 {
+			return SailingDirectionsResult{
+				Query:           args.Query,
+				Territory:       territory,
+				Contexts:        "Official hydrographic sailing directions are currently unreachable; rely on Google Search results and nautical charts.",
+				DebugDurationMS: time.Since(start).Milliseconds(),
+			}, nil
+		}
 		return SailingDirectionsResult{
 			Query:           args.Query,
 			Territory:       territory,
@@ -285,16 +355,7 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 		}, nil
 	}
 
-	formatted, chunkCount, sourceList, err := formatRagContextResponse(resp.Body)
-	if err != nil {
-		slog.ErrorContext(reqCtx, "RAG retrieveContexts response decode error",
-			"query", args.Query,
-			"duration_ms", time.Since(start).Milliseconds(),
-			"error", err,
-		)
-		return SailingDirectionsResult{}, err
-	}
-
+	formatted, chunkCount, sourceList := formatRagChunks(allChunks)
 	durationMS := time.Since(start).Milliseconds()
 	slog.InfoContext(reqCtx, "RAG query completed",
 		"query", args.Query,
@@ -348,12 +409,18 @@ func (p *SailingDirectionsProvider) resolveCorpus(ctx context.Context, corpusID 
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to dynamically list RAG corpora", "error", err)
+		slog.WarnContext(ctx, "Failed to dynamically list RAG corpora", "corpus_id", corpusID, "error", err)
 		return formatCorpusResource(p.projectID, p.location, corpusID)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		slog.WarnContext(ctx, "RAG corpora list returned non-OK status",
+			"corpus_id", corpusID,
+			"status_code", resp.StatusCode,
+			"body", string(body),
+		)
 		return formatCorpusResource(p.projectID, p.location, corpusID)
 	}
 
@@ -364,6 +431,7 @@ func (p *SailingDirectionsProvider) resolveCorpus(ctx context.Context, corpusID 
 		} `json:"ragCorpora"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+		slog.WarnContext(ctx, "Failed to decode RAG corpora list response", "corpus_id", corpusID, "error", err)
 		return formatCorpusResource(p.projectID, p.location, corpusID)
 	}
 
@@ -382,6 +450,7 @@ func (p *SailingDirectionsProvider) resolveCorpus(ctx context.Context, corpusID 
 		return resolved
 	}
 
+	slog.WarnContext(ctx, "RAG corpus displayName not found in project corpora list, using fallback path", "corpus_id", corpusID)
 	return formatCorpusResource(p.projectID, p.location, corpusID)
 }
 
@@ -397,10 +466,13 @@ func formatRagContextResponse(body io.Reader) (string, int, []string, error) {
 	if err := json.NewDecoder(body).Decode(&resp); err != nil {
 		return "", 0, nil, fmt.Errorf("decoding retrieveContexts response: %w", err)
 	}
+	formatted, count, sources := formatRagChunks(resp.Contexts.Contexts)
+	return formatted, count, sources, nil
+}
 
-	items := resp.Contexts.Contexts
+func formatRagChunks(items []ragContextChunk) (string, int, []string) {
 	if len(items) == 0 {
-		return "No relevant hydrographic pilot contexts found for the query.", 0, nil, nil
+		return "No relevant hydrographic pilot contexts found for the query.", 0, nil
 	}
 
 	var sources []string
@@ -427,5 +499,5 @@ func formatRagContextResponse(body io.Reader) (string, int, []string, error) {
 		sb.WriteString(strings.TrimSpace(item.Text))
 	}
 
-	return sb.String(), len(items), sources, nil
+	return sb.String(), len(items), sources
 }

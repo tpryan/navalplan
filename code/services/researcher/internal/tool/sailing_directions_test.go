@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -214,6 +215,74 @@ func TestQueryCoastPilot(t *testing.T) {
 	}
 	if res.Territory != "us" {
 		t.Errorf("Expected Territory 'us', got %s", res.Territory)
+	}
+}
+
+func TestQuerySailingDirections_AllTerritorySplitsRequestsAndPassesTopK(t *testing.T) {
+	var retrieveCalls atomic.Int32
+	mockDoer := &mockHTTPDoer{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			if strings.HasSuffix(req.URL.Path, "/ragCorpora") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body: io.NopCloser(bytes.NewBufferString(`{
+						"ragCorpora": [
+							{"name": "projects/test-proj/locations/us-central1/ragCorpora/111", "displayName": "coast-pilot-corpus"},
+							{"name": "projects/test-proj/locations/us-central1/ragCorpora/222", "displayName": "nga-sailing-directions-corpus"}
+						]
+					}`)),
+				}, nil
+			}
+			bodyBytes, _ := io.ReadAll(req.Body)
+			bodyStr := string(bodyBytes)
+			if strings.Count(bodyStr, `"ragCorpus"`) != 1 {
+				t.Errorf("expected exactly 1 ragCorpus per retrieveContexts request, got body: %s", bodyStr)
+			}
+			if !strings.Contains(bodyStr, `"similarityTopK":7`) {
+				t.Errorf("expected similarityTopK:7 in request body, got: %s", bodyStr)
+			}
+			retrieveCalls.Add(1)
+			source := "CPB7_WEB.pdf"
+			text := "San Pedro Channel controlling depth."
+			if strings.Contains(bodyStr, "ragCorpora/222") {
+				source = "Pub_154.pdf"
+				text = "Catalina approach notes."
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body: io.NopCloser(bytes.NewBufferString(`{
+					"contexts": {
+						"contexts": [
+							{"sourceDisplayName": "` + source + `", "text": "` + text + `", "score": 0.9}
+						]
+					}
+				}`)),
+			}, nil
+		},
+	}
+
+	provider := &SailingDirectionsProvider{
+		projectID:        "test-proj",
+		location:         "us-central1",
+		coastPilotCorpus: "coast-pilot-corpus",
+		ngaCorpus:        "nga-sailing-directions-corpus",
+		client:           mockDoer,
+		resolvedCorpora:  make(map[string]string),
+	}
+
+	res, err := provider.QuerySailingDirections(newMockContext(), SailingDirectionsArgs{
+		Query:     "San Pedro Channel hazards",
+		Territory: "all",
+		TopK:      7,
+	})
+	if err != nil {
+		t.Fatalf("QuerySailingDirections() error = %v", err)
+	}
+	if retrieveCalls.Load() != 2 {
+		t.Errorf("expected 2 retrieveContexts calls (one per corpus), got %d", retrieveCalls.Load())
+	}
+	if !strings.Contains(res.Contexts, "San Pedro Channel controlling depth.") || !strings.Contains(res.Contexts, "Catalina approach notes.") {
+		t.Errorf("expected merged contexts from both corpora, got: %s", res.Contexts)
 	}
 }
 
