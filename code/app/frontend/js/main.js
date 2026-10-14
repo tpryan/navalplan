@@ -73,6 +73,37 @@ let _guidePoll = null;
 let _guideProgressES = null;
 let _stopPoll = null;
 let _stopProgressES = null;
+let pilotProgressSteps = [];
+let researchAllProgressSteps = [];
+
+function pushProgressStep(stepsArray, message, markAllDone = false) {
+    if (!message || typeof message !== 'string') return;
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    stepsArray.forEach(s => {
+        if (s.state === 'active') s.state = 'done';
+    });
+    const last = stepsArray[stepsArray.length - 1];
+    if (!last || last.label !== trimmed) {
+        stepsArray.push({ label: trimmed, state: markAllDone ? 'done' : 'active' });
+    } else if (markAllDone) {
+        last.state = 'done';
+    }
+    while (stepsArray.length > 6) {
+        stepsArray.shift();
+    }
+}
+
+function updateStepperInCard(cardEl, stepsArray) {
+    if (!cardEl || !Array.isArray(stepsArray) || stepsArray.length === 0) return;
+    const existing = cardEl.querySelector('.np-stepper');
+    const nextStepper = Stepper({ steps: stepsArray });
+    if (existing) {
+        existing.replaceWith(nextStepper);
+    } else {
+        cardEl.appendChild(nextStepper);
+    }
+}
 
 // GPX Tracks state
 let currentTracks = [];
@@ -1997,6 +2028,9 @@ async function loadStops() {
 async function executeResearchAll() {
     if (!currentVoyage) return;
     
+    researchAllProgressSteps = [
+        { label: 'Starting full voyage research…', state: 'active' }
+    ];
     isResearchAllRunning = true;
     renderItinerary();
 
@@ -2048,6 +2082,15 @@ async function executeResearchAll() {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
+                }
+                if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
+                    pushProgressStep(researchAllProgressSteps, evt.message, evt.stage === 'done');
+                    const card = document.querySelector('#itinerary-list .np-research-card');
+                    if (card) {
+                        updateStepperInCard(card, researchAllProgressSteps);
+                    } else if (isResearchAllRunning) {
+                        renderItinerary();
+                    }
                 }
             });
         }
@@ -2300,6 +2343,9 @@ async function checkItineraryFullness(isManualAction = false) {
 async function handlePilotSuggestionsClick() {
     if (!currentVoyage) return;
     
+    pilotProgressSteps = [
+        { label: 'Starting Local Pilot research…', state: 'active' }
+    ];
     isPilotResearching = true;
     renderItinerary();
     
@@ -2389,6 +2435,7 @@ async function handlePilotSuggestionsClick() {
             _pilotProgressES = API.streamProgress(recRes.progress_session_id, (evt) => {
                 if (evt.stage === 'done') {
                     console.log('[progress] done received — finishing pilot research');
+                    pushProgressStep(pilotProgressSteps, evt.message || 'Local Pilot complete', true);
                     finishPilotResearch();
                 } else if (evt.stage === 'error' || (typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
                     clearInterval(_pilotPoll); _pilotPoll = null;
@@ -2403,6 +2450,14 @@ async function handlePilotSuggestionsClick() {
                     if (evt.stage === 'error_429') title = 'Rate Limit Reached';
                     else if (evt.stage === 'error_503') title = 'Model Busy';
                     showNotification(title, evt.message || 'The Local Pilot agent was unable to complete. Please try again.');
+                } else if (evt.message) {
+                    pushProgressStep(pilotProgressSteps, evt.message);
+                    const card = document.querySelector('#itinerary-list .np-research-card');
+                    if (card) {
+                        updateStepperInCard(card, pilotProgressSteps);
+                    } else if (isPilotResearching) {
+                        renderItinerary();
+                    }
                 }
             });
         }
@@ -2418,6 +2473,7 @@ async function handlePilotSuggestionsClick() {
                     console.log('[rec-stream] recommendation', rec.name, rec.type);
                     if (!voyageRecommendations.some(r => r.id === rec.id)) {
                         voyageRecommendations.push(rec);
+                        pushProgressStep(pilotProgressSteps, `Charted ${displayLocationName(rec.name)} (${rec.type || 'spot'})`);
                         renderRecommendations();
                         renderItinerary();
                     }
@@ -2840,11 +2896,10 @@ function renderItinerary() {
             top.appendChild(lbl);
             card.appendChild(top);
 
-            card.appendChild(Stepper({ steps: [
-                { label: 'Scanning anchorages', state: 'done' },
-                { label: 'Checking pilot charts', state: 'active' },
-                { label: 'Sourcing recommendations', state: 'queued' },
-            ]}));
+            const stepsToShow = pilotProgressSteps.length > 0 ? pilotProgressSteps : [
+                { label: 'Starting Local Pilot research…', state: 'active' }
+            ];
+            card.appendChild(Stepper({ steps: stepsToShow }));
             list.appendChild(card);
             return;
         }
@@ -2914,6 +2969,29 @@ function renderItinerary() {
         return;
     }
 
+    if (isPilotResearching) {
+        const card = document.createElement('div');
+        card.className = 'np-research-card';
+
+        const top = document.createElement('div');
+        top.className = 'np-research-card__top';
+        const spinner = document.createElement('span');
+        spinner.className = 'material-symbols-outlined spin np-research-card__icon';
+        spinner.textContent = 'explore';
+        const lbl = document.createElement('span');
+        lbl.className = 'np-research-card__label';
+        lbl.textContent = 'Researching area…';
+        top.appendChild(spinner);
+        top.appendChild(lbl);
+        card.appendChild(top);
+
+        const stepsToShow = pilotProgressSteps.length > 0 ? pilotProgressSteps : [
+            { label: 'Starting Local Pilot research…', state: 'active' }
+        ];
+        card.appendChild(Stepper({ steps: stepsToShow }));
+        list.appendChild(card);
+    }
+
     // §5.6 — Research-all in progress card
     if (isResearchAllRunning) {
         const card = document.createElement('div');
@@ -2931,12 +3009,10 @@ function renderItinerary() {
         top.appendChild(lbl);
         card.appendChild(top);
 
-        card.appendChild(Stepper({ steps: [
-            { label: 'Fetching weather forecasts', state: 'active' },
-            { label: 'Reading tide tables', state: 'queued' },
-            { label: 'Locating nearby facilities', state: 'queued' },
-            { label: 'Building voyage guide', state: 'queued' },
-        ]}));
+        const stepsToShow = researchAllProgressSteps.length > 0 ? researchAllProgressSteps : [
+            { label: 'Starting full voyage research…', state: 'active' }
+        ];
+        card.appendChild(Stepper({ steps: stepsToShow }));
         list.appendChild(card);
         return;
     }
@@ -3265,12 +3341,10 @@ async function handleResearchClick(stop, button) {
         loadTop.appendChild(loadLbl);
         loadCard.appendChild(loadTop);
 
-        loadCard.appendChild(Stepper({ steps: [
-            { label: 'Fetching weather forecast', state: 'active' },
-            { label: 'Reading tide tables', state: 'queued' },
-            { label: 'Locating nearby facilities', state: 'queued' },
-            { label: 'Computing sun phase', state: 'queued' },
-        ]}));
+        const stopSteps = [
+            { label: `Starting research for ${stop.location_name || 'stop'}…`, state: 'active' }
+        ];
+        loadCard.appendChild(Stepper({ steps: stopSteps }));
         content.appendChild(loadCard);
 
         modal.classList.remove('hidden');
@@ -3291,6 +3365,10 @@ async function handleResearchClick(stop, button) {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
+                }
+                if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
+                    pushProgressStep(stopSteps, evt.message, evt.stage === 'done');
+                    updateStepperInCard(loadCard, stopSteps);
                 }
             });
         }
@@ -3983,12 +4061,10 @@ async function redoBriefing(oldBriefing, btn) {
     redoTop.appendChild(redoSpinner);
     redoTop.appendChild(redoLbl);
     redoCard.appendChild(redoTop);
-    redoCard.appendChild(Stepper({ steps: [
-        { label: 'Fetching weather forecast', state: 'active' },
-        { label: 'Reading tide tables', state: 'queued' },
-        { label: 'Locating nearby facilities', state: 'queued' },
-        { label: 'Computing sun phase', state: 'queued' },
-    ]}));
+    const redoSteps = [
+        { label: 'Starting stop re-research…', state: 'active' }
+    ];
+    redoCard.appendChild(Stepper({ steps: redoSteps }));
     content.appendChild(redoCard);
     btn.disabled = true;
 
@@ -4002,6 +4078,10 @@ async function redoBriefing(oldBriefing, btn) {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
+                }
+                if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
+                    pushProgressStep(redoSteps, evt.message, evt.stage === 'done');
+                    updateStepperInCard(redoCard, redoSteps);
                 }
             });
         }

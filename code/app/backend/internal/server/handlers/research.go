@@ -348,7 +348,30 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		}
 	}
 
+	progressStop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(8 * time.Second)
+		defer t.Stop()
+		messages := []string{
+			fmt.Sprintf("Fetching weather & marine forecast for %s", stop.LocationName),
+			fmt.Sprintf("Checking NOAA tide tables & currents for %s", stop.LocationName),
+			fmt.Sprintf("Discovering anchorages, marinas, and shore facilities for %s", stop.LocationName),
+			fmt.Sprintf("Compiling pilot notes & navigational briefing for %s", stop.LocationName),
+		}
+		msgIdx := 0
+		for {
+			select {
+			case <-progressStop:
+				return
+			case <-t.C:
+				msg := messages[msgIdx%len(messages)]
+				msgIdx++
+				h.broadcastProgress(sessionID, "agent", msg)
+			}
+		}
+	}()
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
+	close(progressStop)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
@@ -364,6 +387,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		return
 	}
 
+	h.broadcastProgress(sessionID, "parsing", fmt.Sprintf("Mapping facilities & saving briefing for %s", stop.LocationName))
 	responseText = cleanJSON(responseText)
 
 	var output AgentOutput
