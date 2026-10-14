@@ -1860,6 +1860,8 @@ async function selectVoyage(voyage, doPushState = true) {
     document.querySelectorAll('#mobile-tab-bar .np-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'plan'));
 
     lastKnownItineraryFull = false;
+    lastKnownResearchDone = false;
+    document.getElementById('btn-export-voyage')?.classList.add('hidden');
     clearRecommendations();
     clearPilotCircle();
     updateItineraryHeader(currentVoyage);
@@ -2177,6 +2179,9 @@ async function handleResearchAll(confirmFirst = true) {
 async function checkItineraryFullness(isManualAction = false) {
     if (!currentVoyage) return;
     
+    const btnReport = document.getElementById('btn-export-voyage');
+    const hasLocalPilotResearch = Array.isArray(voyageRecommendations) && voyageRecommendations.length > 0;
+
     // If no dates, it can't be full in the itinerary sense
     if (!currentVoyage.start_date || !currentVoyage.end_date) {
         lastKnownItineraryFull = false;
@@ -2187,6 +2192,12 @@ async function checkItineraryFullness(isManualAction = false) {
         
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) btnResearchAll.classList.add('hidden');
+
+        if (btnReport) {
+            btnReport.classList.toggle('hidden', !hasLocalPilotResearch);
+            btnReport.classList.remove('primary');
+            btnReport.classList.add('secondary');
+        }
         
         return;
     }
@@ -2199,17 +2210,18 @@ async function checkItineraryFullness(isManualAction = false) {
 
     let isFull = false;
     let allResearchDone = false;
+    let hasStopOrGuideResearch = false;
 
     try {
         // Fetch ALL stops for this voyage to be sure (bypass pagination)
         const allStops = (await API.getStops(currentVoyage.id, 1, 1000)) || [];
         isFull = allStops.length >= diffDays;
 
+        const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
+        const guide = await API.getVoyageGuide(currentVoyage.id);
+        hasStopOrGuideResearch = briefings.length > 0 || guide !== null;
+
         if (isFull) {
-            // Check if briefings exist for all stops AND guide exists
-            const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
-            const guide = await API.getVoyageGuide(currentVoyage.id);
-            
             // Criteria: Briefings for every stop + Global Voyage Guide
             allResearchDone = briefings.length >= allStops.length && guide !== null;
         }
@@ -2245,8 +2257,9 @@ async function checkItineraryFullness(isManualAction = false) {
     if (btnGuide) btnGuide.classList.toggle('hidden', allResearchDone);
     const tabGuide = document.getElementById('tab-guide');
     if (tabGuide) tabGuide.classList.toggle('hidden', allResearchDone);
-    const btnReport = document.getElementById('btn-export-voyage');
+    const hasAnyReportData = hasLocalPilotResearch || hasStopOrGuideResearch || allResearchDone;
     if (btnReport) {
+        btnReport.classList.toggle('hidden', !hasAnyReportData);
         btnReport.classList.toggle('primary', allResearchDone);
         btnReport.classList.toggle('secondary', !allResearchDone);
     }
@@ -2483,6 +2496,8 @@ async function renderRecommendations() {
         }
 
         if (!voyageRecommendations || voyageRecommendations.length === 0) return;
+
+        document.getElementById('btn-export-voyage')?.classList.remove('hidden');
 
         const { AdvancedMarkerElement } = await importLibrary("marker");
 
