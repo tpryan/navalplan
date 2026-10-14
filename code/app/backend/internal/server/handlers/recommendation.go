@@ -306,7 +306,12 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "err", err)
 	}
 
-	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, nil); err != nil {
+	radiusNM := radiusToNM(v.SearchRadius, v.SearchRadiusUnit)
+	sessionState := map[string]any{
+		"search_mode":        "area",
+		"area_radius_meters": radiusNM * 1852.0,
+	}
+	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, sessionState); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.broadcastProgress(progressSessionID, "error", "Failed to start research session")
 		return
@@ -326,7 +331,6 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	count := recommendationCount(v.SearchRadius, v.SearchRadiusUnit)
-	radiusNM := radiusToNM(v.SearchRadius, v.SearchRadiusUnit)
 	boundaryHint := searchBoundaryHint(*v.Latitude, *v.Longitude, radiusNM)
 
 	var latStr string

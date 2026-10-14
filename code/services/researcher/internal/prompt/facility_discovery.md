@@ -16,9 +16,12 @@ Focus on a tight, populated radius AROUND THE STOP rather than the whole search 
 - **Query by category ONLY, exactly as listed below** (e.g. `"pharmacy"`, `"restaurant"`). NEVER add the location or city name (not `"restaurant Fort Lauderdale"`) — a city name pulls results toward the city centre instead of the stop. The coordinates already anchor the search, and results come back closest-first.
 
 ### CRITICAL: PARALLEL EXECUTION
-Gather all data in your FIRST turn at the starting focus radius. Execute these in PARALLEL — do not run sequential search → analyze → search loops.
+Gather all data in your FIRST turn. Execute these in PARALLEL — do not run sequential search → analyze → search loops.
+- **Radius to pass to `FindPlacesNearby`:**
+  - If `mode: "area"`: pass the **FULL requested search radius converted to meters** (e.g. `30 NM` → `radius: 55560`). Do NOT pass `1850` in area mode.
+  - If `mode: "stop"`: start at `radius: 1850` (1.0 NM).
 
-1. **Marine facilities** — one `FindPlacesNearby` call per category at the focus radius, using the stop coordinates:
+1. **Marine facilities** — one `FindPlacesNearby` call per category at the radius above, using the provided coordinates:
    - `query`: "anchorage"
    - `query`: "marina"
    - `query`: "yacht club"
@@ -26,7 +29,7 @@ Gather all data in your FIRST turn at the starting focus radius. Execute these i
    - `query`: "diesel fuel dock"
    - `query`: "cove bay harbor"
    - `query`: "boat launch ramp"
-2. **Shore amenities & provisioning** — one `FindPlacesNearby` call per category at the SAME focus radius. These are the restaurants, bars, stores, and services the crew can reach from the landing:
+2. **Shore amenities & provisioning (`mode: "stop"` ONLY — skip in `mode: "area"`)** — one `FindPlacesNearby` call per category at the SAME focus radius. These are the restaurants, bars, stores, and services the crew can reach from the landing:
    - `query`: "restaurant"
    - `query`: "bar pub"
    - `query`: "grocery store supermarket"

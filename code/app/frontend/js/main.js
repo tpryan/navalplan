@@ -1158,20 +1158,41 @@ function initVoyageModalListeners() {
         updateVoyageModalMapPreview();
     });
 
+    let locationDirty = false;
+    let locationGeocodeTimer = null;
+    const geocodeLocationInput = async () => {
+        if (!locInput) return;
+        const address = locInput.value.trim();
+        if (!address) return;
+        try {
+            const { Geocoder } = await importLibrary('geocoding');
+            const geocoder = new Geocoder();
+            const res = await geocoder.geocode({ address });
+            if (res.results && res.results.length > 0) {
+                const loc = res.results[0].geometry.location;
+                locationDirty = false;
+                await setVoyageModalTargetCoords(loc.lat(), loc.lng(), { pan: true, geocode: false });
+            }
+        } catch (err) {
+            console.warn('Failed to geocode location input', err);
+        }
+    };
+
     if (locInput) {
+        locInput.addEventListener('input', () => {
+            locationDirty = true;
+            if (locationGeocodeTimer) clearTimeout(locationGeocodeTimer);
+            locationGeocodeTimer = setTimeout(() => {
+                if (locationDirty) geocodeLocationInput();
+            }, 500);
+        });
         locInput.addEventListener('change', async () => {
-            const address = locInput.value.trim();
-            if (!address) return;
-            try {
-                const { Geocoder } = await importLibrary('geocoding');
-                const geocoder = new Geocoder();
-                const res = await geocoder.geocode({ address });
-                if (res.results && res.results.length > 0) {
-                    const loc = res.results[0].geometry.location;
-                    await setVoyageModalTargetCoords(loc.lat(), loc.lng(), { pan: true, geocode: false });
-                }
-            } catch (err) {
-                console.warn('Failed to geocode location input', err);
+            if (locationGeocodeTimer) {
+                clearTimeout(locationGeocodeTimer);
+                locationGeocodeTimer = null;
+            }
+            if (locationDirty || !inputLat.value || !inputLng.value) {
+                await geocodeLocationInput();
             }
         });
     }
@@ -1258,6 +1279,13 @@ function initVoyageModalListeners() {
     // Form Submit
     formNewVoyage.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (locationGeocodeTimer) {
+            clearTimeout(locationGeocodeTimer);
+            locationGeocodeTimer = null;
+        }
+        if (locationDirty || (!inputLat.value && locInput && locInput.value.trim())) {
+            await geocodeLocationInput();
+        }
         const formData = new FormData(formNewVoyage);
         const start = formData.get('start_date');
         // In Day Trip mode the End Date field is hidden — always force it to

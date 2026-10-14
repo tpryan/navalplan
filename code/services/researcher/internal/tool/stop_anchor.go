@@ -10,9 +10,36 @@ import (
 // session. agenttool copies parent state into sub-agent sessions, so they are
 // visible to facility_discovery's tool calls too.
 const (
-	stateStopLatitude  = "stop_latitude"
-	stateStopLongitude = "stop_longitude"
+	stateStopLatitude     = "stop_latitude"
+	stateStopLongitude    = "stop_longitude"
+	stateAreaRadiusMeters = "area_radius_meters"
 )
+
+// areaSearchRadius reads the voyage-wide area search radius (in meters) from
+// session state when running Local Pilot / area discovery.
+func areaSearchRadius(ctx agent.Context) (radiusMeters float64, ok bool) {
+	if ctx == nil {
+		return 0, false
+	}
+	defer func() {
+		if recover() != nil {
+			radiusMeters, ok = 0, false
+		}
+	}()
+	st := ctx.State()
+	if st == nil {
+		return 0, false
+	}
+	raw, err := st.Get(stateAreaRadiusMeters)
+	if err != nil {
+		return 0, false
+	}
+	r, okR := toFloat(raw)
+	if !okR || r <= 0 {
+		return 0, false
+	}
+	return r, true
+}
 
 // anchorOverrideNM is how far a place search may be centred from the stop
 // before it is pulled back onto the stop. Stops use a few-NM radius, so a

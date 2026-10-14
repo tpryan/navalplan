@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	places "cloud.google.com/go/maps/places/apiv1"
@@ -103,18 +104,37 @@ func NewPlacesTool(ctx context.Context, apiKey string) (tool.Tool, *PlacesProvid
 	return t, p, err
 }
 
+// offsetLatLng returns a point offset by distanceMeters along bearingDeg (0=N, 90=E, 180=S, 270=W).
+func offsetLatLng(lat, lng, distanceMeters, bearingDeg float64) (float64, float64) {
+	const R = 6371000.0
+	angDist := distanceMeters / R
+	brng := bearingDeg * math.Pi / 180.0
+	lat1 := lat * math.Pi / 180.0
+	lng1 := lng * math.Pi / 180.0
+
+	lat2 := math.Asin(math.Sin(lat1)*math.Cos(angDist) + math.Cos(lat1)*math.Sin(angDist)*math.Cos(brng))
+	lng2 := lng1 + math.Atan2(math.Sin(brng)*math.Sin(angDist)*math.Cos(lat1), math.Cos(angDist)-math.Sin(lat1)*math.Sin(lat2))
+	return lat2 * 180.0 / math.Pi, lng2 * 180.0 / math.Pi
+}
+
 func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesResponse, error) {
 	start := time.Now()
 
 	// Default radius if 0; if under 100, assume miles/NM passed and convert to meters.
-	radius := args.Radius
-	if radius <= 0 {
-		radius = 5000 // 5km default
-	} else if radius < 100 {
-		radius = radius * 1852 // Convert NM/miles to meters
+	requestedRadius := args.Radius
+	if requestedRadius <= 0 {
+		requestedRadius = 5000 // 5km default
+	} else if requestedRadius < 100 {
+		requestedRadius = requestedRadius * 1852 // Convert NM/miles to meters
 	}
-	if radius > 50000 {
-		radius = 50000 // Google Places API maximum limit is 50,000 meters
+	// When running in voyage-wide area mode, enforce at least the session's area
+	// radius even if the sub-agent passed the 1850m stop focus radius.
+	if areaRadius, ok := areaSearchRadius(ctx); ok && areaRadius > requestedRadius {
+		requestedRadius = areaRadius
+	}
+	apiRadius := requestedRadius
+	if apiRadius > 50000 {
+		apiRadius = 50000 // Google Places API maximum limit is 50,000 meters per Circle
 	}
 
 	centerPoint := &latlng.LatLng{
@@ -124,7 +144,7 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 
 	circleArea := &placespb.Circle{
 		Center: centerPoint,
-		Radius: radius,
+		Radius: apiRadius,
 	}
 
 	locationBias := &placespb.SearchTextRequest_LocationBias{
@@ -150,46 +170,94 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 	// Append FieldMask to context
 	callCtx := metadata.AppendToOutgoingContext(ctx, "x-goog-fieldmask", fieldMaskHeader)
 
-	// Amenity categories use Nearby Search: restricted to the circle and ranked
-	// by distance, so results are the closest places of that kind rather than
-	// the most prominent ones in the wider city.
+	// Amenity categories in tight stop searches use Nearby Search: restricted to
+	// the circle and ranked by distance, so results are the closest places of
+	// that kind rather than the most prominent ones in the wider city.
+	// Wide-area searches (> 10 km, i.e. mode: "area") use Text Search + sector fan-out
+	// so open-water circle centers cover all surrounding coasts.
 	var placesList []*placespb.Place
 	usedNearby := false
-	if includedTypes := nearbyTypesForQuery(args.Query); len(includedTypes) > 0 {
-		nearbyResp, err := p.client.SearchNearby(callCtx, &placespb.SearchNearbyRequest{
-			IncludedTypes:  includedTypes,
-			MaxResultCount: 20,
-			LocationRestriction: &placespb.SearchNearbyRequest_LocationRestriction{
-				Type: &placespb.SearchNearbyRequest_LocationRestriction_Circle{Circle: circleArea},
-			},
-			RankPreference: placespb.SearchNearbyRequest_DISTANCE,
-		})
-		if err == nil {
-			placesList = nearbyResp.Places
-			usedNearby = true
+	if requestedRadius <= 10000 {
+		if includedTypes := nearbyTypesForQuery(args.Query); len(includedTypes) > 0 {
+			nearbyResp, err := p.client.SearchNearby(callCtx, &placespb.SearchNearbyRequest{
+				IncludedTypes:  includedTypes,
+				MaxResultCount: 20,
+				LocationRestriction: &placespb.SearchNearbyRequest_LocationRestriction{
+					Type: &placespb.SearchNearbyRequest_LocationRestriction_Circle{Circle: circleArea},
+				},
+				RankPreference: placespb.SearchNearbyRequest_DISTANCE,
+			})
+			if err == nil {
+				placesList = nearbyResp.Places
+				usedNearby = true
+			}
+			// On error (e.g. an unsupported type), fall back to Text Search below.
 		}
-		// On error (e.g. an unsupported type), fall back to Text Search below.
 	}
 
-	// Marine features (anchorages, moorings, coves) are not Google place types,
-	// so they use Text Search, ranked by distance from the stop.
+	// Marine features (anchorages, moorings, coves) and wide-area searches use Text Search.
 	if !usedNearby {
+		rankPref := placespb.SearchTextRequest_DISTANCE
+		if requestedRadius > 10000 {
+			rankPref = placespb.SearchTextRequest_RELEVANCE
+		}
 		req := &placespb.SearchTextRequest{
 			TextQuery:      args.Query,
 			LocationBias:   locationBias,
 			OpenNow:        args.OpenNow,
 			MinRating:      args.MinRating,
 			MaxResultCount: 20,
-			RankPreference: placespb.SearchTextRequest_DISTANCE,
+			RankPreference: rankPref,
 		}
 		resp, err := p.client.SearchText(callCtx, req)
 		if err != nil {
 			return PlacesResponse{}, fmt.Errorf("%w: SearchText API: %w", ErrAPIUnavailable, err)
 		}
-		placesList = resp.Places
+		placesList = append(placesList, resp.Places...)
+
+		// For wide-area searches (> 15 km / ~8 NM), also probe 8 compass sector
+		// points at 60% of the requested radius in parallel so open-water centers
+		// (e.g. Florida Straits between Fort Lauderdale and Bimini) cover every
+		// shore inside the circle.
+		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) {
+			sectorOffset := requestedRadius * 0.60
+			bearings := []float64{0, 45, 90, 135, 180, 225, 270, 315}
+			sectorResults := make([][]*placespb.Place, len(bearings))
+			var wg sync.WaitGroup
+			for i, brng := range bearings {
+				wg.Add(1)
+				go func(idx int, b float64) {
+					defer wg.Done()
+					sLat, sLng := offsetLatLng(args.Latitude, args.Longitude, sectorOffset, b)
+					sReq := &placespb.SearchTextRequest{
+						TextQuery: args.Query,
+						LocationBias: &placespb.SearchTextRequest_LocationBias{
+							Type: &placespb.SearchTextRequest_LocationBias_Circle{
+								Circle: &placespb.Circle{
+									Center: &latlng.LatLng{Latitude: sLat, Longitude: sLng},
+									Radius: apiRadius,
+								},
+							},
+						},
+						OpenNow:        args.OpenNow,
+						MinRating:      args.MinRating,
+						MaxResultCount: 20,
+						RankPreference: placespb.SearchTextRequest_RELEVANCE,
+					}
+					if sResp, sErr := p.client.SearchText(callCtx, sReq); sErr == nil && sResp != nil {
+						sectorResults[idx] = sResp.Places
+					}
+				}(i, brng)
+			}
+			wg.Wait()
+			for _, sr := range sectorResults {
+				placesList = append(placesList, sr...)
+			}
+		}
 	}
 
 	var results []PlaceResult
+	seen := make(map[string]bool)
 	for _, pt := range placesList {
 		lat := 0.0
 		lng := 0.0
@@ -198,7 +266,9 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			lng = pt.Location.Longitude
 		}
 
-		filterRadius := radius
+		// Filter against the full requested radius (not the 50km API circle cap)
+		// so outer rims of 30-60 NM circles are preserved.
+		filterRadius := requestedRadius
 
 		dist := 0.0
 		if lat != 0 && lng != 0 {
@@ -216,6 +286,12 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		if pt.DisplayName != nil {
 			name = pt.DisplayName.Text
 		}
+
+		dedupKey := fmt.Sprintf("%s|%.4f|%.4f", strings.ToLower(strings.TrimSpace(name)), lat, lng)
+		if seen[dedupKey] {
+			continue
+		}
+		seen[dedupKey] = true
 
 		results = append(results, PlaceResult{
 			Name:            name,
