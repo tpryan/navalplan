@@ -25,7 +25,10 @@ import (
 	"google.golang.org/genai"
 )
 
-const maxOutputTokens = 8192
+// maxOutputTokens is the model maximum. The harbourmaster returns the whole
+// briefing (weather, tides, pilot notes, every facility) as one JSON object;
+// at 8192 dense stops were truncated mid-JSON and saved as empty briefings.
+const maxOutputTokens = 65536
 
 const (
 	Harbourmaster = "harbourmaster"

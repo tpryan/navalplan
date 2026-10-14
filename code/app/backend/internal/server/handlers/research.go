@@ -353,6 +353,10 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 
 	var output AgentOutput
 	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
+		if !strings.HasSuffix(strings.TrimSpace(responseText), "}") {
+			slog.ErrorContext(ctx, "Agent JSON output is incomplete; likely truncated at the model output token limit",
+				"stop_id", stop.ID, "location", stop.LocationName, "response_chars", len(responseText))
+		}
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
 		h.saveEmptyBriefing(ctx, stop)
 		return

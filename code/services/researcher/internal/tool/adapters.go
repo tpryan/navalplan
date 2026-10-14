@@ -92,15 +92,17 @@ type PlacesRequest struct {
 
 // PlaceDetail represents a single place found by the search.
 type PlaceDetail struct {
-	Name            string  `json:"name"`
-	Type            string  `json:"type"` // Mapped from query or business type
-	Website         string  `json:"website"`
-	Address         string  `json:"address"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
-	Rating          float64 `json:"rating"`
-	UserRatingCount int32   `json:"user_rating_count"`
-	BusinessStatus  string  `json:"business_status"`
+	Name            string   `json:"name"`
+	Type            string   `json:"type"` // Mapped from Google place types and the query; see classifyPlace
+	Website         string   `json:"website"`
+	Address         string   `json:"address"`
+	Latitude        float64  `json:"latitude"`
+	Longitude       float64  `json:"longitude"`
+	Rating          float64  `json:"rating"`
+	UserRatingCount int32    `json:"user_rating_count"`
+	BusinessStatus  string   `json:"business_status"`
+	DistanceMeters  float64  `json:"distance_meters"`
+	GoogleTypes     []string `json:"google_types,omitempty"`
 	Details         struct {
 		Description string `json:"description"`
 		Protection  string `json:"protection"`
@@ -268,24 +270,10 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 			UserRatingCount: p.UserRatingCount,
 			BusinessStatus:  p.BusinessStatus,
 			Website:         p.WebsiteURI,
+			DistanceMeters:  p.DistanceMeters,
+			GoogleTypes:     p.Types,
 		}
-
-		// Try to map type from query
-		q := strings.ToLower(req.Query)
-		if strings.Contains(q, "anchorage") {
-			detail.Type = "Anchorage"
-		} else if strings.Contains(q, "marina") {
-			detail.Type = "Marina"
-		} else if strings.Contains(q, "mooring") {
-			detail.Type = "Mooring"
-		} else if strings.Contains(q, "fuel") {
-			detail.Type = "Fuel Station"
-		} else if strings.Contains(q, "restaurant") {
-			detail.Type = "Restaurant"
-		} else if strings.Contains(q, "bar") {
-			detail.Type = "Bar"
-		}
-
+		detail.Type = classifyPlace(req.Query, p.Types)
 		res.Facilities = append(res.Facilities, detail)
 	}
 

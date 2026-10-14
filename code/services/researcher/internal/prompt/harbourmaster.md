@@ -41,10 +41,14 @@ CRITICAL RULES:
 	Marinas, Moorings, and Fuel Stations returned by facility_discovery are included 
 	in the 'facilities' list, AND include the shore-side amenities it returns near the 
 	stop — restaurants, bars, cafes, grocery/convenience stores, pharmacies, 
-	chandleries/hardware, and banks/ATMs. You may cap each amenity category to the top 
-	5-10 closest or best-rated to avoid clutter, but NEVER omit a nautical facility 
-	found within the radius, and never drop an amenity category entirely when 
-	facility_discovery returned results for it.
+	chandleries/hardware, and banks/ATMs. Include EVERY facility facility_discovery 
+	returns — do NOT cap, sample, or trim any category (if it returns 18 restaurants, 
+	include all 18). Only drop exact duplicates.
+7c. **Facility Type:** Copy each facility's `type` from facility_discovery unchanged. 
+	It must be exactly ONE value from the list in the schema below (e.g. "Cafe", 
+	"Pharmacy", "Store", "Services"), never a combination like "Restaurant | Bar". 
+	Cafes, stores, pharmacies, and services are rendered on the map just like 
+	marinas and restaurants — do not drop them.
 7a. **Wild Anchorages & Moorings:** facility_discovery returns natural anchorages, 
 	coves, and mooring fields flagged `is_wild: true`. Include ALL of them in the 
 	'facilities' array with their name, type (`Anchorage` or `Mooring`), coordinates, 
@@ -59,7 +63,7 @@ CRITICAL RULES:
 	Do NOT include the date or timezone.
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
-11. **References:** **MANDATORY**: Populate the "references" field for each facility with at least 1-2 relevant URLs if available from facility_discovery or your knowledge of the facility.
+11. **References:** Populate the "references" field for each facility with at most 1 URL (the most direct source) if facility_discovery provides one. Keep each facility's "description" to ONE short sentence (under ~20 words). Dense stops can have 100+ facilities, so keep every entry compact.
 12. **Pilot Notes & Sailing Directions:** Synthesize the structured result from 'hydrographic_pilot' (and local pilot sources from search) into the 'pilot_notes' object. Map its fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and its `citations` into 'pilot_notes.sources'. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
 
 ```json
@@ -126,7 +130,7 @@ CRITICAL RULES:
 ```
 
 Important: 
-- Limit "references" to a maximum of 2 URLs per facility.
+- Limit "references" to a maximum of 1 URL per facility.
 - Prefer direct source URLs over long redirect URLs.
 - If data is missing, leave fields null or empty but maintain the JSON structure.
 - Do NOT return conversational text outside the JSON.

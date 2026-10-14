@@ -1,0 +1,115 @@
+package tool
+
+import (
+	"regexp"
+	"strings"
+)
+
+// Facility types the frontend renders (see activeFacilityFilters in main.js).
+const (
+	TypeAnchorage   = "Anchorage"
+	TypeMarina      = "Marina"
+	TypeMooring     = "Mooring"
+	TypeFuelStation = "Fuel Station"
+	TypeYachtClub   = "Yacht Club"
+	TypeBoatLaunch  = "Boat Launch"
+	TypeRestaurant  = "Restaurant"
+	TypeBar         = "Bar"
+	TypeCafe        = "Cafe"
+	TypeStore       = "Store"
+	TypePharmacy    = "Pharmacy"
+	TypeServices    = "Services"
+)
+
+// queryRule maps a FindPlacesNearby query to a facility type. Authoritative
+// rules describe nautical features Google does not type (anchorages, moorings,
+// fuel docks, yacht clubs, launches), so the query wins over Google's types.
+type queryRule struct {
+	re            *regexp.Regexp
+	facilityType  string
+	authoritative bool
+}
+
+var queryRules = []queryRule{
+	{regexp.MustCompile(`\banchorage`), TypeAnchorage, true},
+	{regexp.MustCompile(`\bmooring`), TypeMooring, true},
+	{regexp.MustCompile(`\b(fuel|diesel)\b`), TypeFuelStation, true},
+	{regexp.MustCompile(`\byacht club`), TypeYachtClub, true},
+	{regexp.MustCompile(`\b(boat launch|ramp)\b`), TypeBoatLaunch, true},
+	{regexp.MustCompile(`\bmarina`), TypeMarina, false},
+	{regexp.MustCompile(`\b(cove|bay|harbou?r)\b`), TypeAnchorage, false},
+	{regexp.MustCompile(`\brestaurant`), TypeRestaurant, false},
+	{regexp.MustCompile(`\b(bar|pub)s?\b`), TypeBar, false},
+	{regexp.MustCompile(`\b(cafe|café|coffee)`), TypeCafe, false},
+	{regexp.MustCompile(`\b(pharmacy|drugstore|chemist)`), TypePharmacy, false},
+	{regexp.MustCompile(`\b(grocery|supermarket|convenience|market|provision)`), TypeStore, false},
+	{regexp.MustCompile(`\b(hardware|chandlery|atm|bank)\b`), TypeServices, false},
+}
+
+// googleTypeMap maps Google Places (New) types to facility types.
+var googleTypeMap = map[string]string{
+	"marina":            TypeMarina,
+	"gas_station":       TypeFuelStation,
+	"cafe":              TypeCafe,
+	"coffee_shop":       TypeCafe,
+	"tea_house":         TypeCafe,
+	"bar":               TypeBar,
+	"pub":               TypeBar,
+	"wine_bar":          TypeBar,
+	"night_club":        TypeBar,
+	"restaurant":        TypeRestaurant,
+	"bar_and_grill":     TypeRestaurant,
+	"meal_takeaway":     TypeRestaurant,
+	"pharmacy":          TypePharmacy,
+	"drugstore":         TypePharmacy,
+	"grocery_store":     TypeStore,
+	"supermarket":       TypeStore,
+	"convenience_store": TypeStore,
+	"market":            TypeStore,
+	"food_store":        TypeStore,
+	"liquor_store":      TypeStore,
+	"hardware_store":    TypeServices,
+	"bank":              TypeServices,
+	"atm":               TypeServices,
+}
+
+func classifyGoogleType(t string) string {
+	if ft, ok := googleTypeMap[t]; ok {
+		return ft
+	}
+	if strings.HasSuffix(t, "_restaurant") {
+		return TypeRestaurant
+	}
+	return ""
+}
+
+// classifyPlace assigns a single facility type to a Places result using the
+// search query and Google's place types. Nautical queries are authoritative;
+// otherwise the query's category is used when Google agrees (or has no
+// opinion), and Google's first recognized type is used when it disagrees.
+func classifyPlace(query string, googleTypes []string) string {
+	q := strings.ToLower(query)
+	var fromQuery string
+	for _, r := range queryRules {
+		if r.re.MatchString(q) {
+			if r.authoritative {
+				return r.facilityType
+			}
+			fromQuery = r.facilityType
+			break
+		}
+	}
+	var fromGoogle []string
+	for _, t := range googleTypes {
+		if ft := classifyGoogleType(t); ft != "" {
+			if ft == fromQuery {
+				return ft
+			}
+			fromGoogle = append(fromGoogle, ft)
+		}
+	}
+	if len(fromGoogle) > 0 {
+		return fromGoogle[0]
+	}
+	return fromQuery
+}

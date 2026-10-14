@@ -65,7 +65,7 @@ Return ONLY this JSON object — no text outside the JSON block:
       "vhf": "...",
       "protection": "...",
       "holding": "...",
-      "description": "Shelter/holding/depth for marine spots; cuisine, hours, or what the store sells for amenities.",
+      "description": "ONE short sentence (under ~20 words): shelter/holding/depth for marine spots; cuisine or what the store sells for amenities.",
       "is_wild": false,
       "references": ["https://..."]
     }
@@ -74,6 +74,9 @@ Return ONLY this JSON object — no text outside the JSON block:
 ```
 
 Rules:
-- Limit `references` to a maximum of 2 URLs per facility; prefer direct source URLs over redirects.
+- Limit `references` to a maximum of 1 URL per facility; prefer direct source URLs over redirects. Leave `vhf`, `protection`, and `holding` null for shore amenities. Dense stops can return 100+ facilities, so keep every entry compact.
 - Leave unknown fields null or empty, but always return the valid JSON structure.
-- Include EVERY nautical facility AND shore amenity found within the focus radius. You may cap each category to the ~5-10 best-rated / closest entries to avoid clutter, but do not omit a category entirely when results exist.
+- Include EVERY nautical facility AND shore amenity `FindPlacesNearby` returns within the focus radius. **Do NOT cap, sample, or trim any category** — if a query returns 18 restaurants, return all 18. The only removals allowed are duplicates (see Dedupe) and genuinely irrelevant POIs.
+- **`type` is exactly ONE value** from the list above (e.g. `"Cafe"`), never a combination like `"Restaurant | Bar"`.
+- **Keep the tool's `type`:** `FindPlacesNearby` returns a `type` already derived from Google's place categories. Use it as-is. Only set a type yourself for web-search (`is_wild`) spots or when the tool's `type` is empty; then pick the closest value from the list. Never drop a result because of its type.
+- **Pass through `distance_meters`** exactly as `FindPlacesNearby` returns it.

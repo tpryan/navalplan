@@ -4374,7 +4374,7 @@ async function initMap() {
                          if (f.latitude && f.longitude) {
                              const type = (f.type || '').toLowerCase();
                              const filterKey = type.includes('anchor') ? 'anchorage'
-                                 : type.includes('marina') ? 'marina'
+                                 : (type.includes('marina') || type.includes('yacht') || type.includes('launch') || type.includes('ramp')) ? 'marina'
                                  : type.includes('moor') ? 'mooring'
                                  : type.includes('restaurant') ? 'restaurant'
                                  : type.includes('cafe') ? 'cafe'
