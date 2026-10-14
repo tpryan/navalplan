@@ -102,7 +102,7 @@ function updateUIForLogin(person) {
     menu.appendChild(actions);
 
     container.appendChild(menu);
-    container.appendChild(makeThemeButton());
+    container.appendChild(makeMapControlsPill());
 }
 
 
@@ -130,7 +130,7 @@ function updateUIForLogout() {
         </a>
         <a href="/auth/google/login" id="btn-login-floating" class="btn primary">Sign in</a>
     `;
-    container.appendChild(makeThemeButton());
+    container.appendChild(makeMapControlsPill());
 
     // Sidebar greeting (§5.1)
     if (voyageList) {
@@ -182,15 +182,29 @@ function updateUIForLogout() {
     }
 }
 
-function makeThemeButton() {
-    const btn = document.createElement('button');
-    btn.id = 'btn-theme-toggle';
-    btn.type = 'button';
-    btn.className = 'np-fab';
-    btn.setAttribute('aria-label', 'Toggle dark mode');
-    btn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
-    btn.innerHTML = `<span class="material-symbols-outlined">${currentTheme() === 'dark' ? 'light_mode' : 'dark_mode'}</span>`;
-    btn.addEventListener('focus', () => { btn.style.outline = '3px solid var(--focus)'; btn.style.outlineOffset = '2px'; });
-    btn.addEventListener('blur', () => { btn.style.outline = 'none'; });
-    return btn;
+function makeMapControlsPill() {
+    const pill = document.createElement('div');
+    pill.id = 'map-view-controls';
+
+    const satBtn = document.createElement('button');
+    satBtn.id = 'btn-map-type-toggle';
+    satBtn.type = 'button';
+    satBtn.className = 'btn-icon';
+    satBtn.title = 'Toggle Satellite View';
+    satBtn.setAttribute('aria-label', 'Toggle Satellite View');
+    satBtn.setAttribute('aria-pressed', 'false');
+    satBtn.innerHTML = '<span class="material-symbols-outlined">satellite_alt</span>';
+
+    const themeBtn = document.createElement('button');
+    themeBtn.id = 'btn-theme-toggle';
+    themeBtn.type = 'button';
+    themeBtn.className = 'btn-icon';
+    themeBtn.title = 'Toggle Dark Mode';
+    themeBtn.setAttribute('aria-label', 'Toggle dark mode');
+    themeBtn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
+    themeBtn.innerHTML = `<span class="material-symbols-outlined">${currentTheme() === 'dark' ? 'light_mode' : 'dark_mode'}</span>`;
+
+    pill.appendChild(satBtn);
+    pill.appendChild(themeBtn);
+    return pill;
 }

@@ -510,7 +510,8 @@ select.form-select:hover {
     gap: 8px;
 }
 
-#user-floating-menu {
+#user-floating-menu,
+#map-view-controls {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -521,6 +522,11 @@ select.form-select:hover {
     border: 1.5px solid var(--hair);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+}
+
+#map-view-controls {
+    padding: 6px 10px;
+    gap: 6px;
 }
 
 #user-floating-menu .avatar {

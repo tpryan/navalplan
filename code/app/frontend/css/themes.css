@@ -193,6 +193,8 @@
 [data-theme="dark"] .modal,
 [data-theme="midnight-mariner"] #user-floating-menu,
 [data-theme="dark"] #user-floating-menu,
+[data-theme="midnight-mariner"] #map-view-controls,
+[data-theme="dark"] #map-view-controls,
 [data-theme="midnight-mariner"] #facility-controls,
 [data-theme="dark"] #facility-controls,
 [data-theme="midnight-mariner"] #pilot-controls,

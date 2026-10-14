@@ -1158,45 +1158,8 @@ html:has(.print-view) {
     }
 }
 
-.map-type-toggle-btn {
-    position: absolute;
-    top: 68px;
-    right: 16px;
-    z-index: 10;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: var(--surface);
-    color: var(--text-dark);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-pill);
-    box-shadow: var(--shadow);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.map-type-toggle-btn:hover {
-    border-color: var(--brand-medium);
-}
-
-.map-type-toggle-btn.active {
-    background: var(--brand-medium);
-    color: #fff;
-    border-color: var(--brand-medium);
-}
-
-.map-type-toggle-btn .material-symbols-outlined {
-    font-size: 16px;
-}
-
-@media (max-width: 768px) {
-    .map-type-toggle-btn {
-        top: 64px;
-        right: 12px;
-    }
+#btn-map-type-toggle.active {
+    color: var(--sky, var(--brand-medium));
 }
 
 .track-layer-btn {

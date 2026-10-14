@@ -590,17 +590,18 @@ function initUI() {
 }
 
 function initMapTypeToggle() {
-    const btn = document.getElementById('btn-map-type-toggle');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
+    const container = document.getElementById('auth-container');
+    if (!container) return;
+    container.addEventListener('click', (e) => {
+        const btn = e.target.closest('#btn-map-type-toggle');
+        if (!btn) return;
         currentMapTypeId = currentMapTypeId === 'hybrid' ? 'roadmap' : 'hybrid';
         const isSat = currentMapTypeId === 'hybrid';
         btn.classList.toggle('active', isSat);
         btn.setAttribute('aria-pressed', isSat ? 'true' : 'false');
+        btn.title = isSat ? 'Switch to Map View' : 'Toggle Satellite View';
         const iconEl = btn.querySelector('.material-symbols-outlined');
-        const labelEl = btn.querySelector('.map-type-toggle-label');
         if (iconEl) iconEl.textContent = isSat ? 'map' : 'satellite_alt';
-        if (labelEl) labelEl.textContent = isSat ? 'Map' : 'Satellite';
         if (map) {
             map.setMapTypeId(currentMapTypeId);
         }
