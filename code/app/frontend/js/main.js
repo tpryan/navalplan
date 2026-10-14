@@ -1862,6 +1862,7 @@ async function selectVoyage(voyage, doPushState = true) {
     lastKnownItineraryFull = false;
     lastKnownResearchDone = false;
     document.getElementById('btn-export-voyage')?.classList.add('hidden');
+    document.getElementById('btn-voyage-tracks')?.classList.add('hidden');
     clearRecommendations();
     clearPilotCircle();
     updateItineraryHeader(currentVoyage);
@@ -1898,7 +1899,7 @@ async function loadStops() {
             await loadAndRenderTracks(currentVoyage.id);
         }
 
-        // Toggle visibility of Research All button
+        // Toggle visibility of Research All and Tracks buttons
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) {
             const hasDates = currentVoyage.start_date && currentVoyage.end_date;
@@ -1908,6 +1909,7 @@ async function loadStops() {
                 btnResearchAll.classList.add('hidden');
             }
         }
+        document.getElementById('btn-voyage-tracks')?.classList.toggle('hidden', !(currentStops && currentStops.length > 0));
 
         // Auto-load recommendations if they exist
         try {
@@ -2193,6 +2195,8 @@ async function checkItineraryFullness(isManualAction = false) {
         const btnResearchAll = document.getElementById('btn-research-all');
         if (btnResearchAll) btnResearchAll.classList.add('hidden');
 
+        document.getElementById('btn-voyage-tracks')?.classList.add('hidden');
+
         if (btnReport) {
             btnReport.classList.toggle('hidden', !hasLocalPilotResearch);
             btnReport.classList.remove('primary');
@@ -2239,7 +2243,7 @@ async function checkItineraryFullness(isManualAction = false) {
         renderItinerary();
     }
 
-    // Toggle visibility of Research All button
+    // Toggle visibility of Research All and Tracks buttons
     const btnResearchAll = document.getElementById('btn-research-all');
     if (btnResearchAll) {
         if (currentStops.length > 0) {
@@ -2248,6 +2252,7 @@ async function checkItineraryFullness(isManualAction = false) {
             btnResearchAll.classList.add('hidden');
         }
     }
+    document.getElementById('btn-voyage-tracks')?.classList.toggle('hidden', !(currentStops && currentStops.length > 0));
 
     // Once all stop planning/research is complete, the Voyage Report becomes the
     // primary artifact: remove the Guide control from the toolbar and promote the
