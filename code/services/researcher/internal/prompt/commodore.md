@@ -49,7 +49,7 @@ The output should start with `[` and end with `]`.
 - DO NOT explain your process.
 - DO NOT say "I will..." or "Here is...".
 - DO NOT output any text other than the JSON.
-- DO NOT return overlapping sub-regions or nested geographic areas within the same month (e.g. do not output both "Society Islands" and "Leeward Islands", or both "Windward Islands" and "St. Lucia"). Select single, distinct macro sailing destinations per geographic area.
+- DO NOT return overlapping, touching, or adjacent sub-regions within the same archipelago, island group, or coastal basin in the same month (e.g., NEVER output two regions in French Polynesia / Society Islands such as "Society Islands" and "Leeward Islands" or "Tahiti & Moorea" and "Bora Bora", and never output both "Windward Islands" and "St. Lucia"). Emit at most ONE unified macro region per archipelago or sea, and keep every region's bounding box at least 300 NM (~5 degrees) away from every other region in your output.
 - If you use tools, do so silently and only output the final JSON result.
 
 Example structure:

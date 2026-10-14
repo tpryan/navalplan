@@ -220,3 +220,38 @@ func TestPruneDuplicateRegions(t *testing.T) {
 		t.Errorf("expected region 1 to be deleted during pruning")
 	}
 }
+
+func TestPruneDuplicateRegions_StackedSocietyIslands(t *testing.T) {
+	// Two adjacent/partially-overlapping Society Islands boxes (~1.2° apart, IoU ~0.20)
+	geomNorth := json.RawMessage(`{"type":"Polygon","coordinates":[[[-152.5,-16.0],[-149.0,-16.0],[-149.0,-17.3],[-152.5,-17.3],[-152.5,-16.0]]]}`)
+	geomSouth := json.RawMessage(`{"type":"Polygon","coordinates":[[[-152.5,-16.9],[-149.0,-16.9],[-149.0,-18.2],[-152.5,-18.2],[-152.5,-16.9]]]}`)
+
+	store := &pruneMockStore{
+		regions: map[int][]model.RegionWithSeasonality{
+			6: {
+				{
+					SailingRegion:    model.SailingRegion{ID: 10, Name: "Society Islands", Geometry: model.RawJSON(geomNorth)},
+					SuitabilityScore: 92,
+					Tier:             "Standard",
+				},
+				{
+					SailingRegion:    model.SailingRegion{ID: 11, Name: "Tahiti & Society Islands", Geometry: model.RawJSON(geomSouth)},
+					SuitabilityScore: 88,
+					Tier:             "Standard",
+				},
+			},
+		},
+	}
+
+	h := &Handler{DB: store}
+	pruned, err := h.PruneDuplicateRegions(context.Background(), 6)
+	if err != nil {
+		t.Fatalf("unexpected error during pruning: %v", err)
+	}
+	if pruned != 1 {
+		t.Errorf("expected 1 stacked Society Islands region pruned, got %d", pruned)
+	}
+	if _, ok := store.deletedRegion[11]; !ok {
+		t.Errorf("expected lower-score region 11 to be deleted")
+	}
+}

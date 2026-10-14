@@ -112,6 +112,9 @@ func TestNew_Defaults(t *testing.T) {
 	if cfg.DisableTracing {
 		t.Error("DisableTracing = true, want false by default")
 	}
+	if cfg.CommodoreModelName != "gemini-4-argon" {
+		t.Errorf("CommodoreModelName = %q, want gemini-4-argon", cfg.CommodoreModelName)
+	}
 }
 
 func TestNew_PortFallback(t *testing.T) {

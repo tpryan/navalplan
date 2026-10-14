@@ -11,6 +11,7 @@ type Config struct {
 	Env                string
 	Project            string
 	ModelName          string
+	CommodoreModelName string
 	GeminiAPIKey       string
 	MapsAPIKey         string
 	UKTidalAPIKey      string
@@ -37,6 +38,11 @@ func New(getEnv func(string) string) (*Config, error) {
 	modelName := getEnv("NAVALPLAN_AGENT_MODEL")
 	if modelName == "" {
 		modelName = "gemini-3.5-flash-lite"
+	}
+
+	commodoreModelName := getEnv("NAVALPLAN_COMMODORE_MODEL")
+	if commodoreModelName == "" {
+		commodoreModelName = "gemini-4-argon"
 	}
 
 	geminiKey := getEnv("GEMINI_API_KEY")
@@ -129,6 +135,7 @@ func New(getEnv func(string) string) (*Config, error) {
 		Env:                env,
 		Project:            project,
 		ModelName:          modelName,
+		CommodoreModelName: commodoreModelName,
 		GeminiAPIKey:       geminiKey,
 		MapsAPIKey:         mapsKey,
 		UKTidalAPIKey:      ukTidalKey,

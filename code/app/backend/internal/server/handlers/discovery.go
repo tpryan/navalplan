@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"app/internal/model"
@@ -118,6 +120,44 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 
 func isSpatialDuplicate(iou, containment float64) bool {
 	return iou > 0.40 || containment > 0.70
+}
+
+func normalizeRegionKey(name string) string {
+	s := strings.ToLower(strings.TrimSpace(name))
+	if idx := strings.Index(s, "("); idx != -1 {
+		s = strings.TrimSpace(s[:idx])
+	}
+	if idx := strings.Index(s, ","); idx != -1 {
+		s = strings.TrimSpace(s[:idx])
+	}
+	return s
+}
+
+// isRegionDuplicate detects duplicate or stacked macro discovery regions in the
+// same month (e.g., two overlapping or adjacent "Society Islands" / "French
+// Polynesia" polygons). Macro global discovery regions are hundreds of NM apart,
+// so any bounding-box overlap or centers within 3.5 degrees (~210 NM) — or
+// matching normalized region names — indicate a duplicate region.
+func isRegionDuplicate(nameA, nameB string, b1, b2 orb.Bound) (bool, float64, float64) {
+	iou, containment, _ := computeBoundsStats(b1, b2)
+	if isSpatialDuplicate(iou, containment) {
+		return true, iou, containment
+	}
+	if iou > 0.05 || containment > 0.15 {
+		return true, iou, containment
+	}
+	c1 := b1.Center()
+	c2 := b2.Center()
+	centerDistDeg := math.Hypot(c1.X()-c2.X(), c1.Y()-c2.Y())
+	if centerDistDeg < 3.5 {
+		return true, iou, containment
+	}
+	kA := normalizeRegionKey(nameA)
+	kB := normalizeRegionKey(nameB)
+	if kA != "" && kB != "" && (kA == kB || strings.Contains(kA, kB) || strings.Contains(kB, kA)) && centerDistDeg < 8.0 {
+		return true, iou, containment
+	}
+	return false, iou, containment
 }
 
 func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) {
@@ -253,9 +293,9 @@ func (h *Handler) PruneDuplicateRegions(ctx context.Context, month int) (int, er
 
 			b1 := itemA.geom.Geometry().Bound()
 			b2 := itemB.geom.Geometry().Bound()
-			iou, containment, _ := computeBoundsStats(b1, b2)
+			dup, iou, containment := isRegionDuplicate(itemA.region.Name, itemB.region.Name, b1, b2)
 
-			if isSpatialDuplicate(iou, containment) {
+			if dup {
 				pA := getTierPriority(itemA.region.Tier, itemA.region.IsHiddenGem)
 				pB := getTierPriority(itemB.region.Tier, itemB.region.IsHiddenGem)
 
@@ -315,7 +355,18 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		return
 	}
 
-	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return JSON only.", monthName)
+	existingRegionsForPrompt, _ := h.DB.ListRegionsByMonth(ctx, month)
+	var existingNames []string
+	for _, er := range existingRegionsForPrompt {
+		if strings.TrimSpace(er.Name) != "" {
+			existingNames = append(existingNames, er.Name)
+		}
+	}
+
+	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return at most ONE region per archipelago, island group, or coastal basin, and ensure all bounding boxes are at least 300 NM (~5 degrees) apart. Return JSON only.", monthName)
+	if len(existingNames) > 0 {
+		prompt += fmt.Sprintf(" Existing regions already active for %s: [%s]. Do NOT output a second region covering the same archipelago, island group, or coast under a variant name or shifted bounding box.", monthName, strings.Join(existingNames, ", "))
+	}
 
 	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Invoking commodore agent for %s...", month, monthName))
 	agentStart := time.Now()
@@ -388,9 +439,7 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 
 			b1 := newGeom.Geometry().Bound()
 			b2 := ex.Geom.Geometry().Bound()
-			iou, containment, _ := computeBoundsStats(b1, b2)
-
-			isDuplicate := isSpatialDuplicate(iou, containment)
+			isDuplicate, iou, containment := isRegionDuplicate(reg.Name, ex.Name, b1, b2)
 
 			if isDuplicate {
 				newPriority := getTierPriority(reg.Tier, reg.IsHiddenGem)

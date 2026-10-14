@@ -166,6 +166,7 @@ var specs = []spec{
 
 type agentConfig struct {
 	name        string
+	modelName   string
 	description string
 	instruction string
 	tools       []adktool.Tool
@@ -180,8 +181,14 @@ func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCa
 			return nil, fmt.Errorf("assembling tools for %s: %w", sp.name, err)
 		}
 
+		modelName := cfg.ModelName
+		if sp.name == Commodore && cfg.CommodoreModelName != "" {
+			modelName = cfg.CommodoreModelName
+		}
+
 		a, err := createAgent(ctx, cfg, before, after, &agentConfig{
 			name:        sp.name,
+			modelName:   modelName,
 			description: sp.description,
 			instruction: sp.instruction,
 			tools:       agentTools,
@@ -336,7 +343,11 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 			APIKey: cfg.GeminiAPIKey,
 		}
 	}
-	m, err := gemini.NewModel(ctx, cfg.ModelName, clientCfg)
+	targetModel := acfg.modelName
+	if targetModel == "" {
+		targetModel = cfg.ModelName
+	}
+	m, err := gemini.NewModel(ctx, targetModel, clientCfg)
 	if err != nil {
 		return nil, err
 	}
