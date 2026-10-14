@@ -50,6 +50,7 @@ steps:
   - '--set-secrets=NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY:latest'
   - '--set-secrets=NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY:latest'
   - '--set-env-vars=NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL}'
+  - '--set-env-vars=NAVALPLAN_COMMODORE_MODEL=${_NAVALPLAN_COMMODORE_MODEL}'
   - '--set-env-vars=ENV=${_ENV}'
   - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
   - '--set-env-vars=GCP_PROJECT=${PROJECT_ID}'
@@ -82,7 +83,7 @@ steps:
       --deployment-target=agent_runtime \
       --service-name=navalplan-researcher \
       --secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},ENV=${_ENV},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCP_PROJECT=${PROJECT_ID},NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
+      --update-env-vars="NAVALPLAN_AGENT_MODEL=${_NAVALPLAN_AGENT_MODEL},NAVALPLAN_COMMODORE_MODEL=${_NAVALPLAN_COMMODORE_MODEL},ENV=${_ENV},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCP_PROJECT=${PROJECT_ID},NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/${PROJECT_ID}/locations/us-central1/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
       --no-confirm-project
   dir: 'code/services/researcher'
 
@@ -93,6 +94,7 @@ images:
 substitutions:
   _SHORT_SHA: "latest"
   _NAVALPLAN_AGENT_MODEL: "gemini-3.5-flash-lite"
+  _NAVALPLAN_COMMODORE_MODEL: "gemini-4-argon"
   _ENV: "production"
 
 logsBucket: gs://navalplan-logging-bucket
