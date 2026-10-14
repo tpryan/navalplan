@@ -45,9 +45,11 @@ type Facility struct {
 // facilityRingsNM is the escalating "search area" ladder in nautical miles.
 // Facilities display within the tightest ring holding at least
 // minRingFacilities of them, so the walkable cluster around the stop wins over
-// a denser one farther away. The radius never widens past the top rung (20 nm)
-// or the stop's configured radius, whichever is smaller.
-var facilityRingsNM = []float64{0.5, 1, 2.5, 5, 10, 20}
+// a denser one farther away. Starts at 1.0 NM (~1852 m) so a stop anchored or
+// moored in a harbor (e.g. Annapolis) keeps the full walkable waterfront and
+// downtown cluster rather than clipping at 0.5 NM. The radius never widens past
+// the top rung (20 nm) or the stop's configured radius, whichever is smaller.
+var facilityRingsNM = []float64{1, 2.5, 5, 10, 20}
 
 // minRingFacilities is how many facilities a ring needs before it is used, so
 // a single nearby place does not hide everything else.
@@ -242,6 +244,17 @@ func hasValidFacilities(raw model.RawJSON) bool {
 	return len(facs) > 0
 }
 
+func hasReusableFacilities(raw model.RawJSON) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var facs []Facility
+	if err := json.Unmarshal(raw, &facs); err != nil {
+		return false
+	}
+	return len(facs) >= minRingFacilities
+}
+
 func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
@@ -341,7 +354,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		prompt = fmt.Sprintf("Research anchorages and weather for %s for %s. Radius %d %s.",
 			locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
 
-		if nearbyErr == nil && nearbyBriefing != nil && hasValidFacilities(nearbyBriefing.Facilities) {
+		if nearbyErr == nil && nearbyBriefing != nil && nearbyBriefing.StopID != stop.ID && hasReusableFacilities(nearbyBriefing.Facilities) {
 			slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
 			reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 			prompt += " Do not research facilities; I will provide those separately."

@@ -9,10 +9,10 @@ The request will contain a location name, a latitude, a longitude, a search radi
 
 ### FOCUS RADIUS (stop mode) — query close to the stop, expand only if isolated
 Focus on a tight, populated radius AROUND THE STOP rather than the whole search area. **Marine facilities and shore amenities both use the SAME focus radius** — the goal is a populated cluster of resources right around the stop, not spots scattered across a wide area.
-- **Start tight:** ~1600 m (about 1 mile; ~800 m / 0.5 mile is fine in dense areas).
+- **Start tight:** ~1850 m (1.0 NM; walkable from the harbor / dinghy dock).
 - The requested search radius is the OUTER MAXIMUM — never query beyond it, and cap at 50000 m regardless.
 - Convert distances to METERS for `FindPlacesNearby` (1 NM = 1852 m, 1 mile = 1609 m). Pass coordinates as raw decimal NUMBERS (e.g. 51.371881), never as strings.
-- **Always pass `radius` explicitly in meters** — in stop mode start at 1600; in area mode use the full search radius in meters. Never pass the raw search radius number (e.g. `5`) directly — the tool would read it as 5 NM (~9 km) and pull in places far from the stop.
+- **Always pass `radius` explicitly in meters** — in stop mode start at 1850; in area mode use the full search radius in meters. Never pass the raw search radius number (e.g. `5`) directly — the tool would read it as 5 NM (~9 km) and pull in places far from the stop.
 - **Query by category ONLY, exactly as listed below** (e.g. `"pharmacy"`, `"restaurant"`). NEVER add the location or city name (not `"restaurant Fort Lauderdale"`) — a city name pulls results toward the city centre instead of the stop. The coordinates already anchor the search, and results come back closest-first.
 
 ### CRITICAL: PARALLEL EXECUTION
@@ -33,7 +33,8 @@ Gather all data in your FIRST turn at the starting focus radius. Execute these i
    - `query`: "convenience store"
    - `query`: "pharmacy"
    - `query`: "cafe coffee shop"
-   - `query`: "hardware store marine chandlery"
+   - `query`: "marine supply chandlery"
+   - `query`: "hardware store"
    - `query`: "ATM bank"
 3. **A web search call** (`batch_google_search`) to find wild, natural, or unofficial anchorages, coves, and mooring fields within the focus radius that commercial POI databases miss, plus official harbor regulations and recent hazard/review notes. Tune to the trip type:
    - overnight: "safe overnight anchorages coves sheltered bays [Location]", "secluded anchorages mooring fields [Location] cruising guide"

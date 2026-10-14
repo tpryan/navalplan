@@ -43,34 +43,41 @@ var queryRules = []queryRule{
 	{regexp.MustCompile(`\b(cafe|café|coffee)`), TypeCafe, false},
 	{regexp.MustCompile(`\b(pharmacy|drugstore|chemist)`), TypePharmacy, false},
 	{regexp.MustCompile(`\b(grocery|supermarket|convenience|market|provision)`), TypeStore, false},
-	{regexp.MustCompile(`\b(hardware|chandlery|atm|bank)\b`), TypeServices, false},
+	{regexp.MustCompile(`\b(hardware|chandlery|marine supply|atm|bank)\b`), TypeServices, false},
 }
 
 // googleTypeMap maps Google Places (New) types to facility types.
 var googleTypeMap = map[string]string{
-	"marina":            TypeMarina,
-	"gas_station":       TypeFuelStation,
-	"cafe":              TypeCafe,
-	"coffee_shop":       TypeCafe,
-	"tea_house":         TypeCafe,
-	"bar":               TypeBar,
-	"pub":               TypeBar,
-	"wine_bar":          TypeBar,
-	"night_club":        TypeBar,
-	"restaurant":        TypeRestaurant,
-	"bar_and_grill":     TypeRestaurant,
-	"meal_takeaway":     TypeRestaurant,
-	"pharmacy":          TypePharmacy,
-	"drugstore":         TypePharmacy,
-	"grocery_store":     TypeStore,
-	"supermarket":       TypeStore,
-	"convenience_store": TypeStore,
-	"market":            TypeStore,
-	"food_store":        TypeStore,
-	"liquor_store":      TypeStore,
-	"hardware_store":    TypeServices,
-	"bank":              TypeServices,
-	"atm":               TypeServices,
+	"marina":               TypeMarina,
+	"ferry_terminal":       TypeMarina,
+	"gas_station":          TypeFuelStation,
+	"cafe":                 TypeCafe,
+	"coffee_shop":          TypeCafe,
+	"tea_house":            TypeCafe,
+	"bakery":               TypeCafe,
+	"bar":                  TypeBar,
+	"pub":                  TypeBar,
+	"wine_bar":             TypeBar,
+	"night_club":           TypeBar,
+	"restaurant":           TypeRestaurant,
+	"bar_and_grill":        TypeRestaurant,
+	"meal_takeaway":        TypeRestaurant,
+	"sandwich_shop":        TypeRestaurant,
+	"ice_cream_shop":       TypeCafe,
+	"pharmacy":             TypePharmacy,
+	"drugstore":            TypePharmacy,
+	"grocery_store":        TypeStore,
+	"supermarket":          TypeStore,
+	"convenience_store":    TypeStore,
+	"market":               TypeStore,
+	"food_store":           TypeStore,
+	"liquor_store":         TypeStore,
+	"department_store":     TypeStore,
+	"hardware_store":       TypeServices,
+	"sporting_goods_store": TypeServices,
+	"laundry":              TypeServices,
+	"bank":                 TypeServices,
+	"atm":                  TypeServices,
 }
 
 func classifyGoogleType(t string) string {
@@ -131,6 +138,21 @@ var nearbySearchTypes = map[string][]string{
 // amenity query, or nil when the query should use Text Search.
 func nearbyTypesForQuery(query string) []string {
 	q := strings.ToLower(query)
+	if strings.Contains(q, "chandlery") || strings.Contains(q, "marine supply") {
+		return nil
+	}
+	if strings.Contains(q, "convenience") && !strings.Contains(q, "grocery") && !strings.Contains(q, "supermarket") {
+		return []string{"convenience_store"}
+	}
+	if strings.Contains(q, "grocery") || strings.Contains(q, "supermarket") {
+		return []string{"grocery_store", "supermarket", "market"}
+	}
+	if strings.Contains(q, "hardware") && !strings.Contains(q, "atm") && !strings.Contains(q, "bank") {
+		return []string{"hardware_store"}
+	}
+	if strings.Contains(q, "atm") || strings.Contains(q, "bank") {
+		return []string{"bank", "atm"}
+	}
 	for _, r := range queryRules {
 		if r.re.MatchString(q) {
 			return nearbySearchTypes[r.facilityType]

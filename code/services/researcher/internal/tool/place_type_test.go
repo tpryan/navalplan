@@ -23,6 +23,8 @@ func TestClassifyPlace(t *testing.T) {
 		{"pharmacy", []string{"pharmacy", "health"}, TypePharmacy},
 		{"cafe coffee shop", []string{"coffee_shop", "cafe"}, TypeCafe},
 		{"hardware store marine chandlery", []string{"hardware_store"}, TypeServices},
+		{"marine supply chandlery", []string{"point_of_interest"}, TypeServices},
+		{"hardware store", []string{"hardware_store"}, TypeServices},
 		{"ATM bank", []string{"atm"}, TypeServices},
 		// Google's type wins when the result is not what the query asked for.
 		{"marina", []string{"seafood_restaurant"}, TypeRestaurant},

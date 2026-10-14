@@ -63,4 +63,4 @@
 59. Done. Until we run local pilot research, there is nothing to report, so we should hide the report button. 
 60. Done. The tracks button should be hidden until there are stops decided upon. 
 61. Done. The interface in this /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-10-14 at 11.47.11 AM.png is shwoing placeholders to communicate things are happening.  We do have stuff happening and a realtime comms channel.  Can we put actual updates here? For both hub & marina search and the stop planner phases? 
-62. I'm still not super happy with the number of resources being returned for stops.  A place like annapolis, chosen as a stop, should be teaming with resources accessible on foot from the docks.  Can you investigate. See http://localhost:8080/voyages/16 for reference. 
+62. Done. I'm still not super happy with the number of resources being returned for stops.  A place like annapolis, chosen as a stop, should be teaming with resources accessible on foot from the docks.  Can you investigate. See http://localhost:8080/voyages/16 for reference. 
