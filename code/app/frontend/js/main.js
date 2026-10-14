@@ -41,6 +41,8 @@ let selectedDate = null;
 let voyageModalMode = 'multiday';
 let map = null;
 let currentMapTypeId = 'roadmap';
+let voyagePreviewCircle = null;
+let voyagePreviewMarker = null;
 let markers = [];
 let routePolyline = null;
 let routePolylines = [];
@@ -859,12 +861,117 @@ function applyVoyageModalMode(mode) {
     }
 }
 
+function clearVoyageModalMapPreview() {
+    if (voyagePreviewCircle) {
+        voyagePreviewCircle.setMap(null);
+        voyagePreviewCircle = null;
+    }
+    if (voyagePreviewMarker) {
+        voyagePreviewMarker.map = null;
+        voyagePreviewMarker = null;
+    }
+}
+
+async function setVoyageModalTargetCoords(lat, lng, { pan = false, geocode = true } = {}) {
+    const inputLat = document.getElementById('voyage-lat');
+    const inputLng = document.getElementById('voyage-lng');
+    const displayCoords = document.getElementById('voyage-coords-display');
+    if (inputLat) inputLat.value = lat;
+    if (inputLng) inputLng.value = lng;
+    if (displayCoords) displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+    if (pan && map) {
+        map.panTo({ lat, lng });
+    }
+    await updateVoyageModalMapPreview();
+    if (geocode) {
+        try {
+            const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
+            const locInput = document.getElementById('voyage-location-name');
+            const preciseInput = document.getElementById('voyage-precise-location');
+            if (locInput) locInput.value = locationName;
+            if (preciseInput) preciseInput.value = preciseLocation;
+        } catch (e) {
+            console.warn('Failed to geocode target coordinates', e);
+        }
+    }
+}
+
+async function updateVoyageModalMapPreview() {
+    const modalNewVoyage = document.getElementById('modal-new-voyage');
+    if (!map || !modalNewVoyage || modalNewVoyage.classList.contains('hidden')) {
+        clearVoyageModalMapPreview();
+        return;
+    }
+
+    const inputLat = document.getElementById('voyage-lat');
+    const inputLng = document.getElementById('voyage-lng');
+    const inputRadius = document.getElementById('voyage-radius');
+
+    let lat = parseFloat(inputLat?.value);
+    let lng = parseFloat(inputLng?.value);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        const center = map.getCenter();
+        if (!center) return;
+        lat = center.lat();
+        lng = center.lng();
+    }
+
+    const radiusNm = parseFloat(inputRadius?.value) || 20;
+    const radiusMeters = radiusNm * 1852;
+    const position = { lat, lng };
+
+    const { Circle } = await importLibrary('maps');
+    const { AdvancedMarkerElement } = await importLibrary('marker');
+
+    if (!voyagePreviewCircle) {
+        voyagePreviewCircle = new Circle({
+            map,
+            center: position,
+            radius: radiusMeters,
+            strokeColor: '#D94E34',
+            strokeOpacity: 0.85,
+            strokeWeight: 2,
+            fillColor: '#D94E34',
+            fillOpacity: 0.12,
+            clickable: false,
+            zIndex: 5
+        });
+    } else {
+        voyagePreviewCircle.setMap(map);
+        voyagePreviewCircle.setCenter(position);
+        voyagePreviewCircle.setRadius(radiusMeters);
+    }
+
+    if (!voyagePreviewMarker) {
+        const pinEl = MapPin({ glyph: 'my_location', color: '#D94E34', size: 'md' });
+        voyagePreviewMarker = new AdvancedMarkerElement({
+            map,
+            position,
+            content: pinEl,
+            title: 'Voyage Center (drag to reposition)',
+            gmpDraggable: true,
+            zIndex: 50
+        });
+        voyagePreviewMarker.addListener('dragend', async () => {
+            const pos = voyagePreviewMarker.position;
+            if (!pos) return;
+            const dLat = typeof pos.lat === 'function' ? pos.lat() : pos.lat;
+            const dLng = typeof pos.lng === 'function' ? pos.lng() : pos.lng;
+            await setVoyageModalTargetCoords(dLat, dLng, { pan: false, geocode: true });
+        });
+    } else {
+        voyagePreviewMarker.map = map;
+        voyagePreviewMarker.position = position;
+    }
+}
+
 function initVoyageModalListeners() {
     const btnNewVoyage = document.getElementById('btn-new-voyage');
     const btnModeMultiday = document.getElementById('btn-mode-multiday');
     const btnModeDaytrip = document.getElementById('btn-mode-daytrip');
     const modalOverlay = document.getElementById('modal-overlay');
     const modalNewVoyage = document.getElementById('modal-new-voyage');
+    const modalHeader = document.getElementById('modal-new-voyage-header');
     const btnCancelVoyage = document.getElementById('btn-cancel-voyage');
     const formNewVoyage = document.getElementById('form-new-voyage');
     const btnUseMapCenter = document.getElementById('btn-use-map-center');
@@ -873,17 +980,76 @@ function initVoyageModalListeners() {
     const inputLng = document.getElementById('voyage-lng');
     const inputRadius = document.getElementById('voyage-radius');
     const radiusDisplay = document.getElementById('voyage-radius-display');
+    const locInput = document.getElementById('voyage-location-name');
     const modalTitle = modalNewVoyage.querySelector('h2');
     const submitBtn = formNewVoyage.querySelector('button[type="submit"]');
 
-    inputRadius.addEventListener('input', () => { radiusDisplay.textContent = inputRadius.value; });
+    // Make floating modal draggable via its header
+    if (modalHeader && modalNewVoyage) {
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        modalHeader.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button')) return;
+            isDragging = true;
+            const rect = modalNewVoyage.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            modalNewVoyage.style.left = `${rect.left}px`;
+            modalNewVoyage.style.top = `${rect.top}px`;
+            modalNewVoyage.style.right = 'auto';
+            modalNewVoyage.style.transform = 'none';
+            modalHeader.setPointerCapture(e.pointerId);
+        });
+
+        modalHeader.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            const maxX = Math.max(0, window.innerWidth - modalNewVoyage.offsetWidth);
+            const maxY = Math.max(0, window.innerHeight - modalNewVoyage.offsetHeight);
+            const nextLeft = Math.min(maxX, Math.max(0, e.clientX - dragOffsetX));
+            const nextTop = Math.min(maxY, Math.max(0, e.clientY - dragOffsetY));
+            modalNewVoyage.style.left = `${nextLeft}px`;
+            modalNewVoyage.style.top = `${nextTop}px`;
+        });
+
+        const endDrag = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            try { modalHeader.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+        modalHeader.addEventListener('pointerup', endDrag);
+        modalHeader.addEventListener('pointercancel', endDrag);
+    }
+
+    inputRadius.addEventListener('input', () => {
+        radiusDisplay.textContent = inputRadius.value;
+        updateVoyageModalMapPreview();
+    });
+
+    if (locInput) {
+        locInput.addEventListener('change', async () => {
+            const address = locInput.value.trim();
+            if (!address) return;
+            try {
+                const { Geocoder } = await importLibrary('geocoding');
+                const geocoder = new Geocoder();
+                const res = await geocoder.geocode({ address });
+                if (res.results && res.results.length > 0) {
+                    const loc = res.results[0].geometry.location;
+                    await setVoyageModalTargetCoords(loc.lat(), loc.lng(), { pan: true, geocode: false });
+                }
+            } catch (err) {
+                console.warn('Failed to geocode location input', err);
+            }
+        });
+    }
 
     // Open Modal (Create Mode)
     btnNewVoyage.addEventListener('click', () => {
         editingVoyageId = null;
         modalTitle.textContent = 'Plan a New Voyage';
         submitBtn.textContent = 'Create Voyage';
-        modalOverlay.classList.remove('hidden');
         modalNewVoyage.classList.remove('hidden');
         document.getElementById('voyage-start').value = '';
         document.getElementById('voyage-end').value = '';
@@ -897,6 +1063,7 @@ function initVoyageModalListeners() {
         // Default to Multi-Day mode with date fields hidden (Discovery First).
         applyVoyageModalMode('multiday');
         document.getElementById('voyage-date-fields').classList.add('hidden');
+        updateVoyageModalMapPreview();
     });
 
     if (btnModeMultiday) {
@@ -909,6 +1076,7 @@ function initVoyageModalListeners() {
     const closeModal = () => {
         modalOverlay.classList.add('hidden');
         modalNewVoyage.classList.add('hidden');
+        clearVoyageModalMapPreview();
         formNewVoyage.reset();
         displayCoords.textContent = '';
         inputLat.value = '';
@@ -943,10 +1111,6 @@ function initVoyageModalListeners() {
             const lng = center.lng();
             const zoom = map.getZoom();
 
-            inputLat.value = lat;
-            inputLng.value = lng;
-            displayCoords.textContent = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-
             // At zoom 10, ~20nm is good coverage. Higher zoom = smaller radius.
             let radius = Math.round(20 * Math.pow(2, 10 - zoom));
             radius = Math.max(1, Math.min(150, radius));
@@ -956,13 +1120,7 @@ function initVoyageModalListeners() {
                 document.getElementById('voyage-radius-display').textContent = radius;
             }
 
-            try {
-                const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
-                document.getElementById('voyage-location-name').value = locationName;
-                document.getElementById('voyage-precise-location').value = preciseLocation;
-            } catch (e) {
-                console.warn("Failed to geocode map center", e);
-            }
+            await setVoyageModalTargetCoords(lat, lng, { pan: false, geocode: true });
         });
     }
 
@@ -1630,8 +1788,8 @@ function openEditModal(voyage) {
         document.getElementById('voyage-coords-display').textContent = '';
     }
 
-    modalOverlay.classList.remove('hidden');
     modalNewVoyage.classList.remove('hidden');
+    updateVoyageModalMapPreview();
 }
 
 function showVoyageList(doPushState = true) {
@@ -4200,6 +4358,11 @@ async function initMap() {
 
   console.log('NavalPlan: Map Loaded Successfully');
   map.addListener('click', async (e) => {
+      const modalNewVoyage = document.getElementById('modal-new-voyage');
+      if (modalNewVoyage && !modalNewVoyage.classList.contains('hidden')) {
+          await setVoyageModalTargetCoords(e.latLng.lat(), e.latLng.lng(), { pan: false, geocode: true });
+          return;
+      }
       if (!currentVoyage) return;
 
       if (!currentVoyage.start_date || !currentVoyage.end_date) {
@@ -6078,6 +6241,7 @@ async function showRegionBriefing(props, month) {
                 if (inputLat) inputLat.value = centerLat.toFixed(6);
                 if (inputLng) inputLng.value = centerLng.toFixed(6);
                 if (displayCoords) displayCoords.textContent = `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`;
+                updateVoyageModalMapPreview();
             }
         }, 100);
     });

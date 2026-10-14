@@ -189,9 +189,12 @@
     <div id="modal-overlay" class="hidden"></div>
     
     <!-- Voyage Form Modal -->
-    <div id="modal-new-voyage" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-voyage-title">
-      <div class="modal-form-header">
-        <span id="modal-voyage-pill" class="modal-voyage-pill">NEW VOYAGE</span>
+    <div id="modal-new-voyage" class="modal modal--floating hidden" role="dialog" aria-modal="false" aria-labelledby="modal-new-voyage-title">
+      <div id="modal-new-voyage-header" class="modal-form-header modal-form-header--draggable" title="Drag to move">
+        <div class="flex align-center gap-xs">
+          <span class="material-symbols-outlined modal-drag-grip" aria-hidden="true">drag_indicator</span>
+          <span id="modal-voyage-pill" class="modal-voyage-pill">NEW VOYAGE</span>
+        </div>
         <button type="button" id="btn-cancel-voyage" class="modal-close-circle" aria-label="Close">✕</button>
       </div>
       <h2 id="modal-new-voyage-title" class="modal-form-title">Plan a New Voyage</h2>

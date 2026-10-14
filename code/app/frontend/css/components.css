@@ -1767,6 +1767,42 @@
     margin-bottom: 14px;
 }
 
+.modal-form-header--draggable {
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.modal-form-header--draggable:active {
+    cursor: grabbing;
+}
+
+.modal-drag-grip {
+    font-size: 18px;
+    color: var(--muted);
+    opacity: 0.75;
+}
+
+.modal.modal--floating {
+    top: 76px;
+    left: calc(var(--sidebar-w, 380px) + 24px);
+    transform: none;
+    max-width: 380px;
+    padding: 1.5rem;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .modal.modal--floating {
+        top: 64px;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
+}
+
 .modal-voyage-pill {
     display: inline-flex;
     align-items: center;
