@@ -40,6 +40,7 @@ let selectedDate = null;
 // 'multiday' | 'daytrip' — which mode the New/Edit Voyage modal is currently in.
 let voyageModalMode = 'multiday';
 let map = null;
+let currentMapTypeId = 'roadmap';
 let markers = [];
 let routePolyline = null;
 let routePolylines = [];
@@ -542,6 +543,7 @@ async function handleCheckin() {
 function initUI() {
     loadTheme();
     initThemeToggle();
+    initMapTypeToggle();
     initPilotAndFilterListeners();
     initDiscoveryListeners();
     initMobileMenuListeners();
@@ -550,6 +552,24 @@ function initUI() {
     initModalCloseListeners();
     initTrackListeners();
     initAdminUI();
+}
+
+function initMapTypeToggle() {
+    const btn = document.getElementById('btn-map-type-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        currentMapTypeId = currentMapTypeId === 'hybrid' ? 'roadmap' : 'hybrid';
+        const isSat = currentMapTypeId === 'hybrid';
+        btn.classList.toggle('active', isSat);
+        btn.setAttribute('aria-pressed', isSat ? 'true' : 'false');
+        const iconEl = btn.querySelector('.material-symbols-outlined');
+        const labelEl = btn.querySelector('.map-type-toggle-label');
+        if (iconEl) iconEl.textContent = isSat ? 'map' : 'satellite_alt';
+        if (labelEl) labelEl.textContent = isSat ? 'Map' : 'Satellite';
+        if (map) {
+            map.setMapTypeId(currentMapTypeId);
+        }
+    });
 }
 
 function initThemeToggle() {
@@ -4081,6 +4101,7 @@ async function initMap() {
     center: { lat: 20, lng: 0 },
     zoom: 3,
     maxZoom: 18,
+    mapTypeId: currentMapTypeId,
     mapId: isMidnightMariner ? __GOOGLE_MAPS_MAP_ID_MM__ : __GOOGLE_MAPS_MAP_ID__,
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
