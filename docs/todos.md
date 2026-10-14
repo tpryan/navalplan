@@ -58,7 +58,7 @@
 54. Done. Real time tracking info should not be shown before or after the trip ends. Give a grace period of like 24 hours. But otherwise that is only a live trip feature. 
 55. Done. As shown in /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-10-14 at 11.38.28 AM.png the key for tracks overlaps the Google Maps controls. Can we offset it? 
 56. Done. Can we add a toggle for satilite maps in the Google Maps UI.
-57. Night mode throws this error:  This page can't load Google Maps correctly. Do you own this website? Let's fix that. 
+57. Done. Night mode throws this error:  This page can't load Google Maps correctly. Do you own this website? Let's fix that. 
 58. In the interface pictured here: /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-10-14 at 11.43.05 AM.png it would be helpful if we could actually see the radius and center on the map while we are targeting things.  Maybe change the blocking modal to a floating box that can be moved around the map? 
 59. Until we run local pilot research, there is nothing to report, so we should hide the report button. 
 60. The tracks button should be hidden until there are stops decided upon. 

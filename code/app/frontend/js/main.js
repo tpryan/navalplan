@@ -572,6 +572,37 @@ function initMapTypeToggle() {
     });
 }
 
+function getValidMapId(isDark) {
+    const mmId = typeof __GOOGLE_MAPS_MAP_ID_MM__ !== 'undefined' ? __GOOGLE_MAPS_MAP_ID_MM__ : '';
+    const defaultId = typeof __GOOGLE_MAPS_MAP_ID__ !== 'undefined' ? __GOOGLE_MAPS_MAP_ID__ : '';
+    const isPlaceholder = (id) => !id || id === 'midnight_mariner_id' || id === 'your_map_id' || id === 'placeholder';
+    if (isDark && !isPlaceholder(mmId)) {
+        return mmId;
+    }
+    if (!isPlaceholder(defaultId)) {
+        return defaultId;
+    }
+    return 'DEMO_MAP_ID';
+}
+
+async function applyMapTheme() {
+    if (!map) return;
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    await initMap();
+    if (map && center) map.setCenter(center);
+    if (map && zoom != null) map.setZoom(zoom);
+    if (currentVoyage) {
+        await renderMapStops();
+        await renderTrackPolylines();
+    }
+    if (recommendationMarkers && recommendationMarkers.length > 0) {
+        recommendationMarkers.forEach(({ marker, type }) => {
+            marker.map = activeFilters.has(type) ? map : null;
+        });
+    }
+}
+
 function initThemeToggle() {
     // btn-theme-toggle is injected by auth.js after session check,
     // so listen on the container with event delegation.
@@ -586,9 +617,7 @@ function initThemeToggle() {
                 btn.innerHTML = `<span class="material-symbols-outlined">${next === 'dark' ? 'light_mode' : 'dark_mode'}</span>`;
                 btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
             }
-            // colorScheme is immutable after Map construction — reload so
-            // initMap picks up the new theme with the correct colorScheme.
-            window.location.reload();
+            applyMapTheme();
         }
     });
 }
@@ -4102,7 +4131,7 @@ async function initMap() {
     zoom: 3,
     maxZoom: 18,
     mapTypeId: currentMapTypeId,
-    mapId: isMidnightMariner ? __GOOGLE_MAPS_MAP_ID_MM__ : __GOOGLE_MAPS_MAP_ID__,
+    mapId: getValidMapId(isMidnightMariner),
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
     disableDefaultUI: false,
     mapTypeControl: false,
