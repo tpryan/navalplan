@@ -43,10 +43,15 @@ type Facility struct {
 }
 
 // facilityRingsNM is the escalating "search area" ladder in nautical miles.
-// Facilities display within the tightest ring that contains any of them; the
-// radius only widens when a ring comes up empty, and never past the top rung
-// (20 nm) or the stop's configured radius, whichever is smaller.
-var facilityRingsNM = []float64{2.5, 5, 10, 20}
+// Facilities display within the tightest ring holding at least
+// minRingFacilities of them, so the walkable cluster around the stop wins over
+// a denser one farther away. The radius never widens past the top rung (20 nm)
+// or the stop's configured radius, whichever is smaller.
+var facilityRingsNM = []float64{0.5, 1, 2.5, 5, 10, 20}
+
+// minRingFacilities is how many facilities a ring needs before it is used, so
+// a single nearby place does not hide everything else.
+const minRingFacilities = 8
 
 // nearbyFacilities keeps only the facilities within the tightest non-empty ring
 // of facilityRingsNM around (lat,lng), capped at maxNM. Facilities without
@@ -73,6 +78,7 @@ func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
 		rings = []float64{maxNM}
 	}
 
+	var widest []Facility
 	for _, ring := range rings {
 		kept := []Facility{}
 		for _, f := range withCoords {
@@ -80,11 +86,13 @@ func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
 				kept = append(kept, f)
 			}
 		}
-		if len(kept) > 0 {
+		if len(kept) >= minRingFacilities {
 			return append(kept, coordless...)
 		}
+		widest = kept
 	}
-	return coordless
+	// No ring reached the minimum: show everything within the widest ring.
+	return append(widest, coordless...)
 }
 
 func (h *Handler) getStaticMap(ctx context.Context, lat, lng float64) ([]byte, error) {
@@ -291,7 +299,14 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		nearbyBriefing, nearbyErr = h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
 	}
 
-	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
+	// Stop coordinates in session state let the researcher's place search
+	// anchor on the stop instead of trusting coordinates relayed by the LLM
+	// (which tends to substitute the named city's centre).
+	sessionState := map[string]any{
+		"stop_latitude":  stop.Latitude,
+		"stop_longitude": stop.Longitude,
+	}
+	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, sessionState); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.saveEmptyBriefing(ctx, stop)
 		return

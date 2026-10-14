@@ -113,3 +113,28 @@ func classifyPlace(query string, googleTypes []string) string {
 	}
 	return fromQuery
 }
+
+// nearbySearchTypes lists the Google Places (New) Table A types used for
+// Nearby Search per amenity facility type. Marine types are absent on purpose:
+// anchorages, moorings, and coves are not Google place types, so they use
+// Text Search.
+var nearbySearchTypes = map[string][]string{
+	TypeRestaurant: {"restaurant"},
+	TypeBar:        {"bar", "pub", "wine_bar"},
+	TypeCafe:       {"cafe", "coffee_shop"},
+	TypePharmacy:   {"pharmacy", "drugstore"},
+	TypeStore:      {"grocery_store", "supermarket", "convenience_store", "market"},
+	TypeServices:   {"hardware_store", "bank", "atm"},
+}
+
+// nearbyTypesForQuery returns the Google types to use with Nearby Search for an
+// amenity query, or nil when the query should use Text Search.
+func nearbyTypesForQuery(query string) []string {
+	q := strings.ToLower(query)
+	for _, r := range queryRules {
+		if r.re.MatchString(q) {
+			return nearbySearchTypes[r.facilityType]
+		}
+	}
+	return nil
+}

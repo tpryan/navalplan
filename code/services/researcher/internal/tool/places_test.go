@@ -13,8 +13,9 @@ import (
 
 // mockPlacesClient is a mock implementation of the PlacesClient interface.
 type mockPlacesClient struct {
-	SearchTextFunc func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error)
-	CloseFunc      func() error
+	SearchTextFunc   func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error)
+	SearchNearbyFunc func(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error)
+	CloseFunc        func() error
 }
 
 func (m *mockPlacesClient) SearchText(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
@@ -22,6 +23,13 @@ func (m *mockPlacesClient) SearchText(ctx context.Context, req *placespb.SearchT
 		return m.SearchTextFunc(ctx, req, opts...)
 	}
 	return nil, nil
+}
+
+func (m *mockPlacesClient) SearchNearby(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error) {
+	if m.SearchNearbyFunc != nil {
+		return m.SearchNearbyFunc(ctx, req, opts...)
+	}
+	return &placespb.SearchNearbyResponse{}, nil
 }
 
 func (m *mockPlacesClient) Close() error {
@@ -161,5 +169,91 @@ func TestFindPlaces_RadiusClamping(t *testing.T) {
 				t.Errorf("got radius %v, want %v", capturedRadius, tt.expectedRadius)
 			}
 		})
+	}
+}
+
+func TestFindPlaces_AmenityUsesNearbySearchByDistance(t *testing.T) {
+	var got *placespb.SearchNearbyRequest
+	textCalled := false
+	mockClient := &mockPlacesClient{
+		SearchNearbyFunc: func(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error) {
+			got = req
+			return &placespb.SearchNearbyResponse{Places: []*placespb.Place{
+				{Location: &latlng.LatLng{Latitude: 10.001, Longitude: 20.0}, Types: []string{"pharmacy"}},
+			}}, nil
+		},
+		SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
+			textCalled = true
+			return &placespb.SearchTextResponse{}, nil
+		},
+	}
+	p := &PlacesProvider{client: mockClient}
+	res, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "pharmacy", Latitude: 10.0, Longitude: 20.0, Radius: 1600})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if textCalled {
+		t.Error("Text Search called for an amenity query; want Nearby Search only")
+	}
+	if got == nil {
+		t.Fatal("Nearby Search not called")
+	}
+	if got.RankPreference != placespb.SearchNearbyRequest_DISTANCE {
+		t.Errorf("RankPreference = %v, want DISTANCE", got.RankPreference)
+	}
+	circle, ok := got.LocationRestriction.GetType().(*placespb.SearchNearbyRequest_LocationRestriction_Circle)
+	if !ok || circle.Circle.Radius != 1600 {
+		t.Errorf("LocationRestriction = %v, want 1600 m circle", got.LocationRestriction)
+	}
+	if len(got.IncludedTypes) == 0 || got.IncludedTypes[0] != "pharmacy" {
+		t.Errorf("IncludedTypes = %v, want pharmacy first", got.IncludedTypes)
+	}
+	if len(res.Places) != 1 {
+		t.Errorf("got %d places, want 1", len(res.Places))
+	}
+}
+
+func TestFindPlaces_MarineUsesTextSearchByDistance(t *testing.T) {
+	var got *placespb.SearchTextRequest
+	nearbyCalled := false
+	mockClient := &mockPlacesClient{
+		SearchNearbyFunc: func(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error) {
+			nearbyCalled = true
+			return &placespb.SearchNearbyResponse{}, nil
+		},
+		SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
+			got = req
+			return &placespb.SearchTextResponse{}, nil
+		},
+	}
+	p := &PlacesProvider{client: mockClient}
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "anchorage", Latitude: 10.0, Longitude: 20.0, Radius: 1600}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if nearbyCalled {
+		t.Error("Nearby Search called for a marine query")
+	}
+	if got == nil || got.RankPreference != placespb.SearchTextRequest_DISTANCE {
+		t.Errorf("Text Search request = %v, want RankPreference DISTANCE", got)
+	}
+}
+
+func TestFindPlaces_NearbyErrorFallsBackToTextSearch(t *testing.T) {
+	textCalled := false
+	mockClient := &mockPlacesClient{
+		SearchNearbyFunc: func(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error) {
+			return nil, errors.New("INVALID_ARGUMENT: unsupported type")
+		},
+		SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
+			textCalled = true
+			return &placespb.SearchTextResponse{}, nil
+		},
+	}
+	p := &PlacesProvider{client: mockClient}
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "cafe coffee shop", Latitude: 10.0, Longitude: 20.0}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !textCalled {
+		t.Error("Text Search fallback not called after Nearby Search error")
 	}
 }

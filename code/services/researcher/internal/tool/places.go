@@ -67,6 +67,7 @@ type PlacesResponse struct {
 // PlacesClient defines the interface for the Google Places API client.
 type PlacesClient interface {
 	SearchText(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error)
+	SearchNearby(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error)
 	Close() error
 }
 
@@ -146,23 +147,47 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 	}
 	fieldMaskHeader := strings.Join(fieldsToRequest, ",")
 
-	req := &placespb.SearchTextRequest{
-		TextQuery:      args.Query,
-		LocationBias:   locationBias,
-		OpenNow:        args.OpenNow,
-		MinRating:      args.MinRating,
-		MaxResultCount: 20,
-	}
-
 	// Append FieldMask to context
 	callCtx := metadata.AppendToOutgoingContext(ctx, "x-goog-fieldmask", fieldMaskHeader)
 
-	resp, err := p.client.SearchText(callCtx, req)
-	if err != nil {
-		return PlacesResponse{}, fmt.Errorf("%w: SearchText API: %w", ErrAPIUnavailable, err)
+	// Amenity categories use Nearby Search: restricted to the circle and ranked
+	// by distance, so results are the closest places of that kind rather than
+	// the most prominent ones in the wider city.
+	var placesList []*placespb.Place
+	usedNearby := false
+	if includedTypes := nearbyTypesForQuery(args.Query); len(includedTypes) > 0 {
+		nearbyResp, err := p.client.SearchNearby(callCtx, &placespb.SearchNearbyRequest{
+			IncludedTypes:  includedTypes,
+			MaxResultCount: 20,
+			LocationRestriction: &placespb.SearchNearbyRequest_LocationRestriction{
+				Type: &placespb.SearchNearbyRequest_LocationRestriction_Circle{Circle: circleArea},
+			},
+			RankPreference: placespb.SearchNearbyRequest_DISTANCE,
+		})
+		if err == nil {
+			placesList = nearbyResp.Places
+			usedNearby = true
+		}
+		// On error (e.g. an unsupported type), fall back to Text Search below.
 	}
 
-	placesList := resp.Places
+	// Marine features (anchorages, moorings, coves) are not Google place types,
+	// so they use Text Search, ranked by distance from the stop.
+	if !usedNearby {
+		req := &placespb.SearchTextRequest{
+			TextQuery:      args.Query,
+			LocationBias:   locationBias,
+			OpenNow:        args.OpenNow,
+			MinRating:      args.MinRating,
+			MaxResultCount: 20,
+			RankPreference: placespb.SearchTextRequest_DISTANCE,
+		}
+		resp, err := p.client.SearchText(callCtx, req)
+		if err != nil {
+			return PlacesResponse{}, fmt.Errorf("%w: SearchText API: %w", ErrAPIUnavailable, err)
+		}
+		placesList = resp.Places
+	}
 
 	var results []PlaceResult
 	for _, pt := range placesList {
@@ -183,6 +208,10 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			}
 		}
 
+		// Nearby Search has no min_rating parameter, so apply it here.
+		if usedNearby && args.MinRating > 0 && float64(pt.Rating) < args.MinRating {
+			continue
+		}
 		name := ""
 		if pt.DisplayName != nil {
 			name = pt.DisplayName.Text

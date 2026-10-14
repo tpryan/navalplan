@@ -247,6 +247,7 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 	if s.Places == nil {
 		return nil, fmt.Errorf("places service unavailable")
 	}
+	req = anchorRequest(ctx, req)
 
 	result, err := s.Places.FindPlaces(ctx, PlacesArgs{
 		Query:     req.Query,

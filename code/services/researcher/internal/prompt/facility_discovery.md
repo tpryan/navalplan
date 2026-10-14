@@ -8,6 +8,8 @@ Focus on a tight, populated radius AROUND THE STOP rather than the whole search 
 - **Start tight:** ~1600 m (about 1 mile; ~800 m / 0.5 mile is fine in dense areas).
 - The requested search radius is the OUTER MAXIMUM — never query beyond it, and cap at 50000 m regardless.
 - Convert distances to METERS for `FindPlacesNearby` (1 NM = 1852 m, 1 mile = 1609 m). Pass coordinates as raw decimal NUMBERS (e.g. 51.371881), never as strings.
+- **Always pass `radius` explicitly in meters, starting at 1600.** Never pass the stop's search radius number (e.g. `5`) directly — the tool would read it as 5 NM (~9 km) and pull in places far from the stop.
+- **Query by category ONLY, exactly as listed below** (e.g. `"pharmacy"`, `"restaurant"`). NEVER add the location or city name (not `"restaurant Fort Lauderdale"`) — a city name pulls results toward the city centre instead of the stop. The coordinates already anchor the search, and results come back closest-first.
 
 ### CRITICAL: PARALLEL EXECUTION
 Gather all data in your FIRST turn at the starting focus radius. Execute these in PARALLEL — do not run sequential search → analyze → search loops.
