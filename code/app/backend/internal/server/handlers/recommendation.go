@@ -343,9 +343,10 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	prompt := fmt.Sprintf(
-		"Recommend %d anchorages, moorings, and marinas within %d %s of coordinates (latitude: %.4f, longitude: %.4f, approximately %s, %s, %s). %s",
-		count, v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
-		boundaryHint)
+		"Recommend anchorages, moorings, marinas, and fuel docks within %d %s of coordinates (latitude: %.4f, longitude: %.4f, approximately %s, %s, %s). "+
+			"Return at least %d, and include EVERY qualifying spot you find with verified coordinates — there is no upper limit. %s",
+		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
+		count, boundaryHint)
 
 	if v.StartDate != nil && v.EndDate != nil && v.StartDate.Equal(*v.EndDate) {
 		prompt += " This is a day trip — a single-day outing with no overnight stay. " +

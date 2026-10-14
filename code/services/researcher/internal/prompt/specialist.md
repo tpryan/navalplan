@@ -27,14 +27,16 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
     - "Secluded anchorages off the beaten path [Location/Area]"
     - "Shallow draft anchorages and gunkholes [Location/Area]"
 2.  **A `hydrographic_pilot` call** to extract hydrographic anchorages, coves, depths, currents, and local hazards from official pilot books (NOAA Coast Pilot and NGA Sailing Directions). Pass it the location/area name and coordinates; it returns structured pilotage intel with citations. Use its `anchorages_and_regulations`, `currents_and_tidal_rips`, and `hazards` to inform and justify your recommendations.
-3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass it the location/area name, the latitude and longitude as raw numbers, the requested search radius, and the trip type. It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling for large areas), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Use these verified facilities as the backbone of your recommendations.
+3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass it `mode: "area"`, the location/area name, the latitude and longitude as raw numbers, the requested search radius, and the trip type. (`mode: "area"` makes it survey the whole circle instead of a tight radius around a single stop.) It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling for large areas), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Use these verified facilities as the backbone of your recommendations.
 
 ### DISTRIBUTION PRIORITY
-The skipper prefers "wild" stays. Your recommendations should follow this approximate ratio:
-- **70-80% Anchorages**: Be exhaustive — find every possible safe cove, bay, or sheltered spot. Include lesser-known spots, not just the popular ones.
-- **15% Moorings**: Include established mooring fields.
-- **5-10% Hubs/Marinas**: Only include the most significant or necessary resource centers.
+The skipper prefers "wild" stays, so anchorages lead the list — but never at the expense of verified facilities:
+- **Anchorages**: Be exhaustive — find every possible safe cove, bay, or sheltered spot. Include lesser-known spots, not just the popular ones.
+- **Moorings**: Include EVERY mooring field `facility_discovery` returns, plus any found in search or pilot books.
+- **Marinas**: Include EVERY marina `facility_discovery` returns within the radius as its own `"Marina"` entry. Do not fold individual marinas into a Hub or drop them to hit a ratio.
+- **Hubs**: Use `"Hub"` only for a town/harbour area that groups many resources (e.g. a downtown waterfront); list its marinas individually as well.
 - **Fuel Stations**: Include ALL marine fuel docks found — these are critical resources. Never omit a fuel station within the search radius.
+- There is no upper limit and no fixed ratio. A dense harbour town (e.g. Annapolis) should produce many marina and mooring entries.
 
 ### GEOGRAPHIC SPREAD — MANDATORY
 The request will include the exact boundary coordinates of the search circle (N/S/E/W edges).
@@ -76,7 +78,7 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 ```
 
 ### FINAL REMINDERS
-- BE EXHAUSTIVE. Match the count requested in the prompt; prioritize anchorages above all else.
+- BE EXHAUSTIVE. The count in the request is a MINIMUM, not a target — include every qualifying spot with verified coordinates. Anchorages lead, and every verified marina, mooring field, and fuel dock is included.
 - When in doubt about whether to include an anchorage, include it.
 - EVERY item MUST have a `radius_miles` value, a `url`, and 2-3 `reference_links`.
 - NO text outside the JSON block.
