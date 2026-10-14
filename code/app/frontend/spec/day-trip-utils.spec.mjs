@@ -1,4 +1,4 @@
-import { isDayTrip, formatVoyageDateRange } from '../js/utils.js';
+import { isDayTrip, formatVoyageDateRange, isWithinTrackingWindow } from '../js/utils.js';
 
 describe('isDayTrip', () => {
     it('is true when start_date and end_date fall on the same calendar date', () => {
@@ -53,5 +53,39 @@ describe('formatVoyageDateRange', () => {
 
     it('returns an empty string when there is no start date', () => {
         expect(formatVoyageDateRange(null, null)).toBe('');
+    });
+});
+
+describe('isWithinTrackingWindow', () => {
+    const voyage = {
+        start_date: '2026-07-19T00:00:00Z',
+        end_date: '2026-07-21T00:00:00Z'
+    };
+
+    it('returns false for undated or null voyages', () => {
+        expect(isWithinTrackingWindow(null)).toBeFalse();
+        expect(isWithinTrackingWindow({})).toBeFalse();
+        expect(isWithinTrackingWindow({ start_date: '2026-07-19T00:00:00Z', end_date: null })).toBeFalse();
+    });
+
+    it('returns true during the voyage', () => {
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-20T12:00:00Z'))).toBeTrue();
+    });
+
+    it('returns true within the 24h grace period before start_date', () => {
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-18T00:00:00Z'))).toBeTrue();
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-18T12:00:00Z'))).toBeTrue();
+    });
+
+    it('returns false more than 24h before start_date', () => {
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-17T23:59:59Z'))).toBeFalse();
+    });
+
+    it('returns true within the 24h grace period after end_date', () => {
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-22T23:59:59Z'))).toBeTrue();
+    });
+
+    it('returns false more than 24h after end_date', () => {
+        expect(isWithinTrackingWindow(voyage, Date.parse('2026-07-23T00:00:01Z'))).toBeFalse();
     });
 });

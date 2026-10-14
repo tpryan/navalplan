@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -450,7 +450,7 @@ async function reverseGeocode(latLng) {
 }
 
 async function handleCheckin() {
-    if (!currentVoyage) return;
+    if (!currentVoyage || !isWithinTrackingWindow(currentVoyage)) return;
     
     if (!navigator.geolocation) {
         showNotification('Error', 'Geolocation is not supported by your browser.');
@@ -1626,6 +1626,7 @@ function updateItineraryHeader(voyage) {
         datesEl.textContent = 'No dates set for this voyage';
         if (btnSetDates) btnSetDates.classList.remove('hidden');
     }
+    document.getElementById('btn-checkin')?.classList.toggle('hidden', !isWithinTrackingWindow(voyage));
 }
 
 async function selectVoyage(voyage, doPushState = true) {
@@ -1644,7 +1645,7 @@ async function selectVoyage(voyage, doPushState = true) {
     document.getElementById('voyage-list').classList.add('hidden');
     document.getElementById('itinerary-view').classList.remove('hidden');
     document.querySelector('.sidebar-actions').classList.add('hidden');
-    document.getElementById('btn-checkin')?.classList.remove('hidden');
+    document.getElementById('btn-checkin')?.classList.toggle('hidden', !isWithinTrackingWindow(currentVoyage));
     
     // For mobile — show sidebar (itinerary), activate Plan tab
     document.getElementById('app').classList.add('menu-open');
@@ -4257,8 +4258,8 @@ async function initMap() {
             new Date(a.target_date) - new Date(b.target_date)
         );
 
-        // Draw Check-in Marker if it exists
-        if (currentVoyage.checkin_latitude != null && currentVoyage.checkin_longitude != null) {
+        // Draw Check-in Marker if it exists and voyage is within live tracking window
+        if (isWithinTrackingWindow(currentVoyage) && currentVoyage.checkin_latitude != null && currentVoyage.checkin_longitude != null) {
         const dot = accentDot('muted', 36);
         
         // Add custom animation layers
@@ -5244,8 +5245,8 @@ async function captureAndUploadMap(voyageId) {
     if (sortedStops.length > 0) {
         const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
         
-        // Add Check-in marker if it exists and is near the voyage
-        if (currentVoyage && currentVoyage.checkin_latitude && currentVoyage.checkin_longitude) {
+        // Add Check-in marker if it exists and is within the live tracking window
+        if (currentVoyage && isWithinTrackingWindow(currentVoyage) && currentVoyage.checkin_latitude && currentVoyage.checkin_longitude) {
             // Always show check-in if it exists? Or only if near?
             // User said "properly handle things when I am not geographically in the area"
             // For static map, if it's far, it will zoom out too much.
@@ -6537,7 +6538,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Check-in status ───────────────────────────────────────────────────────
-    if (voyage.checkin_latitude && voyage.checkin_longitude && voyage.checkin_at) {
+    if (isWithinTrackingWindow(voyage) && voyage.checkin_latitude && voyage.checkin_longitude && voyage.checkin_at) {
         const checkinDate = new Date(voyage.checkin_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const locName = voyage.checkin_location || 'Position';
         const lat = voyage.checkin_latitude.toFixed(4);

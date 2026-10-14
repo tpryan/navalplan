@@ -446,3 +446,24 @@ export function generateDebriefsHTML(debrief, stopsContext = null, tracksContext
     return html;
 }
 
+/**
+ * Returns true if the current time (or provided timestamp) is within the active
+ * live-tracking window for a voyage: [start_date 00:00:00Z - 24h, end_date 23:59:59.999Z + 24h].
+ * Undated voyages return false.
+ *
+ * @param {object|null|undefined} voyage
+ * @param {number} [nowMs=Date.now()]
+ * @returns {boolean}
+ */
+export function isWithinTrackingWindow(voyage, nowMs = Date.now()) {
+    if (!voyage || !voyage.start_date || !voyage.end_date) return false;
+    const startDay = String(voyage.start_date).split('T')[0];
+    const endDay = String(voyage.end_date).split('T')[0];
+    const startMs = Date.parse(`${startDay}T00:00:00Z`);
+    const endMs = Date.parse(`${endDay}T23:59:59.999Z`);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) return false;
+    const GRACE_MS = 24 * 60 * 60 * 1000;
+    return nowMs >= (startMs - GRACE_MS) && nowMs <= (endMs + GRACE_MS);
+}
+
+
