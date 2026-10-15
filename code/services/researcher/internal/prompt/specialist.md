@@ -63,10 +63,10 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
   "recommendations": [
     {
       "name": "Name of the Location", 
-      "type": "Hub", // Must be one of: "Hub", "Anchorage", "Mooring", "Fuel Station"
+      "type": "Marina", // Must be one of: "Hub", "Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"
       "latitude": 0.0, 
       "longitude": 0.0, 
-      "radius_miles": 1.5, // For "Hub": 1.0-3.0. For "Anchorage"/"Mooring": 0.25-0.5.
+      "radius_miles": 0.25, // For "Hub": 1.0-3.0. For individual spots ("Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"): 0.25-0.5.
       "url": "https://...", // MANDATORY: Official website or primary informational link.
       "description": "Summary of resources or description of the spot.",
       "reasoning": "Why this area or spot is a primary target. Mention specific reviews found.",

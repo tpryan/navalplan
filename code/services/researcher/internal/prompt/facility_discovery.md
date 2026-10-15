@@ -39,9 +39,11 @@ Gather all data in your FIRST turn. Execute these in PARALLEL — do not run seq
    - `query`: "marine supply chandlery"
    - `query`: "hardware store"
    - `query`: "ATM bank"
-3. **A web search call** (`batch_google_search`) to find wild, natural, or unofficial anchorages, coves, and mooring fields within the focus radius that commercial POI databases miss, plus official harbor regulations and recent hazard/review notes. Tune to the trip type:
-   - overnight: "safe overnight anchorages coves sheltered bays [Location]", "secluded anchorages mooring fields [Location] cruising guide"
-   - day_trip: "day anchorage lunch stop mooring [Location]", "day-use moorings easily reached anchorages [Location]"
+3.  **A single `BatchGoogleSearch` call** (`batch_google_search`) to find wild, natural, or unofficial anchorages, coves, and mooring fields within the focus radius that commercial POI databases miss, plus official harbor regulations and recent hazard/review notes.
+   - In `mode: "area"`, include queries for the major harbors and rivers on ALL sides of the circle (e.g., western shore, eastern shore, northern and southern tributaries), not just the town closest to the center point.
+   - Tune to the trip type:
+     - overnight: "safe overnight anchorages coves sheltered bays [Location]", "secluded anchorages mooring fields [Location] cruising guide"
+     - day_trip: "day anchorage lunch stop mooring [Location]", "day-use moorings easily reached anchorages [Location]"
 
 ### ISOLATED STOPS — EXPAND UNTIL POPULATED
 If the focus radius returns few or no results (an isolated or rural stop), progressively widen the radius and re-query the sparse/empty categories — both marine and amenity — until you have a reasonably populated set: ~4800 m (3 miles) → ~8000 m → ~16000 m → up to the requested search radius (cap 50000 m). Stop expanding as soon as you have a useful cluster; do not jump straight to the maximum. Record `distance_meters` from the stop for every result so the parent can judge walkability.

@@ -218,10 +218,16 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 
 		// For wide-area searches (> 15 km / ~8 NM), also probe 8 compass sector
 		// points at 60% of the requested radius in parallel so open-water centers
-		// (e.g. Florida Straits between Fort Lauderdale and Bimini) cover every
-		// shore inside the circle.
+		// (e.g. Chesapeake Bay off Kent Island, or Florida Straits) cover every
+		// shore inside the circle. Use a local sector radius (45% of requestedRadius)
+		// and DISTANCE ranking so each sector returns the places closest to that
+		// shore rather than repeating the same 20 region-wide RELEVANCE results.
 		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) {
 			sectorOffset := requestedRadius * 0.60
+			sectorBiasRadius := requestedRadius * 0.45
+			if sectorBiasRadius > 50000 {
+				sectorBiasRadius = 50000
+			}
 			bearings := []float64{0, 45, 90, 135, 180, 225, 270, 315}
 			sectorResults := make([][]*placespb.Place, len(bearings))
 			var wg sync.WaitGroup
@@ -236,14 +242,14 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 							Type: &placespb.SearchTextRequest_LocationBias_Circle{
 								Circle: &placespb.Circle{
 									Center: &latlng.LatLng{Latitude: sLat, Longitude: sLng},
-									Radius: apiRadius,
+									Radius: sectorBiasRadius,
 								},
 							},
 						},
 						OpenNow:        args.OpenNow,
 						MinRating:      args.MinRating,
 						MaxResultCount: 20,
-						RankPreference: placespb.SearchTextRequest_RELEVANCE,
+						RankPreference: placespb.SearchTextRequest_DISTANCE,
 					}
 					if sResp, sErr := p.client.SearchText(callCtx, sReq); sErr == nil && sResp != nil {
 						sectorResults[idx] = sResp.Places

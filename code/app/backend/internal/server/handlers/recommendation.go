@@ -27,12 +27,12 @@ func radiusToNM(radius int, unit string) float64 {
 
 func recommendationCount(radius int, unit string) int {
 	nm := radiusToNM(radius, unit)
-	count := int(math.Round(nm * 1.0))
-	if count < 15 {
-		count = 15
+	count := int(math.Round(nm * 3.0))
+	if count < 25 {
+		count = 25
 	}
-	if count > 30 {
-		count = 30
+	if count > 60 {
+		count = 60
 	}
 	return count
 }
@@ -222,9 +222,10 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 
 	prompt := fmt.Sprintf(
 		"Recommend anchorages, moorings, marinas, and fuel docks within %d %s of coordinates (latitude: %.4f, longitude: %.4f, approximately %s, %s, %s). "+
-			"Return at least %d, and include EVERY qualifying spot you find with verified coordinates — there is no upper limit. %s",
+			"Return at least %d, and include EVERY qualifying spot you find with verified coordinates — there is no upper limit. "+
+			"Pass the exact center coordinates (latitude: %.4f, longitude: %.4f) and full radius (%d %s = %.0f meters) to facility_discovery with mode: \"area\" — do NOT shift the center to a single island or town. %s",
 		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
-		count, boundaryHint)
+		count, *v.Latitude, *v.Longitude, v.SearchRadius, v.SearchRadiusUnit, radiusNM*1852.0, boundaryHint)
 
 	if v.StartDate != nil && v.EndDate != nil && v.StartDate.Equal(*v.EndDate) {
 		prompt += " This is a day trip — a single-day outing with no overnight stay. " +
