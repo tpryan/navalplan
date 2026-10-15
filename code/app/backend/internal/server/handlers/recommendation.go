@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -74,30 +72,6 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 	return hint
 }
 
-func repairMathInJSON(s string) string {
-	re := regexp.MustCompile(`(-?\d+\.?\d*)\s*([+-])\s*(\d+\.?\d*)`)
-
-	return re.ReplaceAllStringFunc(s, func(match string) string {
-		parts := re.FindStringSubmatch(match)
-		if len(parts) != 4 {
-			return match
-		}
-
-		v1, _ := strconv.ParseFloat(parts[1], 64)
-		op := parts[2]
-		v2, _ := strconv.ParseFloat(parts[3], 64)
-
-		var res float64
-		if op == "+" {
-			res = v1 + v2
-		} else {
-			res = v1 - v2
-		}
-
-		return fmt.Sprintf("%.7f", res)
-	})
-}
-
 func haversine(lat1, lon1, lat2, lon2 float64, unit string) float64 {
 	const (
 		earthRadiusKm = 6371.0
@@ -131,32 +105,15 @@ func haversine(lat1, lon1, lat2, lon2 float64, unit string) float64 {
 }
 
 func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	v, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	v, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if v.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := v.ID
 
 	recommendations, err := h.DB.ListVoyageRecommendations(r.Context(), voyageID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list recommendations", "voyage_id", voyageID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to list recommendations", "voyage_id", voyageID, "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -168,101 +125,23 @@ func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ensureRecChannel(sessionID string, ttl time.Duration) chan model.VoyageRecommendation {
-	h.muRecStreams.Lock()
-	if ch, ok := h.recStreams[sessionID]; ok {
-		h.muRecStreams.Unlock()
-		return ch
-	}
-	ch := make(chan model.VoyageRecommendation, 100)
-	h.recStreams[sessionID] = ch
-	h.muRecStreams.Unlock()
-
-	go func(sid string, created chan model.VoyageRecommendation) {
-		time.Sleep(ttl)
-		h.muRecStreams.Lock()
-		if existing, ok := h.recStreams[sid]; ok && existing == created {
-			delete(h.recStreams, sid)
-		}
-		h.muRecStreams.Unlock()
-	}(sessionID, ch)
-
-	return ch
+	return h.recHub.ensure(sessionID, ttl)
 }
 
 func (h *Handler) broadcastRecommendation(sessionID string, rec model.VoyageRecommendation) {
-	h.muRecStreams.RLock()
-	defer h.muRecStreams.RUnlock()
-	if ch, ok := h.recStreams[sessionID]; ok {
-		select {
-		case ch <- rec:
-		default:
-		}
-	}
+	h.recHub.broadcast(sessionID, rec)
 }
 
 func (h *Handler) StreamRecommendations(w http.ResponseWriter, r *http.Request) {
-	sessionID := r.URL.Query().Get("session_id")
-	if sessionID == "" {
-		writeError(w, http.StatusBadRequest, "Missing session_id")
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	rc := http.NewResponseController(w)
-	fmt.Fprintf(w, ": connected\n\n")
-	_ = rc.Flush()
-
-	ch := h.ensureRecChannel(sessionID, 30*time.Minute)
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			fmt.Fprintf(w, ": keepalive\n\n")
-			rc.Flush()
-		case rec, ok := <-ch:
-			if !ok {
-				return
-			}
-			jsonData, _ := json.Marshal(rec)
-			fmt.Fprintf(w, "event: recommendation\ndata: %s\n\n", jsonData)
-			rc.Flush()
-		}
-	}
+	streamSSE(w, r, &h.recHub, "recommendation", 30*time.Minute, nil)
 }
 
 func (h *Handler) GenerateRecommendations(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
 	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
 
 	ts := time.Now().Unix()
 	sessionID := fmt.Sprintf("recommendation_%d_%d", voyage.ID, ts)
@@ -286,24 +165,19 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	h.ResearchSem <- struct{}{}
 	defer func() {
 		<-h.ResearchSem
-		h.muRecStreams.Lock()
-		if ch, ok := h.recStreams[sessionID]; ok {
-			close(ch)
-			delete(h.recStreams, sessionID)
-		}
-		h.muRecStreams.Unlock()
+		h.recHub.close(sessionID)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	slog.InfoContext(ctx, fmt.Sprintf("[navigator-agent] Generating recommendations for voyage %d", v.ID))
+	slog.InfoContext(ctx, "[navigator-agent] Generating recommendations for voyage", "voyage_id", v.ID)
 	h.broadcastProgress(progressSessionID, "start", "Starting Local Pilot research")
 
 	const appName = "specialist"
 	const userID = "system"
 
 	if err := h.DB.DeleteVoyageRecommendations(ctx, v.ID); err != nil {
-		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "err", err)
+		slog.ErrorContext(ctx, "Failed to delete old recommendations", "voyage_id", v.ID, "error", err)
 	}
 
 	radiusNM := radiusToNM(v.SearchRadius, v.SearchRadiusUnit)
@@ -430,17 +304,15 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	recommendations := wrapper.Recommendations
 
 	for _, rec := range recommendations {
-		if v.Latitude != nil && v.Longitude != nil {
-			dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
-			if dist > float64(v.SearchRadius) {
-				continue
-			}
-			rec.RadiusMiles = haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, "mi")
+		dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
+		if dist > float64(v.SearchRadius) {
+			continue
 		}
+		rec.RadiusMiles = haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, "mi")
 
 		rec.VoyageID = v.ID
 		if err := h.DB.CreateVoyageRecommendation(ctx, &rec); err != nil {
-			slog.ErrorContext(ctx, "Failed to save recommendation", "voyage_id", v.ID, "err", err)
+			slog.ErrorContext(ctx, "Failed to save recommendation", "voyage_id", v.ID, "error", err)
 			continue
 		}
 
@@ -449,5 +321,5 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	h.broadcastProgress(progressSessionID, "done", fmt.Sprintf("Local Pilot complete — %d locations charted", parsedCount))
-	slog.InfoContext(ctx, fmt.Sprintf("Generated %d recommendations for voyage %d", parsedCount, v.ID))
+	slog.InfoContext(ctx, "Generated recommendations for voyage", "count", parsedCount, "voyage_id", v.ID)
 }

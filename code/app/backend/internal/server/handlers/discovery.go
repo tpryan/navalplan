@@ -118,10 +118,6 @@ func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func isSpatialDuplicate(iou, containment float64) bool {
-	return iou > 0.40 || containment > 0.70
-}
-
 func normalizeRegionKey(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	if idx := strings.Index(s, "("); idx != -1 {
@@ -139,10 +135,7 @@ func normalizeRegionKey(name string) string {
 // so any bounding-box overlap or centers within 3.5 degrees (~210 NM) — or
 // matching normalized region names — indicate a duplicate region.
 func isRegionDuplicate(nameA, nameB string, b1, b2 orb.Bound) (bool, float64, float64) {
-	iou, containment, _ := computeBoundsStats(b1, b2)
-	if isSpatialDuplicate(iou, containment) {
-		return true, iou, containment
-	}
+	iou, containment := computeBoundsStats(b1, b2)
 	if iou > 0.05 || containment > 0.15 {
 		return true, iou, containment
 	}
@@ -160,7 +153,11 @@ func isRegionDuplicate(nameA, nameB string, b1, b2 orb.Bound) (bool, float64, fl
 	return false, iou, containment
 }
 
-func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) {
+// computeBoundsStats computes bounding-box Intersection-over-Union (IoU) and
+// containment in raw degrees². Note: degree-squared areas distort with latitude
+// and do not wrap across the ±180° antimeridian; this is a coarse screen paired
+// with center-distance and normalized name checks in isRegionDuplicate.
+func computeBoundsStats(b1, b2 orb.Bound) (iou, containment float64) {
 	minX := max(b1.Min.X(), b2.Min.X())
 	minY := max(b1.Min.Y(), b2.Min.Y())
 	maxX := min(b1.Max.X(), b2.Max.X())
@@ -181,17 +178,12 @@ func computeBoundsStats(b1, b2 orb.Bound) (iou, containment, sizeRatio float64) 
 	}
 
 	minArea := min(area1, area2)
-	maxArea := max(area1, area2)
 
 	if minArea > 0 {
 		containment = intersectArea / minArea
 	}
 
-	if maxArea > 0 {
-		sizeRatio = minArea / maxArea
-	}
-
-	return iou, containment, sizeRatio
+	return iou, containment
 }
 
 func getTierPriority(tier string, isHiddenGem bool) int {
@@ -244,12 +236,21 @@ func (h *Handler) DiscoveryPruning(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PruneDuplicateRegions(ctx context.Context, month int) (int, error) {
 	if month == 0 {
 		totalPruned := 0
+		var firstErr error
+		failedMonths := 0
 		for m := 1; m <= 12; m++ {
 			n, err := h.PruneDuplicateRegions(ctx, m)
 			if err != nil {
-				slog.ErrorContext(ctx, fmt.Sprintf("[discovery-prune] Error pruning month %d", m), "error", err)
+				slog.ErrorContext(ctx, "[discovery-prune] Error pruning month", "month", m, "error", err)
+				failedMonths++
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
 			totalPruned += n
+		}
+		if failedMonths == 12 && firstErr != nil {
+			return 0, firstErr
 		}
 		return totalPruned, nil
 	}
@@ -318,12 +319,13 @@ func (h *Handler) PruneDuplicateRegions(ctx context.Context, month int) (int, er
 					}
 				}
 
-				slog.InfoContext(ctx, fmt.Sprintf("[discovery-prune] Removing duplicate region '%s' (ID: %d, Tier: %s, Score: %d) in favor of '%s' (ID: %d, Tier: %s, Score: %d) (IoU: %.2f, Cont: %.2f)",
-					removeTarget.Name, removeTarget.SailingRegion.ID, removeTarget.Tier, removeTarget.SuitabilityScore,
-					keepTarget.Name, keepTarget.SailingRegion.ID, keepTarget.Tier, keepTarget.SuitabilityScore, iou, containment))
+				slog.InfoContext(ctx, "[discovery-prune] Removing duplicate region",
+					"remove_name", removeTarget.Name, "remove_id", removeTarget.SailingRegion.ID, "remove_tier", removeTarget.Tier, "remove_score", removeTarget.SuitabilityScore,
+					"keep_name", keepTarget.Name, "keep_id", keepTarget.SailingRegion.ID, "keep_tier", keepTarget.Tier, "keep_score", keepTarget.SuitabilityScore,
+					"iou", iou, "containment", containment)
 
 				if err := h.DB.DeleteSeasonality(ctx, int(removeTarget.SailingRegion.ID), month); err != nil {
-					slog.ErrorContext(ctx, fmt.Sprintf("[discovery-prune] Failed to delete seasonality for region %d", removeTarget.SailingRegion.ID), "error", err)
+					slog.ErrorContext(ctx, "[discovery-prune] Failed to delete seasonality for region", "region_id", removeTarget.SailingRegion.ID, "error", err)
 				} else {
 					removedIDs[removeTarget.SailingRegion.ID] = true
 					prunedCount++
@@ -340,18 +342,18 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 	monthName := time.Month(month).String()
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Panic during %s mining", month, monthName), "recover", r)
+			slog.ErrorContext(ctx, "[discovery-mining] Panic during mining", "month", month, "month_name", monthName, "recover", r)
 		}
 	}()
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Starting mining for %s", month, monthName))
+	slog.InfoContext(ctx, "[discovery-mining] Starting mining", "month", month, "month_name", monthName)
 
 	const appName = "commodore"
 	const userID = "system"
 	sessionID := fmt.Sprintf("discovery_%d_%d", month, time.Now().Unix())
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Creating agent session '%s'", month, sessionID))
+	slog.InfoContext(ctx, "[discovery-mining] Creating agent session", "month", month, "session_id", sessionID)
 	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, map[string]any{"Month": monthName}); err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Failed to create agent session for %s", month, monthName), "error", err, "duration", time.Since(start))
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to create agent session", "month", month, "month_name", monthName, "error", err, "duration", time.Since(start))
 		return
 	}
 
@@ -368,35 +370,36 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		prompt += fmt.Sprintf(" Existing regions already active for %s: [%s]. Do NOT output a second region covering the same archipelago, island group, or coast under a variant name or shifted bounding box.", monthName, strings.Join(existingNames, ", "))
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Invoking commodore agent for %s...", month, monthName))
+	slog.InfoContext(ctx, "[discovery-mining] Invoking commodore agent", "month", month, "month_name", monthName)
 	agentStart := time.Now()
 	responseText, err := h.Agent.RunSync(ctx, appName, userID, sessionID, prompt)
 	agentDuration := time.Since(agentStart)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Agent run failed for %s after %v", month, monthName, agentDuration), "error", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Agent run failed", "month", month, "month_name", monthName, "duration", agentDuration, "error", err)
 		return
 	}
 
 	if responseText == "" {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] No response text from agent for %s after %v", month, monthName, agentDuration))
+		slog.ErrorContext(ctx, "[discovery-mining] No response text from agent", "month", month, "month_name", monthName, "duration", agentDuration)
 		return
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Agent returned %d bytes in %v for %s", month, len(responseText), agentDuration, monthName))
+	slog.InfoContext(ctx, "[discovery-mining] Agent returned response", "month", month, "month_name", monthName, "bytes", len(responseText), "duration", agentDuration)
 
 	cleanedResponseText := cleanJSON(responseText)
 
 	var output []DiscoveryRegionOutput
 	if err := json.Unmarshal([]byte(cleanedResponseText), &output); err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Failed to unmarshal discovery agent JSON for %s", month, monthName), "error", err, "cleaned", cleanedResponseText, "raw", responseText)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to unmarshal discovery agent JSON", "month", month, "month_name", monthName, "error", err, "cleaned", cleanedResponseText, "raw", responseText)
 		return
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Saving %d candidate regions for %s...", month, len(output), monthName))
+	slog.InfoContext(ctx, "[discovery-mining] Saving candidate regions", "month", month, "month_name", monthName, "count", len(output))
 
 	activeRegions, err := h.DB.ListRegionsByMonth(ctx, month)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to load active regions for month %d", month), "error", err)
+		slog.ErrorContext(ctx, "[discovery-mining] Failed to load active regions; aborting to avoid duplicate insertion", "month", month, "error", err)
+		return
 	}
 
 	type activeReg struct {
@@ -404,6 +407,7 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		Name     string
 		Tier     string
 		IsHidden bool
+		Replaced bool
 		Geom     *geojson.Geometry
 	}
 	var parsedActive []activeReg
@@ -423,13 +427,13 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 	for _, reg := range output {
 		newGeom, err := geojson.UnmarshalGeometry(reg.Geometry)
 		if err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to parse geometry for new region %s", reg.Name), "error", err)
+			slog.ErrorContext(ctx, "[discovery-mining] Failed to parse geometry for new region", "region", reg.Name, "error", err)
 			continue
 		}
 
 		shouldSkip := false
 		for i, ex := range parsedActive {
-			if ex.Name == "" {
+			if ex.Replaced {
 				continue
 			}
 
@@ -446,17 +450,17 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 				oldPriority := getTierPriority(ex.Tier, ex.IsHidden)
 
 				if newPriority > oldPriority {
-					slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Replacing existing '%s' (Tier: %s) with new superior '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
-						ex.Name, ex.Tier, reg.Name, reg.Tier, iou, containment))
+					slog.InfoContext(ctx, "[discovery-mining] Replacing existing region with superior candidate",
+						"existing_name", ex.Name, "existing_tier", ex.Tier, "new_name", reg.Name, "new_tier", reg.Tier, "iou", iou, "containment", containment)
 
 					if err := h.DB.DeleteSeasonality(ctx, int(ex.ID), month); err != nil {
-						slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to remove inferior region %s", ex.Name), "error", err)
+						slog.ErrorContext(ctx, "[discovery-mining] Failed to remove inferior region", "region", ex.Name, "error", err)
 					}
 
-					parsedActive[i].Name = ""
+					parsedActive[i].Replaced = true
 				} else {
-					slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] Skipping new region '%s' (Tier: %s) in favor of existing '%s' (Tier: %s) (IoU: %.2f, Cont: %.2f)",
-						reg.Name, reg.Tier, ex.Name, ex.Tier, iou, containment))
+					slog.InfoContext(ctx, "[discovery-mining] Skipping new region in favor of existing",
+						"new_name", reg.Name, "new_tier", reg.Tier, "existing_name", ex.Name, "existing_tier", ex.Tier, "iou", iou, "containment", containment)
 					shouldSkip = true
 					break
 				}
@@ -474,7 +478,7 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		}
 
 		if err := h.DB.UpsertRegion(ctx, region); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to upsert region %s", reg.Name), "error", err)
+			slog.ErrorContext(ctx, "[discovery-mining] Failed to upsert region", "region", reg.Name, "error", err)
 			continue
 		}
 
@@ -501,7 +505,7 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		}
 
 		if err := h.DB.UpsertSeasonality(ctx, seasonality); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("[discovery-mining] Failed to upsert seasonality for %s", reg.Name), "error", err)
+			slog.ErrorContext(ctx, "[discovery-mining] Failed to upsert seasonality", "region", reg.Name, "error", err)
 		} else {
 			parsedActive = append(parsedActive, activeReg{
 				ID:       region.ID,
@@ -514,8 +518,8 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 	}
 
 	if pruned, err := h.PruneDuplicateRegions(ctx, month); err == nil && pruned > 0 {
-		slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Pruned %d duplicate regions for %s", month, pruned, monthName))
+		slog.InfoContext(ctx, "[discovery-mining] Pruned duplicate regions", "month", month, "month_name", monthName, "pruned", pruned)
 	}
 
-	slog.InfoContext(ctx, fmt.Sprintf("[discovery-mining] [%d/12] Completed %s mining in %v. Saved %d regions.", month, monthName, time.Since(start), len(output)))
+	slog.InfoContext(ctx, "[discovery-mining] Completed mining", "month", month, "month_name", monthName, "duration", time.Since(start), "saved", len(output))
 }

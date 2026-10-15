@@ -371,27 +371,11 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 
 // DebriefAllVoyageTracks triggers an AI after-action review for all tracks of a voyage.
 func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	voyageID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	allTracks, err := h.DB.ListVoyageTracks(r.Context(), voyageID)
 	if err != nil {
@@ -425,8 +409,15 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 		if debrief == nil {
 			continue
 		}
-		debriefBytes, _ := json.Marshal(debrief)
-		_ = h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes))
+		debriefBytes, err := json.Marshal(debrief)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to marshal track debrief", "track_id", track.ID, "error", err)
+			continue
+		}
+		if err := h.DB.UpdateVoyageTrackDebrief(r.Context(), track.ID, model.RawJSON(debriefBytes)); err != nil {
+			slog.ErrorContext(r.Context(), "Failed to persist track debrief", "track_id", track.ID, "error", err)
+			continue
+		}
 		debriefs = append(debriefs, debrief)
 	}
 
@@ -570,6 +561,31 @@ func ParseDurationMinutes(s string) (float64, bool) {
 	return totalMins, found
 }
 
+const (
+	// legEndpointMatchNM is the maximum distance (NM) between a track endpoint and
+	// a voyage stop for GPS leg-pair matching.
+	legEndpointMatchNM = 15.0
+	// sameDayDepartureBonusNM is the score bonus (NM) subtracted when a track's
+	// start date matches the candidate departure stop's target date.
+	sameDayDepartureBonusNM = 5.0
+	// singleStopFallbackNM is the maximum distance (NM) for matching a track start
+	// point to the closest single stop when leg-pair matching fails.
+	singleStopFallbackNM = 10.0
+	// circuitLoopRadiusNM is the distance tolerance (NM) for treating the first and
+	// last stops of a voyage as a round-trip loop.
+	circuitLoopRadiusNM = 2.0
+	// plannedRouteEndpointMatchNM is the maximum distance (NM) between recorded and
+	// planned track endpoints when pairing an actual track with a planned route.
+	plannedRouteEndpointMatchNM = 8.0
+	// defaultPlanningSpeedKts is the fallback cruising speed (kts) used to estimate
+	// planned passage duration when a planned route has no duration interval.
+	defaultPlanningSpeedKts = 5.5
+	// maxDBDistanceColumnNM and maxDBSpeedColumnKts match the NUMERIC(8,2) and
+	// NUMERIC(5,2) column limits on voyage_tracks.
+	maxDBDistanceColumnNM = 999999.99
+	maxDBSpeedColumnKts   = 999.99
+)
+
 // ResolveDebriefStartStop ensures that a debrief's StartStopID points to the starting stop of its passage leg,
 // never the arrival/ending stop, and populates StopTitle matching the voyage stops.
 func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops []model.Stop) {
@@ -604,11 +620,11 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 			for i := 0; i < len(stops)-1; i++ {
 				dStart := gpx.CalculateHaversineNM(startLat, startLng, stops[i].Latitude, stops[i].Longitude)
 				dEnd := gpx.CalculateHaversineNM(endLat, endLng, stops[i+1].Latitude, stops[i+1].Longitude)
-				if dStart <= 15.0 && dEnd <= 15.0 {
+				if dStart <= legEndpointMatchNM && dEnd <= legEndpointMatchNM {
 					score := dStart + dEnd
 					if t.StartTime != nil && !stops[i].TargetDate.IsZero() {
 						if stops[i].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
-							score -= 5.0
+							score -= sameDayDepartureBonusNM
 						}
 					}
 					if score < bestScore {
@@ -649,12 +665,12 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 	// 4. Fallback to closest single stop by coordinates
 	if !foundStop && t != nil {
 		if startLat, startLng, _, _, ok := extractTrackEndpoints(t); ok {
-			sIdx := findClosestStop(startLat, startLng, stops, 10.0)
+			sIdx := findClosestStop(startLat, startLng, stops, singleStopFallbackNM)
 			if sIdx >= 0 {
 				if sIdx == len(stops)-1 && len(stops) >= 2 {
 					dFirst := gpx.CalculateHaversineNM(startLat, startLng, stops[0].Latitude, stops[0].Longitude)
 					dLast := gpx.CalculateHaversineNM(startLat, startLng, stops[len(stops)-1].Latitude, stops[len(stops)-1].Longitude)
-					if math.Abs(dFirst-dLast) < 2.0 {
+					if math.Abs(dFirst-dLast) < circuitLoopRadiusNM {
 						if t.StartTime != nil && !stops[0].TargetDate.IsZero() && stops[0].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
 							sIdx = 0
 						} else {
@@ -1123,22 +1139,22 @@ func buildModelTrack(voyageID int64, stopID *int64, fileName, rawGPX string, pt 
 	distNM := pt.DistanceNM
 	if distNM < 0 || math.IsNaN(distNM) || math.IsInf(distNM, 0) {
 		distNM = 0
-	} else if distNM > 999999.99 {
-		distNM = 999999.99
+	} else if distNM > maxDBDistanceColumnNM {
+		distNM = maxDBDistanceColumnNM
 	}
 
 	maxSpd := pt.MaxSpeedKts
 	if maxSpd < 0 || math.IsNaN(maxSpd) || math.IsInf(maxSpd, 0) {
 		maxSpd = 0
-	} else if maxSpd > 999.99 {
-		maxSpd = 999.99
+	} else if maxSpd > maxDBSpeedColumnKts {
+		maxSpd = maxDBSpeedColumnKts
 	}
 
 	avgSpd := pt.AvgSpeedKts
 	if avgSpd < 0 || math.IsNaN(avgSpd) || math.IsInf(avgSpd, 0) {
 		avgSpd = 0
-	} else if avgSpd > 999.99 {
-		avgSpd = 999.99
+	} else if avgSpd > maxDBSpeedColumnKts {
+		avgSpd = maxDBSpeedColumnKts
 	}
 
 	return model.VoyageTrack{

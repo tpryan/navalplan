@@ -15,9 +15,9 @@ func TestRecStreams_PerInstance(t *testing.T) {
 	rec := model.VoyageRecommendation{Name: "Test Anchorage"}
 
 	ch := make(chan model.VoyageRecommendation, 1)
-	h1.muRecStreams.Lock()
-	h1.recStreams[sessionID] = ch
-	h1.muRecStreams.Unlock()
+	h1.recHub.mu.Lock()
+	h1.recHub.streams[sessionID] = ch
+	h1.recHub.mu.Unlock()
 
 	h1.broadcastRecommendation(sessionID, rec)
 
@@ -44,9 +44,9 @@ func TestRecStreams_Broadcast_DropsWhenFull(t *testing.T) {
 
 	sessionID := "full-session"
 	ch := make(chan model.VoyageRecommendation, 1)
-	h.muRecStreams.Lock()
-	h.recStreams[sessionID] = ch
-	h.muRecStreams.Unlock()
+	h.recHub.mu.Lock()
+	h.recHub.streams[sessionID] = ch
+	h.recHub.mu.Unlock()
 
 	rec := model.VoyageRecommendation{Name: "First"}
 	h.broadcastRecommendation(sessionID, rec)
@@ -109,7 +109,8 @@ func TestEnsureRecChannel(t *testing.T) {
 
 func newHandlerForSSETest() *Handler {
 	return &Handler{
-		recStreams:  make(map[string]chan model.VoyageRecommendation),
+		recHub:      newEventHub[model.VoyageRecommendation](100),
+		progressHub: newEventHub[model.ProgressEvent](30),
 		ResearchSem: make(chan struct{}, 10),
 	}
 }

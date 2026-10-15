@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +72,6 @@ type DBStore interface {
 	CountPeople(ctx context.Context, expired bool) (int, error)
 	UpdatePersonName(ctx context.Context, id int64, name string) error
 	UpdatePersonExpiration(ctx context.Context, id int64, expiresAt *time.Time) error
-	SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error
 
 	// Invitations
 	GetInvitation(ctx context.Context, email string) (*model.Invitation, error)
@@ -87,11 +86,8 @@ type DBStore interface {
 
 	// Discovery / Regions
 	ListRegionsByMonth(ctx context.Context, month int) ([]model.RegionWithSeasonality, error)
-	GetRegionDetails(ctx context.Context, regionID int, month int) (*model.SailingRegion, *model.RegionSeasonality, error)
 	UpsertRegion(ctx context.Context, region *model.SailingRegion) error
 	UpsertSeasonality(ctx context.Context, seasonality *model.RegionSeasonality) error
-	DeleteSeasonalityForMonth(ctx context.Context, month int) error
-	GetAllRegions(ctx context.Context) ([]model.SailingRegion, error)
 	DeleteSeasonality(ctx context.Context, regionID int, month int) error
 
 	// Tracks
@@ -120,11 +116,8 @@ type Handler struct {
 	lastHealthCheck time.Time
 	lastHealthErr   error
 
-	muRecStreams sync.RWMutex
-	recStreams   map[string]chan model.VoyageRecommendation
-
-	muProgressStreams sync.RWMutex
-	progressStreams   map[string]chan model.ProgressEvent
+	recHub      eventHub[model.VoyageRecommendation]
+	progressHub eventHub[model.ProgressEvent]
 
 	muActiveJobs sync.Mutex
 	activeJobs   map[string]struct{}
@@ -182,17 +175,17 @@ func New(db DBStore, contentDir string, agentURL string, resolver agent.Resolver
 	}
 
 	return &Handler{
-		DB:              db,
-		ContentDir:      contentDir,
-		AgentURL:        agentURL,
-		AgentClient:     client,
-		HealthClient:    healthClient,
-		Agent:           agentRunner,
-		Resolver:        resolver,
-		ResearchSem:     make(chan struct{}, 10),
-		recStreams:      make(map[string]chan model.VoyageRecommendation),
-		progressStreams: make(map[string]chan model.ProgressEvent),
-		activeJobs:      make(map[string]struct{}),
+		DB:           db,
+		ContentDir:   contentDir,
+		AgentURL:     agentURL,
+		AgentClient:  client,
+		HealthClient: healthClient,
+		Agent:        agentRunner,
+		Resolver:     resolver,
+		ResearchSem:  make(chan struct{}, 10),
+		recHub:       newEventHub[model.VoyageRecommendation](100),
+		progressHub:  newEventHub[model.ProgressEvent](30),
+		activeJobs:   make(map[string]struct{}),
 	}
 }
 
@@ -272,94 +265,68 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 	return nil
 }
 
-var bulletKeyRegex = regexp.MustCompile(`(?m)^(\s*)[-*]\s*("[\w_-]+"\s*:)`)
-
-func cleanJSON(s string) string {
-	s = strings.TrimSpace(s)
-
-	startObj := strings.Index(s, "{")
-	startArr := strings.Index(s, "[")
-
-	start := -1
-	if startObj != -1 && (startArr == -1 || startObj < startArr) {
-		start = startObj
-	} else {
-		start = startArr
-	}
-
-	endObj := strings.LastIndex(s, "}")
-	endArr := strings.LastIndex(s, "]")
-
-	end := -1
-	if endObj != -1 && (endArr == -1 || endObj > endArr) {
-		end = endObj
-	} else {
-		end = endArr
-	}
-
-	if start != -1 && end != -1 && end > start {
-		s = s[start : end+1]
-	} else {
-		return ""
-	}
-
-	s = bulletKeyRegex.ReplaceAllString(s, "$1$2")
-	s = strings.ReplaceAll(s, `\'`, `'`)
-	return strings.TrimSpace(s)
-}
-
-func repairTruncatedJSONArray(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return s
-	}
-	if json.Valid([]byte(s)) {
-		return s
-	}
-
-	startObj := strings.Index(s, "{")
-	startArr := strings.Index(s, "[")
-
-	if startObj == -1 && startArr == -1 {
-		return s
-	}
-
-	isObjRoot := startObj != -1 && (startArr == -1 || startObj < startArr)
-	start := startObj
-	if !isObjRoot {
-		start = startArr
-	}
-
-	// Scan backwards from the end for each '}' to find the last valid closure
-	for i := len(s) - 1; i >= start; i-- {
-		if s[i] == '}' {
-			sub := s[start : i+1]
-			if isObjRoot {
-				// Try closing array and object wrapper: ...]}
-				candidate := sub + "\n]}"
-				if json.Valid([]byte(candidate)) {
-					return candidate
-				}
-				// Try closing object only: ...}
-				candidateObj := sub + "\n}"
-				if json.Valid([]byte(candidateObj)) {
-					return candidateObj
-				}
-			} else {
-				// Array root: ...]
-				candidate := sub + "\n]"
-				if json.Valid([]byte(candidate)) {
-					return candidate
-				}
-			}
-		}
-	}
-
-	return s
-}
-
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func (h *Handler) authorizedVoyage(w http.ResponseWriter, r *http.Request) (*model.Voyage, *model.Person, bool) {
+	person := GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return nil, nil, false
+	}
+
+	voyageID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
+		return nil, nil, false
+	}
+
+	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Voyage not found")
+		return nil, nil, false
+	}
+
+	if voyage.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return nil, nil, false
+	}
+
+	return voyage, person, true
+}
+
+func (h *Handler) authorizedStop(w http.ResponseWriter, r *http.Request) (*model.Stop, *model.Voyage, *model.Person, bool) {
+	person := GetPersonFromContext(r.Context())
+	if person == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		return nil, nil, nil, false
+	}
+
+	stopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		return nil, nil, nil, false
+	}
+
+	stop, err := h.DB.GetStop(r.Context(), stopID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Stop not found")
+		return nil, nil, nil, false
+	}
+
+	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Voyage not found")
+		return nil, nil, nil, false
+	}
+
+	if voyage.PersonID != person.ID {
+		writeError(w, http.StatusForbidden, "Unauthorized")
+		return nil, nil, nil, false
+	}
+
+	return stop, voyage, person, true
 }

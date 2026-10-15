@@ -116,7 +116,7 @@ func (h *Handler) snapToWater(ctx context.Context, lat, lng, startLat, startLng,
 
 	water, err := isWaterPoint(ctx, lat, lng)
 	if err != nil {
-		slog.WarnContext(ctx, "Water check unavailable; keeping interpolated point", "err", err)
+		slog.WarnContext(ctx, "Water check unavailable; keeping interpolated point", "error", err)
 		return lat, lng
 	}
 	if water {

@@ -148,7 +148,13 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.DB.CreateInvitation(r.Context(), req.Email, currentUser.ID, false, expiresAt); err != nil {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		writeError(w, http.StatusBadRequest, "Email is required")
+		return
+	}
+
+	if err := h.DB.CreateInvitation(r.Context(), email, currentUser.ID, false, expiresAt); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create invitation")
 		return
 	}

@@ -81,28 +81,11 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
 	if err != nil {
@@ -367,6 +350,7 @@ func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, 
 	}
 	tracks, err := h.DB.ListVoyageTracks(ctx, stop.VoyageID)
 	if err != nil {
+		slog.WarnContext(ctx, "[lookout] Failed to list voyage tracks", "voyage_id", stop.VoyageID, "stop_id", stop.ID, "error", err)
 		tracks = nil
 	}
 

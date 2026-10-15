@@ -51,7 +51,10 @@ func (h *Handler) UploadVoyageSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.ParseMultipartForm(10 << 20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid multipart form data")
+		return
+	}
 
 	file, _, err := r.FormFile("image")
 	if err != nil {
@@ -102,26 +105,14 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAuthorized := false
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
 	}
 
-	if voyage.IsPublic {
-		isAuthorized = true
-	} else {
-		cookie, err := r.Cookie("navalplan_session")
-		if err == nil {
-			session, _ := h.DB.GetSession(r.Context(), cookie.Value)
-			if session != nil && session.PersonID == voyage.PersonID {
-				isAuthorized = true
-			}
-		}
-	}
-
-	if !isAuthorized {
+	person := GetPersonFromContext(r.Context())
+	if !voyage.IsPublic && (person == nil || person.ID != voyage.PersonID) {
 		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}
@@ -266,9 +257,11 @@ func (h *Handler) performGuideResearchLogic(voyage *model.Voyage, sessionID stri
 	}
 
 	if err := h.DB.CreateVoyageGuide(ctx, guide); err != nil {
-		slog.ErrorContext(ctx, "Failed to save voyage guide", "error", err)
+		slog.ErrorContext(ctx, "Failed to save voyage guide", "voyage_id", voyage.ID, "error", err)
+		h.broadcastProgress(sessionID, "error", "Failed to save voyage guide")
+		return
 	}
-	slog.InfoContext(ctx, fmt.Sprintf("Voyage guide saved for voyage %d", voyage.ID))
+	slog.InfoContext(ctx, "Voyage guide saved", "voyage_id", voyage.ID)
 	h.broadcastProgress(sessionID, "done", "Voyage guide research complete")
 }
 
@@ -297,7 +290,9 @@ func (h *Handler) saveEmptyGuide(ctx context.Context, voyage *model.Voyage) {
 		PointsOfInterest: model.RawJSON([]byte(`[]`)),
 		CreatedAt:        time.Now(),
 	}
-	h.DB.CreateVoyageGuide(ctx, guide)
+	if err := h.DB.CreateVoyageGuide(ctx, guide); err != nil {
+		slog.ErrorContext(ctx, "Failed to save empty voyage guide", "voyage_id", voyage.ID, "error", err)
+	}
 }
 
 type VoyageGuideResponse struct {
@@ -381,6 +376,9 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guide, err := h.DB.GetVoyageGuide(r.Context(), voyage.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "Failed to get voyage guide for public voyage", "voyage_id", voyage.ID, "error", err)
+	}
 
 	stops, err := h.DB.ListStops(r.Context(), voyage.ID, 0, 0)
 	if err != nil {
@@ -407,7 +405,6 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 
 	var debriefs []*model.TrackDebrief
 	if tracks, err := h.DB.ListVoyageTracks(r.Context(), voyage.ID); err == nil {
-		stops, _ := h.DB.ListStops(r.Context(), voyage.ID, 100, 0)
 		for _, t := range tracks {
 			if len(t.Debrief) > 0 && string(t.Debrief) != "null" {
 				var d model.TrackDebrief
@@ -449,28 +446,11 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListVoyageBriefings(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyageID)
 	if err != nil {

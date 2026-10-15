@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -95,40 +94,6 @@ func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
 	}
 	// No ring reached the minimum: show everything within the widest ring.
 	return append(widest, coordless...)
-}
-
-func (h *Handler) getStaticMap(ctx context.Context, lat, lng float64) ([]byte, error) {
-	apiKey := os.Getenv("NAVALPLAN_BACKEND_MAPS_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("NAVALPLAN_BACKEND_MAPS_API_KEY not set")
-	}
-
-	endpoint := fmt.Sprintf("https://maps.googleapis.com/maps/api/staticmap?center=%f,%f&zoom=12&size=600x400&maptype=roadmap&markers=color:red%%7C%f,%f&key=%s",
-		lat, lng, lat, lng, apiKey)
-
-	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create static map request: %w", err)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute static map request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("static map request failed with status: %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read static map body: %w", err)
-	}
-	return data, nil
 }
 
 func geocodeFacility(ctx context.Context, name, vicinity string, centerLat, centerLng float64) (float64, float64, error) {
@@ -477,7 +442,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			h.performLookoutAuditLogic(stop, briefing, allStops, sessionID)
 		}
 	}
-	slog.InfoContext(ctx, fmt.Sprintf("Briefing saved for stop %d", stop.ID))
+	slog.InfoContext(ctx, "Briefing saved for stop", "stop_id", stop.ID)
 	h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete for %s", stop.LocationName))
 }
 
@@ -533,28 +498,11 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
 	if err != nil {
@@ -617,7 +565,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			go func(s model.Stop) {
 				defer wg.Done()
 				defer func() { <-h.ResearchSem }()
-				slog.InfoContext(ctx, fmt.Sprintf("Starting stop research for stop %d", s.ID))
+				slog.InfoContext(ctx, "Starting stop research for stop", "stop_id", s.ID)
 				h.performStopResearchLogic(&s, sessionID)
 			}(stop)
 		}
@@ -651,7 +599,7 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			}
 		}
 
-		slog.InfoContext(ctx, fmt.Sprintf("Full research complete for voyage %d", voyageID))
+		slog.InfoContext(ctx, "Full research complete for voyage", "voyage_id", voyageID)
 	}()
 }
 
@@ -664,5 +612,7 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 		Facilities:     model.RawJSON([]byte(`[]`)),
 		PilotNotes:     model.RawJSON([]byte(`{}`)),
 	}
-	h.DB.CreateBriefing(ctx, briefing)
+	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
+		slog.ErrorContext(ctx, "Failed to save empty briefing", "stop_id", stop.ID, "error", err)
+	}
 }
