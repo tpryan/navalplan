@@ -263,16 +263,14 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 	res := &McpPlacesResponse{}
 	for _, p := range result.Places {
 		detail := PlaceDetail{
-			Name:            p.Name,
-			Address:         p.Address,
-			Latitude:        p.Latitude,
-			Longitude:       p.Longitude,
-			Rating:          p.Rating,
-			UserRatingCount: p.UserRatingCount,
-			BusinessStatus:  p.BusinessStatus,
-			Website:         p.WebsiteURI,
-			DistanceMeters:  p.DistanceMeters,
-			GoogleTypes:     p.Types,
+			Name:           p.Name,
+			Address:        p.Address,
+			Latitude:       p.Latitude,
+			Longitude:      p.Longitude,
+			BusinessStatus: p.BusinessStatus,
+			Website:        p.WebsiteURI,
+			DistanceMeters: p.DistanceMeters,
+			GoogleTypes:    p.Types,
 		}
 		detail.Type = classifyPlace(req.Query, p.Types)
 		res.Facilities = append(res.Facilities, detail)

@@ -172,3 +172,14 @@ func wideAreaNearbyTypes(query string) []string {
 	}
 	return nearbyTypesForQuery(query)
 }
+
+// shouldSectorFanOut reports whether a wide-area query (> 15 km) should fan out
+// across 4 cardinal sector circles. Only core hub/overnight categories (marina,
+// anchorage, mooring) fan out; secondary marine queries (yacht club, fuel dock,
+// cove/bay/harbor, boat launch ramp) run a single center circle query.
+func shouldSectorFanOut(query string) bool {
+	q := strings.ToLower(query)
+	return strings.Contains(q, "marina") ||
+		strings.Contains(q, "anchorage") ||
+		strings.Contains(q, "mooring")
+}

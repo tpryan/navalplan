@@ -48,15 +48,12 @@ Gather all data in your FIRST turn. Execute these in PARALLEL — do not run seq
 ### ISOLATED STOPS — EXPAND UNTIL POPULATED
 If the focus radius returns few or no results (an isolated or rural stop), progressively widen the radius and re-query the sparse/empty categories — both marine and amenity — until you have a reasonably populated set: ~4800 m (3 miles) → ~8000 m → ~16000 m → up to the requested search radius (cap 50000 m). Stop expanding as soon as you have a useful cluster; do not jump straight to the maximum. Record `distance_meters` from the stop for every result so the parent can judge walkability.
 
-### COMPASS SECTOR DISTRIBUTION (only if the focus radius expands beyond 27 NM / 50,000m)
-If an isolated stop forces the focus radius past 27 NM, a single centered query cannot cover the area. Issue additional `FindPlacesNearby` calls at intermediate points toward the N, S, E, and W boundaries so you gather verified coordinates across the region, not just the center.
-
 ### SYNTHESIS RULES
 - **Coordinates:** Use the EXACT latitude/longitude returned by `FindPlacesNearby`. For wild spots found via web search (`is_wild: true`), use explicit coordinates from the source text if present (converting `DD° MM.M'` to `DD + MM.M/60`), or if the source names a specific creek, cove, river, bay, or point without coordinates, include the spot with `latitude: 0, longitude: 0` so the backend geocoder resolves its exact location. NEVER invent or estimate decimal coordinates from memory.
 - **Wild anchorage synthesis:** `FindPlacesNearby` frequently returns nothing for generic `"anchorage"` queries because natural coves, creeks, points, and bays are geographic features, not businesses. Extract every named anchorage, creek, cove, or mooring area inside the search circle from your web search results and include it with `is_wild: true`.
 - **Dedupe:** Merge duplicate entries for the same facility (same name/coordinates) into one, keeping the richest data.
 - **Keep shore amenities:** Include restaurants, bars, cafes, grocery/convenience stores, pharmacies, chandleries/hardware, and ATMs/banks found in the focus radius. Exclude only genuinely irrelevant POIs (e.g. a residential address, or something far outside the focus radius). Do not drop dining/provisioning just because it is not waterfront.
-- **Pass through tool fields:** Populate `website` (from `website_uri`), `rating`, `user_rating_count`, and `business_status` directly from `FindPlacesNearby` whenever the tool provides them; leave null otherwise.
+- **Pass through tool fields:** Populate `website` (from `website_uri`) and `business_status` directly from `FindPlacesNearby` whenever the tool provides them; leave null otherwise.
 
 ### OUTPUT
 Return ONLY this JSON object — no text outside the JSON block:
@@ -71,8 +68,6 @@ Return ONLY this JSON object — no text outside the JSON block:
       "distance_meters": 0,
       "website": "...",
       "address": "...",
-      "rating": 4.2,
-      "user_rating_count": 123,
       "business_status": "OPERATIONAL",
       "vhf": "...",
       "protection": "...",

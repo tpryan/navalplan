@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -220,36 +219,52 @@ func hasReusableFacilities(raw model.RawJSON) bool {
 	return len(facs) >= minRingFacilities
 }
 
+// nearbyStopRadiusNM is the distance threshold (in nautical miles) within which
+// two stops share a single search.
+const nearbyStopRadiusNM = 2.0
+
+// stopsWithin2NM reports whether two stops have valid coordinates within 2.0 NM of each other.
+func stopsWithin2NM(a, b model.Stop) bool {
+	if (a.Latitude == 0 && a.Longitude == 0) || (b.Latitude == 0 && b.Longitude == 0) {
+		return false
+	}
+	return haversine(a.Latitude, a.Longitude, b.Latitude, b.Longitude, "nm") <= nearbyStopRadiusNM
+}
+
 func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
 	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Starting research for %s", stop.LocationName))
 
+	isPassage := stop.StopType == model.StopTypePassagePoint
+
 	stops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
-	if err == nil && len(stops) > 1 {
-		first := stops[0]
-		last := stops[len(stops)-1]
+	if err == nil && len(stops) > 1 && !isPassage {
+		// Check if any earlier stop in the voyage is within 2 NM (e.g. Stop 1 and
+		// Stop 2 in the same harbor, or the final return stop returning to the
+		// departure harbor). If so, clone its briefing so only 1 search is run.
+		for _, earlier := range stops {
+			if earlier.ID == stop.ID {
+				break
+			}
+			if earlier.StopType == model.StopTypePassagePoint {
+				continue
+			}
+			if stopsWithin2NM(earlier, *stop) {
+				slog.InfoContext(ctx, "Stop within 2 NM of earlier stop detected, attempting to clone briefing", "stop_id", stop.ID, "earlier_stop_id", earlier.ID)
 
-		if stop.ID == last.ID {
-			const threshold = 0.001
-			latDiff := math.Abs(first.Latitude - last.Latitude)
-			lngDiff := math.Abs(first.Longitude - last.Longitude)
-
-			if latDiff < threshold && lngDiff < threshold {
-				slog.InfoContext(ctx, "Redundant last stop detected, attempting to clone briefing from first stop", "stop_id", stop.ID, "first_stop_id", first.ID)
-
-				firstBriefing, err := h.DB.GetBriefing(ctx, first.ID)
-				if err == nil && firstBriefing != nil && hasValidFacilities(firstBriefing.Facilities) {
-					h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from first stop for %s", stop.LocationName))
+				earlierBriefing, err := h.DB.GetBriefing(ctx, earlier.ID)
+				if err == nil && earlierBriefing != nil && hasValidFacilities(earlierBriefing.Facilities) {
+					h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from earlier stop for %s", stop.LocationName))
 
 					newBriefing := &model.Briefing{
 						StopID:         stop.ID,
-						WeatherSummary: firstBriefing.WeatherSummary,
-						SunPhase:       firstBriefing.SunPhase,
-						Tides:          firstBriefing.Tides,
-						Facilities:     firstBriefing.Facilities,
-						PilotNotes:     firstBriefing.PilotNotes,
+						WeatherSummary: earlierBriefing.WeatherSummary,
+						SunPhase:       earlierBriefing.SunPhase,
+						Tides:          earlierBriefing.Tides,
+						Facilities:     earlierBriefing.Facilities,
+						PilotNotes:     earlierBriefing.PilotNotes,
 					}
 					if err := h.DB.CreateBriefing(ctx, newBriefing); err == nil {
 						allStops := make([]model.Stop, len(stops))
@@ -267,8 +282,6 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	const appName = "harbourmaster"
 	const userID = "system"
 	agentSessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
-
-	isPassage := stop.StopType == model.StopTypePassagePoint
 
 	var nearbyBriefing *model.Briefing
 	var nearbyErr error
@@ -544,22 +557,35 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			h.performGuideResearchLogic(voyage, sessionID)
 		}()
 
-		var redundantLastStop *model.Stop
-		var firstStopID int64
-		if len(stops) > 1 {
-			first := stops[0]
-			last := stops[len(stops)-1]
-			firstStopID = first.ID
-			const threshold = 0.001
-			if math.Abs(first.Latitude-last.Latitude) < threshold && math.Abs(first.Longitude-last.Longitude) < threshold {
-				redundantLastStop = &last
+		// Check proximity BEFORE making any agent/Places calls:
+		// Any stop within 2 NM of an earlier non-passage stop in the voyage
+		// (e.g. Stop 1 and Stop 2 in the same harbor, or the final return stop)
+		// is held back until the primary stops complete, then clones the primary
+		// stop's briefing so only 1 search is performed.
+		type redundantStopPair struct {
+			stop          model.Stop
+			primaryStopID int64
+		}
+		var primaryStops []model.Stop
+		var redundantStops []redundantStopPair
+		for _, stop := range stops {
+			var matchedPrimaryID int64
+			if stop.StopType != model.StopTypePassagePoint {
+				for _, p := range primaryStops {
+					if p.StopType != model.StopTypePassagePoint && stopsWithin2NM(p, stop) {
+						matchedPrimaryID = p.ID
+						break
+					}
+				}
+			}
+			if matchedPrimaryID != 0 {
+				redundantStops = append(redundantStops, redundantStopPair{stop: stop, primaryStopID: matchedPrimaryID})
+			} else {
+				primaryStops = append(primaryStops, stop)
 			}
 		}
 
-		for _, stop := range stops {
-			if redundantLastStop != nil && stop.ID == redundantLastStop.ID {
-				continue
-			}
+		for _, stop := range primaryStops {
 			wg.Add(1)
 			h.ResearchSem <- struct{}{}
 			go func(s model.Stop) {
@@ -572,30 +598,31 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 
 		wg.Wait()
 
-		if redundantLastStop != nil {
-			slog.InfoContext(ctx, "Cloning first stop briefing to redundant last stop", "voyage_id", voyageID, "last_stop_id", redundantLastStop.ID)
-			firstBriefing, err := h.DB.GetBriefing(ctx, firstStopID)
-			if err == nil && firstBriefing != nil && hasValidFacilities(firstBriefing.Facilities) {
+		for _, pair := range redundantStops {
+			rStop := pair.stop
+			slog.InfoContext(ctx, "Cloning primary stop briefing to stop within 2 NM", "voyage_id", voyageID, "stop_id", rStop.ID, "primary_stop_id", pair.primaryStopID)
+			primaryBriefing, err := h.DB.GetBriefing(ctx, pair.primaryStopID)
+			if err == nil && primaryBriefing != nil && hasValidFacilities(primaryBriefing.Facilities) {
 				newBriefing := &model.Briefing{
-					StopID:         redundantLastStop.ID,
-					WeatherSummary: firstBriefing.WeatherSummary,
-					SunPhase:       firstBriefing.SunPhase,
-					Tides:          firstBriefing.Tides,
-					Facilities:     firstBriefing.Facilities,
-					PilotNotes:     firstBriefing.PilotNotes,
+					StopID:         rStop.ID,
+					WeatherSummary: primaryBriefing.WeatherSummary,
+					SunPhase:       primaryBriefing.SunPhase,
+					Tides:          primaryBriefing.Tides,
+					Facilities:     primaryBriefing.Facilities,
+					PilotNotes:     primaryBriefing.PilotNotes,
 				}
 				if err := h.DB.CreateBriefing(ctx, newBriefing); err != nil {
-					slog.ErrorContext(ctx, "Failed to clone briefing for redundant last stop", "error", err)
+					slog.ErrorContext(ctx, "Failed to clone briefing for nearby stop", "error", err)
 				} else {
 					allStops := make([]model.Stop, len(stops))
 					copy(allStops, stops)
 					sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
-					h.performLookoutAuditLogic(redundantLastStop, newBriefing, allStops, sessionID)
-					h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", redundantLastStop.LocationName))
+					h.performLookoutAuditLogic(&rStop, newBriefing, allStops, sessionID)
+					h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", rStop.LocationName))
 				}
 			} else {
-				slog.WarnContext(ctx, "First stop briefing missing or invalid for cloning, falling back to full research for last stop")
-				h.performStopResearchLogic(redundantLastStop, sessionID)
+				slog.WarnContext(ctx, "Primary stop briefing missing or invalid for cloning, falling back to full research", "stop_id", rStop.ID)
+				h.performStopResearchLogic(&rStop, sessionID)
 			}
 		}
 

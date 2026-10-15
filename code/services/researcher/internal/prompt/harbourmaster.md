@@ -114,8 +114,6 @@ CRITICAL RULES:
 			"address": "...",
 			"latitude": 0.0,
 			"longitude": 0.0,
-			"rating": 4.2,
-			"user_rating_count": 123,
 			"business_status": "OPERATIONAL",
 			"details": {
 				"description": "...",

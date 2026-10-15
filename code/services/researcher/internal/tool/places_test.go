@@ -147,7 +147,9 @@ func TestFindPlaces_RadiusClamping(t *testing.T) {
 				SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
 					if req.LocationBias != nil {
 						if circle, ok := req.LocationBias.Type.(*placespb.SearchTextRequest_LocationBias_Circle); ok && circle.Circle != nil {
-							capturedRadius = circle.Circle.Radius
+							if capturedRadius == 0 {
+								capturedRadius = circle.Circle.Radius
+							}
 						}
 					}
 					return &placespb.SearchTextResponse{}, nil
@@ -255,5 +257,40 @@ func TestFindPlaces_NearbyErrorFallsBackToTextSearch(t *testing.T) {
 	}
 	if !textCalled {
 		t.Error("Text Search fallback not called after Nearby Search error")
+	}
+}
+
+func TestFindPlaces_WideAreaSectorFanOut(t *testing.T) {
+	// Core categories (marina, anchorage, mooring) fan out across 4 cardinal sectors (1 center + 4 sectors).
+	var textCalls, nearbyCalls int
+	mockClient := &mockPlacesClient{
+		SearchTextFunc: func(ctx context.Context, req *placespb.SearchTextRequest, opts ...gax.CallOption) (*placespb.SearchTextResponse, error) {
+			textCalls++
+			return &placespb.SearchTextResponse{}, nil
+		},
+		SearchNearbyFunc: func(ctx context.Context, req *placespb.SearchNearbyRequest, opts ...gax.CallOption) (*placespb.SearchNearbyResponse, error) {
+			nearbyCalls++
+			return &placespb.SearchNearbyResponse{Places: []*placespb.Place{
+				{FormattedAddress: "Sector Marina", Location: &latlng.LatLng{Latitude: 10.0, Longitude: 20.0}},
+			}}, nil
+		},
+	}
+	p := &PlacesProvider{client: mockClient}
+
+	// "marina" at 30 km -> 1 center SearchText + 4 sector SearchNearby calls = 5 calls total.
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "marina", Latitude: 10.0, Longitude: 20.0, Radius: 30000}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if textCalls != 1 || nearbyCalls != 4 {
+		t.Errorf("marina wide-area calls: got text=%d nearby=%d, want text=1 nearby=4", textCalls, nearbyCalls)
+	}
+
+	// "yacht club" at 30 km -> secondary category, no sector fan-out -> 1 center SearchText call only.
+	textCalls, nearbyCalls = 0, 0
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "yacht club", Latitude: 10.0, Longitude: 20.0, Radius: 30000}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if textCalls != 1 || nearbyCalls != 0 {
+		t.Errorf("yacht club wide-area calls: got text=%d nearby=%d, want text=1 nearby=0", textCalls, nearbyCalls)
 	}
 }

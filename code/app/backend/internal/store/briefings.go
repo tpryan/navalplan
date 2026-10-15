@@ -43,7 +43,10 @@ func (db *DB) ListVoyageBriefings(ctx context.Context, voyageID int64) ([]model.
 }
 
 func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*model.Briefing, error) {
-	const tolerance = 0.005
+	// 2.0 NM (~3.7 km) radius: bounding box of ~0.035° lat / ~0.045° lng, plus exact Haversine distance filter (<= 2.0 NM).
+	const latTol = 0.035
+	const lngTol = 0.045
+	const maxDistNM = 2.0
 
 	var b model.Briefing
 	query := `
@@ -54,11 +57,16 @@ func (db *DB) GetNearbyBriefing(ctx context.Context, lat, lng float64) (*model.B
 		FROM briefing b
 		JOIN stop s ON b.stop_id = s.id
 		WHERE s.latitude BETWEEN $1::float - $3::float AND $1::float + $3::float
-		  AND s.longitude BETWEEN $2::float - $3::float AND $2::float + $3::float
+		  AND s.longitude BETWEEN $2::float - $4::float AND $2::float + $4::float
+		  AND (3440.065 * 2 * ASIN(SQRT(
+		      POWER(SIN(RADIANS(s.latitude - $1::float) / 2), 2) +
+		      COS(RADIANS($1::float)) * COS(RADIANS(s.latitude)) *
+		      POWER(SIN(RADIANS(s.longitude - $2::float) / 2), 2)
+		  ))) <= $5::float
 		ORDER BY b.created_at DESC
 		LIMIT 1
 	`
-	err := db.GetContext(ctx, &b, query, lat, lng, tolerance)
+	err := db.GetContext(ctx, &b, query, lat, lng, latTol, lngTol, maxDistNM)
 	if err != nil {
 		return nil, err
 	}

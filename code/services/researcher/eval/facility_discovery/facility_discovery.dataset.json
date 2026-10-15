@@ -49,7 +49,7 @@
               "rubric_id": "superset_fields_present",
               "content": {
                 "property": {
-                  "description": "Facility entries carry the superset fields where available (e.g. 'website', 'rating', 'business_status', 'is_wild', 'references')."
+                  "description": "Facility entries carry the superset fields where available (e.g. 'website', 'business_status', 'is_wild', 'references')."
                 }
               }
             }

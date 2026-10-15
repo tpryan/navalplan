@@ -153,17 +153,14 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		},
 	}
 
-	// Define fields to return (FieldMask)
-	// Basic fields + location + rating + website
+	// Define fields to return (FieldMask) — Pro tier only (no Enterprise fields)
 	fieldsToRequest := []string{
 		"places.displayName",
 		"places.formattedAddress",
 		"places.location",
-		"places.rating",
-		"places.userRatingCount",
 		"places.businessStatus",
 		"places.types",
-		"places.websiteUri",
+		"places.googleMapsUri",
 	}
 	fieldMaskHeader := strings.Join(fieldsToRequest, ",")
 
@@ -174,8 +171,8 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 	// - <= 10 km: amenity categories use Nearby Search (circle-restricted, DISTANCE ranked)
 	//   so results are the closest places of that kind rather than prominent city-wide matches.
 	// - > 10 km: Text Search with RELEVANCE ranking.
-	// - > 15 km: Text Search + 8-sector compass fan-out around the circle perimeter so
-	//   open-water centers cover all surrounding coasts.
+	// - > 15 km: for core hub/overnight categories (marina, anchorage, mooring), also probe
+	//   4 cardinal sectors (N, E, S, W) so open-water centers cover all surrounding coasts.
 	var placesList []*placespb.Place
 	usedNearby := false
 	if requestedRadius <= 10000 {
@@ -206,7 +203,6 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			TextQuery:      args.Query,
 			LocationBias:   locationBias,
 			OpenNow:        args.OpenNow,
-			MinRating:      args.MinRating,
 			MaxResultCount: 20,
 			RankPreference: rankPref,
 		}
@@ -216,26 +212,18 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		}
 		placesList = append(placesList, resp.Places...)
 
-		// For wide-area searches (> 15 km / ~8 NM), also probe 8 compass sector
-		// points at 60% of the requested radius in parallel so open-water centers
-		// (e.g. Chesapeake Bay off Kent Island, or Florida Straits) cover every
-		// shore inside the circle.
-		//
-		// If the query maps to a Google Places Table A type (e.g. "marina"), use
-		// SearchNearby with DISTANCE ranking on each sector circle so Google returns
-		// the 20 marinas closest to that sector point (Annapolis, Galesville,
-		// St. Michaels, Rock Hall, etc.) instead of matching the word "marina" by
-		// text relevance near the center. For untyped nautical queries ("anchorage",
-		// "cove bay harbor", "mooring"), use SearchText with a localized sector
-		// circle bias.
-		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) {
-			sectorOffset := requestedRadius * 0.60
-			sectorBiasRadius := requestedRadius * 0.50
+		// For wide-area searches (> 15 km / ~8 NM) on core categories (marina,
+		// anchorage, mooring), also probe 4 cardinal sector points (N, E, S, W) at
+		// 55% of the requested radius in parallel so open-water centers cover every
+		// shore inside the circle without 8-way overlap.
+		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) && shouldSectorFanOut(args.Query) {
+			sectorOffset := requestedRadius * 0.55
+			sectorBiasRadius := requestedRadius * 0.55
 			if sectorBiasRadius > 50000 {
 				sectorBiasRadius = 50000
 			}
 			sectorNearbyTypes := wideAreaNearbyTypes(args.Query)
-			bearings := []float64{0, 45, 90, 135, 180, 225, 270, 315}
+			bearings := []float64{0, 90, 180, 270}
 			sectorResults := make([][]*placespb.Place, len(bearings))
 			var wg sync.WaitGroup
 			for i, brng := range bearings {
@@ -266,7 +254,6 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 							Type: &placespb.SearchTextRequest_LocationBias_Circle{Circle: sCircle},
 						},
 						OpenNow:        args.OpenNow,
-						MinRating:      args.MinRating,
 						MaxResultCount: 20,
 						RankPreference: placespb.SearchTextRequest_RELEVANCE,
 					}
@@ -304,10 +291,6 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			}
 		}
 
-		// Nearby Search has no min_rating parameter, so apply it here.
-		if usedNearby && args.MinRating > 0 && float64(pt.Rating) < args.MinRating {
-			continue
-		}
 		name := ""
 		if pt.DisplayName != nil {
 			name = pt.DisplayName.Text
@@ -320,16 +303,14 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		seen[dedupKey] = true
 
 		results = append(results, PlaceResult{
-			Name:            name,
-			Address:         pt.FormattedAddress,
-			Latitude:        lat,
-			Longitude:       lng,
-			DistanceMeters:  dist,
-			Rating:          float64(pt.Rating),
-			UserRatingCount: pt.GetUserRatingCount(),
-			BusinessStatus:  pt.BusinessStatus.String(),
-			Types:           pt.Types,
-			WebsiteURI:      pt.WebsiteUri,
+			Name:           name,
+			Address:        pt.FormattedAddress,
+			Latitude:       lat,
+			Longitude:      lng,
+			DistanceMeters: dist,
+			BusinessStatus: pt.BusinessStatus.String(),
+			Types:          pt.Types,
+			WebsiteURI:     pt.GoogleMapsUri,
 		})
 	}
 
