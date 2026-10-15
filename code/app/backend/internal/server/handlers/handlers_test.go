@@ -277,11 +277,6 @@ func (m *MockStore) UpdatePersonExpiration(ctx context.Context, id int64, expire
 	return args.Error(0)
 }
 
-func (m *MockStore) SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error {
-	args := m.Called(id, isAdmin)
-	return args.Error(0)
-}
-
 func (m *MockStore) CreateSession(ctx context.Context, token string, personID int64, expiresAt time.Time) error {
 	args := m.Called(token, personID, expiresAt)
 	return args.Error(0)
@@ -308,19 +303,6 @@ func (m *MockStore) ListRegionsByMonth(ctx context.Context, month int) ([]model.
 	return args.Get(0).([]model.RegionWithSeasonality), args.Error(1)
 }
 
-func (m *MockStore) GetRegionDetails(ctx context.Context, regionID int, month int) (*model.SailingRegion, *model.RegionSeasonality, error) {
-	args := m.Called(regionID, month)
-	var r *model.SailingRegion
-	var s *model.RegionSeasonality
-	if args.Get(0) != nil {
-		r = args.Get(0).(*model.SailingRegion)
-	}
-	if args.Get(1) != nil {
-		s = args.Get(1).(*model.RegionSeasonality)
-	}
-	return r, s, args.Error(2)
-}
-
 func (m *MockStore) UpsertRegion(ctx context.Context, region *model.SailingRegion) error {
 	args := m.Called(region)
 	return args.Error(0)
@@ -329,19 +311,6 @@ func (m *MockStore) UpsertRegion(ctx context.Context, region *model.SailingRegio
 func (m *MockStore) UpsertSeasonality(ctx context.Context, seasonality *model.RegionSeasonality) error {
 	args := m.Called(seasonality)
 	return args.Error(0)
-}
-
-func (m *MockStore) DeleteSeasonalityForMonth(ctx context.Context, month int) error {
-	args := m.Called(month)
-	return args.Error(0)
-}
-
-func (m *MockStore) GetAllRegions(ctx context.Context) ([]model.SailingRegion, error) {
-	args := m.Called()
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]model.SailingRegion), args.Error(1)
 }
 
 func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month int) error {

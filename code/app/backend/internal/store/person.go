@@ -65,12 +65,6 @@ func (db *DB) CreatePerson(ctx context.Context, googleID, email, name string, pi
 	return &person, nil
 }
 
-func (db *DB) SetAdminStatus(ctx context.Context, id int64, isAdmin bool) error {
-	query := `UPDATE "person" SET is_admin = $1 WHERE id = $2`
-	_, err := db.ExecContext(ctx, query, isAdmin, id)
-	return err
-}
-
 func (db *DB) UpdatePersonName(ctx context.Context, id int64, name string) error {
 	query := `UPDATE "person" SET name = $1 WHERE id = $2`
 	_, err := db.ExecContext(ctx, query, name, id)

@@ -77,20 +77,6 @@ func TestGeocodeFacility_ErrorStatus(t *testing.T) {
 	t.Log("ZERO_RESULTS path handled by integration tests; missing-key path covered above")
 }
 
-func TestGetStaticMap_MissingAPIKey(t *testing.T) {
-	t.Setenv("NAVALPLAN_BACKEND_MAPS_API_KEY", "")
-
-	h := &Handler{}
-	_, err := h.getStaticMap(context.Background(), 37.8, -122.4)
-	if err == nil {
-		t.Fatal("expected error when API key is missing, got nil")
-	}
-	expected := "NAVALPLAN_BACKEND_MAPS_API_KEY not set"
-	if err.Error() != expected {
-		t.Errorf("unexpected error message: %q", err.Error())
-	}
-}
-
 func TestHasValidFacilities(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -32,23 +32,6 @@ func (db *DB) ListRegionsByMonth(ctx context.Context, month int) ([]model.Region
 	return regions, nil
 }
 
-// GetRegionDetails returns a region and its seasonality data for a specific month.
-func (db *DB) GetRegionDetails(ctx context.Context, regionID int, month int) (*model.SailingRegion, *model.RegionSeasonality, error) {
-	var region model.SailingRegion
-	err := db.GetContext(ctx, &region, "SELECT * FROM sailing_regions WHERE id = $1", regionID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get region: %w", err)
-	}
-
-	var seasonality model.RegionSeasonality
-	err = db.GetContext(ctx, &seasonality, "SELECT * FROM region_seasonality WHERE region_id = $1 AND month = $2", regionID, month)
-	if err != nil {
-		return &region, nil, fmt.Errorf("failed to get seasonality: %w", err)
-	}
-
-	return &region, &seasonality, nil
-}
-
 // UpsertRegion inserts or updates a sailing region.
 func (db *DB) UpsertRegion(ctx context.Context, region *model.SailingRegion) error {
 	query := `
@@ -71,16 +54,6 @@ func (db *DB) UpsertRegion(ctx context.Context, region *model.SailingRegion) err
 		}
 	}
 
-	return nil
-}
-
-// DeleteSeasonalityForMonth removes all seasonality entries for a specific month.
-func (db *DB) DeleteSeasonalityForMonth(ctx context.Context, month int) error {
-	query := `DELETE FROM region_seasonality WHERE month = $1`
-	_, err := db.ExecContext(ctx, query, month)
-	if err != nil {
-		return fmt.Errorf("failed to delete seasonality for month %d: %w", month, err)
-	}
 	return nil
 }
 
@@ -118,17 +91,6 @@ func (db *DB) UpsertSeasonality(ctx context.Context, s *model.RegionSeasonality)
 	}
 
 	return nil
-}
-
-// GetAllRegions returns all sailing regions.
-func (db *DB) GetAllRegions(ctx context.Context) ([]model.SailingRegion, error) {
-	var regions []model.SailingRegion
-	query := `SELECT * FROM sailing_regions`
-	err := db.SelectContext(ctx, &regions, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list all regions: %w", err)
-	}
-	return regions, nil
 }
 
 // DeleteSeasonality removes a specific seasonality entry.

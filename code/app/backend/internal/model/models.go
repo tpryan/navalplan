@@ -256,8 +256,7 @@ func (r *RawJSON) Scan(value interface{}) error {
 type TrackKind string
 
 const (
-	TrackKindPlanned  TrackKind = "planned"
-	TrackKindRecorded TrackKind = "recorded"
+	TrackKindPlanned TrackKind = "planned"
 )
 
 // VoyageTrack represents a planned route or recorded GPS track.

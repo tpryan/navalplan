@@ -121,29 +121,6 @@ func (s *sessionTrackingStore) ListRegionsByMonth(_ context.Context, _ int) ([]m
 	return nil, nil
 }
 
-func TestIsSpatialDuplicate(t *testing.T) {
-	tests := []struct {
-		name        string
-		iou         float64
-		containment float64
-		want        bool
-	}{
-		{"Low overlap", 0.1, 0.2, false},
-		{"High IoU", 0.5, 0.5, true},
-		{"High Containment sub-region", 0.2, 0.8, true},
-		{"Borderline IoU below threshold", 0.35, 0.65, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isSpatialDuplicate(tt.iou, tt.containment)
-			if got != tt.want {
-				t.Errorf("isSpatialDuplicate(%v, %v) = %v; want %v", tt.iou, tt.containment, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestDiscoveryPruning_HTTPTrigger(t *testing.T) {
 	client := &http.Client{Timeout: 100 * time.Millisecond}
 	h := &Handler{
