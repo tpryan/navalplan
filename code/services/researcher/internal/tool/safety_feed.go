@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -127,7 +128,7 @@ func parseBroadcastWarnings(data []byte, lat, lon, radiusNM float64) ([]string, 
 		}
 		label := text
 		if w.NavArea != "" && w.MsgNumber != 0 {
-			label = "NAVAREA " + w.NavArea + " " + itoa(w.MsgNumber) + "/" + itoa(w.MsgYear) + ": " + text
+			label = "NAVAREA " + w.NavArea + " " + strconv.Itoa(w.MsgNumber) + "/" + strconv.Itoa(w.MsgYear) + ": " + text
 		}
 		hazards = append(hazards, label)
 
@@ -149,28 +150,6 @@ func parseBroadcastWarnings(data []byte, lat, lon, radiusNM float64) ([]string, 
 	return hazards, level
 }
 
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
-}
-
 // fetchSafetyAlerts returns navigational warnings near a location, using a short
 // per-area cache. It only performs network I/O when the feed is enabled; any
 // error yields an empty result with "unknown" level so the caller can fall back
@@ -184,7 +163,7 @@ func fetchSafetyAlerts(ctx context.Context, lat, lon, radiusNM float64) ([]strin
 	}
 
 	// Cache per ~1-degree cell to avoid refetching for nearby stops.
-	key := itoa(int(math.Round(lat))) + "," + itoa(int(math.Round(lon)))
+	key := strconv.Itoa(int(math.Round(lat))) + "," + strconv.Itoa(int(math.Round(lon)))
 	safetyCacheMu.Lock()
 	if e, ok := safetyCache[key]; ok && time.Since(e.at) < safetyCacheTTL {
 		safetyCacheMu.Unlock()

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"strconv"
 	"time"
 
 	"app/internal/model"
@@ -138,16 +137,24 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 	ws := model.WeatherSummary{
 		Summary:          summary,
 		Condition:        condition,
-		TempMinF:         weather.Daily.Temperature2mMin[0],
-		TempMaxF:         weather.Daily.Temperature2mMax[0],
-		WindSpeedKt:      weather.Daily.WindSpeed10mMax[0],
-		WindDirection:    degreesToCompass(float64(weather.Daily.WindDirection10mDominant[0])),
 		HourlyWind:       weather.Hourly.WindSpeed10m,
 		HourlyWindDir:    make([]string, len(weather.Hourly.WindDirection10m)),
 		HourlyConditions: hourlyConditions,
 		HourlyTemp:       weather.Hourly.Temperature2m,
 		HourlyGusts:      weather.Hourly.WindGusts10m,
 		HourlyPrecip:     weather.Hourly.Precipitation,
+	}
+	if len(weather.Daily.Temperature2mMin) > 0 {
+		ws.TempMinF = weather.Daily.Temperature2mMin[0]
+	}
+	if len(weather.Daily.Temperature2mMax) > 0 {
+		ws.TempMaxF = weather.Daily.Temperature2mMax[0]
+	}
+	if len(weather.Daily.WindSpeed10mMax) > 0 {
+		ws.WindSpeedKt = weather.Daily.WindSpeed10mMax[0]
+	}
+	if len(weather.Daily.WindDirection10mDominant) > 0 {
+		ws.WindDirection = degreesToCompass(float64(weather.Daily.WindDirection10mDominant[0]))
 	}
 
 	for i, deg := range weather.Hourly.WindDirection10m {
@@ -201,28 +208,11 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 }
 
 func (h *Handler) UpdateVoyageWeather(w http.ResponseWriter, r *http.Request) {
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	ctx := r.Context()
 	stops, err := h.DB.ListStops(ctx, voyageID, 0, 0)

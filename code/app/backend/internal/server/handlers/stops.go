@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -9,30 +10,43 @@ import (
 	"app/internal/model"
 )
 
+func validateStop(s *model.Stop) error {
+	switch s.StopType {
+	case model.StopTypeLandfall, model.StopTypePassagePoint:
+	case "":
+		s.StopType = model.StopTypeLandfall
+	default:
+		return errors.New("Invalid stop type")
+	}
+
+	if s.Latitude < -90 || s.Latitude > 90 {
+		return errors.New("Invalid latitude")
+	}
+	if s.Longitude < -180 || s.Longitude > 180 {
+		return errors.New("Invalid longitude")
+	}
+	if s.SearchRadius < 0 {
+		return errors.New("Search radius cannot be negative")
+	}
+	if s.SearchRadius == 0 {
+		s.SearchRadius = 20
+	}
+	switch s.SearchRadiusUnit {
+	case "nm", "km", "mi":
+	case "":
+		s.SearchRadiusUnit = "nm"
+	default:
+		return errors.New("Invalid search radius unit")
+	}
+	return nil
+}
+
 func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
@@ -46,7 +60,7 @@ func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
 
 	stops, err := h.DB.ListStops(r.Context(), voyageID, limit, offset)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list stops", "voyage_id", voyageID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to list stops", "voyage_id", voyageID, "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -56,29 +70,11 @@ func (h *Handler) ListStops(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	voyageID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
+	voyage, _, ok := h.authorizedVoyage(w, r)
+	if !ok {
 		return
 	}
-
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	voyageID := voyage.ID
 
 	var s model.Stop
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
@@ -87,41 +83,13 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 	}
 	s.VoyageID = voyageID
 
-	switch s.StopType {
-	case model.StopTypeLandfall, model.StopTypePassagePoint:
-	case "":
-		s.StopType = model.StopTypeLandfall
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid stop type")
-		return
-	}
-
-	if s.Latitude < -90 || s.Latitude > 90 {
-		writeError(w, http.StatusBadRequest, "Invalid latitude")
-		return
-	}
-	if s.Longitude < -180 || s.Longitude > 180 {
-		writeError(w, http.StatusBadRequest, "Invalid longitude")
-		return
-	}
-	if s.SearchRadius < 0 {
-		writeError(w, http.StatusBadRequest, "Search radius cannot be negative")
-		return
-	}
-	if s.SearchRadius == 0 {
-		s.SearchRadius = 20
-	}
-	switch s.SearchRadiusUnit {
-	case "nm", "km", "mi":
-	case "":
-		s.SearchRadiusUnit = "nm"
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid search radius unit")
+	if err := validateStop(&s); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := h.DB.CreateStop(r.Context(), &s); err != nil {
-		slog.ErrorContext(r.Context(), "Failed to create stop", "err", err)
+		slog.ErrorContext(r.Context(), "Failed to create stop", "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -132,34 +100,11 @@ func (h *Handler) CreateStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid ID")
+	existingStop, _, _, ok := h.authorizedStop(w, r)
+	if !ok {
 		return
 	}
-
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	existingStop, err := h.DB.GetStop(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Stop not found")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), existingStop.VoyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	id := existingStop.ID
 
 	var s model.Stop
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
@@ -169,8 +114,13 @@ func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
 	s.ID = id
 	s.VoyageID = existingStop.VoyageID
 
+	if err := validateStop(&s); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	if err := h.DB.UpdateStop(r.Context(), &s); err != nil {
-		slog.ErrorContext(r.Context(), "Failed to update stop", "stop_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to update stop", "stop_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -180,37 +130,14 @@ func (h *Handler) UpdateStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteStop(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid ID")
+	existingStop, _, _, ok := h.authorizedStop(w, r)
+	if !ok {
 		return
 	}
-
-	person := GetPersonFromContext(r.Context())
-	if person == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	existingStop, err := h.DB.GetStop(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Stop not found")
-		return
-	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), existingStop.VoyageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Voyage not found")
-		return
-	}
-	if voyage.PersonID != person.ID {
-		writeError(w, http.StatusForbidden, "Unauthorized")
-		return
-	}
+	id := existingStop.ID
 
 	if err := h.DB.DeleteStop(r.Context(), id); err != nil {
-		slog.ErrorContext(r.Context(), "Failed to delete stop", "stop_id", id, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to delete stop", "stop_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}

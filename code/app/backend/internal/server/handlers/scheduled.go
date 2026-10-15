@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"sort"
 	"time"
-
-	"app/internal/model"
 )
 
 func (h *Handler) ScheduledMaintenance(w http.ResponseWriter, r *http.Request) {
@@ -32,11 +30,6 @@ func (h *Handler) ScheduledMaintenance(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(ctx, "[scheduled] Processing stops", "count", len(stops))
 
-	voyageStops := make(map[int64][]model.Stop)
-	for _, s := range stops {
-		voyageStops[s.VoyageID] = append(voyageStops[s.VoyageID], s)
-	}
-
 	processedWeather := 0
 	processedLookout := 0
 
@@ -53,22 +46,28 @@ func (h *Handler) ScheduledMaintenance(w http.ResponseWriter, r *http.Request) {
 		}
 
 		briefing, err := h.DB.GetBriefing(ctx, stop.ID)
-		if err != nil || briefing == nil {
+		if err != nil {
+			slog.WarnContext(ctx, "[scheduled] Failed to fetch briefing for stop", "stop_id", stop.ID, "error", err)
+			continue
+		}
+		if briefing == nil {
 			continue
 		}
 
 		allVoyageStops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
 		if err != nil {
-			slog.ErrorContext(ctx, "[scheduled] Failed to list voyage stops", "voyage_id", stop.ID, "error", err)
+			slog.ErrorContext(ctx, "[scheduled] Failed to list voyage stops", "stop_id", stop.ID, "voyage_id", stop.VoyageID, "error", err)
 			continue
 		}
 		sort.Slice(allVoyageStops, func(i, j int) bool { return allVoyageStops[i].TargetDate.Before(allVoyageStops[j].TargetDate) })
 
 		sessionID := fmt.Sprintf("scheduled_lookout_%d_%d", stop.ID, time.Now().Unix())
 
-		h.ResearchSem <- struct{}{}
-		h.performLookoutAuditLogic(&stop, briefing, allVoyageStops, sessionID)
-		<-h.ResearchSem
+		func() {
+			h.ResearchSem <- struct{}{}
+			defer func() { <-h.ResearchSem }()
+			h.performLookoutAuditLogic(&stop, briefing, allVoyageStops, sessionID)
+		}()
 
 		processedLookout++
 	}

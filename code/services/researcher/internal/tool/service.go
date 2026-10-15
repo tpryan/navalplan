@@ -130,10 +130,8 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("CalculateHeading: %w", err))
 	}
 
-	// Note: FilterGPXData is intentionally NOT exposed as an LLM tool. GPX
-	// smoothing/glitch removal runs deterministically in Go on track upload
-	// (see gpx.FilterGPX), so no agent needs to call it. FetchFilterGPXData is
-	// retained for the MCP server and direct use.
+	// Note: GPX smoothing/glitch removal is intentionally NOT exposed as an LLM
+	// tool; it runs deterministically in the backend on track upload (gpx.FilterGPX).
 
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
