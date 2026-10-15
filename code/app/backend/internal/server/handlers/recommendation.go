@@ -146,10 +146,12 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 	}
 
 	hint := fmt.Sprintf(
-		"The circle boundary reaches approximately: N %s, S %s, E %s, W %s. "+
-			"Make sure to include sailing spots near ALL four edges of this boundary, "+
-			"not only near the center or the most prominent harbour.",
-		fmtLat(nLat), fmtLat(sLat), fmtLng(eLng), fmtLng(wLng),
+		"The circle boundary reaches approximately: North edge (%s, %s), South edge (%s, %s), East edge (%s, %s), West edge (%s, %s). "+
+			"When the center is in open water (e.g. a strait, sound, or bay), identify the coastlines, cities, islands, and inlets located near EACH of those four perimeter coordinates (especially both the West edge and East edge, or North edge and South edge) and include their marinas, moorings, fuel docks, and anchorages — never cover only one side of an open-water crossing!",
+		fmtLat(nLat), fmtLng(centerLng),
+		fmtLat(sLat), fmtLng(centerLng),
+		fmtLat(centerLat), fmtLng(eLng),
+		fmtLat(centerLat), fmtLng(wLng),
 	)
 	if radiusNM > 27.0 {
 		hint += " For this large search area (>27 NM), execute your parallel searches in Turn 1 across both central and outer compass sectors."
@@ -306,10 +308,13 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	prompt := fmt.Sprintf(
-		"Recommend anchorages, moorings, marinas, and fuel docks within %d %s of coordinates (latitude: %.4f, longitude: %.4f, approximately %s, %s, %s). "+
-			"Return at least %d, and include EVERY qualifying spot you find with verified coordinates — there is no upper limit. "+
+		"Recommend anchorages, moorings, marinas, and fuel docks within %d %s of center coordinates (latitude: %.4f, longitude: %.4f, %s, %s; center reference point near %s). "+
+			"IMPORTANT: %q is only the nearest point to the circle center — the search circle spans %d %s in ALL directions (N, NE, E, SE, S, SW, W, NW) across multiple shores, harbors, and rivers. "+
+			"Your batch_google_search queries and recommendations MUST explicitly cover major harbors, rivers, and creeks on EVERY shore inside the boundary (including Western/NW/SW shores as well as Eastern/NE/SE shores), not just %s. "+
+			"Return at least %d recommendations, and include EVERY qualifying marina, mooring field, fuel dock, yacht club, and anchorage you find with verified coordinates — there is no upper limit. "+
 			"Pass the exact center coordinates (latitude: %.4f, longitude: %.4f) and full radius (%d %s = %.0f meters) to facility_discovery with mode: \"area\" — do NOT shift the center to a single island or town. %s",
 		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
+		locInfo, v.SearchRadius, v.SearchRadiusUnit, locInfo,
 		count, *v.Latitude, *v.Longitude, v.SearchRadius, v.SearchRadiusUnit, radiusNM*1852.0, boundaryHint)
 
 	if v.StartDate != nil && v.EndDate != nil && v.StartDate.Equal(*v.EndDate) {

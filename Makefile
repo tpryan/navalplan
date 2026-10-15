@@ -59,6 +59,7 @@ build: build-js
 run-backend:
 	@echo "Starting NavalPlan backend (API Only)..."
 	@pids=$$(lsof -ti :8080 2>/dev/null); [ -n "$$pids" ] && echo "$$pids" | xargs kill -9 2>/dev/null || true
+	@rm -f code/app/backend/navalplan-backend code/app/backend/app
 	mkdir -p code/app/backend/static.min
 	cd code/app/backend && NAVALPLAN_CONTENT_DIR=./static.min go run -mod=vendor . < /dev/null
 
@@ -127,8 +128,9 @@ setup-infra:
 	@./scripts/setup_infra.sh
 
 dev: db-start build-js
-	@echo "Cleaning up any existing processes on ports 8080 and 8081..."
+	@echo "Cleaning up any existing processes and stale binaries on ports 8080 and 8081..."
 	@pids=$$(lsof -ti :8080 :8081 2>/dev/null); [ -n "$$pids" ] && echo "$$pids" | xargs kill -9 2>/dev/null || true
+	@rm -f code/app/backend/navalplan-backend code/app/backend/app code/services/researcher/researcher code/services/researcher/researcher-service code/services/researcher/navalplan-agent
 	@echo "Starting Backend, Frontend, and Agent..."
 	@echo "Press Ctrl+C to stop all."
 	@(trap 'kill 0' SIGINT; make run-backend & make run-agent & (sleep 3 && make run-frontend) & wait)

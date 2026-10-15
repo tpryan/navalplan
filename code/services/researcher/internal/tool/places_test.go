@@ -277,12 +277,21 @@ func TestFindPlaces_WideAreaSectorFanOut(t *testing.T) {
 	}
 	p := &PlacesProvider{client: mockClient}
 
-	// "marina" at 30 km -> 1 center SearchText + 4 sector SearchNearby calls = 5 calls total.
+	// "marina" at 30 km -> 1 center SearchText + 8 compass sector SearchNearby calls = 9 calls total.
 	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "marina", Latitude: 10.0, Longitude: 20.0, Radius: 30000}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if textCalls != 1 || nearbyCalls != 4 {
-		t.Errorf("marina wide-area calls: got text=%d nearby=%d, want text=1 nearby=4", textCalls, nearbyCalls)
+	if textCalls != 1 || nearbyCalls != 8 {
+		t.Errorf("marina wide-area calls: got text=%d nearby=%d, want text=1 nearby=8", textCalls, nearbyCalls)
+	}
+
+	// "anchorage" at 30 km -> 1 center SearchText + 4 cardinal sector SearchText calls = 5 calls total.
+	textCalls, nearbyCalls = 0, 0
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "anchorage", Latitude: 10.0, Longitude: 20.0, Radius: 30000}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if textCalls != 5 || nearbyCalls != 0 {
+		t.Errorf("anchorage wide-area calls: got text=%d nearby=%d, want text=5 nearby=0", textCalls, nearbyCalls)
 	}
 
 	// "yacht club" at 30 km -> secondary category, no sector fan-out -> 1 center SearchText call only.

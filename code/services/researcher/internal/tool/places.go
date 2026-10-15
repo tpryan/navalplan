@@ -132,6 +132,16 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 	if areaRadius, ok := areaSearchRadius(ctx); ok && areaRadius > requestedRadius {
 		requestedRadius = areaRadius
 	}
+	// Anchor on session stop/area center coordinates when set so an LLM that
+	// omits coordinates or substitutes a single island/town on one side of an
+	// open-water circle (e.g. Bimini instead of the Florida Straits center)
+	// still searches and filters around the true circle center.
+	if stopLat, stopLng, ok := stopAnchor(ctx); ok {
+		lat, lng, overridden := anchorCoords(args.Latitude, args.Longitude, stopLat, stopLng)
+		if overridden {
+			args.Latitude, args.Longitude = lat, lng
+		}
+	}
 	apiRadius := requestedRadius
 	if apiRadius > 50000 {
 		apiRadius = 50000 // Google Places API maximum limit is 50,000 meters per Circle
@@ -213,17 +223,25 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		placesList = append(placesList, resp.Places...)
 
 		// For wide-area searches (> 15 km / ~8 NM) on core categories (marina,
-		// anchorage, mooring), also probe 4 cardinal sector points (N, E, S, W) at
-		// 55% of the requested radius in parallel so open-water centers cover every
-		// shore inside the circle without 8-way overlap.
+		// anchorage, mooring), also probe compass sector points in parallel so
+		// open-water centers cover every shore inside the circle.
+		// Marinas use 8 compass sectors (45° steps) with SearchNearby(DISTANCE) so
+		// diagonal harbors (e.g. Annapolis at 315° NW or Deale at 225° SW from Kent
+		// Island) get dedicated 20-marina circles; untyped anchorage/mooring text
+		// queries use 4 cardinal sectors (0°, 90°, 180°, 270°).
 		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) && shouldSectorFanOut(args.Query) {
+			sectorNearbyTypes := wideAreaNearbyTypes(args.Query)
+			bearings := []float64{0, 90, 180, 270}
 			sectorOffset := requestedRadius * 0.55
 			sectorBiasRadius := requestedRadius * 0.55
+			if len(sectorNearbyTypes) > 0 {
+				bearings = []float64{0, 45, 90, 135, 180, 225, 270, 315}
+				sectorOffset = requestedRadius * 0.60
+				sectorBiasRadius = requestedRadius * 0.50
+			}
 			if sectorBiasRadius > 50000 {
 				sectorBiasRadius = 50000
 			}
-			sectorNearbyTypes := wideAreaNearbyTypes(args.Query)
-			bearings := []float64{0, 90, 180, 270}
 			sectorResults := make([][]*placespb.Place, len(bearings))
 			var wg sync.WaitGroup
 			for i, brng := range bearings {
@@ -263,9 +281,25 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 				}(i, brng)
 			}
 			wg.Wait()
-			for _, sr := range sectorResults {
-				placesList = append(placesList, sr...)
+			// Round-robin interleave center + sector results so the top of the returned
+			// list represents every compass sector equally rather than front-loading 20
+			// center results followed by 20 North results.
+			allBuckets := append([][]*placespb.Place{placesList}, sectorResults...)
+			maxLen := 0
+			for _, b := range allBuckets {
+				if len(b) > maxLen {
+					maxLen = len(b)
+				}
 			}
+			interleaved := make([]*placespb.Place, 0, len(placesList)*len(allBuckets))
+			for rank := 0; rank < maxLen; rank++ {
+				for _, b := range allBuckets {
+					if rank < len(b) {
+						interleaved = append(interleaved, b[rank])
+					}
+				}
+			}
+			placesList = interleaved
 		}
 	}
 

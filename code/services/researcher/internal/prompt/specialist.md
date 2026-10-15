@@ -17,17 +17,17 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
 - When calling tools with latitude and longitude, you MUST pass coordinates as raw decimal NUMBERS (e.g. 51.371881), NEVER as string literals (do not pass "51.371881").
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
-1.  **A single `batch_google_search` call** with ALL of these queries:
-    - "Complete list of safe anchorages and coves in [Location/Area] with official links"
-    - "Best mooring ball fields and public moorings in [Location/Area] reviews and websites"
-    - "Major harbor hubs, yacht clubs, and boating centers in [Location/Area] official websites"
-    - "Cruising guide highlights and local pilotage notes for [Location/Area]"
-    - "Navily and Noonsite top rated spots in [Location/Area]"
-    - "Hidden coves sheltered bays overnight anchorage [Location/Area]"
-    - "Secluded anchorages off the beaten path [Location/Area]"
-    - "Shallow draft anchorages and gunkholes [Location/Area]"
+1.  **A single `batch_google_search` call** — do NOT merely substitute the center town name into every query! Use the N/S/E/W boundary coordinates to identify the major harbors, rivers, and shores on ALL sides of the circle (e.g., both Western Shore / NW / SW harbors such as Annapolis, Severn River, South River, West River, Herring Bay AND Eastern Shore / NE / SE harbors such as Kent Island, Eastern Bay, Miles River, Chester River), and include queries across all of them:
+    - "Complete list of safe anchorages and coves in [All Major Harbors & Rivers Across N/S/E/W of Circle] with official links"
+    - "Best mooring ball fields, guest moorings, and municipal moorings in [All Major Harbors & Towns in Circle] reviews and websites"
+    - "Major harbor hubs, marinas, yacht clubs, and boating centers across [Western/Northern Shores and Eastern/Southern Shores of Circle] official websites"
+    - "Cruising guide highlights and local pilotage notes for [Region & All Surrounding Rivers/Bays in Circle]"
+    - "Navily, ActiveCaptain, and Waterway Guide top anchorages and marinas in [Region & Surrounding Shores]"
+    - "Hidden coves sheltered bays overnight anchorage [Western/NW/SW Rivers & Creeks in Circle]"
+    - "Secluded anchorages off the beaten path [Eastern/NE/SE Rivers & Creeks in Circle]"
+    - "Shallow draft anchorages and gunkholes across [All Tributaries in Circle]"
 2.  **A `hydrographic_pilot` call** to extract hydrographic anchorages, coves, depths, currents, and local hazards from official pilot books (NOAA Coast Pilot and NGA Sailing Directions). Pass it the location/area name and coordinates; it returns structured pilotage intel with citations. Use its `anchorages_and_regulations`, `currents_and_tidal_rips`, and `hazards` to inform and justify your recommendations.
-3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass it `mode: "area"`, the location/area name, the latitude and longitude as raw numbers, the requested search radius, and the trip type. (`mode: "area"` makes it survey the whole circle instead of a tight radius around a single stop.) It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling for large areas), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Use these verified facilities as the backbone of your recommendations.
+3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass a structured request string containing `mode: "area"`, the exact center `latitude` and `longitude` as raw decimal numbers, the full `radius` in meters, the location/area name (naming shores on ALL sides of the boundary, e.g. both Western and Eastern shores), and the trip type. **NEVER omit `latitude`, `longitude`, or `radius` when calling `facility_discovery`, and NEVER substitute the coordinates of a single island or town.** It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling across all compass bearings), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Include EVERY verified marina, mooring field, fuel dock, and yacht club it returns across all shores.
 
 ### DISTRIBUTION PRIORITY
 The skipper prefers "wild" stays, so anchorages lead the list — but never at the expense of verified facilities:

@@ -83,7 +83,7 @@ Return ONLY this JSON object — no text outside the JSON block:
 Rules:
 - Limit `references` to a maximum of 1 URL per facility; prefer direct source URLs over redirects. Leave `vhf`, `protection`, and `holding` null for shore amenities. Dense stops can return 100+ facilities, so keep every entry compact.
 - Leave unknown fields null or empty, but always return the valid JSON structure.
-- Include EVERY nautical facility AND shore amenity `FindPlacesNearby` returns within the focus radius. **Do NOT cap, sample, or trim any category** — if a query returns 18 restaurants, return all 18. The only removals allowed are duplicates (see Dedupe) and genuinely irrelevant POIs.
+- Include EVERY nautical facility AND shore amenity `FindPlacesNearby` returns within the focus radius. **Do NOT cap, sample, or trim any category** — if a query returns 18 restaurants, return all 18; if `FindPlacesNearby` returns 50+ marinas across multiple towns/shores in `mode: "area"`, you MUST output ALL of them (never stop after 5–10 marinas or omit entire towns like Annapolis, Deale, Galesville, or St. Michaels). The only removals allowed are exact duplicates (see Dedupe) and non-marine businesses in area mode.
 - **`type` is exactly ONE value** from the list above (e.g. `"Cafe"`), never a combination like `"Restaurant | Bar"`.
 - **Keep the tool's `type`:** `FindPlacesNearby` returns a `type` already derived from Google's place categories. Use it as-is. Only set a type yourself for web-search (`is_wild`) spots or when the tool's `type` is empty; then pick the closest value from the list. Never drop a result because of its type.
 - **Pass through `distance_meters`** exactly as `FindPlacesNearby` returns it.
