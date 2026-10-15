@@ -8,10 +8,86 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"app/internal/model"
 )
+
+const (
+	// recGeocodeSnapMinNM is the minimum discrepancy (NM) between an LLM-emitted
+	// anchorage/mooring coordinate and Google Geocoding's location for that named
+	// feature before we snap to the geocoded position (catches ~2-8 NM LLM memory drift
+	// such as placing Bloody Point Anchorage on Poplar Island).
+	recGeocodeSnapMinNM = 0.75
+	// recGeocodeSnapMaxNM caps how far a geocode match may be from the LLM coordinate
+	// so an unrelated distant namesake cannot hijack the pin.
+	recGeocodeSnapMaxNM = 12.0
+)
+
+var genericMarineSuffixes = []string{
+	" Anchorage", " Mooring Field", " Moorings", " Mooring",
+	" Harbor Hub", " Boating Hub", " Central Hub", " Hub",
+}
+
+func cleanGeocodeFeatureName(name string) string {
+	cleaned := strings.TrimSpace(name)
+	lower := strings.ToLower(cleaned)
+	for _, suffix := range genericMarineSuffixes {
+		if strings.HasSuffix(lower, strings.ToLower(suffix)) && len(cleaned) > len(suffix)+2 {
+			cleaned = strings.TrimSpace(cleaned[:len(cleaned)-len(suffix)])
+			break
+		}
+	}
+	return cleaned
+}
+
+func refineRecommendationCoordinates(ctx context.Context, recs []model.VoyageRecommendation, vicinity string, centerLat, centerLng, maxRadiusNM float64) {
+	if len(recs) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+	for i := range recs {
+		recType := strings.ToLower(strings.TrimSpace(recs[i].Type))
+		needsCheck := (recs[i].Latitude == 0 && recs[i].Longitude == 0) ||
+			strings.Contains(recType, "anchor") ||
+			strings.Contains(recType, "moor") ||
+			recType == "hub"
+		if !needsCheck {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			r := &recs[idx]
+			queryName := cleanGeocodeFeatureName(r.Name)
+			lat, lng, err := geocodeFacility(ctx, queryName, vicinity, centerLat, centerLng)
+			if err != nil || (lat == 0 && lng == 0) {
+				return
+			}
+			if haversine(centerLat, centerLng, lat, lng, "nm") > maxRadiusNM {
+				return
+			}
+			if r.Latitude == 0 && r.Longitude == 0 {
+				r.Latitude, r.Longitude = lat, lng
+				return
+			}
+			driftNM := haversine(r.Latitude, r.Longitude, lat, lng, "nm")
+			if driftNM >= recGeocodeSnapMinNM && driftNM <= recGeocodeSnapMaxNM {
+				slog.InfoContext(ctx, "Snapped drifted recommendation coordinates to geocoded feature",
+					"name", r.Name, "query", queryName,
+					"old_lat", r.Latitude, "old_lng", r.Longitude,
+					"new_lat", lat, "new_lng", lng, "drift_nm", driftNM)
+				r.Latitude, r.Longitude = lat, lng
+			}
+		}(i)
+	}
+	wg.Wait()
+}
 
 func radiusToNM(radius int, unit string) float64 {
 	r := float64(radius)
@@ -303,6 +379,7 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	recommendations := wrapper.Recommendations
+	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 
 	for _, rec := range recommendations {
 		dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)

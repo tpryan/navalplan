@@ -53,8 +53,8 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 
 **CRITICAL: COORDINATE ACCURACY**
 - Prioritize coordinates from `facility_discovery` as they are verified and precise.
-- For spots found in `batch_google_search` or `hydrographic_pilot`, use coordinates provided in the source or identify their location. If an outer spot lacks precise coordinates, do NOT launch separate sequential searches; instead, filter it out and select from the dozens of candidates with verified coordinates found in Turn 1.
-- NEVER guess coordinates based on a general area name.
+- For spots found in `batch_google_search` or `hydrographic_pilot`, ONLY include them if explicit coordinates are present in the retrieved text (convert degrees/minutes `DD° MM.M'` to decimal degrees `DD + MM.M/60` accurately) or if they match a `facility_discovery` entry. If a spot lacks explicit coordinates in the tool output, do NOT estimate or guess coordinates from memory — drop it and select from the candidates with verified coordinates.
+- NEVER guess coordinates based on a general area name or adjacent island.
 - Use the exact `latitude` and `longitude` returned by tools. 
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**
 
