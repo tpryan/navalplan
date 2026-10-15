@@ -67,12 +67,21 @@ func refineRecommendationCoordinates(ctx context.Context, recs []model.VoyageRec
 			queryName := cleanGeocodeFeatureName(r.Name)
 			lat, lng, err := geocodeFacility(ctx, queryName, vicinity, centerLat, centerLng)
 			if err != nil || (lat == 0 && lng == 0) {
-				return
+				// If the LLM emitted (0,0) and full-name geocoding failed, retry with the
+				// raw recommendation name before giving up.
+				if r.Latitude == 0 && r.Longitude == 0 && queryName != r.Name {
+					lat, lng, err = geocodeFacility(ctx, r.Name, vicinity, centerLat, centerLng)
+				}
+				if err != nil || (lat == 0 && lng == 0) {
+					return
+				}
 			}
 			if haversine(centerLat, centerLng, lat, lng, "nm") > maxRadiusNM {
 				return
 			}
 			if r.Latitude == 0 && r.Longitude == 0 {
+				slog.InfoContext(ctx, "Geocoded recommendation missing coordinates",
+					"name", r.Name, "query", queryName, "lat", lat, "lng", lng)
 				r.Latitude, r.Longitude = lat, lng
 				return
 			}
@@ -382,6 +391,9 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 
 	for _, rec := range recommendations {
+		if rec.Latitude == 0 && rec.Longitude == 0 {
+			continue
+		}
 		dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
 		if dist > float64(v.SearchRadius) {
 			continue

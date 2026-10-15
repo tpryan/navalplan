@@ -160,3 +160,15 @@ func nearbyTypesForQuery(query string) []string {
 	}
 	return nil
 }
+
+// wideAreaNearbyTypes returns Google Places (New) Table A types for wide-area
+// sector fan-out (> 15 km). Using SearchNearby with IncludedTypes={"marina"} on
+// each compass sector guarantees up to 20 marinas per sector ranked strictly by
+// distance from that sector point, covering every shore around an open-water center.
+func wideAreaNearbyTypes(query string) []string {
+	q := strings.ToLower(query)
+	if strings.Contains(q, "marina") {
+		return []string{"marina"}
+	}
+	return nearbyTypesForQuery(query)
+}

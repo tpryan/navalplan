@@ -53,9 +53,9 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 
 **CRITICAL: COORDINATE ACCURACY**
 - Prioritize coordinates from `facility_discovery` as they are verified and precise.
-- For spots found in `batch_google_search` or `hydrographic_pilot`, ONLY include them if explicit coordinates are present in the retrieved text (convert degrees/minutes `DD° MM.M'` to decimal degrees `DD + MM.M/60` accurately) or if they match a `facility_discovery` entry. If a spot lacks explicit coordinates in the tool output, do NOT estimate or guess coordinates from memory — drop it and select from the candidates with verified coordinates.
-- NEVER guess coordinates based on a general area name or adjacent island.
-- Use the exact `latitude` and `longitude` returned by tools. 
+- Include EVERY anchorage, cove, creek, mooring field, marina, yacht club, and hub found in `facility_discovery`, `hydrographic_pilot`, and `batch_google_search`.
+- If a spot from `batch_google_search` or `hydrographic_pilot` has explicit coordinates in the retrieved text, convert `DD° MM.M'` to decimal degrees (`DD + MM.M/60`) accurately. If it is a real, named anchorage/cove/creek/mooring area within the search boundary but the text does not list numeric coordinates, output `"latitude": 0.0, "longitude": 0.0` — the backend's Google Geocoding step will automatically resolve its exact coordinates from `name` and filter it against the search circle.
+- NEVER guess or estimate non-zero coordinates from memory. Either use tool-returned coordinates, exact converted coordinates from text, or `0.0, 0.0` for backend geocoding.
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**
 
 ```json

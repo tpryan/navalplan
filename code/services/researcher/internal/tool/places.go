@@ -219,15 +219,22 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		// For wide-area searches (> 15 km / ~8 NM), also probe 8 compass sector
 		// points at 60% of the requested radius in parallel so open-water centers
 		// (e.g. Chesapeake Bay off Kent Island, or Florida Straits) cover every
-		// shore inside the circle. Use a local sector radius (45% of requestedRadius)
-		// and DISTANCE ranking so each sector returns the places closest to that
-		// shore rather than repeating the same 20 region-wide RELEVANCE results.
+		// shore inside the circle.
+		//
+		// If the query maps to a Google Places Table A type (e.g. "marina"), use
+		// SearchNearby with DISTANCE ranking on each sector circle so Google returns
+		// the 20 marinas closest to that sector point (Annapolis, Galesville,
+		// St. Michaels, Rock Hall, etc.) instead of matching the word "marina" by
+		// text relevance near the center. For untyped nautical queries ("anchorage",
+		// "cove bay harbor", "mooring"), use SearchText with a localized sector
+		// circle bias.
 		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) {
 			sectorOffset := requestedRadius * 0.60
-			sectorBiasRadius := requestedRadius * 0.45
+			sectorBiasRadius := requestedRadius * 0.50
 			if sectorBiasRadius > 50000 {
 				sectorBiasRadius = 50000
 			}
+			sectorNearbyTypes := wideAreaNearbyTypes(args.Query)
 			bearings := []float64{0, 45, 90, 135, 180, 225, 270, 315}
 			sectorResults := make([][]*placespb.Place, len(bearings))
 			var wg sync.WaitGroup
@@ -236,20 +243,32 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 				go func(idx int, b float64) {
 					defer wg.Done()
 					sLat, sLng := offsetLatLng(args.Latitude, args.Longitude, sectorOffset, b)
+					sCircle := &placespb.Circle{
+						Center: &latlng.LatLng{Latitude: sLat, Longitude: sLng},
+						Radius: sectorBiasRadius,
+					}
+					if len(sectorNearbyTypes) > 0 {
+						if nResp, nErr := p.client.SearchNearby(callCtx, &placespb.SearchNearbyRequest{
+							IncludedTypes:  sectorNearbyTypes,
+							MaxResultCount: 20,
+							LocationRestriction: &placespb.SearchNearbyRequest_LocationRestriction{
+								Type: &placespb.SearchNearbyRequest_LocationRestriction_Circle{Circle: sCircle},
+							},
+							RankPreference: placespb.SearchNearbyRequest_DISTANCE,
+						}); nErr == nil && nResp != nil && len(nResp.Places) > 0 {
+							sectorResults[idx] = nResp.Places
+							return
+						}
+					}
 					sReq := &placespb.SearchTextRequest{
 						TextQuery: args.Query,
 						LocationBias: &placespb.SearchTextRequest_LocationBias{
-							Type: &placespb.SearchTextRequest_LocationBias_Circle{
-								Circle: &placespb.Circle{
-									Center: &latlng.LatLng{Latitude: sLat, Longitude: sLng},
-									Radius: sectorBiasRadius,
-								},
-							},
+							Type: &placespb.SearchTextRequest_LocationBias_Circle{Circle: sCircle},
 						},
 						OpenNow:        args.OpenNow,
 						MinRating:      args.MinRating,
 						MaxResultCount: 20,
-						RankPreference: placespb.SearchTextRequest_DISTANCE,
+						RankPreference: placespb.SearchTextRequest_RELEVANCE,
 					}
 					if sResp, sErr := p.client.SearchText(callCtx, sReq); sErr == nil && sResp != nil {
 						sectorResults[idx] = sResp.Places
