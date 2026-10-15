@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -11,15 +12,20 @@ import (
 
 const (
 	EarthRadiusNM            = 3440.065
-	MaxPlausibleSpeedKts     = 45.0 // filter out GPS jitter/glitches
-	MaxAccelerationKtsPerSec = 2.0  // max plausible boat speed change rate
-	MaxGlitchWindowSec       = 60.0 // time window for acceleration check
-	SustainedSpeedWindowSec  = 60.0 // max speed is measured over at least this span to suppress GPS jitter
+	MPS2Knots                = 1.943844 // 1 m/s in knots (3600 / 1852)
+	MaxPlausibleSpeedKts     = 45.0     // filter out GPS jitter/glitches
+	MaxAccelerationKtsPerSec = 2.0      // max plausible boat speed change rate
+	MaxGlitchWindowSec       = 60.0     // time window for acceleration check
+	SustainedSpeedWindowSec  = 60.0     // max speed is measured over at least this span to suppress GPS jitter
+	maxTrackDistanceNM       = 999999.99
 )
 
 // ParseGPX parses raw GPX XML and produces one or more processed ParsedTrack models.
 func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
-	if cleanData, glitches, err := FilterGPX(data); err == nil && glitches > 0 {
+	cleanData, glitches, err := FilterGPX(data)
+	if err != nil {
+		slog.Warn("GPX glitch filter returned error; proceeding with raw GPX", "glitches_detected", glitches, "error", err)
+	} else if glitches > 0 {
 		data = cleanData
 	}
 
@@ -67,8 +73,7 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 			for _, pt := range seg.TrackPoints {
 				var spdKts *float64
 				if pt.Speed != nil {
-					// GPX 1.1 speed is in m/s; 1 m/s = 1.94384 knots
-					k := *pt.Speed * 1.94384
+					k := *pt.Speed * MPS2Knots
 					spdKts = &k
 				}
 				pts = append(pts, Point{
@@ -120,47 +125,74 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 	return tracks, nil
 }
 
+type trackMetrics struct {
+	totalDist        float64
+	maxSpeed         float64
+	avgSpeed         float64
+	durationInterval string
+	startTime        *time.Time
+	endTime          *time.Time
+}
+
 func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 	points, _ = FilterTrackPoints(points)
-	hasReportedSpeed := false
+	hasReportedSpeed := hasAnyReportedSpeed(points)
+	m := computeTrackMetrics(kind, points, hasReportedSpeed)
+
+	geoJSONBytes := BuildGeoJSON(name, kind, points, m.totalDist, m.startTime, m.endTime, m.maxSpeed, m.avgSpeed)
+	simplifiedPoints := SimplifyRDP(points, DefaultEpsilonNM)
+	simplifiedGeoJSONBytes := BuildGeoJSON(name, kind, simplifiedPoints, m.totalDist, m.startTime, m.endTime, m.maxSpeed, m.avgSpeed)
+
+	return ParsedTrack{
+		Name:              name,
+		Kind:              kind,
+		Points:            points,
+		StartTime:         m.startTime,
+		EndTime:           m.endTime,
+		DistanceNM:        math.Round(m.totalDist*100) / 100,
+		DurationInterval:  m.durationInterval,
+		MaxSpeedKts:       math.Round(m.maxSpeed*10) / 10,
+		AvgSpeedKts:       math.Round(m.avgSpeed*10) / 10,
+		GeoJSON:           geoJSONBytes,
+		SimplifiedGeoJSON: simplifiedGeoJSONBytes,
+	}
+}
+
+func hasAnyReportedSpeed(points []Point) bool {
 	for i := range points {
 		if points[i].SpeedKts != nil {
-			hasReportedSpeed = true
-			break
+			return true
 		}
 	}
+	return false
+}
 
-	var totalDist float64
-	var maxSpeed float64
+func computeTrackMetrics(kind string, points []Point, hasReportedSpeed bool) trackMetrics {
+	var m trackMetrics
 	var speedSum float64
 	var speedPointsCount int
-
-	var startTime *time.Time
-	var endTime *time.Time
-
 	lastValidIdx := -1
+
 	for i := range points {
 		if points[i].Time != nil {
-			if startTime == nil || points[i].Time.Before(*startTime) {
-				startTime = points[i].Time
+			if m.startTime == nil || points[i].Time.Before(*m.startTime) {
+				m.startTime = points[i].Time
 			}
-			if endTime == nil || points[i].Time.After(*endTime) {
-				endTime = points[i].Time
+			if m.endTime == nil || points[i].Time.After(*m.endTime) {
+				m.endTime = points[i].Time
 			}
 		}
 
 		if i > 0 {
 			prev := points[i-1]
 			dist := CalculateHaversineNM(prev.Lat, prev.Lng, points[i].Lat, points[i].Lng)
-			totalDist += dist
+			m.totalDist += dist
 
-			// Compute course if not provided
 			if points[i].CourseDeg == nil {
 				bearing := CalculateBearing(prev.Lat, prev.Lng, points[i].Lat, points[i].Lng)
 				points[i].CourseDeg = &bearing
 			}
 
-			// Compute speed if not provided and timestamps exist
 			if points[i].SpeedKts == nil && prev.Time != nil && points[i].Time != nil {
 				dtHours := points[i].Time.Sub(*prev.Time).Hours()
 				if dtHours > 0 {
@@ -171,23 +203,10 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 
 			if points[i].SpeedKts != nil {
 				spd := *points[i].SpeedKts
-				isGlitch := false
-				if spd > MaxPlausibleSpeedKts {
-					isGlitch = true
-				} else if lastValidIdx >= 0 && points[lastValidIdx].SpeedKts != nil && points[lastValidIdx].Time != nil && points[i].Time != nil {
-					dtSec := points[i].Time.Sub(*points[lastValidIdx].Time).Seconds()
-					if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
-						deltaV := math.Abs(spd - *points[lastValidIdx].SpeedKts)
-						if deltaV/dtSec > MaxAccelerationKtsPerSec {
-							isGlitch = true
-						}
-					}
-				}
-
-				if !isGlitch {
+				if !isStepSpeedGlitch(points, lastValidIdx, i, spd) {
 					lastValidIdx = i
-					if spd > maxSpeed {
-						maxSpeed = spd
+					if spd > m.maxSpeed {
+						m.maxSpeed = spd
 					}
 					speedSum += spd
 					speedPointsCount++
@@ -195,8 +214,8 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 			}
 		} else if points[0].SpeedKts != nil && *points[0].SpeedKts <= MaxPlausibleSpeedKts {
 			lastValidIdx = 0
-			if *points[0].SpeedKts > maxSpeed {
-				maxSpeed = *points[0].SpeedKts
+			if *points[0].SpeedKts > m.maxSpeed {
+				m.maxSpeed = *points[0].SpeedKts
 			}
 			speedSum += *points[0].SpeedKts
 			speedPointsCount++
@@ -209,62 +228,62 @@ func buildParsedTrack(name, kind string, points []Point) ParsedTrack {
 	// SustainedSpeedWindowSec.
 	if !hasReportedSpeed {
 		if sustained, ok := sustainedMaxSpeed(points, SustainedSpeedWindowSec); ok {
-			maxSpeed = sustained
+			m.maxSpeed = sustained
 		}
 	}
-	var durationInterval string
-	var avgSpeed float64
-	if startTime != nil && endTime != nil {
-		dur := endTime.Sub(*startTime)
-		durationInterval = FormatPostgresInterval(dur)
-		durHours := dur.Hours()
-		if durHours > 0 && totalDist > 0 {
-			calcAvg := totalDist / durHours
-			if calcAvg <= MaxPlausibleSpeedKts {
-				avgSpeed = calcAvg
+
+	if m.startTime != nil && m.endTime != nil {
+		dur := m.endTime.Sub(*m.startTime)
+		m.durationInterval = FormatPostgresInterval(dur)
+		if durHours := dur.Hours(); durHours > 0 && m.totalDist > 0 {
+			if calcAvg := m.totalDist / durHours; calcAvg <= MaxPlausibleSpeedKts {
+				m.avgSpeed = calcAvg
 			}
 		}
 	}
-	if avgSpeed == 0 && speedPointsCount > 0 {
-		calcAvg := speedSum / float64(speedPointsCount)
-		if calcAvg <= MaxPlausibleSpeedKts {
-			avgSpeed = calcAvg
+	if m.avgSpeed == 0 && speedPointsCount > 0 {
+		if calcAvg := speedSum / float64(speedPointsCount); calcAvg <= MaxPlausibleSpeedKts {
+			m.avgSpeed = calcAvg
 		}
 	}
 	if kind == "planned" {
-		maxSpeed = 0
-		avgSpeed = 0
-	}
-	if avgSpeed < 0 || avgSpeed > MaxPlausibleSpeedKts || math.IsNaN(avgSpeed) || math.IsInf(avgSpeed, 0) {
-		avgSpeed = 0
-	}
-	if maxSpeed < 0 || maxSpeed > MaxPlausibleSpeedKts || math.IsNaN(maxSpeed) || math.IsInf(maxSpeed, 0) {
-		maxSpeed = 0
-	}
-	if totalDist < 0 || math.IsNaN(totalDist) || math.IsInf(totalDist, 0) {
-		totalDist = 0
-	} else if totalDist > 999999.99 {
-		totalDist = 999999.99
+		m.maxSpeed = 0
+		m.avgSpeed = 0
 	}
 
-	// Generate GeoJSON and Simplified GeoJSON
-	geoJSONBytes := BuildGeoJSON(name, kind, points, totalDist, startTime, endTime, maxSpeed, avgSpeed)
-	simplifiedPoints := SimplifyRDP(points, DefaultEpsilonNM)
-	simplifiedGeoJSONBytes := BuildGeoJSON(name, kind, simplifiedPoints, totalDist, startTime, endTime, maxSpeed, avgSpeed)
+	m.avgSpeed = sanitizeMetric(m.avgSpeed, MaxPlausibleSpeedKts)
+	m.maxSpeed = sanitizeMetric(m.maxSpeed, MaxPlausibleSpeedKts)
+	m.totalDist = sanitizeMetric(m.totalDist, maxTrackDistanceNM)
+	return m
+}
 
-	return ParsedTrack{
-		Name:              name,
-		Kind:              kind,
-		Points:            points,
-		StartTime:         startTime,
-		EndTime:           endTime,
-		DistanceNM:        math.Round(totalDist*100) / 100,
-		DurationInterval:  durationInterval,
-		MaxSpeedKts:       math.Round(maxSpeed*10) / 10,
-		AvgSpeedKts:       math.Round(avgSpeed*10) / 10,
-		GeoJSON:           geoJSONBytes,
-		SimplifiedGeoJSON: simplifiedGeoJSONBytes,
+func isStepSpeedGlitch(points []Point, lastValidIdx, i int, spd float64) bool {
+	if spd > MaxPlausibleSpeedKts {
+		return true
 	}
+	if lastValidIdx >= 0 && points[lastValidIdx].SpeedKts != nil && points[lastValidIdx].Time != nil && points[i].Time != nil {
+		dtSec := points[i].Time.Sub(*points[lastValidIdx].Time).Seconds()
+		if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
+			deltaV := math.Abs(spd - *points[lastValidIdx].SpeedKts)
+			if deltaV/dtSec > MaxAccelerationKtsPerSec {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sanitizeMetric(val, maxAllowed float64) float64 {
+	if val < 0 || math.IsNaN(val) || math.IsInf(val, 0) {
+		return 0
+	}
+	if val > maxAllowed {
+		if maxAllowed == MaxPlausibleSpeedKts {
+			return 0
+		}
+		return maxAllowed
+	}
+	return val
 }
 
 // BuildGeoJSON constructs a GeoJSON Feature string representation for a set of points.

@@ -53,8 +53,11 @@ type filterPoint struct {
 	Desc   string   `xml:"desc,omitempty"`
 }
 
-// FilterGPX parses GPX XML, detects GPS glitches and speed spikes, removes them, and returns clean XML.
-// If no glitches were detected, the original data is returned verbatim.
+// FilterGPX parses GPX XML, detects GPS glitches and speed spikes in track
+// segments (<trk>), removes them, and returns cleaned XML. Routes (<rte>) and
+// waypoints (<wpt>) are left untouched because their <time> elements represent
+// creation timestamps rather than travel telemetry. If no glitches were
+// detected, the original data is returned verbatim.
 func FilterGPX(data []byte) ([]byte, int, error) {
 	var doc filterGPXDoc
 	if err := xml.Unmarshal(data, &doc); err != nil {
@@ -107,7 +110,7 @@ func FilterGPX(data []byte) ([]byte, int, error) {
 
 	outBytes, err := xml.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return data, 0, fmt.Errorf("failed to marshal clean GPX XML: %w", err)
+		return data, totalGlitches, fmt.Errorf("failed to marshal clean GPX XML: %w", err)
 	}
 
 	return append([]byte(xml.Header), outBytes...), totalGlitches, nil
@@ -118,92 +121,22 @@ func filterPointSlice(pts []filterPoint) ([]filterPoint, int) {
 		return pts, 0
 	}
 
-	parsedTimes := make([]*time.Time, len(pts))
-	speedsKts := make([]*float64, len(pts))
-
+	points := make([]Point, len(pts))
 	for i, pt := range pts {
+		points[i].Lat = pt.Lat
+		points[i].Lng = pt.Lon
 		if pt.Time != "" {
 			if t, err := parseGPXTime(pt.Time); err == nil {
-				parsedTimes[i] = t
+				points[i].Time = t
 			}
 		}
 		if pt.Speed != nil {
-			// GPX speed is m/s; 1 m/s = 1.943844 knots
-			spd := *pt.Speed * 1.943844
-			speedsKts[i] = &spd
+			spd := *pt.Speed * MPS2Knots
+			points[i].SpeedKts = &spd
 		}
 	}
 
-	glitchMap := make(map[int]bool)
-	glitchCount := 0
-	lastValidIdx := -1
-
-	for i := 0; i < len(pts); i++ {
-		isGlitch := false
-
-		var spd float64
-		hasSpeed := false
-
-		if speedsKts[i] != nil {
-			spd = *speedsKts[i]
-			hasSpeed = true
-		} else if lastValidIdx >= 0 && parsedTimes[lastValidIdx] != nil && parsedTimes[i] != nil {
-			dtHours := parsedTimes[i].Sub(*parsedTimes[lastValidIdx]).Hours()
-			if dtHours > 0 {
-				dist := CalculateHaversineNM(pts[lastValidIdx].Lat, pts[lastValidIdx].Lon, pts[i].Lat, pts[i].Lon)
-				spd = dist / dtHours
-				hasSpeed = true
-			}
-		}
-
-		if hasSpeed {
-			if spd > MaxPlausibleSpeedKts {
-				isGlitch = true
-			} else if lastValidIdx >= 0 && parsedTimes[lastValidIdx] != nil && parsedTimes[i] != nil {
-				var prevSpd float64
-				hasPrevSpd := false
-				if speedsKts[lastValidIdx] != nil {
-					prevSpd = *speedsKts[lastValidIdx]
-					hasPrevSpd = true
-				}
-
-				if hasPrevSpd {
-					dtSec := parsedTimes[i].Sub(*parsedTimes[lastValidIdx]).Seconds()
-					deltaV := math.Abs(spd - prevSpd)
-
-					if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
-						accel := deltaV / dtSec
-						if accel > MaxAccelerationKtsPerSec {
-							isGlitch = true
-						}
-					} else if dtSec <= 0 && deltaV > 0.5 {
-						isGlitch = true
-					}
-				}
-			}
-
-			// 3-point peak spike check
-			if !isGlitch && i > 0 && i < len(pts)-1 && speedsKts[i-1] != nil && speedsKts[i+1] != nil && parsedTimes[i-1] != nil && parsedTimes[i+1] != nil && parsedTimes[i] != nil {
-				dtPrev := parsedTimes[i].Sub(*parsedTimes[i-1]).Seconds()
-				dtNext := parsedTimes[i+1].Sub(*parsedTimes[i]).Seconds()
-				if dtPrev > 0 && dtPrev <= 15.0 && dtNext > 0 && dtNext <= 15.0 {
-					sPrev := *speedsKts[i-1]
-					sNext := *speedsKts[i+1]
-					if (spd-sPrev) > 5.0 && (spd-sNext) > 5.0 {
-						isGlitch = true
-					}
-				}
-			}
-		}
-
-		if isGlitch {
-			glitchMap[i] = true
-			glitchCount++
-		} else {
-			lastValidIdx = i
-		}
-	}
-
+	glitchMap, glitchCount := detectPointGlitches(points)
 	if glitchCount == 0 {
 		return pts, 0
 	}
@@ -224,83 +157,7 @@ func FilterTrackPoints(points []Point) ([]Point, int) {
 		return points, 0
 	}
 
-	speeds := make([]*float64, len(points))
-	for i := range points {
-		if points[i].SpeedKts != nil {
-			speeds[i] = points[i].SpeedKts
-		}
-	}
-
-	glitchMap := make(map[int]bool)
-	glitchCount := 0
-	lastValidIdx := -1
-
-	for i := 0; i < len(points); i++ {
-		isGlitch := false
-
-		var spd float64
-		hasSpeed := false
-
-		if speeds[i] != nil {
-			spd = *speeds[i]
-			hasSpeed = true
-		} else if lastValidIdx >= 0 && points[lastValidIdx].Time != nil && points[i].Time != nil {
-			dtHours := points[i].Time.Sub(*points[lastValidIdx].Time).Hours()
-			if dtHours > 0 {
-				dist := CalculateHaversineNM(points[lastValidIdx].Lat, points[lastValidIdx].Lng, points[i].Lat, points[i].Lng)
-				spd = dist / dtHours
-				hasSpeed = true
-			}
-		}
-
-		if hasSpeed {
-			if spd > MaxPlausibleSpeedKts {
-				isGlitch = true
-			} else if lastValidIdx >= 0 && points[lastValidIdx].Time != nil && points[i].Time != nil {
-				var prevSpd float64
-				hasPrevSpd := false
-				if speeds[lastValidIdx] != nil {
-					prevSpd = *speeds[lastValidIdx]
-					hasPrevSpd = true
-				}
-
-				if hasPrevSpd {
-					dtSec := points[i].Time.Sub(*points[lastValidIdx].Time).Seconds()
-					deltaV := math.Abs(spd - prevSpd)
-
-					if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
-						accel := deltaV / dtSec
-						if accel > MaxAccelerationKtsPerSec {
-							isGlitch = true
-						}
-					} else if dtSec <= 0 && deltaV > 0.5 {
-						isGlitch = true
-					}
-				}
-			}
-
-			// 3-point peak spike check
-			if !isGlitch && i > 0 && i < len(points)-1 && speeds[i-1] != nil && speeds[i+1] != nil && points[i-1].Time != nil && points[i+1].Time != nil && points[i].Time != nil {
-				dtPrev := points[i].Time.Sub(*points[i-1].Time).Seconds()
-				dtNext := points[i+1].Time.Sub(*points[i].Time).Seconds()
-				if dtPrev > 0 && dtPrev <= 15.0 && dtNext > 0 && dtNext <= 15.0 {
-					sPrev := *speeds[i-1]
-					sNext := *speeds[i+1]
-					if (spd-sPrev) > 5.0 && (spd-sNext) > 5.0 {
-						isGlitch = true
-					}
-				}
-			}
-		}
-
-		if isGlitch {
-			glitchMap[i] = true
-			glitchCount++
-		} else {
-			lastValidIdx = i
-		}
-	}
-
+	glitchMap, glitchCount := detectPointGlitches(points)
 	if glitchCount == 0 {
 		return points, 0
 	}
@@ -317,6 +174,75 @@ func FilterTrackPoints(points []Point) ([]Point, int) {
 	}
 
 	return cleanPoints, glitchCount
+}
+
+// detectPointGlitches identifies indices in points that exceed plausible speed,
+// acceleration, or 3-point spike thresholds.
+func detectPointGlitches(points []Point) (map[int]bool, int) {
+	glitchMap := make(map[int]bool)
+	glitchCount := 0
+	lastValidIdx := -1
+
+	for i := 0; i < len(points); i++ {
+		isGlitch := false
+
+		var spd float64
+		hasSpeed := false
+
+		if points[i].SpeedKts != nil {
+			spd = *points[i].SpeedKts
+			hasSpeed = true
+		} else if lastValidIdx >= 0 && points[lastValidIdx].Time != nil && points[i].Time != nil {
+			dtHours := points[i].Time.Sub(*points[lastValidIdx].Time).Hours()
+			if dtHours > 0 {
+				dist := CalculateHaversineNM(points[lastValidIdx].Lat, points[lastValidIdx].Lng, points[i].Lat, points[i].Lng)
+				spd = dist / dtHours
+				hasSpeed = true
+			}
+		}
+
+		if hasSpeed {
+			if spd > MaxPlausibleSpeedKts {
+				isGlitch = true
+			} else if lastValidIdx >= 0 && points[lastValidIdx].Time != nil && points[i].Time != nil && points[lastValidIdx].SpeedKts != nil {
+				prevSpd := *points[lastValidIdx].SpeedKts
+				dtSec := points[i].Time.Sub(*points[lastValidIdx].Time).Seconds()
+				deltaV := math.Abs(spd - prevSpd)
+
+				if dtSec > 0 && dtSec <= MaxGlitchWindowSec {
+					if deltaV/dtSec > MaxAccelerationKtsPerSec {
+						isGlitch = true
+					}
+				} else if dtSec <= 0 && deltaV > 0.5 {
+					isGlitch = true
+				}
+			}
+
+			// 3-point peak spike check
+			if !isGlitch && i > 0 && i < len(points)-1 &&
+				points[i-1].SpeedKts != nil && points[i+1].SpeedKts != nil &&
+				points[i-1].Time != nil && points[i+1].Time != nil && points[i].Time != nil {
+				dtPrev := points[i].Time.Sub(*points[i-1].Time).Seconds()
+				dtNext := points[i+1].Time.Sub(*points[i].Time).Seconds()
+				if dtPrev > 0 && dtPrev <= 15.0 && dtNext > 0 && dtNext <= 15.0 {
+					sPrev := *points[i-1].SpeedKts
+					sNext := *points[i+1].SpeedKts
+					if (spd-sPrev) > 5.0 && (spd-sNext) > 5.0 {
+						isGlitch = true
+					}
+				}
+			}
+		}
+
+		if isGlitch {
+			glitchMap[i] = true
+			glitchCount++
+		} else {
+			lastValidIdx = i
+		}
+	}
+
+	return glitchMap, glitchCount
 }
 
 func parseGPXTime(timeStr string) (*time.Time, error) {

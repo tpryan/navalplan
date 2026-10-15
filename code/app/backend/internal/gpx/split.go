@@ -23,7 +23,6 @@ func SplitTrackByStops(master ParsedTrack, stops []model.Stop) []LegResult {
 	type stopMatch struct {
 		stopIndex  int
 		pointIndex int
-		distNM     float64
 	}
 
 	var matches []stopMatch
@@ -50,7 +49,6 @@ func SplitTrackByStops(master ParsedTrack, stops []model.Stop) []LegResult {
 			matches = append(matches, stopMatch{
 				stopIndex:  sIdx,
 				pointIndex: bestIdx,
-				distNM:     minDist,
 			})
 			lastPointIdx = bestIdx
 		}
