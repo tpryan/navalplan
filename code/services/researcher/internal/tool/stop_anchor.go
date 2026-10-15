@@ -53,6 +53,8 @@ func stopAnchor(ctx agent.Context) (lat, lng float64, ok bool) {
 	if ctx == nil {
 		return 0, 0, false
 	}
+	// ADK tool/mock contexts without an initialized session state can panic on
+	// ctx.State(); recover so stateless/test invocations degrade gracefully.
 	defer func() {
 		if recover() != nil {
 			lat, lng, ok = 0, 0, false

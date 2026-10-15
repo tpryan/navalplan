@@ -8,7 +8,45 @@ import (
 	"net/http"
 
 	"github.com/tpryan/navalplan/services/researcher/internal/tool"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/memory"
+	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/tool/toolconfirmation"
+	"google.golang.org/genai"
 )
+
+type mcpAgentContext struct {
+	agent.StrictContextMock
+}
+
+func wrapAgentContext(ctx context.Context) agent.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &mcpAgentContext{StrictContextMock: agent.NewStrictContextMock(ctx)}
+}
+
+func (mcpAgentContext) Actions() *session.EventActions        { return nil }
+func (mcpAgentContext) Agent() agent.Agent                    { return nil }
+func (mcpAgentContext) AgentName() string                     { return "mcp" }
+func (mcpAgentContext) AppName() string                       { return "mcp" }
+func (mcpAgentContext) Artifacts() agent.Artifacts            { return nil }
+func (mcpAgentContext) Branch() string                        { return "" }
+func (mcpAgentContext) FunctionCallID() string                { return "" }
+func (mcpAgentContext) InvocationID() string                  { return "" }
+func (mcpAgentContext) ReadonlyState() session.ReadonlyState  { return nil }
+func (mcpAgentContext) RequestConfirmation(string, any) error { return nil }
+func (mcpAgentContext) SearchMemory(context.Context, string) (*memory.SearchResponse, error) {
+	return nil, nil
+}
+func (mcpAgentContext) Session() session.Session                             { return nil }
+func (mcpAgentContext) SessionID() string                                    { return "" }
+func (mcpAgentContext) State() session.State                                 { return nil }
+func (mcpAgentContext) ToolConfirmation() *toolconfirmation.ToolConfirmation { return nil }
+func (mcpAgentContext) UserContent() *genai.Content                          { return nil }
+func (mcpAgentContext) UserID() string                                       { return "" }
+func (mcpAgentContext) EndInvocation()                                       {}
+func (mcpAgentContext) Ended() bool                                          { return false }
 
 type JSONRPCMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -25,13 +63,11 @@ type JSONRPCResponse struct {
 }
 
 type Handler struct {
-	Ctx      context.Context
 	Nautical *tool.NauticalToolService
 }
 
-func NewHandler(ctx context.Context, nautical *tool.NauticalToolService) *Handler {
+func NewHandler(_ context.Context, nautical *tool.NauticalToolService) *Handler {
 	return &Handler{
-		Ctx:      ctx,
 		Nautical: nautical,
 	}
 }
@@ -182,49 +218,50 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 		return nil, err
 	}
 
+	agentCtx := wrapAgentContext(ctx)
 	switch callReq.Name {
 	case "GetTides":
 		var req tool.TideRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchTides(nil, req)
+		return h.Nautical.FetchTides(agentCtx, req)
 	case "GetWeather":
 		var req tool.WeatherRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchWeather(nil, req)
+		return h.Nautical.FetchWeather(agentCtx, req)
 	case "GetSunriseSunset":
 		var req tool.SunriseRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchSunriseSunset(nil, req)
+		return h.Nautical.FetchSunriseSunset(agentCtx, req)
 	case "FindPlacesNearby":
 		var req tool.PlacesRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchPlacesNearby(nil, req)
+		return h.Nautical.FetchPlacesNearby(agentCtx, req)
 	case "GetSafetyAlerts":
 		var req tool.SafetyRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchSafetyAlerts(nil, req)
+		return h.Nautical.FetchSafetyAlerts(agentCtx, req)
 	case "QuerySailingDirections", "query_sailing_directions":
 		var req tool.SailingDirectionsRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchSailingDirections(nil, req)
+		return h.Nautical.FetchSailingDirections(agentCtx, req)
 	case "QueryCoastPilot", "query_coast_pilot":
 		var req tool.CoastPilotRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
 			return nil, err
 		}
-		return h.Nautical.FetchCoastPilot(nil, req)
+		return h.Nautical.FetchCoastPilot(agentCtx, req)
 	}
 	return nil, fmt.Errorf("unknown tool %s", callReq.Name)
 }

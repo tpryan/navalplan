@@ -179,7 +179,7 @@ func resolveCorpusResourceName(ctx context.Context, client *http.Client, project
 			return corpus.Name, nil
 		}
 	}
-	return fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", projectID, region, corpusID), nil
+	return "", fmt.Errorf("corpus %q not found in project %s (%s)", corpusID, projectID, region)
 }
 
 func triggerRagImport(ctx context.Context, cfg Config, corpusID string, gcsURIs []string) error {
@@ -277,13 +277,23 @@ func triggerRagImport(ctx context.Context, cfg Config, corpusID string, gcsURIs 
 	return nil
 }
 
+const (
+	ragOperationPollInterval = 10 * time.Second
+	ragOperationTimeout      = 30 * time.Minute
+	maxConsecutiveParseErrs  = 5
+)
+
 func waitForRagOperation(ctx context.Context, client *http.Client, region, opName string) error {
+	ctx, cancel := context.WithTimeout(ctx, ragOperationTimeout)
+	defer cancel()
+
 	opURL := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/%s", region, opName)
+	consecutiveParseErrs := 0
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(10 * time.Second):
+			return fmt.Errorf("waiting for RAG operation %s: %w", opName, ctx.Err())
+		case <-time.After(ragOperationPollInterval):
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, opURL, nil)
@@ -318,9 +328,14 @@ func waitForRagOperation(ctx context.Context, client *http.Client, region, opNam
 			} `json:"response"`
 		}
 		if err := json.Unmarshal(body, &status); err != nil {
-			slog.Warn("Failed parsing operation status", "error", err)
+			consecutiveParseErrs++
+			slog.Warn("Failed parsing operation status", "error", err, "attempt", consecutiveParseErrs)
+			if consecutiveParseErrs >= maxConsecutiveParseErrs {
+				return fmt.Errorf("exceeded %d consecutive status parse failures for %s: %w", maxConsecutiveParseErrs, opName, err)
+			}
 			continue
 		}
+		consecutiveParseErrs = 0
 		if status.Done {
 			if status.Error != nil {
 				return fmt.Errorf("operation failed (%d): %s", status.Error.Code, status.Error.Message)
@@ -483,6 +498,7 @@ func streamDownloadToGCS(ctx context.Context, httpClient *http.Client, gcsClient
 	if err != nil {
 		return err
 	}
+	// msi.nga.mil rejects non-browser HTTP clients without browser User-Agent and Referer headers.
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Referer", "https://msi.nga.mil/Publications/SDEnroute")
 

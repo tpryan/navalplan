@@ -182,7 +182,11 @@ func (h *reasoningEngineHandlers) handleStream(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	f, _ := w.(http.Flusher)
+	f, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
 
 	for event, err := range resp {
 		if err != nil {

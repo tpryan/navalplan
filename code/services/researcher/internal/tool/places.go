@@ -170,11 +170,12 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 	// Append FieldMask to context
 	callCtx := metadata.AppendToOutgoingContext(ctx, "x-goog-fieldmask", fieldMaskHeader)
 
-	// Amenity categories in tight stop searches use Nearby Search: restricted to
-	// the circle and ranked by distance, so results are the closest places of
-	// that kind rather than the most prominent ones in the wider city.
-	// Wide-area searches (> 10 km, i.e. mode: "area") use Text Search + sector fan-out
-	// so open-water circle centers cover all surrounding coasts.
+	// Search strategy by requestedRadius:
+	// - <= 10 km: amenity categories use Nearby Search (circle-restricted, DISTANCE ranked)
+	//   so results are the closest places of that kind rather than prominent city-wide matches.
+	// - > 10 km: Text Search with RELEVANCE ranking.
+	// - > 15 km: Text Search + 8-sector compass fan-out around the circle perimeter so
+	//   open-water centers cover all surrounding coasts.
 	var placesList []*placespb.Place
 	usedNearby := false
 	if requestedRadius <= 10000 {

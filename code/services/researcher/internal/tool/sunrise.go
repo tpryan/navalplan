@@ -38,7 +38,7 @@ type SunriseProvider struct {
 	client TimezoneClient
 }
 
-// Close closes the underlying client connection.
+// Close is a no-op; the underlying Maps HTTP client requires no explicit teardown.
 func (sp *SunriseProvider) Close() error {
 	return nil
 }

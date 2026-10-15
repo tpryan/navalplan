@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/tpryan/openmeteogo"
@@ -57,7 +58,7 @@ type WeatherProvider struct {
 	client WeatherClient
 }
 
-// Close closes the underlying client connection.
+// Close is a no-op; the underlying HTTP client uses pooled connections.
 func (wp *WeatherProvider) Close() error {
 	return nil
 }
@@ -332,6 +333,6 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 // DegreesToDirection converts a compass bearing in degrees to a cardinal direction string (e.g. "N", "NNE").
 func DegreesToDirection(deg float64) string {
 	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
-	index := int((deg + 11.25) / 22.5)
-	return directions[index%16]
+	index := ((int(math.Floor((deg+11.25)/22.5)) % 16) + 16) % 16
+	return directions[index]
 }

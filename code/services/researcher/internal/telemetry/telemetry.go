@@ -446,8 +446,21 @@ func InitTracing(ctx context.Context, projectID, env string, disableTracing bool
 			}
 		}
 	}
+	// Default to the deployed Vertex AI Reasoning Engine resource when neither
+	// NAVALPLAN_RESOURCE_ID nor OTEL_RESOURCE_ATTRIBUTES provides cloud.resource_id.
 	if resourceID == "" && projectID != "" && env == "production" {
-		resourceID = fmt.Sprintf("projects/%s/locations/us-central1/reasoningEngines/1643463669536784384", projectID)
+		loc := strings.TrimSpace(os.Getenv("VERTEX_LOCATION"))
+		if loc == "" {
+			loc = strings.TrimSpace(os.Getenv("GOOGLE_CLOUD_LOCATION"))
+		}
+		if loc == "" {
+			loc = "us-central1"
+		}
+		reID := strings.TrimSpace(os.Getenv("NAVALPLAN_REASONING_ENGINE_ID"))
+		if reID == "" {
+			reID = "1643463669536784384"
+		}
+		resourceID = fmt.Sprintf("projects/%s/locations/%s/reasoningEngines/%s", projectID, loc, reID)
 	}
 
 	slog.Info("Telemetry initialization started",

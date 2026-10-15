@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"time"
@@ -36,10 +37,13 @@ type TideEvent struct {
 }
 
 // TideResult defines the response structure for the get_tides tool.
+// Datum records the vertical zero-reference of the provider: "MLLW" (NOAA),
+// "CD" (UK ADMIRALTY Chart Datum), or "LAT" (NIWA Lowest Astronomical Tide).
 type TideResult struct {
 	StationName   string      `json:"station_name"`
 	StationID     string      `json:"station_id"`
 	DistanceMiles float64     `json:"distance_miles"`
+	Datum         string      `json:"datum,omitempty"`
 	Tides         []TideEvent `json:"tides"`
 	Note          string      `json:"note,omitempty"`
 }
@@ -168,7 +172,11 @@ func (p *NOAAProvider) fetchPredictions(station noaago.Station, dateStr string) 
 
 	var events []TideEvent
 	for _, pt := range tideResp.GetData() {
-		val, _ := pt.ValueFloat()
+		val, err := pt.ValueFloat()
+		if err != nil {
+			slog.Warn("Failed to parse NOAA tide prediction value", "station_id", station.ID, "time", pt.Time, "error", err)
+			continue
+		}
 		events = append(events, TideEvent{
 			Time:   pt.Time,
 			Type:   pt.Type,
@@ -412,6 +420,7 @@ func (p *NIWAProvider) GetTides(lat, lng float64, dateStr string) (TideResult, e
 		StationName:   stationName,
 		StationID:     stationID,
 		DistanceMiles: distMiles,
+		Datum:         "LAT",
 		Tides:         tides,
 	}, nil
 }

@@ -172,38 +172,22 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 	}
 
 	var resources []ragResource
+	addCorpus := func(corpusID string) {
+		if corpusID != "" {
+			if res := p.resolveCorpus(reqCtx, corpusID); res != "" {
+				resources = append(resources, ragResource{RagCorpus: res})
+			}
+		}
+	}
+
 	switch territory {
 	case "international":
-		if p.ngaCorpus != "" {
-			if res := p.resolveCorpus(reqCtx, p.ngaCorpus); res != "" {
-				resources = append(resources, ragResource{
-					RagCorpus: res,
-				})
-			}
-		}
+		addCorpus(p.ngaCorpus)
 	case "us":
-		if p.coastPilotCorpus != "" {
-			if res := p.resolveCorpus(reqCtx, p.coastPilotCorpus); res != "" {
-				resources = append(resources, ragResource{
-					RagCorpus: res,
-				})
-			}
-		}
+		addCorpus(p.coastPilotCorpus)
 	default:
-		if p.coastPilotCorpus != "" {
-			if res := p.resolveCorpus(reqCtx, p.coastPilotCorpus); res != "" {
-				resources = append(resources, ragResource{
-					RagCorpus: res,
-				})
-			}
-		}
-		if p.ngaCorpus != "" {
-			if res := p.resolveCorpus(reqCtx, p.ngaCorpus); res != "" {
-				resources = append(resources, ragResource{
-					RagCorpus: res,
-				})
-			}
-		}
+		addCorpus(p.coastPilotCorpus)
+		addCorpus(p.ngaCorpus)
 	}
 
 	if len(resources) == 0 {
@@ -459,15 +443,6 @@ func formatCorpusResource(projectID, location, corpusID string) string {
 		return corpusID
 	}
 	return fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", projectID, location, corpusID)
-}
-
-func formatRagContextResponse(body io.Reader) (string, int, []string, error) {
-	var resp retrieveContextsResponse
-	if err := json.NewDecoder(body).Decode(&resp); err != nil {
-		return "", 0, nil, fmt.Errorf("decoding retrieveContexts response: %w", err)
-	}
-	formatted, count, sources := formatRagChunks(resp.Contexts.Contexts)
-	return formatted, count, sources, nil
 }
 
 func formatRagChunks(items []ragContextChunk) (string, int, []string) {
