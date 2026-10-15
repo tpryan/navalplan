@@ -259,6 +259,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 					},
 				}, nil)
 				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("GetBriefing", stopID).Return(nil, nil).Maybe()
 				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -289,6 +290,53 @@ func TestDebriefVoyageTrack(t *testing.T) {
 				}
 				if len(d.Observations) == 0 {
 					t.Errorf("Expected observations in debrief")
+				}
+			},
+		},
+		{
+			name: "includes stop briefing weather and tide data in debrief",
+			setupMock: func(m *MockStore) {
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+					ID:               trackID,
+					VoyageID:         voyageID,
+					VoyageStopID:     &stopID,
+					Kind:             "recorded",
+					Name:             "Leg 1 Actual",
+					DistanceNM:       &recDist,
+					DurationInterval: &dur,
+					AvgSpeedKts:      &avgSpd,
+					MaxSpeedKts:      &maxSpd,
+				}, nil)
+				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+					{
+						ID:               "plan-1",
+						VoyageID:         voyageID,
+						VoyageStopID:     &stopID,
+						Kind:             "planned",
+						Name:             "Leg 1 Plan",
+						DistanceNM:       &planDist,
+						DurationInterval: &planDur,
+					},
+				}, nil)
+				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{
+					{ID: stopID, VoyageID: voyageID, LocationName: "Marina"},
+				}, nil)
+				m.On("GetBriefing", stopID).Return(&model.Briefing{
+					ID:             1,
+					StopID:         stopID,
+					WeatherSummary: model.RawJSON(`{"summary":"Clear sky","condition":"Clear sky","wind_speed_kt":18.5,"wind_direction":"ENE","wave_height_ft":4.5,"wave_period":7}`),
+					Tides:          model.RawJSON(`[{"time":"2026-05-01T12:00:00Z","height_ft":2.4,"type":"high"}]`),
+				}, nil)
+				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			verifyDebrief: func(t *testing.T, d *model.TrackDebrief) {
+				if !strings.Contains(d.WeatherImpact, "18 kt ENE winds") && !strings.Contains(d.WeatherImpact, "19 kt ENE winds") {
+					t.Errorf("WeatherImpact = %q, expected wind speed and direction from briefing", d.WeatherImpact)
+				}
+				if !strings.Contains(d.WeatherImpact, "4.5 ft seas") {
+					t.Errorf("WeatherImpact = %q, expected wave height from briefing", d.WeatherImpact)
 				}
 			},
 		},
@@ -496,6 +544,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				}
 				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
 				m.On("ListStops", voyageID, 100, 0).Return(stops, nil)
+				m.On("GetBriefing", mock.AnythingOfType("int64")).Return(nil, nil).Maybe()
 				m.On("UpdateVoyageTrackDebrief", "rec-track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
 				m.On("UpdateVoyageTrackDebrief", "rec-track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},

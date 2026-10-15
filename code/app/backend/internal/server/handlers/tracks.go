@@ -982,6 +982,15 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		durComparison += fmt.Sprintf(" (Delta: %s, %+.1f%% variance)", durDelta, *durVarPct)
 	}
 
+	var briefing *model.Briefing
+	if h.DB != nil && match.startStopID != nil {
+		b, err := h.DB.GetBriefing(ctx, *match.startStopID)
+		if err == nil {
+			briefing = b
+		}
+	}
+	weatherContext, parsedWeather := formatDebriefWeatherAndTides(briefing)
+
 	// Generate tactical insights using Pilot agent or rule-based fallback
 	prompt := fmt.Sprintf(
 		"Perform a post-voyage tactical pilot debrief comparing the ACTUAL recorded passage against the PLANNED route:\n"+
@@ -989,7 +998,8 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 			"- Paired Planned Route: '%s'\n"+
 			"- Recorded Distance: %.2f NM vs Planned Distance: %.2f NM (Delta: %+.2f NM, %+.1f%% variance)\n"+
 			"%s\n"+
-			"- Vessel Speed: Average SOG %.1f kts, Maximum SOG %.1f kts\n\n"+
+			"- Vessel Speed: Average SOG %.1f kts, Maximum SOG %.1f kts\n"+
+			"%s\n"+
 			"Guidelines:\n"+
 			"- Be concise, direct, and tactical. Keep each section to 1-2 brief sentences.\n"+
 			"- DO NOT repeat raw numbers, percentages, or statistics already displayed in the metric cards (e.g. do not restate exact distance, duration, or speed values).\n"+
@@ -1000,7 +1010,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 			"3. tacking_efficiency: 1 sentence on maneuvers, tacking angles, or leeway.\n"+
 			"4. weather_impact: 1 sentence on wind, sea state, or current effects.\n"+
 			"5. observations: 2-3 short, bulleted tactical takeaways for the skipper.",
-		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd,
+		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd, weatherContext,
 	)
 
 	if track.RawGPX != nil && len(*track.RawGPX) > 0 && len(*track.RawGPX) < 100000 {
@@ -1059,7 +1069,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	if debrief.WeatherImpact == "" {
-		debrief.WeatherImpact = "Conditions allowed steady progress along the leg."
+		debrief.WeatherImpact = buildFallbackWeatherImpact(parsedWeather)
 	}
 
 	if len(debrief.Observations) == 0 {
@@ -1070,6 +1080,76 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	return &debrief
+}
+
+func formatDebriefWeatherAndTides(briefing *model.Briefing) (string, *model.WeatherSummary) {
+	if briefing == nil {
+		return "", nil
+	}
+	var sb strings.Builder
+	var parsedWS *model.WeatherSummary
+	rawWeather := strings.TrimSpace(string(briefing.WeatherSummary))
+	if rawWeather != "" && rawWeather != "null" && rawWeather != "{}" {
+		var ws model.WeatherSummary
+		if err := json.Unmarshal(briefing.WeatherSummary, &ws); err == nil {
+			if ws.WindSpeedKt > 0 || ws.WaveHeightFt > 0 || ws.Condition != "" || ws.Summary != "" {
+				parsedWS = &ws
+			}
+		}
+		sb.WriteString("\nWeather Conditions for Leg:\n")
+		if parsedWS != nil {
+			var parts []string
+			if parsedWS.Summary != "" {
+				parts = append(parts, fmt.Sprintf("Condition: %s", parsedWS.Summary))
+			} else if parsedWS.Condition != "" {
+				parts = append(parts, fmt.Sprintf("Condition: %s", parsedWS.Condition))
+			}
+			if parsedWS.WindSpeedKt > 0 {
+				if parsedWS.WindDirection != "" {
+					parts = append(parts, fmt.Sprintf("Wind: %.1f kts %s", parsedWS.WindSpeedKt, parsedWS.WindDirection))
+				} else {
+					parts = append(parts, fmt.Sprintf("Wind: %.1f kts", parsedWS.WindSpeedKt))
+				}
+			}
+			if parsedWS.WaveHeightFt > 0 {
+				if parsedWS.WavePeriod > 0 {
+					parts = append(parts, fmt.Sprintf("Waves: %.1f ft @ %.0fs", parsedWS.WaveHeightFt, parsedWS.WavePeriod))
+				} else {
+					parts = append(parts, fmt.Sprintf("Waves: %.1f ft", parsedWS.WaveHeightFt))
+				}
+			}
+			if len(parts) > 0 {
+				sb.WriteString("- " + strings.Join(parts, " | ") + "\n")
+			}
+		}
+		sb.WriteString(rawWeather + "\n")
+	}
+	rawTides := strings.TrimSpace(string(briefing.Tides))
+	if rawTides != "" && rawTides != "null" && rawTides != "{}" && rawTides != "[]" {
+		sb.WriteString("\nTides (48h forecast):\n")
+		sb.WriteString(rawTides + "\n")
+	}
+	return sb.String(), parsedWS
+}
+
+func buildFallbackWeatherImpact(ws *model.WeatherSummary) string {
+	if ws != nil && (ws.WindSpeedKt > 0 || ws.WaveHeightFt > 0 || ws.Condition != "") {
+		var details []string
+		if ws.WindSpeedKt > 0 {
+			if ws.WindDirection != "" {
+				details = append(details, fmt.Sprintf("%.0f kt %s winds", ws.WindSpeedKt, ws.WindDirection))
+			} else {
+				details = append(details, fmt.Sprintf("%.0f kt winds", ws.WindSpeedKt))
+			}
+		}
+		if ws.WaveHeightFt > 0 {
+			details = append(details, fmt.Sprintf("%.1f ft seas", ws.WaveHeightFt))
+		}
+		if len(details) > 0 {
+			return fmt.Sprintf("Passage sailed in %s influencing vessel speed and leeway along the leg.", strings.Join(details, " and "))
+		}
+	}
+	return "Conditions allowed steady progress along the leg."
 }
 
 func extractGPXPayload(r *http.Request) ([]byte, string, string, bool, error) {
