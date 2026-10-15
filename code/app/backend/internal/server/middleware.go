@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -19,21 +20,63 @@ type rateLimitEntry struct {
 }
 
 var (
-	rateLimits = sync.Map{}
+	rateLimits        = sync.Map{}
+	rateLimitReapMu   sync.Mutex
+	rateLimitLastReap time.Time
 )
+
+func clientHost(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if first, _, ok := strings.Cut(xff, ","); ok {
+			return strings.TrimSpace(first)
+		}
+		return strings.TrimSpace(xff)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func reapStaleRateLimits(now time.Time, maxAge time.Duration) {
+	rateLimitReapMu.Lock()
+	if now.Sub(rateLimitLastReap) < maxAge {
+		rateLimitReapMu.Unlock()
+		return
+	}
+	rateLimitLastReap = now
+	rateLimitReapMu.Unlock()
+
+	rateLimits.Range(func(k, v any) bool {
+		entry := v.(*rateLimitEntry)
+		entry.mu.Lock()
+		expired := now.Sub(entry.lastSeen) > maxAge
+		entry.mu.Unlock()
+		if expired {
+			rateLimits.Delete(k)
+		}
+		return true
+	})
+}
 
 func (s *Server) rateLimit(limit int, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			now := time.Now()
+			reapStaleRateLimits(now, 5*window)
+
+			routeKey := r.Pattern
+			if routeKey == "" {
+				routeKey = r.URL.Path
+			}
+
 			var key string
 			person := handlers.GetPersonFromContext(r.Context())
 			if person != nil {
-				key = fmt.Sprintf("user:%d", person.ID)
+				key = fmt.Sprintf("user:%d:%s", person.ID, routeKey)
 			} else {
-				key = fmt.Sprintf("ip:%s", r.RemoteAddr)
+				key = fmt.Sprintf("ip:%s:%s", clientHost(r), routeKey)
 			}
-
-			now := time.Now()
 
 			val, loaded := rateLimits.LoadOrStore(key, &rateLimitEntry{count: 1, lastSeen: now})
 			entry := val.(*rateLimitEntry)
@@ -158,13 +201,23 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 		sessionToken := cookie.Value
 		session, err := s.DB.GetSession(r.Context(), sessionToken)
-		if err != nil || session == nil {
+		if err != nil {
+			slog.WarnContext(r.Context(), "Failed to look up session", "error", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if session == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		person, err := s.DB.GetPersonByID(r.Context(), session.PersonID)
-		if err != nil || person == nil {
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to look up person for session", "person_id", session.PersonID, "error", err)
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
+		if person == nil {
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}

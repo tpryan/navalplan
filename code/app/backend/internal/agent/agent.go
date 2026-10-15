@@ -170,7 +170,7 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 
 	slog.InfoContext(ctx, "invoking agent via HTTP", "target", target, "appName", appName)
 
-	body, err := r.buildRunBody(appName, userID, sessionID, prompt, true)
+	body, err := r.buildRunBody(appName, userID, sessionID, prompt)
 	if err != nil {
 		return "", err
 	}
@@ -181,7 +181,9 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if strings.Contains(target, "run.app") {
-		r.addAuthHeader(req, target)
+		if err := r.addAuthHeader(req, target); err != nil {
+			return "", err
+		}
 	}
 
 	resp, err := r.Client.Do(req)
@@ -271,21 +273,22 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 	return sb.String(), nil
 }
 
-func (r *AgentRunner) addAuthHeader(req *http.Request, audience string) {
-	tokenSource, err := idtoken.NewTokenSource(context.Background(), audience)
+func (r *AgentRunner) addAuthHeader(req *http.Request, audience string) error {
+	tokenSource, err := idtoken.NewTokenSource(req.Context(), audience)
 	if err != nil {
-		slog.Error("Failed to create ID token source", "error", err)
-		return
+		slog.ErrorContext(req.Context(), "Failed to create ID token source", "error", err)
+		return fmt.Errorf("create ID token source: %w", err)
 	}
 	token, err := tokenSource.Token()
 	if err != nil {
-		slog.Error("Failed to get ID token", "error", err)
-		return
+		slog.ErrorContext(req.Context(), "Failed to get ID token", "error", err)
+		return fmt.Errorf("get ID token: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	return nil
 }
 
-func (r *AgentRunner) buildRunBody(appName, userID, sessionID, prompt string, stream bool) (io.Reader, error) {
+func (r *AgentRunner) buildRunBody(appName, userID, sessionID, prompt string) (io.Reader, error) {
 	var req agentRunRequest
 	req.AppName = appName
 	req.UserID = userID

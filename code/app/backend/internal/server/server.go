@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -28,13 +27,11 @@ type Server struct {
 // New initializes a new Server with the provided database and configuration.
 func New(db handlers.DBStore, cfg *config.Config) (*Server, error) {
 	if len(cfg.GoogleClientID) > 0 {
-		prefix := ""
-		if len(cfg.GoogleClientID) >= 5 {
-			prefix = cfg.GoogleClientID[:5]
-		} else {
-			prefix = cfg.GoogleClientID
+		prefix := cfg.GoogleClientID
+		if len(prefix) >= 5 {
+			prefix = prefix[:5]
 		}
-		slog.Info(fmt.Sprintf("Initializing server with Google Client ID prefix: %s... (total length: %d)", prefix, len(cfg.GoogleClientID)))
+		slog.Info("Initializing server with Google Client ID", "prefix", prefix, "length", len(cfg.GoogleClientID))
 	} else {
 		slog.Warn("Initializing server with EMPTY Google Client ID!")
 	}

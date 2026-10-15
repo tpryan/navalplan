@@ -247,7 +247,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 					}
 					if streamErr != nil {
 						streamErr = fmt.Errorf("stream error: %s", data)
-						continue
+						break
 					}
 					parseAndAppendChunk(ctx, data, &sb)
 					continue

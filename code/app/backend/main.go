@@ -120,8 +120,8 @@ func run(ctx context.Context, cfg *config.Config) error {
 
 	errChan := make(chan error, 1)
 	go func() {
-		slog.Info(fmt.Sprintf("NavalPlan starting on port %s...", cfg.Port))
-		slog.Info(fmt.Sprintf("Serving static content from: %s", cfg.ContentDir))
+		slog.Info("NavalPlan starting", "port", cfg.Port)
+		slog.Info("Serving static content", "dir", cfg.ContentDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
