@@ -155,6 +155,7 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.DB.CreateInvitation(r.Context(), email, currentUser.ID, false, expiresAt); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to create invitation", "email", email, "error", err)
 		writeError(w, http.StatusInternalServerError, "Failed to create invitation")
 		return
 	}

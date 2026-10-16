@@ -4,9 +4,13 @@ import { showNotification } from './notifications.js';
 
 let currentAdminPage = 1;
 let currentAdminView = 'active';
+let adminUIInitialized = false;
 const ADMIN_PAGE_LIMIT = 20;
 
 export function initAdminUI() {
+    if (adminUIInitialized) return;
+    adminUIInitialized = true;
+
     // Open modal via event delegation (button is injected by auth.js)
     document.addEventListener('click', async (e) => {
         if (!e.target.closest('#btn-open-admin')) return;

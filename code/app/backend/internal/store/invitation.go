@@ -24,7 +24,12 @@ func (db *DB) GetInvitation(ctx context.Context, email string) (*model.Invitatio
 }
 
 func (db *DB) CreateInvitation(ctx context.Context, email string, invitedBy int64, isAdmin bool, expiresAt *time.Time) error {
-	query := `INSERT INTO invitation (email, invited_by, is_admin, expires_at) VALUES ($1, $2, $3, $4)`
+	query := `INSERT INTO invitation (email, invited_by, is_admin, expires_at) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (email) DO UPDATE SET
+			invited_by = EXCLUDED.invited_by,
+			is_admin = invitation.is_admin OR EXCLUDED.is_admin,
+			expires_at = EXCLUDED.expires_at,
+			created_at = NOW()`
 	_, err := db.ExecContext(ctx, query, email, invitedBy, isAdmin, expiresAt)
 	return err
 }

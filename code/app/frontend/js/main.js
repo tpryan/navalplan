@@ -586,7 +586,6 @@ function initUI() {
     initNavigationListeners();
     initModalCloseListeners();
     initTrackListeners();
-    initAdminUI();
 }
 
 function initMapTypeToggle() {
