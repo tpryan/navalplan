@@ -111,8 +111,17 @@ func (h *Handler) GetVoyageMapImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	person := GetPersonFromContext(r.Context())
-	if !voyage.IsPublic && (person == nil || person.ID != voyage.PersonID) {
+	isAuthorized := voyage.IsPublic
+	if !isAuthorized {
+		if person := GetPersonFromContext(r.Context()); person != nil && person.ID == voyage.PersonID {
+			isAuthorized = true
+		} else if cookie, err := r.Cookie("navalplan_session"); err == nil {
+			if session, err := h.DB.GetSession(r.Context(), cookie.Value); err == nil && session != nil && session.PersonID == voyage.PersonID {
+				isAuthorized = true
+			}
+		}
+	}
+	if !isAuthorized {
 		writeError(w, http.StatusForbidden, "Unauthorized")
 		return
 	}

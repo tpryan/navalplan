@@ -190,19 +190,19 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 			wantAlertStopID:   101,
 		},
 		{
-			name: "second stop within 2 NM of first stop clones briefing and triggers lookout without agent call",
+			name: "second stop within 2 NM on same date clones briefing and triggers lookout without agent call",
 			stop: &model.Stop{
 				ID:           102,
 				VoyageID:     1,
 				LocationName: "Falmouth Harbour",
 				Latitude:     17.015, // ~0.9 NM from 17.00, -61.76
 				Longitude:    -61.76,
-				TargetDate:   time.Now().Add(24 * time.Hour),
+				TargetDate:   time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC),
 			},
 			allStops: []model.Stop{
-				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now()},
-				{ID: 102, VoyageID: 1, LocationName: "Falmouth Harbour", Latitude: 17.015, Longitude: -61.76, TargetDate: time.Now().Add(24 * time.Hour)},
-				{ID: 103, VoyageID: 1, LocationName: "Jolly Harbour", Latitude: 17.066, Longitude: -61.886, TargetDate: time.Now().Add(48 * time.Hour)},
+				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 5, 1, 8, 0, 0, 0, time.UTC)},
+				{ID: 102, VoyageID: 1, LocationName: "Falmouth Harbour", Latitude: 17.015, Longitude: -61.76, TargetDate: time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC)},
+				{ID: 103, VoyageID: 1, LocationName: "Jolly Harbour", Latitude: 17.066, Longitude: -61.886, TargetDate: time.Date(2027, 5, 2, 12, 0, 0, 0, time.UTC)},
 			},
 			firstBriefing: &model.Briefing{
 				StopID:         101,
@@ -216,25 +216,25 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 			wantAlertStopID:   102,
 		},
 		{
-			name: "redundant last stop clones briefing and triggers lookout",
+			name: "return stop within 2 NM on different date reuses facilities and fetches fresh weather/tides",
 			stop: &model.Stop{
 				ID:           102,
 				VoyageID:     1,
 				LocationName: "English Harbour Return",
 				Latitude:     17.0,
 				Longitude:    -61.76,
-				TargetDate:   time.Now().Add(48 * time.Hour),
+				TargetDate:   time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC),
 			},
 			allStops: []model.Stop{
-				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now()},
-				{ID: 102, VoyageID: 1, LocationName: "English Harbour Return", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now().Add(48 * time.Hour)},
+				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 4, 30, 12, 0, 0, 0, time.UTC)},
+				{ID: 102, VoyageID: 1, LocationName: "English Harbour Return", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC)},
 			},
 			firstBriefing: &model.Briefing{
 				StopID:         101,
 				WeatherSummary: model.RawJSON([]byte(`{"summary":"Clear"}`)),
 				SunPhase:       model.RawJSON([]byte(`{"sunrise":"06:00"}`)),
 				Tides:          model.RawJSON([]byte(`{"high":"12:00"}`)),
-				Facilities:     model.RawJSON([]byte(`[{"name":"Nelson Dockyard","type":"Marina"}]`)),
+				Facilities:     model.RawJSON([]byte(`[{"name":"Nelson Dockyard","type":"Marina","latitude":17.0,"longitude":-61.76}]`)),
 				PilotNotes:     model.RawJSON([]byte(`{"overview":"Deep sheltered bay"}`)),
 			},
 			wantBriefingCount: 1,
