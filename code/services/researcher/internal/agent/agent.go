@@ -330,9 +330,9 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 
 	var clientCfg *genai.ClientConfig
 	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" {
-		loc := cfg.VertexLocation
+		loc := os.Getenv("GOOGLE_CLOUD_LOCATION")
 		if loc == "" {
-			loc = "us-central1"
+			loc = "global"
 		}
 		clientCfg = &genai.ClientConfig{
 			Project:  cfg.Project,

@@ -451,7 +451,9 @@ func InitTracing(ctx context.Context, projectID, env string, disableTracing bool
 	if resourceID == "" && projectID != "" && env == "production" {
 		loc := strings.TrimSpace(os.Getenv("VERTEX_LOCATION"))
 		if loc == "" {
-			loc = strings.TrimSpace(os.Getenv("GOOGLE_CLOUD_LOCATION"))
+			if gcl := strings.TrimSpace(os.Getenv("GOOGLE_CLOUD_LOCATION")); gcl != "global" {
+				loc = gcl
+			}
 		}
 		if loc == "" {
 			loc = "us-central1"

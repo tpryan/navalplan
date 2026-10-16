@@ -5,7 +5,8 @@ steps:
   env:
   - 'GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
   - 'GOOGLE_GENAI_USE_VERTEXAI=true'
-  - 'GOOGLE_CLOUD_LOCATION=us-central1'
+  - 'GOOGLE_CLOUD_LOCATION=global'
+  - 'VERTEX_LOCATION=us-central1'
   script: |
     apt-get update && apt-get install -y python3 python3-pip python3-venv lsof
     python3 -m venv /builder/venv

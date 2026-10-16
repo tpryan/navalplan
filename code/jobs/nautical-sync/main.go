@@ -376,7 +376,9 @@ func loadConfig() Config {
 		region = os.Getenv("REGION")
 	}
 	if region == "" {
-		region = os.Getenv("GOOGLE_CLOUD_LOCATION")
+		if gcl := os.Getenv("GOOGLE_CLOUD_LOCATION"); gcl != "global" {
+			region = gcl
+		}
 	}
 	if region == "" {
 		region = "us-central1"

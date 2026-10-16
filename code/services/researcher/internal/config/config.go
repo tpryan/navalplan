@@ -122,7 +122,9 @@ func New(getEnv func(string) string) (*Config, error) {
 
 	vertexLocation := getEnv("VERTEX_LOCATION")
 	if vertexLocation == "" {
-		vertexLocation = getEnv("GOOGLE_CLOUD_LOCATION")
+		if loc := getEnv("GOOGLE_CLOUD_LOCATION"); loc != "global" {
+			vertexLocation = loc
+		}
 	}
 	if vertexLocation == "" {
 		vertexLocation = getEnv("REGION")

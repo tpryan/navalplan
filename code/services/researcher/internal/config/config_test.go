@@ -293,6 +293,17 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 			wantNGA:      "custom-nga-corpus",
 			wantLocation: "europe-west1",
 		},
+		{
+			name: "ignores global GOOGLE_CLOUD_LOCATION for VertexLocation",
+			vars: map[string]string{
+				"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
+				"GEMINI_API_KEY":                 "gemini-key",
+				"GOOGLE_CLOUD_LOCATION":          "global",
+			},
+			wantCP:       "coast-pilot-corpus",
+			wantNGA:      "nga-sailing-directions-corpus",
+			wantLocation: "us-central1",
+		},
 	}
 
 	for _, tt := range tests {
