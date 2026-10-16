@@ -1,0 +1,12 @@
+vendor/
+researcher
+researcher-service
+.adk/
+.gocache/
+.gotmp/
+__pycache__/
+eval/
+eval_temp_*/
+.env
+agent.py
+__init__.py

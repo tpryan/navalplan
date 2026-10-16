@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/tpryan/navalplan/services/researcher/internal/config"
@@ -317,13 +318,22 @@ func createHydrographicPilotTool(ctx context.Context, cfg *config.Config, before
 	return agenttool.New(hydroAgent, nil), nil
 }
 
+func supportsThinkingBudget(model string) bool {
+	return !strings.HasPrefix(model, "gemini-4")
+}
+
 func createAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, acfg *agentConfig) (agent.Agent, error) {
+	targetModel := acfg.modelName
+	if targetModel == "" {
+		targetModel = cfg.ModelName
+	}
+
 	genConfig := &genai.GenerateContentConfig{
 		MaxOutputTokens: maxOutputTokens,
 		Temperature:     genai.Ptr[float32](acfg.temperature),
 	}
 
-	if cfg.ThinkingBudget >= 0 {
+	if cfg.ThinkingBudget >= 0 && supportsThinkingBudget(targetModel) {
 		budget := cfg.ThinkingBudget
 		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
 	}
@@ -343,10 +353,6 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 		clientCfg = &genai.ClientConfig{
 			APIKey: cfg.GeminiAPIKey,
 		}
-	}
-	targetModel := acfg.modelName
-	if targetModel == "" {
-		targetModel = cfg.ModelName
 	}
 	m, err := gemini.NewModel(ctx, targetModel, clientCfg)
 	if err != nil {

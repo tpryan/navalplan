@@ -1,0 +1,12 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-f'
+  - '.cloudbuild/Dockerfile.agent-ci'
+  - '-t'
+  - 'gcr.io/${PROJECT_ID}/navalplan-agent-ci:latest'
+  - '.'
+
+images:
+- 'gcr.io/${PROJECT_ID}/navalplan-agent-ci:latest'

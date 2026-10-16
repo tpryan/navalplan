@@ -106,3 +106,21 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 		t.Errorf("pilot: expected to keep %q directly", toolQuerySailingDirections)
 	}
 }
+
+func TestSupportsThinkingBudget(t *testing.T) {
+	tests := []struct {
+		model string
+		want  bool
+	}{
+		{"gemini-3.5-flash-lite", true},
+		{"gemini-3.8-flash", true},
+		{"gemini-2.5-flash", true},
+		{"gemini-4-argon", false},
+		{"gemini-4.0-pro", false},
+	}
+	for _, tc := range tests {
+		if got := supportsThinkingBudget(tc.model); got != tc.want {
+			t.Errorf("supportsThinkingBudget(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}

@@ -4,7 +4,7 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-PROJECT_ID=your-project-id # Replace with actual ID later
+PROJECT_ID?=navallog
 REGION=us-central1
 REPO_NAME=navalplan
 
@@ -435,14 +435,17 @@ eval-agent:
 		CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$AGENT/test_config.json"; \
 	fi; \
 	if [ "$(VERBOSE)" != "1" ]; then \
-		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+		PYTHONWARNINGS=ignore $(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG 2>/dev/null | tee code/services/researcher/eval.out | grep -A 10 "Eval Run Summary"; \
 	else \
-		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG --print_detailed_results; \
+		$(ADK) eval code/services/researcher code/services/researcher/eval/$$AGENT/$$AGENT.test.json $$CONFIG_FLAG --print_detailed_results | tee code/services/researcher/eval.out; \
 	fi; \
 	EXIT_CODE=$$?; \
+	if grep -qE "Tests failed: [1-9]|Overall Eval Status: FAILED" code/services/researcher/eval.out || ! grep -q "Tests passed:" code/services/researcher/eval.out; then \
+		EXIT_CODE=1; \
+	fi; \
 	lsof -ti :8081 | xargs kill -9 2>/dev/null || true; \
 	rm -f agent.pid; \
-	rm -f code/services/researcher/.env; \
+	rm -f code/services/researcher/.env code/services/researcher/eval.out; \
 	rm -f code/services/researcher/__init__.py code/services/researcher/agent.py; \
 	exit $$EXIT_CODE
 
@@ -491,11 +494,15 @@ eval-all:
 				CONFIG_FLAG="--config_file_path=code/services/researcher/eval/$$agent/test_config.json"; \
 			fi; \
 			if [ "$(VERBOSE)" != "1" ]; then \
-				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG 2>/dev/null | grep -A 10 "Eval Run Summary"; \
+				PYTHONWARNINGS=ignore $(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG 2>/dev/null | tee $$TEMP_DIR/eval.out | grep -A 10 "Eval Run Summary"; \
 			else \
-				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG --print_detailed_results; \
+				$(ADK) eval $$TEMP_DIR code/services/researcher/eval/$$agent/$$agent.test.json $$CONFIG_FLAG --print_detailed_results | tee $$TEMP_DIR/eval.out; \
 			fi; \
-			exit $$?; \
+			RC=$$?; \
+			if grep -qE "Tests failed: [1-9]|Overall Eval Status: FAILED" $$TEMP_DIR/eval.out || ! grep -q "Tests passed:" $$TEMP_DIR/eval.out; then \
+				RC=1; \
+			fi; \
+			exit $$RC; \
 		) & \
 		pids="$$pids $$!"; \
 	done; \
@@ -626,24 +633,28 @@ tidy-researcher:
 
 # --- Deployment ---
 
+build-agent-ci:
+	@echo "Building and pushing Agent CI builder image..."
+	gcloud builds submit --project $(PROJECT_ID) --config .cloudbuild/cloudbuild-agent-ci.yaml .
+
 deploy-agent:
 	@echo "Deploying Agent..."
-	gcloud builds submit --config .cloudbuild/cloudbuild-agent.yaml --substitutions=SHORT_SHA=$(shell git rev-parse --short HEAD) .
+	gcloud builds submit --project $(PROJECT_ID) --config .cloudbuild/cloudbuild-agent.yaml --substitutions=_SHORT_SHA=$(shell git rev-parse --short HEAD 2>/dev/null || echo latest) .
 
 deploy-agent-runtime:
 	@echo "Deploying Researcher Agent to Vertex AI Agent Runtime..."
 	cd code/services/researcher && agents-cli deploy \
-		--project $(shell gcloud config get-value project) \
+		--project $(PROJECT_ID) \
 		--region $(REGION) \
 		--deployment-target agent_runtime \
 		--service-name navalplan-researcher \
 		--secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,NAVALPLAN_COMMODORE_MODEL=gemini-4-argon,ENV=production,GOOGLE_CLOUD_PROJECT=$(shell gcloud config get-value project),GCP_PROJECT=$(shell gcloud config get-value project),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(shell gcloud config get-value project)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
+		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,NAVALPLAN_COMMODORE_MODEL=gemini-4-argon,ENV=production,GOOGLE_CLOUD_PROJECT=$(PROJECT_ID),GCP_PROJECT=$(PROJECT_ID),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
 		--no-confirm-project
 
 deploy-backend:
 	@echo "Deploying Backend..."
-	gcloud builds submit --config .cloudbuild/cloudbuild.yaml --substitutions=_SHORT_SHA=$(shell git rev-parse --short HEAD 2>/dev/null || echo latest) .
+	gcloud builds submit --project $(PROJECT_ID) --config .cloudbuild/cloudbuild.yaml --substitutions=_SHORT_SHA=$(shell git rev-parse --short HEAD 2>/dev/null || echo latest) .
 
 deploy-scheduler:
 	@echo "Deploying Cloud Scheduler Jobs..."

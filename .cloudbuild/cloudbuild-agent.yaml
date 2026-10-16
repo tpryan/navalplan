@@ -1,18 +1,16 @@
 steps:
-# 0. Run parallel agent evaluations
-- name: 'golang:1.26'
+# 0. Run parallel agent evaluations (using pre-baked CI image)
+- name: 'gcr.io/${PROJECT_ID}/navalplan-agent-ci:latest'
   id: 'run-evaluations'
+  waitFor: ['-']
   env:
   - 'GOOGLE_CLOUD_PROJECT=${PROJECT_ID}'
   - 'GOOGLE_GENAI_USE_VERTEXAI=true'
   - 'GOOGLE_CLOUD_LOCATION=global'
   - 'VERTEX_LOCATION=us-central1'
   script: |
-    apt-get update && apt-get install -y python3 python3-pip python3-venv lsof
-    python3 -m venv /builder/venv
-    /builder/venv/bin/pip install "google-adk[a2a,eval]==1.28.0"
     touch .env
-    make deps
+    make deps-researcher
     make eval-all ADK=/builder/venv/bin/adk VERBOSE=1
   secretEnv:
   - 'GEMINI_API_KEY'
@@ -20,20 +18,27 @@ steps:
   - 'NAVALPLAN_TIDAL_UKTIDAL_API_KEY'
   - 'NAVALPLAN_TIDAL_NIWA_API_KEY'
 
-# 1. Build the container image
+# 1. Build the container image (in parallel with evaluations)
 - name: 'gcr.io/cloud-builders/docker'
+  id: 'build-image'
+  waitFor: ['-']
   args: ['build', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}', '-t', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest', '.']
   dir: 'code/services/researcher'
 
-# 2. Push the container image to Container Registry
+# 2. Push the container image to Container Registry (gated on both build and evaluations)
 - name: 'gcr.io/cloud-builders/docker'
+  id: 'push-sha'
+  waitFor: ['build-image', 'run-evaluations']
   args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:${_SHORT_SHA}']
 
 - name: 'gcr.io/cloud-builders/docker'
+  id: 'push-latest'
+  waitFor: ['build-image', 'run-evaluations']
   args: ['push', 'gcr.io/${PROJECT_ID}/navalplan-researcher:latest']
 
-# 3. Deploy to Cloud Run with --no-traffic
+# 3. Deploy to Cloud Run (in parallel with Agent Runtime deployment)
 - name: 'gcr.io/cloud-builders/gcloud'
+  waitFor: ['push-sha', 'push-latest']
   args:
   - 'run'
   - 'deploy'
@@ -66,17 +71,15 @@ steps:
   id: 'deploy-cloud-run'
 
 # 4. Deploy to Vertex AI Agent Runtime (Reasoning Engine)
-- name: 'google/cloud-sdk:slim'
+- name: 'gcr.io/${PROJECT_ID}/navalplan-agent-ci:latest'
   id: 'deploy-reasoning-engine'
+  waitFor: ['push-sha', 'push-latest']
   entrypoint: 'bash'
   args:
   - '-c'
   - |
-    apt-get update && apt-get install -y nodejs npm python3-venv
-    python3 -m venv /builder/venv
-    /builder/venv/bin/pip install uv google-agents-cli
     export PATH="/builder/venv/bin:$$PATH"
-    rm -rf vendor researcher
+    rm -rf vendor researcher researcher-service
     du -sh .
     agents-cli deploy \
       --project=${PROJECT_ID} \

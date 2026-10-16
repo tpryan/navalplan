@@ -1,0 +1,24 @@
+FROM golang:1.26
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    lsof \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /builder/venv \
+    && /builder/venv/bin/pip install --no-cache-dir uv \
+    && /builder/venv/bin/uv pip install --no-cache --python /builder/venv/bin/python \
+        "google-adk[a2a,eval]==1.28.0" \
+        "google-agents-cli"
+
+ENV PATH="/builder/venv/bin:${PATH}"
+
+# Pre-warm Go module cache for researcher service
+WORKDIR /tmp/researcher-deps
+COPY code/services/researcher/go.mod code/services/researcher/go.sum ./
+RUN go mod download && rm -rf /tmp/researcher-deps
+
+WORKDIR /workspace
