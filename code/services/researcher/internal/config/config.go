@@ -1,3 +1,4 @@
+// Package config loads and validates runtime configuration for the researcher service.
 package config
 
 import (
@@ -12,6 +13,17 @@ type Config struct {
 	Project            string
 	ModelName          string
 	CommodoreModelName string
+	// UseVertexAI controls how Gemini model calls authenticate:
+	// - true (GOOGLE_GENAI_USE_VERTEXAI="true" or "1"): Calls the Vertex AI Gemini endpoint
+	//   using Google Cloud Application Default Credentials (ADC) — i.e., the attached GCP
+	//   Service Account IAM identity in Cloud Run / Vertex AI Agent Runtime, or local
+	//   `gcloud auth application-default login` credentials. No GEMINI_API_KEY is needed.
+	// - false (default): Calls the Google AI Studio Gemini endpoint using GeminiAPIKey.
+	UseVertexAI        bool
+	// GeminiLocation is the Vertex AI location used for Gemini model calls when UseVertexAI
+	// is true (parsed from GOOGLE_CLOUD_LOCATION; defaults to "global" because preview/lite
+	// Gemini models are served on the global Vertex AI endpoint).
+	GeminiLocation     string
 	GeminiAPIKey       string
 	MapsAPIKey         string
 	UKTidalAPIKey      string
@@ -22,6 +34,9 @@ type Config struct {
 	SearchTimeoutMs    int
 	CoastPilotCorpusID string
 	NGACorpusID        string
+	// VertexLocation is the regional Vertex AI location used for RAG Engine corpora
+	// (Coast Pilot and NGA Sailing Directions), which must be a concrete GCP region
+	// such as "us-central1" rather than "global".
 	VertexLocation     string
 	DisableTracing     bool
 }
@@ -45,6 +60,19 @@ func New(getEnv func(string) string) (*Config, error) {
 		commodoreModelName = "gemini-4-argon"
 	}
 
+	// Determine whether Gemini calls should authenticate via Vertex AI IAM (ADC)
+	// or via a static Google AI Studio API key (GEMINI_API_KEY).
+	// When GOOGLE_GENAI_USE_VERTEXAI is enabled ("true" or "1"), the genai SDK
+	// uses the runtime's GCP service account credentials and ignores GeminiAPIKey,
+	// so GEMINI_API_KEY is only required when UseVertexAI is false.
+	useVertexEnv := getEnv("GOOGLE_GENAI_USE_VERTEXAI")
+	useVertexAI := useVertexEnv == "true" || useVertexEnv == "1"
+
+	geminiLocation := getEnv("GOOGLE_CLOUD_LOCATION")
+	if geminiLocation == "" {
+		geminiLocation = "global"
+	}
+
 	geminiKey := getEnv("GEMINI_API_KEY")
 	if geminiKey == "" {
 		geminiKey = getEnv("GOOGLE_API_KEY")
@@ -52,8 +80,8 @@ func New(getEnv func(string) string) (*Config, error) {
 	if geminiKey == "" {
 		geminiKey = getEnv("NAVALPLAN_GEMINI_KEY")
 	}
-	if geminiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY is not set")
+	if geminiKey == "" && !useVertexAI {
+		return nil, fmt.Errorf("GEMINI_API_KEY is not set (required unless GOOGLE_GENAI_USE_VERTEXAI=true)")
 	}
 
 	port := getEnv("PORT")
@@ -138,6 +166,8 @@ func New(getEnv func(string) string) (*Config, error) {
 		Project:            project,
 		ModelName:          modelName,
 		CommodoreModelName: commodoreModelName,
+		UseVertexAI:        useVertexAI,
+		GeminiLocation:     geminiLocation,
 		GeminiAPIKey:       geminiKey,
 		MapsAPIKey:         mapsKey,
 		UKTidalAPIKey:      ukTidalKey,

@@ -62,8 +62,8 @@ fi
 
 echo "-----------------------------------------------------------------"
 echo "3. Creating Storage Buckets..."
-# Logging bucket
-LOG_BUCKET="gs://${PROJECT_ID}-logging" # Using project ID to ensure uniqueness
+# Logging bucket (matches logsBucket in .cloudbuild/*.yaml)
+LOG_BUCKET="gs://navalplan-logging-bucket"
 if ! gsutil ls -b "$LOG_BUCKET" >/dev/null 2>&1; then
     gsutil mb -l "$REGION" "$LOG_BUCKET"
     echo "Created logging bucket: $LOG_BUCKET"

@@ -35,7 +35,24 @@ func TestNew_RequiresGeminiAPIKey(t *testing.T) {
 		"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
 	}))
 	if err == nil {
-		t.Fatal("New() should error when no Gemini API key is set")
+		t.Fatal("New() should error when no Gemini API key is set and GOOGLE_GENAI_USE_VERTEXAI is not enabled")
+	}
+}
+
+func TestNew_VertexAIModeDoesNotRequireGeminiAPIKey(t *testing.T) {
+	cfg, err := New(envMap(map[string]string{
+		"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
+		"GOOGLE_GENAI_USE_VERTEXAI":      "true",
+		"GOOGLE_CLOUD_PROJECT":           "navallog",
+	}))
+	if err != nil {
+		t.Fatalf("New() unexpected error with GOOGLE_GENAI_USE_VERTEXAI=true: %v", err)
+	}
+	if !cfg.UseVertexAI {
+		t.Error("UseVertexAI = false, want true")
+	}
+	if cfg.GeminiLocation != "global" {
+		t.Errorf("GeminiLocation = %q, want \"global\"", cfg.GeminiLocation)
 	}
 }
 

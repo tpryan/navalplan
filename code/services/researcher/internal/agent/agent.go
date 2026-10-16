@@ -338,9 +338,21 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
 	}
 
+	// Select the Gemini authentication backend:
+	// 1. Vertex AI (genai.BackendVertexAI): Used when cfg.UseVertexAI is true (or
+	//    GOOGLE_GENAI_USE_VERTEXAI="true"/"1" in the environment). Authenticates via
+	//    Google Cloud Application Default Credentials (the service account IAM identity
+	//    attached to Cloud Run / Vertex AI Agent Runtime, or local gcloud ADC).
+	//    Does not use or require a GEMINI_API_KEY string.
+	// 2. Google AI Studio (genai.BackendGeminiAPI, default): Authenticates using the
+	//    static cfg.GeminiAPIKey string (GEMINI_API_KEY).
 	var clientCfg *genai.ClientConfig
-	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" {
-		loc := os.Getenv("GOOGLE_CLOUD_LOCATION")
+	useVertex := cfg.UseVertexAI || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1"
+	if useVertex {
+		loc := cfg.GeminiLocation
+		if loc == "" {
+			loc = os.Getenv("GOOGLE_CLOUD_LOCATION")
+		}
 		if loc == "" {
 			loc = "global"
 		}

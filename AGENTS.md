@@ -19,7 +19,7 @@ The project manages a complex tripartite stack: a React/Vite Frontend, a Go API 
     *   **Backend**: Deployment uses `gcloud builds submit --config cloudbuild.yaml .`. Secrets are managed via `Makefile` variables (`PROD_DB_USER`, etc.).
     *   **Database/Migrations**: Database lifecycle is *highly* separated:
         *   **Local Dev**: Use `make db-start` (relies on Podman) followed by `make migrate-up`.
-        *   **Production**: Never use the development commands. Must use `make migrate-prod` or `make deploy-sql`. **The production path requires specific `gcloud` credentials and Cloud SQL Auth Proxy setup.**
+        *   **Production**: Never use the development commands. Must use `make migrate-prod` (or `.cloudbuild/cloudbuild-migrate.yaml` in CI/CD). **The production path requires specific `gcloud` credentials and Cloud SQL Auth Proxy setup.**
 
 ### ⚠️ Gotchas & Implicit Conventions
 

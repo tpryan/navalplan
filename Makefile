@@ -43,7 +43,7 @@ MIGRATE_BIN=.bin/migrate
 # ADK CLI — prefer venv if present
 ADK?=$(shell [ -f ./venv/bin/adk ] && echo ./venv/bin/adk || echo adk)
 
-.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-compare eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout eval-results eval-list eval-runs build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force deploy-sql migrate-prod-gcs tidy setup-adk install-cloud-sql-proxy install-migrate
+.PHONY: run db-start db-stop db-reset test test-unit test-all vet vet-backend vet-researcher eval eval-all eval-agent eval-compare eval-harbourmaster eval-pilot eval-commodore eval-specialist eval-lookout eval-submit eval-submit-all eval-submit-harbourmaster eval-submit-pilot eval-submit-commodore eval-submit-specialist eval-submit-lookout eval-results eval-list eval-runs build-js clean-static run-frontend run-agent dev migrate-up migrate-down migrate-create migrate-prod migrate-version migrate-force migrate-prod-version migrate-prod-force tidy setup-adk install-cloud-sql-proxy install-migrate
 
 # --- Development ---
 
@@ -694,42 +694,6 @@ deploy-scheduler:
 		--location=$(REGION) \
 		--quiet
 
-
-# --- Cloud SQL ---
-
-migrate-prod-gcs:
-	@read -p "Enter migration version to apply (e.g., 000001): " version; \
-	FILE=$$(ls $(MIGRATE_PATH)/$${version}_*.up.sql 2>/dev/null); \
-	if [ -z "$$FILE" ]; then \
-		echo "Error: Migration version $$version not found in $(MIGRATE_PATH)"; \
-		exit 1; \
-	fi; \
-	FILENAME=$$(basename $$FILE); \
-	echo "Applying $$FILENAME to PRODUCTION via GCS..."; \
-	gcloud storage cp $$FILE gs://$(STORAGE_BUCKET)/$$FILENAME; \
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/$$FILENAME --database=$(PROD_DB_NAME) --user=$(PROD_DB_USER) -q; \
-	gcloud storage rm gs://$(STORAGE_BUCKET)/$$FILENAME
-
-deploy-sql:
-	@echo "Deploying SQL to PRODUCTION ($(PROD_INSTANCE)) via GCS Import..."
-	@echo -n "Are you SURE? This is destructive. [y/N] "; \
-	read ans; \
-	if [ "$ans" != "y" ]; then \
-		echo "Aborting."; \
-		exit 1; \
-	fi
-	gcloud storage cp code/app/db/pg-shortkey.sql gs://$(STORAGE_BUCKET)/
-	gcloud storage cp code/app/db/schema.sql gs://$(STORAGE_BUCKET)/
-	gcloud storage cp code/app/db/seed.sql gs://$(STORAGE_BUCKET)/
-	
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/pg-shortkey.sql --database=$(PROD_DB_NAME) -q
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/schema.sql --database=$(PROD_DB_NAME) -q
-	gcloud sql import sql $(PROD_INSTANCE) gs://$(STORAGE_BUCKET)/seed.sql --database=$(PROD_DB_NAME) -q
-	
-	gcloud storage rm gs://$(STORAGE_BUCKET)/pg-shortkey.sql
-	gcloud storage rm gs://$(STORAGE_BUCKET)/schema.sql
-	gcloud storage rm gs://$(STORAGE_BUCKET)/seed.sql
-db-publish-prod: deploy-sql
 
 # --- Agent Registry ---
 

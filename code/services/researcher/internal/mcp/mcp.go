@@ -184,6 +184,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						"required": []string{"query"},
 					},
 				},
+				{
+					"name":        "CalculateHeading",
+					"description": "Calculates the nautical heading (course/bearing in degrees), cardinal compass direction, distance in nautical miles, and reciprocal heading between two coordinates. Optionally analyzes wind conditions relative to the course to determine headwinds or adverse winds.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"from_latitude":      map[string]string{"type": "number"},
+							"from_longitude":     map[string]string{"type": "number"},
+							"to_latitude":        map[string]string{"type": "number"},
+							"to_longitude":       map[string]string{"type": "number"},
+							"from_location":      map[string]string{"type": "string"},
+							"to_location":        map[string]string{"type": "string"},
+							"wind_direction_deg": map[string]string{"type": "number"},
+							"wind_speed_kts":     map[string]string{"type": "number"},
+						},
+						"required": []string{"from_latitude", "from_longitude", "to_latitude", "to_longitude"},
+					},
+				},
 			},
 		}
 	case "tools/call":
@@ -262,6 +280,12 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 			return nil, err
 		}
 		return h.Nautical.FetchCoastPilot(agentCtx, req)
+	case "CalculateHeading", "calculate_heading":
+		var req tool.HeadingRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchHeading(agentCtx, req)
 	}
 	return nil, fmt.Errorf("unknown tool %s", callReq.Name)
 }

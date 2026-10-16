@@ -34,86 +34,53 @@ While your **live** GCP environment has moved to Vertex AI Agent Runtime, the **
 
 ## 2. Priority Recommendations (Simplification & Cleanup)
 
-### Priority 1: Remove Legacy Cloud Run Agent Scaffolding (Or Consolidate Runtime Paths)
+### Priority 1: Dual Agent Deployment (`Cloud Run` + `Vertex AI Agent Runtime`) — **Decision: Keep Both**
 
-Your live environment runs `navalplan-researcher` solely on **Vertex AI Agent Runtime (Reasoning Engine)** via `make deploy-agent-runtime`, and there is no `navalplan-researcher` Cloud Run service running. However, the repository still maintains both worlds:
-
-* **`.cloudbuild/cloudbuild-agent.yaml` (Steps 1–3):** Still builds a Docker container, pushes to `gcr.io/${PROJECT_ID}/navalplan-researcher`, and runs `gcloud run deploy navalplan-researcher` before Step 4 runs `agents-cli deploy --deployment-target=agent_runtime`. Running `make deploy-agent` will unexpectedly recreate the Cloud Run service.
-* **`Makefile` (`register-registry`) & `scripts/register_registry.sh`:** Still query `gcloud run services describe navalplan-researcher` to resolve `NAVALPLAN_RESEARCHER_URL`.
-* **Backend Dual Client (`code/app/backend/internal/agent/`):** Maintains both `agent.go` (HTTP/SSE client with Cloud Run ID token auth) and `reasoning_engine.go` (gRPC `StreamQueryReasoningEngine` client).
-* **`scripts/deploy_mesh.sh` & `code/services/researcher/Dockerfile`:** Only apply to Cloud Run revisions/traffic splitting.
-
-**Recommendation:**
-1. Remove Steps 1–3 (`docker build`, `docker push`, `gcloud run deploy`) from `.cloudbuild/cloudbuild-agent.yaml` so CI/CD only runs ADK evaluations (Step 0) and deploys to **Vertex AI Agent Runtime** (Step 4).
-2. Remove `scripts/deploy_mesh.sh` and retire `make deploy-agent` in favor of a single `make deploy-agent` target that targets Agent Runtime.
-3. Keep the HTTP client in `code/app/backend/internal/agent/agent.go` **only** for `localhost:8081` local development (`make dev`), and use `ReasoningEngineRunner` for production.
+`navalplan-researcher` is deployed to two targets in `.cloudbuild/cloudbuild-agent.yaml`:
+1. **Vertex AI Agent Runtime (Reasoning Engine)** (Step 4): Serves `navalplan-backend` via gRPC `StreamQueryReasoningEngine`. All ADK agent tool calls execute in-process inside Reasoning Engine.
+2. **Cloud Run (`navalplan-researcher`)** (Steps 1–3): Serves the HTTP `/mcp/tools` (MCP JSON-RPC) and `/invoke/{agent}` (A2A) endpoints registered in **GCP Agent Registry** (`make register-registry`), since Vertex AI Agent Runtime only exposes `:query`/`:streamQuery` rather than custom HTTP paths.
 
 ---
 
-### Priority 2: Trim Redundant Wire Protocols in `code/services/researcher`
+### Priority 2: MCP & A2A Wire Protocols in `code/services/researcher` — **Completed**
 
-Currently, `code/services/researcher/internal/server/server.go` exposes **four separate protocol surfaces** on the same service:
+`code/services/researcher/internal/server/server.go` exposes four protocol surfaces:
 1. `/api/*` — Standard ADK REST/SSE server (`adkrest.NewServer`) used by local dev (`make dev`).
 2. `/api/reasoning_engine` & `/api/stream_reasoning_engine` — Used by Vertex AI Agent Runtime (`ReasoningEngine`).
-3. `/invoke` & `/invoke/{agent}` — **A2A JSON-RPC + Agent Cards** (`adka2a` / `a2asrv`).
-4. `/mcp/tools` — **Custom MCP JSON-RPC handler** (`internal/mcp/mcp.go`).
+3. `/invoke` & `/invoke/{agent}` — **A2A JSON-RPC + Agent Cards** (`adka2a` / `a2asrv`) for Agent Registry.
+4. `/mcp/tools` — **MCP JSON-RPC handler** (`internal/mcp/mcp.go`) for Agent Registry.
 
-**Why this adds maintenance friction:**
-* Your agents do **not** call `/mcp/tools`—they bind Go tools directly in-process via `nautical.AsTools()`. Meanwhile, `internal/mcp/mcp.go` manually hardcodes JSON-RPC tool schemas that duplicate the struct tags in `internal/tool/*.go`.
-* The `/invoke/*` A2A endpoints are only used locally by `eval_a2a_shim.py` during `make eval-*` and by `make register-registry`.
-
-**Recommendation:**
-* **If you do not actively demo external agents discovering NavalPlan via Agent Registry:** Remove `internal/mcp/mcp.go`, `mcp_tool_spec.json`, `scripts/register_registry.sh`, and the `register-*` targets in `Makefile`.
-* **If you DO want MCP + A2A for Gemini Enterprise / Agent Registry demos:** Keep them, but generate the `tools/list` schema in `internal/mcp/mcp.go` dynamically from `nautical.AsTools()` instead of maintaining a second hardcoded copy of every tool's input schema.
+**Resolution:**
+* Added the missing `CalculateHeading` tool to `internal/mcp/mcp.go` (`tools/list` and `handleToolCall`) so all 8 tools in `NauticalToolService.AsTools()` are reusable via MCP.
+* Added `TestHandler_AllADKToolsExposedInMCP` in `internal/mcp/mcp_test.go` to enforce 1:1 parity between `NauticalToolService.AsTools()` and `/mcp/tools`.
 
 ---
 
-### Priority 3: Move Non-Sensitive Config Out of Secret Manager
+### Priority 3: Secret Manager Configuration — **Decision: Keep All App Config in Secret Manager**
 
-In `.cloudbuild/cloudbuild.yaml` and `scripts/setup_secrets.sh`, `navalplan-backend` mounts **12 secrets** from Google Cloud Secret Manager, 5 of which are plain configuration values rather than secrets:
+`navalplan-backend` mounts all 12 configuration and secret values from Google Cloud Secret Manager (`scripts/setup_secrets.sh` → `.cloudbuild/cloudbuild.yaml`).
 
-| Currently in Secret Manager | Should Be | Rationale |
-| :--- | :--- | :--- |
-| `NAVALPLAN_DB_PASS` | **Secret Manager** | Database password |
-| `NAVALPLAN_OA_SECRET` | **Secret Manager** | OAuth client secret |
-| `NAVALPLAN_SYSTEM_KEY` | **Secret Manager** | Internal scheduler/admin bearer token |
-| `NAVALPLAN_FRONTEND_MAPS_API_KEY` | **Secret Manager** | API key (injected at build & runtime) |
-| `NAVALPLAN_BACKEND_MAPS_API_KEY` | **Secret Manager** | Backend Maps/Places API key |
-| `NAVALPLAN_DB_USER` | `--set-env-vars` | Non-secret username (`navalplan_user`) |
-| `NAVALPLAN_DB_PORT` | `--set-env-vars` | Non-secret port (`5432`) |
-| `NAVALPLAN_DB_MODE` | `--set-env-vars` | Non-secret SSL mode (`disable` over Unix socket) |
-| `NAVALPLAN_DB_SOCKET` | `--set-env-vars` | Non-secret Cloud SQL socket path (`/cloudsql/...`) |
-| `NAVALPLAN_AGENT_URL` | `--set-env-vars` | Reasoning Engine resource name (`projects/.../reasoningEngines/...`) |
-| `NAVALPLAN_MAP_ID` | `--set-env-vars` | Public Google Maps Vector Map style ID |
-| `NAVALPLAN_OA_CLIENT` | `--set-env-vars` | Public OAuth Client ID (visible in browser redirect URLs) |
-
-**Recommendation:**
-* Move the 7 non-secret items from `--set-secrets` to `--set-env-vars` in `.cloudbuild/cloudbuild.yaml` and remove them from `scripts/setup_secrets.sh`.
-* Add `--add-cloudsql-instances=${PROJECT_ID}:us-central1:wakelogdb` explicitly to the `gcloud run deploy navalplan-backend` step in `.cloudbuild/cloudbuild.yaml` so the Cloud SQL Unix socket mount is declarative in CI/CD.
+**Decision:** Retained intentionally so all environment-specific configuration lives in one canonical store (`.env` → Secret Manager) rather than splitting values across Secret Manager and hardcoded `.cloudbuild/cloudbuild.yaml` flags.
 
 ---
 
-### Priority 4: Switch `researcher` from `GEMINI_API_KEY` to Vertex AI ADC in Production
+### Priority 4: Vertex AI ADC vs. `GEMINI_API_KEY` in `researcher` — **Completed**
 
-In `code/services/researcher/internal/config/config.go` (lines 1380–1389), the service requires `GEMINI_API_KEY` at startup and fails if it is not set, even though `code/services/researcher/internal/agent/agent.go` (lines 1377–1386) already supports Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI=true`).
+In `code/services/researcher/internal/config/config.go` and `code/services/researcher/internal/agent/agent.go`, the service supports two Gemini authentication modes:
+1. **Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI=true`)**: Uses Google Cloud Application Default Credentials (the attached GCP Service Account IAM identity). No `GEMINI_API_KEY` string is required.
+2. **Google AI Studio (default when `GOOGLE_GENAI_USE_VERTEXAI` is unset/false)**: Authenticates using `GEMINI_API_KEY`.
 
-**Recommendation:**
-* In `code/services/researcher/internal/config/config.go`, only require `GEMINI_API_KEY` when `GOOGLE_GENAI_USE_VERTEXAI != "true"`.
-* In `make deploy-agent-runtime` and `.cloudbuild/cloudbuild-agent.yaml`, set `GOOGLE_GENAI_USE_VERTEXAI=true` and `GOOGLE_CLOUD_LOCATION=us-central1`, and drop the `GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY` secret requirement in production. This consolidates all LLM calls, RAG queries, and Reasoning Engine execution onto the service account's native Vertex AI IAM credentials and quota.
+**Resolution:**
+* Updated `config.New()` (`code/services/researcher/internal/config/config.go`) to parse `UseVertexAI` (`GOOGLE_GENAI_USE_VERTEXAI`) and `GeminiLocation` (`GOOGLE_CLOUD_LOCATION`), only requiring `GEMINI_API_KEY` when `UseVertexAI` is `false`.
+* Documented both authentication modes thoroughly in `config.go` and `agent.go` and added unit test coverage (`TestNew_VertexAIModeDoesNotRequireGeminiAPIKey`).
 
 ---
 
-### Priority 5: Standardize on One Database Migration Path
+### Priority 5: Standardize on One Database Migration Path — **Completed**
 
-The repository currently supports **three different ways** to mutate the production Cloud SQL schema:
-1. **`.cloudbuild/cloudbuild-migrate.yaml`:** Cloud Build job running `cloud-sql-proxy` + `golang-migrate`.
-2. **`make migrate-prod`:** Local `cloud-sql-proxy` + local `golang-migrate` binary.
-3. **`make deploy-sql` & `make migrate-prod-gcs`:** Copies raw `.sql` files to `gs://navallog-system` and runs `gcloud sql import sql`.
-
-**Recommendation:**
-* **Delete `make deploy-sql` and `make migrate-prod-gcs`** from `Makefile`. Mixing `gcloud sql import sql` with `golang-migrate` bypasses the `schema_migrations` tracking table and causes dirty-version drift (requiring `migrate-prod-force`).
-* Standardize on `golang-migrate` (via `.cloudbuild/cloudbuild-migrate.yaml` for CI/CD and `make migrate-prod` for operator CLI use).
-* If `gs://navallog-system` is only used for SQL file staging and `eval_results`, move `eval_results` to your logging/artifacts bucket and delete `gs://navallog-system`.
+**Resolution:**
+* Removed `deploy-sql`, `migrate-prod-gcs`, and `db-publish-prod` (`gcloud sql import sql`) from `Makefile`.
+* Standardized exclusively on `golang-migrate` (`.cloudbuild/cloudbuild-migrate.yaml` for CI/CD and `make migrate-prod` for operator CLI use).
 
 ---
 
@@ -175,9 +142,9 @@ graph TD
   ```bash
   gcloud run jobs delete nautical-sync --region=us-west1 --project=navallog
   ```
-- [ ] Strip the Cloud Run build/deploy steps (Steps 1–3) out of `.cloudbuild/cloudbuild-agent.yaml` so it only evaluates and deploys to **Vertex AI Agent Runtime**.
-- [ ] Delete `.cloudbuild/cloudbuild-debug.yaml` and `scripts/deploy_mesh.sh`.
-- [ ] Move the 7 non-secret environment variables (`DB_USER`, `DB_PORT`, `DB_MODE`, `DB_SOCKET`, `AGENT_URL`, `MAP_ID`, `OA_CLIENT`) from `--set-secrets` to `--set-env-vars` in `.cloudbuild/cloudbuild.yaml`.
-- [ ] Update `.cloudbuild/cloudbuild.yaml` and `.cloudbuild/cloudbuild-nautical-sync.yaml` image paths from `gcr.io/${PROJECT_ID}/...` to `us-central1-docker.pkg.dev/${PROJECT_ID}/navalplan-repo/...`.
-- [ ] Remove `deploy-sql` and `migrate-prod-gcs` from `Makefile` and standardize on `golang-migrate` (`.cloudbuild/cloudbuild-migrate.yaml` / `make migrate-prod`).
-- [ ] Make `GEMINI_API_KEY` optional in `code/services/researcher/internal/config/config.go` when `GOOGLE_GENAI_USE_VERTEXAI=true`.
+- [x] Keep dual deployment (`Cloud Run` + `Vertex AI Agent Runtime`) in `.cloudbuild/cloudbuild-agent.yaml` so Agent Registry MCP (`/mcp/tools`) and A2A (`/invoke/*`) remain live alongside Reasoning Engine.
+- [x] Sync `/mcp/tools` (`internal/mcp/mcp.go`) with `NauticalToolService.AsTools()` by adding `CalculateHeading` and a parity unit test.
+- [x] Delete `.cloudbuild/cloudbuild-debug.yaml` and align `LOG_BUCKET` in `scripts/setup_infra.sh`.
+- [x] Keep all 12 app config/secret values centralized in Secret Manager (`scripts/setup_secrets.sh`).
+- [x] Remove `deploy-sql`, `migrate-prod-gcs`, and `db-publish-prod` from `Makefile` and standardize on `golang-migrate` (`.cloudbuild/cloudbuild-migrate.yaml` / `make migrate-prod`).
+- [x] Make `GEMINI_API_KEY` optional in `code/services/researcher/internal/config/config.go` when `GOOGLE_GENAI_USE_VERTEXAI=true`, and document both Gemini auth modes in `config.go` and `agent.go`.
