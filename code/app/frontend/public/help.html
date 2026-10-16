@@ -931,30 +931,30 @@
         <section class="doc-section" id="research-all">
             <div class="section-header">
                 <span class="material-symbols-outlined">travel_explore</span>
-                <h2>Stop Research</h2>
+                <h2>Stop Research (Pilot Agent)</h2>
             </div>
             <div class="section-body">
-                <p>Instead of researching stops one by one, use <strong>Run Stop Research</strong> to kick off AI research for every stop and the overall voyage guide simultaneously, with live streaming progress.</p>
+                <p>Instead of researching stops one by one, use <strong>Run Stop Research</strong> to let the Pilot Agent research narrow areas around every stop and build the overall voyage guide simultaneously.</p>
                 <div class="screenshot">
                     <img src="/screenshots/07-full-research.png" alt="Stop research in progress — radar sweeps on each stop and animated route line">
                 </div>
-                <p class="screenshot-caption">Stop research running &mdash; radar sweeps appear on every stop simultaneously while the sidebar stepper tracks live progress.</p>
+                <p class="screenshot-caption">Stop research running &mdash; localized radar sweeps appear on each stop while the sidebar stepper tracks live progress.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Once all days in your itinerary have stops assigned, click <span class="btn-ref">Run Stop Research</span> at the bottom of the sidebar (or from the <em>Itinerary Ready</em> prompt).</div>
+                        <div class="step-text">Once your daily stops are placed (connected by a dashed route line on the map), click <span class="btn-ref">Run Stop Research</span> at the bottom of the sidebar. A <strong>Research Started</strong> confirmation modal appears.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text">A <strong>radar sweep animation</strong> runs on every stop while a real-time <strong>progress stepper card</strong> in the sidebar updates as weather, tides, facilities, and pilot briefings complete.</div>
+                        <div class="step-text">A localized <strong>radar sweep animation</strong> runs around each stop on the map while the sidebar stepper advances through <em>Fetching weather forecasts</em> &rarr; <em>Reading tide tables</em> &rarr; <em>Locating nearby facilities</em> &rarr; <em>Building voyage guide</em>.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">Nearby stops on the same date reuse shared environmental data to speed up completion. Each stop's radar sweep clears as soon as its briefing is ready to read.</div>
+                        <div class="step-text">Nearby stops on the same date reuse shared environmental data to speed up completion. Each stop's radar sweep clears as soon as its briefing is ready.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
-                        <div class="step-text">When all stops and the guide are complete, a <strong>Research complete</strong> banner appears, the separate <span class="btn-ref">Guide</span> button tucks away, and <span class="btn-ref">Report</span> is promoted to the primary toolbar button.</div>
+                        <div class="step-text">When all stops and the guide finish, a <strong>Research complete</strong> banner appears at the top of the itinerary, and you can open the full <strong>Voyage Report</strong>.</div>
                     </li>
                 </ol>
                 <div class="tip">
@@ -968,18 +968,18 @@
         <section class="doc-section" id="lookout">
             <div class="section-header">
                 <span class="material-symbols-outlined">visibility</span>
-                <h2>Safety Audit &amp; Navigational Warnings</h2>
+                <h2>Safety Audit &amp; Lookout Agent</h2>
             </div>
             <div class="section-body">
-                <p>The <strong>Safety Audit</strong> (Lookout agent) runs a voyage-wide analysis across all researched stops. It combines precomputed weather/sea-state thresholds with live <strong>NGA Maritime Safety Information (MSI)</strong> broadcast navigational warnings (NAVAREA, HYDROLANT, HYDROPAC) to surface severity-coded alerts and recommended actions.</p>
+                <p>The <strong>Lookout Agent</strong> analyzes weather, sun phase, tidal currents, course headings, and live <strong>NGA Maritime Safety Information (MSI)</strong> broadcast warnings across your itinerary to alert you to changing conditions and calculate leg-by-leg departure windows.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text"><strong>Run Stop Research first</strong> &mdash; the Safety Audit evaluates your researched stop briefings and coordinates.</div>
+                        <div class="step-text"><strong>Run Stop Research first</strong> &mdash; the Lookout Agent evaluates your researched stop briefings, leg bearings, and coordinates.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text">Trigger the audit from either location:
+                        <div class="step-text">Trigger a fresh audit from either location:
                             <ul style="margin-top:6px;padding-left:1.2em;font-size:0.9rem;color:var(--ink2)">
                                 <li>Open any <strong>stop briefing</strong> and click <span class="btn-ref">Safety Audit</span> in the modal header.</li>
                                 <li>Open the <strong>Voyage Report</strong> and click the <span class="ui-icon"><span class="material-symbols-outlined">visibility</span></span> eye icon in the report header.</li>
@@ -988,20 +988,16 @@
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">NavalPlan refreshes stop weather, queries active maritime broadcast warnings for each stop's bounding area, and evaluates wind, swell, visibility, and navigational hazards.</div>
+                        <div class="step-text">Each stop in the Voyage Report includes a <strong>Safety Lookout</strong> card with course-aware wind/wave advisories (e.g., headwinds along your exact compass bearing) and a <strong>Travel Plan</strong> table showing leg distance (NM), travel time at <strong>4&ndash;8 kt</strong>, and the latest <strong>Depart by</strong> time to arrive before sunset.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">4</div>
-                        <div class="step-text">Results appear in the <strong>Safety Overview</strong> block of the Voyage Report, grouped by stop with severity badges and recommended actions.</div>
-                    </li>
-                    <li class="step">
-                        <div class="step-num">5</div>
-                        <div class="step-text">If no hazards or threshold breaches are found, a <em>Safety audit complete. No alerts found.</em> notification confirms the all-clear.</div>
+                        <div class="step-text">Voyage-wide alerts also appear in the <strong>Safety Overview</strong> block of the Voyage Report, grouped by stop with severity badges and recommended actions.</div>
                     </li>
                 </ol>
                 <div class="tip">
                     <span class="material-symbols-outlined">warning</span>
-                    Alerts are severity-coded &mdash; pay close attention to high-severity weather or active NAVAREA broadcast warnings. Re-run the audit right before departure for the latest forecast and notices.
+                    Switch the Voyage Report into <strong>Sailing Mode</strong> (<span class="ui-icon"><span class="material-symbols-outlined">sailing</span></span>) while underway to put each leg's <strong>Safety Lookout</strong> advisories and <strong>Travel Plan</strong> speed/departure table front and center.
                 </div>
             </div>
         </section>
@@ -1013,23 +1009,19 @@
                 <h2>Destination Guide</h2>
             </div>
             <div class="section-body">
-                <p>The <strong>Destination Guide</strong> is an AI-compiled narrative overview of your cruising ground &mdash; covering seasonal conditions, local charter companies (with direct links), regional highlights, and passage considerations.</p>
+                <p>The <strong>Destination Guide</strong> is an AI-compiled regional briefing covering the cruising ground's <strong>Overview</strong>, a 12-month <strong>Sailing Season</strong> calendar (color-coded for <em>Best</em> vs. <em>Storm</em> months), <strong>Regional Hazards</strong> with cited sources (<code>Refs</code>), <strong>At a Glance</strong> facts (country, timezone, language, currency), and <strong>Charter Info</strong> with direct links to local charter companies.</p>
                 <div class="screenshot">
                     <img src="/screenshots/08-voyage-guide.png" alt="Destination Guide modal showing AI-written narrative with destination sections and passage notes">
                 </div>
-                <p class="screenshot-caption">The Destination Guide &mdash; an AI-compiled narrative covering the region, charter options, and passage planning notes.</p>
+                <p class="screenshot-caption">The Destination Guide &mdash; regional overview, seasonal calendar, hazards, and charter links.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click <span class="btn-ref">Guide</span> in the itinerary toolbar during planning to read the regional guide. (The guide is generated automatically when you run <strong>Local Pilot Research</strong> or <strong>Stop Research</strong>.)</div>
+                        <div class="step-text">Click <span class="btn-ref">Guide</span> in the itinerary toolbar to open the standalone Destination Guide modal, or view it embedded directly inside the <strong>Voyage Report</strong>.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
                         <div class="step-text">To refresh the guide after changing your voyage area or dates, click <span class="btn-ref">Redo</span> inside the guide modal.</div>
-                    </li>
-                    <li class="step">
-                        <div class="step-num">3</div>
-                        <div class="step-text">Once all stop research is complete, the Destination Guide is folded directly into the unified <strong>Voyage Report</strong> and the standalone <span class="btn-ref">Guide</span> toolbar button hides to keep your workspace clean.</div>
                     </li>
                 </ol>
             </div>
@@ -1042,23 +1034,23 @@
                 <h2>Voyage Report &amp; Sailing Mode</h2>
             </div>
             <div class="section-body">
-                <p>The <strong>Voyage Report</strong> assembles all of your research &mdash; map snapshot, safety overview, destination guide, daily stop briefings, tide charts, pilot notes, passage debriefs, and Local Pilot recommendations &mdash; into a single document.</p>
+                <p>The <strong>Voyage Report</strong> compiles your entire trip into a single document: top-level summary metrics (<em>Stops</em>, <em>Days</em>, <em>Avg Wind</em>, <em>Researched</em>), an interactive route map, a <strong>Day by Day</strong> card grid (with temp, wind, sunrise/sunset, leg distance in NM, and mini tide curves), the full <strong>Destination Guide</strong>, and detailed daily stop briefings.</p>
                 <div class="screenshot">
                     <img src="/screenshots/09-voyage-report.png" alt="Voyage Report modal showing a map snapshot and stop overview cards">
                 </div>
-                <p class="screenshot-caption">The Voyage Report &mdash; map snapshot, stop overview cards, and full day-by-day briefings ready to print, copy, or share.</p>
+                <p class="screenshot-caption">The Voyage Report &mdash; route map, Day-by-Day overview cards with mini tide curves, Destination Guide, and full daily briefings.</p>
                 <ol class="steps">
                     <li class="step">
                         <div class="step-num">1</div>
-                        <div class="step-text">Click <span class="btn-ref">Report</span> in the itinerary toolbar (visible as soon as any Pilot, Guide, or Stop research exists, and highlighted as the primary button once all research is complete).</div>
+                        <div class="step-text">Click <span class="btn-ref">Report</span> in the itinerary toolbar to open the Voyage Report.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">2</div>
-                        <div class="step-text"><strong>Toggle Sailing Mode</strong> (<span class="ui-icon"><span class="material-symbols-outlined">sailing</span></span>) in the report header when underway. Sailing Mode strips out pre-trip narrative sections (destination guide, shore facilities, general overview) so you see only essential on-water data: weather, tides, hydrographic pilot notes, and passage debriefs.</div>
+                        <div class="step-text"><strong>Toggle Sailing Mode</strong> (<span class="ui-icon"><span class="material-symbols-outlined">sailing</span></span>) in the report header when underway. Sailing Mode hides pre-trip reference sections (Destination Guide, shore facility directories, overview cards) and highlights each stop's <strong>Safety Lookout</strong> advisories, <strong>Travel Plan</strong> speed/departure table (<code>4&ndash;8 kt</code>), hourly weather strip, and 24-hour tide chart.</div>
                     </li>
                     <li class="step">
                         <div class="step-num">3</div>
-                        <div class="step-text">Use the report header actions to run a <strong>Safety Audit</strong> (<span class="ui-icon"><span class="material-symbols-outlined">visibility</span></span>), <strong>Share</strong> a public link (<span class="ui-icon"><span class="material-symbols-outlined">share</span></span>), <strong>Copy to Clipboard</strong> (<span class="ui-icon"><span class="material-symbols-outlined">content_copy</span></span>), or open the formatted <strong>Print View</strong> (<span class="ui-icon"><span class="material-symbols-outlined">print</span></span>).</div>
+                        <div class="step-text">Use the report header icon bar to <strong>Share</strong> a public link (<span class="ui-icon"><span class="material-symbols-outlined">share</span></span>), toggle <strong>Sailing Mode</strong> (<span class="ui-icon"><span class="material-symbols-outlined">sailing</span></span>), run a <strong>Safety Audit</strong> (<span class="ui-icon"><span class="material-symbols-outlined">visibility</span></span>), <strong>Copy to Clipboard</strong> (<span class="ui-icon"><span class="material-symbols-outlined">content_copy</span></span>), or open the <strong>Print View</strong> (<span class="ui-icon"><span class="material-symbols-outlined">print</span></span>).</div>
                     </li>
                 </ol>
                 <div class="tip">
@@ -1144,6 +1136,14 @@
 
     </main>
 </div>
+
+<footer class="doc-footer">
+    NavalPlan &mdash; <a href="/">Back to App</a>
+</footer>
+
+</body>
+</html>
+>
 
 <footer class="doc-footer">
     NavalPlan &mdash; <a href="/">Back to App</a>
