@@ -64,3 +64,8 @@
 60. Done. The tracks button should be hidden until there are stops decided upon. 
 61. Done. The interface in this /Users/tpryan/Documents/GitHub/navalplan/temp/Screenshot 2026-10-14 at 11.47.11 AM.png is shwoing placeholders to communicate things are happening.  We do have stuff happening and a realtime comms channel.  Can we put actual updates here? For both hub & marina search and the stop planner phases? 
 62. Done. I'm still not super happy with the number of resources being returned for stops.  A place like annapolis, chosen as a stop, should be teaming with resources accessible on foot from the docks.  Can you investigate. See http://localhost:8080/voyages/16 for reference. 
+63. On hold (cannot reproduce). Weird error when starting stops.
+64. In the list of trips, the colors on borders and boxes don't convey any meaning. Make these colors relate to whether a trip has dates (dated) vs. no dates (undated).
+65. Have trips show up on the main map when viewing all trips / no trip selected, using different icons for dated vs. undated trips.
+66. Make the map stop expanding past full zoom out so there are no ugly gutters at the top and bottom when zoomed all the way out.
+67. Once you have a planned track, make sure the Pilot model (stop research / hydrographic pilot) compares course to that planned track.
