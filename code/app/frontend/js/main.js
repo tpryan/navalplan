@@ -1734,7 +1734,10 @@ const VOYAGE_DATED_ACCENT = 'teal';
 const VOYAGE_UNDATED_ACCENT = 'muted';
 const VOYAGE_DATED_ICON = 'sailing';
 const VOYAGE_UNDATED_ICON = 'explore';
+const VOYAGE_CLUSTER_PIXEL_RADIUS = 44;
 let voyageOverviewMarkers = [];
+let voyageOverviewItems = [];
+let voyageOverviewZoomListener = null;
 let _voyageOverviewRetryTimer = null;
 
 function isVoyageDated(voyage) {
@@ -1763,6 +1766,51 @@ function getVoyageCoordinates(voyage) {
   return null;
 }
 
+function latLngToWorldPixel(lat, lng, zoom) {
+  const scale = 256 * Math.pow(2, zoom);
+  const x = ((lng + 180) / 360) * scale;
+  const sinLat = Math.max(-0.9999, Math.min(0.9999, Math.sin((lat * Math.PI) / 180)));
+  const y = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale;
+  return { x, y };
+}
+
+function clusterVoyageOverviewItems(items, zoom) {
+  const projected = items.map(item => ({
+    ...item,
+    pixel: latLngToWorldPixel(item.coords.lat, item.coords.lng, zoom),
+  }));
+  const clusters = [];
+  const assigned = new Set();
+
+  for (let i = 0; i < projected.length; i++) {
+    if (assigned.has(i)) continue;
+    assigned.add(i);
+    const group = [projected[i]];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let j = 0; j < projected.length; j++) {
+        if (assigned.has(j)) continue;
+        const candidate = projected[j];
+        const overlapsGroup = group.some(member => {
+          const dx = member.pixel.x - candidate.pixel.x;
+          const dy = member.pixel.y - candidate.pixel.y;
+          return Math.hypot(dx, dy) <= VOYAGE_CLUSTER_PIXEL_RADIUS;
+        });
+        if (overlapsGroup) {
+          assigned.add(j);
+          group.push(candidate);
+          changed = true;
+        }
+      }
+    }
+    const lat = group.reduce((sum, m) => sum + m.coords.lat, 0) / group.length;
+    const lng = group.reduce((sum, m) => sum + m.coords.lng, 0) / group.length;
+    clusters.push({ position: { lat, lng }, items: group });
+  }
+  return clusters;
+}
+
 function createVoyageOverviewMarkerElement(voyage) {
   const hasDates = isVoyageDated(voyage);
   const accent = hasDates ? VOYAGE_DATED_ACCENT : VOYAGE_UNDATED_ACCENT;
@@ -1780,7 +1828,6 @@ function createVoyageOverviewMarkerElement(voyage) {
   el.setAttribute('role', 'button');
   el.setAttribute('tabindex', '0');
   el.setAttribute('aria-label', `${voyage.title} (${dateSummary})`);
-  el.title = `${voyage.title} — ${dateSummary}`;
 
   const pin = document.createElement('div');
   pin.className = 'np-voyage-marker__pin';
@@ -1799,15 +1846,180 @@ function createVoyageOverviewMarkerElement(voyage) {
   return el;
 }
 
+function bindVoyageMarkerInteraction(el, voyage, markerInstance) {
+  const handleSelect = (e) => {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    selectVoyage(voyage);
+  };
+  el.addEventListener('click', handleSelect);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      selectVoyage(voyage);
+    }
+  });
+  if (markerInstance) {
+    el.addEventListener('mouseenter', () => { markerInstance.zIndex = 200; });
+    el.addEventListener('mouseleave', () => { markerInstance.zIndex = 10; });
+  }
+}
+
+function createVoyageClusterElement(groupItems, onExpandChange) {
+  const hasAnyDated = groupItems.some(item => isVoyageDated(item.voyage));
+  const hasAnyUndated = groupItems.some(item => !isVoyageDated(item.voyage));
+  const clusterEl = document.createElement('div');
+  clusterEl.className = [
+    'np-voyage-cluster',
+    hasAnyDated ? 'np-voyage-cluster--dated' : 'np-voyage-cluster--undated',
+    hasAnyDated && hasAnyUndated ? 'np-voyage-cluster--mixed' : '',
+  ].filter(Boolean).join(' ');
+  clusterEl.dataset.count = String(groupItems.length);
+
+  const count = groupItems.length;
+  const splitRadius = count === 2 ? 28 : Math.max(34, Math.min(64, count * 11));
+  clusterEl.style.setProperty('--cluster-hit-size', `${(splitRadius + 28) * 2}px`);
+
+  const hitpad = document.createElement('div');
+  hitpad.className = 'np-voyage-cluster__hitpad';
+  clusterEl.appendChild(hitpad);
+
+  const hub = document.createElement('div');
+  hub.className = 'np-voyage-cluster__hub';
+  hub.setAttribute('role', 'button');
+  hub.setAttribute('tabindex', '0');
+  hub.setAttribute('aria-label', `${count} overlapping trips — hover to expand`);
+
+  const hubPin = document.createElement('div');
+  hubPin.className = 'np-voyage-cluster__pin';
+  const hubIcon = document.createElement('span');
+  hubIcon.className = 'material-symbols-outlined np-voyage-cluster__icon';
+  hubIcon.setAttribute('aria-hidden', 'true');
+  hubIcon.textContent = hasAnyDated ? VOYAGE_DATED_ICON : VOYAGE_UNDATED_ICON;
+  hubPin.appendChild(hubIcon);
+
+  const badge = document.createElement('span');
+  badge.className = 'np-voyage-cluster__badge';
+  badge.textContent = String(count);
+
+  hub.appendChild(hubPin);
+  hub.appendChild(badge);
+  clusterEl.appendChild(hub);
+
+  groupItems.forEach((item, idx) => {
+    const angle = count === 2
+      ? (idx === 0 ? Math.PI : 0)
+      : (-Math.PI / 2 + (2 * Math.PI * idx) / count);
+    const dx = Math.round(Math.cos(angle) * splitRadius);
+    const dy = Math.round(Math.sin(angle) * splitRadius);
+
+    const spoke = document.createElement('div');
+    spoke.className = 'np-voyage-cluster__spoke';
+    spoke.style.setProperty('--spoke-length', `${splitRadius}px`);
+    spoke.style.setProperty('--spoke-angle', `${(angle * 180) / Math.PI}deg`);
+    clusterEl.appendChild(spoke);
+
+    const markerEl = createVoyageOverviewMarkerElement(item.voyage);
+    markerEl.classList.add('np-voyage-marker--split');
+    markerEl.style.setProperty('--split-x', `${dx}px`);
+    markerEl.style.setProperty('--split-y', `${dy}px`);
+    bindVoyageMarkerInteraction(markerEl, item.voyage, null);
+    clusterEl.appendChild(markerEl);
+  });
+
+  let collapseTimer = null;
+  const expandCluster = () => {
+    if (collapseTimer) {
+      clearTimeout(collapseTimer);
+      collapseTimer = null;
+    }
+    clusterEl.classList.add('is-expanded');
+    if (onExpandChange) onExpandChange(true);
+  };
+  const collapseCluster = () => {
+    if (collapseTimer) clearTimeout(collapseTimer);
+    collapseTimer = setTimeout(() => {
+      clusterEl.classList.remove('is-expanded');
+      if (onExpandChange) onExpandChange(false);
+    }, 140);
+  };
+
+  clusterEl.addEventListener('mouseenter', expandCluster);
+  clusterEl.addEventListener('mouseleave', collapseCluster);
+  hub.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (clusterEl.classList.contains('is-expanded')) {
+      clusterEl.classList.remove('is-expanded');
+      if (onExpandChange) onExpandChange(false);
+    } else {
+      expandCluster();
+    }
+  });
+  hub.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      expandCluster();
+    }
+  });
+
+  return clusterEl;
+}
+
+function clearVoyageOverviewMarkerInstances() {
+  voyageOverviewMarkers.forEach(m => {
+    if (m) m.map = null;
+  });
+  voyageOverviewMarkers = [];
+}
+
 function clearVoyageOverviewMarkers() {
   if (_voyageOverviewRetryTimer) {
     clearTimeout(_voyageOverviewRetryTimer);
     _voyageOverviewRetryTimer = null;
   }
-  voyageOverviewMarkers.forEach(m => {
-    if (m) m.map = null;
-  });
-  voyageOverviewMarkers = [];
+  if (voyageOverviewZoomListener && typeof voyageOverviewZoomListener.remove === 'function') {
+    voyageOverviewZoomListener.remove();
+    voyageOverviewZoomListener = null;
+  }
+  voyageOverviewItems = [];
+  clearVoyageOverviewMarkerInstances();
+}
+
+function rebuildVoyageOverviewClusters(AdvancedMarkerElement) {
+  clearVoyageOverviewMarkerInstances();
+  if (!map || currentVoyage || currentMode === 'discovery' || voyageOverviewItems.length === 0) return;
+
+  const zoom = map.getZoom() ?? 3;
+  const clusters = clusterVoyageOverviewItems(voyageOverviewItems, zoom);
+
+  for (const cluster of clusters) {
+    if (cluster.items.length === 1) {
+      const { voyage, coords } = cluster.items[0];
+      const contentEl = createVoyageOverviewMarkerElement(voyage);
+      const marker = new AdvancedMarkerElement({
+        map,
+        position: coords,
+        content: contentEl,
+        zIndex: 10,
+      });
+      bindVoyageMarkerInteraction(contentEl, voyage, marker);
+      marker.addListener('gmp-click', () => selectVoyage(voyage));
+      voyageOverviewMarkers.push(marker);
+    } else {
+      let markerRef = null;
+      const clusterEl = createVoyageClusterElement(cluster.items, (expanded) => {
+        if (markerRef) markerRef.zIndex = expanded ? 250 : 20;
+      });
+      markerRef = new AdvancedMarkerElement({
+        map,
+        position: cluster.position,
+        content: clusterEl,
+        zIndex: 20,
+      });
+      voyageOverviewMarkers.push(markerRef);
+    }
+  }
 }
 
 async function renderVoyageOverviewMarkers(retryCount = 0) {
@@ -1827,6 +2039,7 @@ async function renderVoyageOverviewMarkers(retryCount = 0) {
 
     clearVoyageOverviewMarkers();
 
+    const resolvedItems = [];
     for (const voyage of voyages) {
       let coords = getVoyageCoordinates(voyage);
       if (!coords && voyage.id && !Array.isArray(voyage.stops)) {
@@ -1842,30 +2055,16 @@ async function renderVoyageOverviewMarkers(retryCount = 0) {
       }
       if (!coords) continue;
       if (!map || currentVoyage || currentMode === 'discovery') return;
+      resolvedItems.push({ voyage, coords });
+    }
 
-      const contentEl = createVoyageOverviewMarkerElement(voyage);
-      const marker = new AdvancedMarkerElement({
-        map,
-        position: coords,
-        title: voyage.title,
-        content: contentEl,
+    voyageOverviewItems = resolvedItems;
+    rebuildVoyageOverviewClusters(AdvancedMarkerElement);
+
+    if (map && !voyageOverviewZoomListener && voyageOverviewItems.length > 0) {
+      voyageOverviewZoomListener = map.addListener('zoom_changed', () => {
+        rebuildVoyageOverviewClusters(AdvancedMarkerElement);
       });
-
-      const handleSelect = (e) => {
-        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-        selectVoyage(voyage);
-      };
-
-      marker.addListener('gmp-click', handleSelect);
-      contentEl.addEventListener('click', handleSelect);
-      contentEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          selectVoyage(voyage);
-        }
-      });
-
-      voyageOverviewMarkers.push(marker);
     }
   } catch (err) {
     console.error('Failed to render voyage overview markers:', err);

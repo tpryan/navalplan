@@ -1449,23 +1449,27 @@ html:has(.print-view) {
 
 /* --- Overview Trip Markers on Main Map (Todo #65) --- */
 .np-voyage-marker {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px 4px 5px;
-    border-radius: 999px;
+    justify-content: center;
     background: var(--surface, #ffffff);
     color: var(--ink, #0B1220);
     border: 2px solid var(--accent, var(--voyage-dated-accent, var(--teal)));
-    box-shadow: var(--shadow, 0 2px 8px rgba(15, 23, 42, 0.2));
+    box-shadow: var(--shadow, 0 2px 8px rgba(15, 23, 42, 0.24));
     cursor: pointer;
     user-select: none;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    max-width: 200px;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-.np-voyage-marker:hover {
-    transform: translateY(-2px) scale(1.03);
+.np-voyage-marker:hover,
+.np-voyage-marker:focus-visible {
+    transform: translateY(-2px) scale(1.08);
+    z-index: 30;
 }
 
 .np-voyage-marker--dated {
@@ -1479,8 +1483,8 @@ html:has(.print-view) {
 }
 
 .np-voyage-marker__pin {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: var(--accent, var(--teal));
     color: var(--surface, #ffffff);
@@ -1491,20 +1495,187 @@ html:has(.print-view) {
 }
 
 .np-voyage-marker__icon {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1;
 }
 
 .np-voyage-marker__label {
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px) scale(0.95);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    background: var(--surface, #ffffff);
+    color: var(--ink, #0B1220);
+    border: 1.5px solid var(--accent, var(--voyage-dated-accent, var(--teal)));
+    border-radius: 999px;
+    padding: 3px 10px;
+    box-shadow: var(--shadow, 0 3px 10px rgba(15, 23, 42, 0.25));
     font-family: var(--font, var(--font-primary));
     font-size: 12px;
     font-weight: 700;
     white-space: nowrap;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+    z-index: 40;
 }
 
+.np-voyage-marker:hover .np-voyage-marker__label,
+.np-voyage-marker:focus-visible .np-voyage-marker__label {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
 
+/* --- Overlapping Trip Cluster & Hover Fan-Out --- */
+.np-voyage-cluster {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
 
+.np-voyage-cluster--dated {
+    --cluster-accent: var(--voyage-dated-accent, var(--teal));
+}
 
+.np-voyage-cluster--undated {
+    --cluster-accent: var(--voyage-undated-accent, var(--muted));
+}
+
+.np-voyage-cluster__hitpad {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 38px;
+    height: 38px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-cluster__hitpad {
+    width: var(--cluster-hit-size, 112px);
+    height: var(--cluster-hit-size, 112px);
+    pointer-events: auto;
+}
+
+.np-voyage-cluster__hub {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface, #ffffff);
+    border: 2px solid var(--cluster-accent, var(--teal));
+    box-shadow: var(--shadow, 0 2px 8px rgba(15, 23, 42, 0.26));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+    transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+}
+
+.np-voyage-cluster--undated .np-voyage-cluster__hub,
+.np-voyage-cluster--mixed .np-voyage-cluster__hub {
+    border-style: dashed;
+}
+
+.np-voyage-cluster__pin {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--cluster-accent, var(--teal));
+    color: var(--surface, #ffffff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease;
+}
+
+.np-voyage-cluster__icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.np-voyage-cluster__badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--ink, #0B1220);
+    color: var(--surface, #ffffff);
+    border: 1.5px solid var(--surface, #ffffff);
+    font-family: var(--font, var(--font-primary));
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 15px;
+    text-align: center;
+    box-sizing: border-box;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-cluster__hub {
+    transform: scale(0.32);
+    opacity: 0.7;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-cluster__badge,
+.np-voyage-cluster.is-expanded .np-voyage-cluster__icon {
+    opacity: 0;
+    transform: scale(0.5);
+}
+
+.np-voyage-cluster__spoke {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 1.5px;
+    background: var(--cluster-accent, var(--teal));
+    opacity: 0;
+    transform-origin: 0 50%;
+    transform: translateY(-50%) rotate(var(--spoke-angle, 0deg));
+    transition: width 0.18s ease, opacity 0.18s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-cluster__spoke {
+    width: var(--spoke-length, 28px);
+    opacity: 0.55;
+}
+
+.np-voyage-marker--split {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.35);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.16s ease, box-shadow 0.16s ease;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-marker--split {
+    transform: translate(calc(-50% + var(--split-x, 0px)), calc(-50% + var(--split-y, 0px))) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.np-voyage-cluster.is-expanded .np-voyage-marker--split:hover,
+.np-voyage-cluster.is-expanded .np-voyage-marker--split:focus-visible {
+    transform: translate(calc(-50% + var(--split-x, 0px)), calc(-50% + var(--split-y, 0px) - 2px)) scale(1.1);
+    z-index: 30;
+}
 
