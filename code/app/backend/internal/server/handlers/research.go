@@ -251,6 +251,44 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 
 	var earlierNearbyBriefing *model.Briefing
 	stops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
+	allStops := make([]model.Stop, len(stops))
+	copy(allStops, stops)
+	sort.Slice(allStops, func(i, j int) bool {
+		return allStops[i].TargetDate.Before(allStops[j].TargetDate)
+	})
+	var next *model.Stop
+	stopPosition := 1
+	for i, s := range allStops {
+		if s.ID == stop.ID {
+			stopPosition = i + 1
+			if i+1 < len(allStops) {
+				next = &allStops[i+1]
+			}
+			break
+		}
+	}
+	var distNM, course float64
+	var hasCourse bool
+	if next != nil && (stop.Latitude != 0 || stop.Longitude != 0) && (next.Latitude != 0 || next.Longitude != 0) {
+		distNM = lookoutHaversineNM(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
+		course = calculateBearing(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
+		hasCourse = true
+	}
+	var matchedPlannedTrack *model.VoyageTrack
+	if next != nil || len(allStops) <= 1 {
+		matchedPlannedTrack = h.findPlannedTrackForLeg(ctx, stop, next, stopPosition)
+	} else if stopTracks, err := h.DB.ListStopTracks(ctx, stop.ID); err == nil {
+		for i := range stopTracks {
+			if stopTracks[i].Kind == "planned" {
+				matchedPlannedTrack = &stopTracks[i]
+				break
+			}
+		}
+	}
+	var plannedRouteInfo string
+	if matchedPlannedTrack != nil {
+		plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
+	}
 	if err == nil && len(stops) > 1 && !isPassage {
 		// Check if any earlier stop in the voyage is within 2 NM (e.g. Stop 1 and
 		// Stop 2 in the same harbor, or the final return stop returning to the
@@ -267,7 +305,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			if stopsWithin2NM(earlier, *stop) {
 				earlierBriefing, err := h.DB.GetBriefing(ctx, earlier.ID)
 				if err == nil && earlierBriefing != nil && hasValidFacilities(earlierBriefing.Facilities) {
-					if sameCalendarDay(earlier.TargetDate, stop.TargetDate) {
+					if sameCalendarDay(earlier.TargetDate, stop.TargetDate) && matchedPlannedTrack == nil {
 						slog.InfoContext(ctx, "Stop within 2 NM on same date detected, cloning briefing", "stop_id", stop.ID, "earlier_stop_id", earlier.ID)
 						h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from earlier stop for %s", stop.LocationName))
 						newBriefing := &model.Briefing{
@@ -279,9 +317,6 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 							PilotNotes:     earlierBriefing.PilotNotes,
 						}
 						if err := h.DB.CreateBriefing(ctx, newBriefing); err == nil {
-							allStops := make([]model.Stop, len(stops))
-							copy(allStops, stops)
-							sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
 							h.performLookoutAuditLogic(stop, newBriefing, allStops, sessionID)
 							h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", stop.LocationName))
 							return
@@ -347,10 +382,8 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			coordStr, stop.TargetDate.Format("January 2, 2006"))
 	} else {
 		locInfo := fmt.Sprintf("%s (%s)", stop.LocationName, coordStr)
-
 		prompt = fmt.Sprintf("Research anchorages and weather for %s for %s. Radius %d %s.",
 			locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
-
 		if earlierNearbyBriefing != nil && hasValidFacilities(earlierNearbyBriefing.Facilities) {
 			slog.InfoContext(ctx, "Reusing facilities from earlier voyage stop within 2 NM", "stop_id", stop.ID, "earlier_briefing_id", earlierNearbyBriefing.ID)
 			reusableFacilities = json.RawMessage(earlierNearbyBriefing.Facilities)
@@ -360,6 +393,9 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 			prompt += " Do not research facilities; I will provide those separately."
 		}
+	}
+	if transitAndTrackPrompt := buildStopTransitAndTrackPrompt(next, distNM, course, hasCourse, plannedRouteInfo); transitAndTrackPrompt != "" {
+		prompt += "\n\n" + transitAndTrackPrompt
 	}
 
 	progressStop := make(chan struct{})
@@ -650,4 +686,22 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
 		slog.ErrorContext(ctx, "Failed to save empty briefing", "stop_id", stop.ID, "error", err)
 	}
+}
+
+func buildStopTransitAndTrackPrompt(next *model.Stop, distNM, course float64, hasCourse bool, plannedRouteInfo string) string {
+	var b strings.Builder
+	if next != nil {
+		fmt.Fprintf(&b, "Next destination: %s (%.4f, %.4f).", next.LocationName, next.Latitude, next.Longitude)
+		if hasCourse && distNM > 0 {
+			fmt.Fprintf(&b, " Straight-line transit distance: %.1f NM on course %.0f° (%s).", distNM, course, bearingToCardinal(course))
+		}
+	}
+	if plannedRouteInfo != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "Planned Track for this leg:\n%s\n", strings.TrimSpace(plannedRouteInfo))
+		b.WriteString("Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track (rather than only a straight-line course between stops), and pass the planned route details to hydrographic_pilot.")
+	}
+	return b.String()
 }

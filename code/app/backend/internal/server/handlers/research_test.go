@@ -137,13 +137,26 @@ func TestHasValidFacilities(t *testing.T) {
 
 type mockResearchAndLookoutStore struct {
 	sessionTrackingStore
-	stops       []model.Stop
-	firstBrief  *model.Briefing
-	savedAlerts map[int64]model.RawJSON
+	stops        []model.Stop
+	voyageTracks []model.VoyageTrack
+	stopTracks   map[int64][]model.VoyageTrack
+	firstBrief   *model.Briefing
+	savedAlerts  map[int64]model.RawJSON
 }
 
 func (m *mockResearchAndLookoutStore) ListStops(_ context.Context, _ int64, _, _ int) ([]model.Stop, error) {
 	return m.stops, nil
+}
+
+func (m *mockResearchAndLookoutStore) ListVoyageTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
+	return m.voyageTracks, nil
+}
+
+func (m *mockResearchAndLookoutStore) ListStopTracks(_ context.Context, stopID int64) ([]model.VoyageTrack, error) {
+	if m.stopTracks != nil {
+		return m.stopTracks[stopID], nil
+	}
+	return nil, nil
 }
 
 func (m *mockResearchAndLookoutStore) GetBriefing(_ context.Context, stopID int64) (*model.Briefing, error) {
@@ -300,5 +313,107 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 				t.Errorf("expected safety alerts for stop ID %d to be upserted, but found none", tt.wantAlertStopID)
 			}
 		})
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
+	stop1ID := int64(201)
+	stop1 := &model.Stop{
+		ID:               stop1ID,
+		VoyageID:         10,
+		LocationName:     "Annapolis",
+		Latitude:         38.9784,
+		Longitude:        -76.4922,
+		SearchRadius:     5,
+		SearchRadiusUnit: "nm",
+		TargetDate:       time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+	}
+	stop2 := model.Stop{
+		ID:               202,
+		VoyageID:         10,
+		LocationName:     "St. Michaels",
+		Latitude:         38.7854,
+		Longitude:        -76.2233,
+		SearchRadius:     5,
+		SearchRadiusUnit: "nm",
+		TargetDate:       time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
+	}
+	plannedGeoJSON := `{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-76.4922,38.9784],[-76.3800,38.8900],[-76.2233,38.7854]]},"properties":{}}]}`
+	var capturedHarbourPrompt string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "sessions") {
+			w.Write([]byte(`{"name":"session"}`))
+			return
+		}
+		if r.URL.Path == "/api/run" {
+			var req struct {
+				AppName    string `json:"appName"`
+				NewMessage struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"newMessage"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			if req.AppName == "harbourmaster" && len(req.NewMessage.Parts) > 0 {
+				capturedHarbourPrompt = req.NewMessage.Parts[0].Text
+				harbourResp := `{"weather_summary":{"summary":"Clear"},"sun_phase":{"sunrise":"05:45"},"tides":{"high":"11:00"},"facilities":[{"name":"Annapolis City Marina","type":"Marina"}],"pilot_notes":{"overview":"Follow planned track through Eastern Bay"}}`
+				event := fmt.Sprintf(`[{"content":{"parts":[{"text":%q}],"role":"model"}}]`, harbourResp)
+				w.Write([]byte(event))
+				return
+			}
+			lookoutResp := `[]`
+			event := fmt.Sprintf(`[{"content":{"parts":[{"text":%q}],"role":"model"}}]`, lookoutResp)
+			w.Write([]byte(event))
+		}
+	})
+	store := &mockResearchAndLookoutStore{
+		stops: []model.Stop{*stop1, stop2},
+		voyageTracks: []model.VoyageTrack{
+			{
+				ID:           "track-plan-1",
+				VoyageID:     10,
+				VoyageStopID: &stop1ID,
+				Name:         "Leg 1 - Annapolis to St. Michaels",
+				Kind:         "planned",
+				GeoJSON:      model.RawJSON(plannedGeoJSON),
+			},
+		},
+		savedAlerts: make(map[int64]model.RawJSON),
+	}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, r)
+			return rec.Result(), nil
+		}),
+	}
+	h := &Handler{
+		DB:          store,
+		AgentURL:    "http://agent.local",
+		AgentClient: client,
+		Agent:       &agent.AgentRunner{Client: client, Resolver: &agent.StaticResolver{BaseURL: "http://agent.local"}},
+		ResearchSem: make(chan struct{}, 10),
+	}
+	h.performStopResearchLogic(stop1, "")
+	if !strings.Contains(capturedHarbourPrompt, "Planned Track for this leg:") {
+		t.Errorf("expected harbourmaster prompt to include planned track header, got: %s", capturedHarbourPrompt)
+	}
+	if !strings.Contains(capturedHarbourPrompt, "Leg 1 - Annapolis to St. Michaels") {
+		t.Errorf("expected harbourmaster prompt to include planned track name, got: %s", capturedHarbourPrompt)
+	}
+	if !strings.Contains(capturedHarbourPrompt, "Key Route Segments & Bearings:") {
+		t.Errorf("expected harbourmaster prompt to include planned route segments and bearings, got: %s", capturedHarbourPrompt)
+	}
+	if !strings.Contains(capturedHarbourPrompt, "Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track") {
+		t.Errorf("expected harbourmaster prompt to instruct pilot comparison against planned track, got: %s", capturedHarbourPrompt)
 	}
 }

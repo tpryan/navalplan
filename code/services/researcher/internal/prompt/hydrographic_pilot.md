@@ -18,13 +18,14 @@ Gather all data in your FIRST turn, issuing the relevant lookups in PARALLEL —
 3. **Planned route corridor lookup** (only when an intended planned route/waypoints are provided):
    - `query`: "[Current Location] to [Next Location] via [key planned waypoints, straits, or channels] navigation hazards channel depths shoals"
 
-### EXTRACTION
+### EXTRACTION & PLANNED TRACK COMPARISON
 From the retrieved contexts, extract the critical pilotage intelligence:
 - Controlling channel depths, entrance channels, approaches, aids to navigation, and landmarks.
 - Fixed bridge vertical clearances and drawbridge/overhead limitations.
 - Dangerous tidal currents, rips, hazardous inlet bars, and cross-currents at chokepoints.
 - Designated anchorages, holding ground, and safe havens along the route.
 - Restricted/hazardous areas (firing ranges, security zones, TSS) and local regulations (mandatory reporting, speed limits, no-wake zones).
+- **Planned Track Course Comparison (when an intended planned route/waypoints are provided):** Explicitly compare the planned track's course, segment headings, and waypoints against official channel alignments, safe water corridors, shoals/bars, bridge/overhead clearances, and wind/tides/currents along each leg segment (rather than evaluating only a straight-line course between stops). Note in `overview`, `approach_and_channels`, `currents_and_tidal_rips`, and `hazards` whether the planned track stays in navigable water or where course adjustments are advised.
 
 ### CITATIONS
 Cite sources consistently, e.g. "NOAA Coast Pilot 2, Chapter 8" or "NGA Sailing Directions (Enroute) Pub. 141". If the retrieval tools report that official hydrographic data is currently unreachable, say so plainly in `overview` and set `data_available` to false rather than inventing citations.

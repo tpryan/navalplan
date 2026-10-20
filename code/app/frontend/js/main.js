@@ -1730,6 +1730,147 @@ async function loadVoyages() {
 }
 
 const VOYAGE_ACCENTS = ['coral', 'teal', 'violet', 'amber', 'sky'];
+const VOYAGE_DATED_ACCENT = 'teal';
+const VOYAGE_UNDATED_ACCENT = 'muted';
+const VOYAGE_DATED_ICON = 'sailing';
+const VOYAGE_UNDATED_ICON = 'explore';
+let voyageOverviewMarkers = [];
+let _voyageOverviewRetryTimer = null;
+
+function isVoyageDated(voyage) {
+  return Boolean(voyage && (voyage.start_date || voyage.end_date));
+}
+
+function getVoyageCoordinates(voyage) {
+  if (!voyage) return null;
+  if (typeof voyage.latitude === 'number' && typeof voyage.longitude === 'number' &&
+      !Number.isNaN(voyage.latitude) && !Number.isNaN(voyage.longitude)) {
+    return { lat: voyage.latitude, lng: voyage.longitude };
+  }
+  if (Array.isArray(voyage.stops) && voyage.stops.length > 0) {
+    const validStop = voyage.stops.find(
+      s => typeof s.latitude === 'number' && typeof s.longitude === 'number' &&
+           !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)
+    );
+    if (validStop) {
+      return { lat: validStop.latitude, lng: validStop.longitude };
+    }
+  }
+  if (typeof voyage.checkin_latitude === 'number' && typeof voyage.checkin_longitude === 'number' &&
+      !Number.isNaN(voyage.checkin_latitude) && !Number.isNaN(voyage.checkin_longitude)) {
+    return { lat: voyage.checkin_latitude, lng: voyage.checkin_longitude };
+  }
+  return null;
+}
+
+function createVoyageOverviewMarkerElement(voyage) {
+  const hasDates = isVoyageDated(voyage);
+  const accent = hasDates ? VOYAGE_DATED_ACCENT : VOYAGE_UNDATED_ACCENT;
+  const iconName = hasDates ? VOYAGE_DATED_ICON : VOYAGE_UNDATED_ICON;
+  const dateSummary = hasDates
+    ? (formatVoyageDateRange(voyage.start_date, voyage.end_date) || 'Dated trip')
+    : 'No dates set';
+
+  const el = document.createElement('div');
+  el.className = `np-voyage-marker ${hasDates ? 'np-voyage-marker--dated' : 'np-voyage-marker--undated'}`;
+  el.dataset.dated = hasDates ? 'true' : 'false';
+  el.dataset.voyageId = String(voyage.id || '');
+  el.dataset.icon = iconName;
+  el.style.setProperty('--accent', `var(--voyage-${hasDates ? 'dated' : 'undated'}-accent, var(--${accent}))`);
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-label', `${voyage.title} (${dateSummary})`);
+  el.title = `${voyage.title} — ${dateSummary}`;
+
+  const pin = document.createElement('div');
+  pin.className = 'np-voyage-marker__pin';
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-outlined np-voyage-marker__icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = iconName;
+  pin.appendChild(icon);
+
+  const label = document.createElement('span');
+  label.className = 'np-voyage-marker__label';
+  label.textContent = voyage.title;
+
+  el.appendChild(pin);
+  el.appendChild(label);
+  return el;
+}
+
+function clearVoyageOverviewMarkers() {
+  if (_voyageOverviewRetryTimer) {
+    clearTimeout(_voyageOverviewRetryTimer);
+    _voyageOverviewRetryTimer = null;
+  }
+  voyageOverviewMarkers.forEach(m => {
+    if (m) m.map = null;
+  });
+  voyageOverviewMarkers = [];
+}
+
+async function renderVoyageOverviewMarkers(retryCount = 0) {
+  clearVoyageOverviewMarkers();
+  if (currentVoyage || currentMode === 'discovery') return;
+  if (!Array.isArray(voyages) || voyages.length === 0) return;
+  if (!map) {
+    if (retryCount < 20) {
+      _voyageOverviewRetryTimer = setTimeout(() => renderVoyageOverviewMarkers(retryCount + 1), 150);
+    }
+    return;
+  }
+
+  try {
+    const { AdvancedMarkerElement } = await importLibrary("marker");
+    if (!map || currentVoyage || currentMode === 'discovery') return;
+
+    clearVoyageOverviewMarkers();
+
+    for (const voyage of voyages) {
+      let coords = getVoyageCoordinates(voyage);
+      if (!coords && voyage.id && !Array.isArray(voyage.stops)) {
+        try {
+          const stops = await API.getStops(voyage.id);
+          if (Array.isArray(stops) && stops.length > 0) {
+            voyage.stops = stops;
+            coords = getVoyageCoordinates(voyage);
+          }
+        } catch (_) {
+          // Ignore per-voyage stop lookup failure on overview map
+        }
+      }
+      if (!coords) continue;
+      if (!map || currentVoyage || currentMode === 'discovery') return;
+
+      const contentEl = createVoyageOverviewMarkerElement(voyage);
+      const marker = new AdvancedMarkerElement({
+        map,
+        position: coords,
+        title: voyage.title,
+        content: contentEl,
+      });
+
+      const handleSelect = (e) => {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        selectVoyage(voyage);
+      };
+
+      marker.addListener('gmp-click', handleSelect);
+      contentEl.addEventListener('click', handleSelect);
+      contentEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectVoyage(voyage);
+        }
+      });
+
+      voyageOverviewMarkers.push(marker);
+    }
+  } catch (err) {
+    console.error('Failed to render voyage overview markers:', err);
+  }
+}
 
 function renderVoyageList() {
   const listContainer = document.getElementById('voyage-list');
@@ -1737,18 +1878,19 @@ function renderVoyageList() {
 
   if ((!voyages || voyages.length === 0) && currentVoyagePage === 1) {
     listContainer.innerHTML = '<p class="np-empty-state">No voyages yet. Plan your first trip!</p>';
+    clearVoyageOverviewMarkers();
     return;
   }
 
   const dated = voyages
-    .filter(v => v.start_date)
+    .filter(v => isVoyageDated(v))
     .sort((a, b) => {
-      const dateDiff = new Date(b.start_date) - new Date(a.start_date);
+      const dateDiff = new Date(b.start_date || b.end_date) - new Date(a.start_date || a.end_date);
       return dateDiff !== 0 ? dateDiff : a.title.localeCompare(b.title);
     });
 
   const undated = voyages
-    .filter(v => !v.start_date)
+    .filter(v => !isVoyageDated(v))
     .sort((a, b) => a.title.localeCompare(b.title));
 
   const sorted = [...dated, ...undated];
@@ -1757,8 +1899,6 @@ function renderVoyageList() {
     sorted.splice(dated.length, 0, 'SEPARATOR');
     sorted.splice(0, 0, 'DATED_HEADER');
   }
-
-  let voyageCardIndex = 0;
 
   sorted.forEach(voyage => {
     if (voyage === 'DATED_HEADER') {
@@ -1776,12 +1916,13 @@ function renderVoyageList() {
       return;
     }
 
-    const accent = VOYAGE_ACCENTS[voyageCardIndex % VOYAGE_ACCENTS.length];
-    voyageCardIndex++;
+    const hasDates = isVoyageDated(voyage);
+    const accent = hasDates ? VOYAGE_DATED_ACCENT : VOYAGE_UNDATED_ACCENT;
 
     const el = document.createElement('div');
-    el.className = 'voyage-item';
-    el.style.setProperty('--accent', `var(--${accent})`);
+    el.className = `voyage-item ${hasDates ? 'voyage-item--dated' : 'voyage-item--undated'}`;
+    el.dataset.dated = hasDates ? 'true' : 'false';
+    el.style.setProperty('--accent', `var(--voyage-${hasDates ? 'dated' : 'undated'}-accent, var(--${accent}))`);
 
     const startDate = voyage.start_date ? new Date(voyage.start_date).toLocaleDateString(undefined, {timeZone: 'UTC'}) : null;
     const dateRangeDisplay = formatVoyageDateRange(voyage.start_date, voyage.end_date);
@@ -1799,10 +1940,10 @@ function renderVoyageList() {
     const chipRow = document.createElement('div');
     chipRow.className = 'np-chip-row';
 
-    if (startDate) {
+    if (hasDates && (startDate || dateRangeDisplay)) {
       const dateChip = document.createElement('span');
       dateChip.className = 'np-chip np-chip--date';
-      dateChip.textContent = dateRangeDisplay;
+      dateChip.textContent = dateRangeDisplay || startDate;
       chipRow.appendChild(dateChip);
     } else {
       const dateChip = document.createElement('span');
@@ -1912,6 +2053,10 @@ function renderVoyageList() {
   if (voyages.length > 0 || currentVoyagePage > 1) {
       listContainer.appendChild(paginationControls);
   }
+
+  if (!currentVoyage && currentMode !== 'discovery') {
+      renderVoyageOverviewMarkers();
+  }
 }
 
 function openEditModal(voyage) {
@@ -1970,6 +2115,7 @@ function showVoyageList(doPushState = true) {
     clearPilotCircle();
     clearMap({ clearTracks: true });
     clearStopSweeps();
+    renderVoyageOverviewMarkers();
     // Cancel any other in-flight research polls
     if (_fullResPoll) { clearInterval(_fullResPoll); _fullResPoll = null; }
     if (_fullResProgressES) { _fullResProgressES.close(); _fullResProgressES = null; }
@@ -1996,6 +2142,7 @@ function updateItineraryHeader(voyage) {
 }
 
 async function selectVoyage(voyage, doPushState = true) {
+    clearVoyageOverviewMarkers();
     if (doPushState) {
         window.history.pushState({ voyageId: voyage.id }, '', `/voyages/${voyage.id}`);
     }
@@ -4512,10 +4659,27 @@ async function initMap() {
 
   console.log('NavalPlan: Map init — theme:', theme, '| colorScheme:', isMidnightMariner ? 'DARK' : 'LIGHT');
 
-  map = new Map(document.getElementById("map-container"), {
+  const mapContainerEl = document.getElementById("map-container");
+  const computeMapMinZoom = (el) => {
+    const height = (el && el.clientHeight) || window.innerHeight || 800;
+    return Math.max(2, Math.ceil(Math.log2(height / 256)));
+  };
+  const initialMinZoom = computeMapMinZoom(mapContainerEl);
+
+  map = new Map(mapContainerEl, {
     center: { lat: 20, lng: 0 },
-    zoom: 3,
+    zoom: Math.max(3, initialMinZoom),
+    minZoom: initialMinZoom,
     maxZoom: 18,
+    restriction: {
+      latLngBounds: {
+        north: 85,
+        south: -85,
+        west: -180,
+        east: 180,
+      },
+      strictBounds: true,
+    },
     mapTypeId: currentMapTypeId,
     mapId: getValidMapId(isMidnightMariner),
     colorScheme: isMidnightMariner ? 'DARK' : 'LIGHT',
@@ -4524,6 +4688,17 @@ async function initMap() {
     streetViewControl: false,
     fullscreenControl: false,
     clickableIcons: false
+  });
+
+  window.addEventListener('resize', () => {
+    if (!map) return;
+    const nextMinZoom = computeMapMinZoom(mapContainerEl);
+    if (typeof map.setOptions === 'function') {
+      map.setOptions({ minZoom: nextMinZoom });
+    }
+    if (typeof map.getZoom === 'function' && map.getZoom() < nextMinZoom && typeof map.setZoom === 'function') {
+      map.setZoom(nextMinZoom);
+    }
   });
 
   // Spacer pushes Google's top-right controls (map type, fullscreen) below the auth bar
@@ -4923,6 +5098,7 @@ function applyFacilityClustering() {
 function clearMap(options = {}) {
     const { clearTracks = true } = options;
     if (activeInfoWindow) activeInfoWindow.close();
+    clearVoyageOverviewMarkers();
     markers.forEach(m => m.map = null);
     markers = [];
 

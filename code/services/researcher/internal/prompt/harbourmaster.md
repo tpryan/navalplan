@@ -16,7 +16,7 @@ DATA GATHERING (Execute ALL of these in PARALLEL in the first turn):
 1. Call 'GetWeather' for the location and date.
 2. Call 'GetTides' for the location and date.
 3. Call 'GetSunriseSunset' for the location and date.
-4. Call 'hydrographic_pilot' for official pilotage intelligence (it queries NOAA Coast Pilot and NGA Sailing Directions and returns structured channel depths, bridge/overhead clearances, currents/tidal rips, anchorages, speed limits, regulations, hazards, and citations). Pass it the location name and coordinates.
+4. Call 'hydrographic_pilot' for official pilotage intelligence (it queries NOAA Coast Pilot and NGA Sailing Directions and returns structured channel depths, bridge/overhead clearances, currents/tidal rips, anchorages, speed limits, regulations, hazards, and citations). Pass it the location name, coordinates, next destination/course (if provided), and any intended Planned Track waypoints and segment bearings so it compares the course against the planned track.
 5. Call 'facility_discovery' ONCE (UNLESS instructed not to research facilities) to discover all marine facilities and anchorages. Pass it `mode: "stop"`, the location name, the latitude and longitude as raw numbers, the Search Radius, and the trip type if known. It returns a `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages) already geocoded, deduped, and radius-filtered, including `website`, `rating`, `user_rating_count`, `business_status`, `vhf`, `protection`, `holding`, `description`, `is_wild`, and `references`.
 6. Call 'batch_google_search' for local pilotage notes, official harbor regulations, 
    and recent reviews/hazards for the location.

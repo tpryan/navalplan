@@ -90,6 +90,18 @@
 
     /* Map */
     --color-route-line:       #314c3b;
+
+    /* Voyage List / Trip Status Colors (Dated vs. Undated) */
+    --voyage-dated-accent:       var(--teal, #0B7A6F);
+    --voyage-dated-bg:           color-mix(in oklab, var(--voyage-dated-accent) 8%, var(--surface));
+    --voyage-dated-border:       color-mix(in oklab, var(--voyage-dated-accent) 32%, transparent);
+    --voyage-dated-chip-bg:      color-mix(in oklab, var(--voyage-dated-accent) 14%, var(--surface));
+    --voyage-dated-chip-text:    var(--voyage-dated-accent);
+    --voyage-undated-accent:     var(--muted, #566074);
+    --voyage-undated-bg:         color-mix(in oklab, var(--voyage-undated-accent) 5%, var(--surface));
+    --voyage-undated-border:     color-mix(in oklab, var(--voyage-undated-accent) 22%, transparent);
+    --voyage-undated-chip-bg:    var(--chip, #F2F4F8);
+    --voyage-undated-chip-text:  var(--voyage-undated-accent);
 }
 
 /* ----------------------------------------
@@ -178,6 +190,18 @@
 
     /* Map */
     --color-route-line:       #00E5FF;
+
+    /* Voyage List / Trip Status Colors (Dated vs. Undated) */
+    --voyage-dated-accent:       var(--teal, #5FE3D2);
+    --voyage-dated-bg:           color-mix(in oklab, var(--voyage-dated-accent) 9%, var(--surface));
+    --voyage-dated-border:       color-mix(in oklab, var(--voyage-dated-accent) 35%, transparent);
+    --voyage-dated-chip-bg:      color-mix(in oklab, var(--voyage-dated-accent) 16%, var(--surface));
+    --voyage-dated-chip-text:    var(--voyage-dated-accent);
+    --voyage-undated-accent:     var(--muted, #8A92A3);
+    --voyage-undated-bg:         color-mix(in oklab, var(--voyage-undated-accent) 6%, var(--surface));
+    --voyage-undated-border:     color-mix(in oklab, var(--voyage-undated-accent) 24%, transparent);
+    --voyage-undated-chip-bg:    var(--chip, #1A2338);
+    --voyage-undated-chip-text:  var(--voyage-undated-accent);
 }
 
 /* ----------------------------------------

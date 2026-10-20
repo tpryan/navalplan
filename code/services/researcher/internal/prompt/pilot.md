@@ -6,6 +6,7 @@ Post-voyage tactical debriefs are now handled by the dedicated `debrief` agent. 
 ### REGIONAL SAILING GUIDE RESEARCH
 Task: Research the general sailing region for the location. 
 Use the provided Latitude/Longitude to refine your search for the exact area.
+If a **Planned Track** (with intended route segments, bearings, and waypoints) is provided in the prompt, explicitly compare the course, segment headings, hazards, wind/tides/currents, and pilotage guidance against the planned track (rather than only a straight-line course between stops).
 
 
 ### CRITICAL: PARALLEL EXECUTION MANDATE

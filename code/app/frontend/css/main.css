@@ -1408,5 +1408,103 @@ html:has(.print-view) {
     margin-top: 8px;
 }
 
+/* --- Voyage List Dated vs. Undated Distinction (Todo #64) --- */
+.voyage-item.voyage-item--dated,
+.voyage-item[data-dated="true"] {
+    --accent: var(--voyage-dated-accent, var(--teal));
+    background: var(--voyage-dated-bg, color-mix(in oklab, var(--teal) 8%, var(--surface)));
+    box-shadow: inset 0 0 0 1.5px var(--voyage-dated-border, color-mix(in oklab, var(--teal) 32%, transparent));
+    border-left: 4px solid var(--voyage-dated-accent, var(--teal));
+}
+
+.voyage-item.voyage-item--undated,
+.voyage-item[data-dated="false"] {
+    --accent: var(--voyage-undated-accent, var(--muted));
+    background: var(--voyage-undated-bg, color-mix(in oklab, var(--muted) 5%, var(--surface)));
+    box-shadow: inset 0 0 0 1.5px var(--voyage-undated-border, color-mix(in oklab, var(--muted) 22%, transparent));
+    border-left: 4px solid var(--voyage-undated-accent, var(--muted));
+}
+
+.voyage-item.voyage-item--dated:hover,
+.voyage-item[data-dated="true"]:hover {
+    box-shadow: inset 0 0 0 1.5px var(--voyage-dated-accent, var(--teal));
+}
+
+.voyage-item.voyage-item--undated:hover,
+.voyage-item[data-dated="false"]:hover {
+    box-shadow: inset 0 0 0 1.5px var(--voyage-undated-accent, var(--muted));
+}
+
+.voyage-item .np-chip--date {
+    background: var(--voyage-dated-chip-bg, color-mix(in oklab, var(--teal) 14%, var(--surface)));
+    color: var(--voyage-dated-chip-text, var(--teal));
+    border: 1px solid var(--voyage-dated-border, color-mix(in oklab, var(--teal) 32%, transparent));
+}
+
+.voyage-item .np-chip--nodates {
+    background: var(--voyage-undated-chip-bg, var(--chip));
+    color: var(--voyage-undated-chip-text, var(--muted));
+    border: 1px solid var(--voyage-undated-border, color-mix(in oklab, var(--muted) 22%, transparent));
+}
+
+/* --- Overview Trip Markers on Main Map (Todo #65) --- */
+.np-voyage-marker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 5px;
+    border-radius: 999px;
+    background: var(--surface, #ffffff);
+    color: var(--ink, #0B1220);
+    border: 2px solid var(--accent, var(--voyage-dated-accent, var(--teal)));
+    box-shadow: var(--shadow, 0 2px 8px rgba(15, 23, 42, 0.2));
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    max-width: 200px;
+}
+
+.np-voyage-marker:hover {
+    transform: translateY(-2px) scale(1.03);
+}
+
+.np-voyage-marker--dated {
+    --accent: var(--voyage-dated-accent, var(--teal));
+    border-style: solid;
+}
+
+.np-voyage-marker--undated {
+    --accent: var(--voyage-undated-accent, var(--muted));
+    border-style: dashed;
+}
+
+.np-voyage-marker__pin {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent, var(--teal));
+    color: var(--surface, #ffffff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.np-voyage-marker__icon {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.np-voyage-marker__label {
+    font-family: var(--font, var(--font-primary));
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+
 
 
