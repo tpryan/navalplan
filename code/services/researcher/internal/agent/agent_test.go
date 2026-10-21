@@ -107,6 +107,21 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 	}
 }
 
+func TestCalculateHeadingScopedToLookout(t *testing.T) {
+	for _, sp := range specs {
+		var hasHeading bool
+		for _, tn := range sp.toolNames {
+			if tn == toolCalculateHeading {
+				hasHeading = true
+			}
+		}
+		want := sp.name == Lookout
+		if hasHeading != want {
+			t.Errorf("%s: has %q = %v, want %v", sp.name, toolCalculateHeading, hasHeading, want)
+		}
+	}
+}
+
 func TestSupportsThinkingBudget(t *testing.T) {
 	tests := []struct {
 		model string

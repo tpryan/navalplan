@@ -28,12 +28,15 @@ On your first turn, also call **`GetSafetyAlerts`** for the stop, passing its co
 - If the feed returns no active hazards or reports that no data is available, do NOT invent any — simply omit safety-feed alerts.
 
 ### Mandatory Passage Heading & Course Calculation (Travel Days)
-When a next destination is provided (a travel day):
-- You MUST execute a **`CalculateHeading`** tool call on your first turn:
-  - `from_latitude`, `from_longitude`: coordinates of the current stop.
-  - `to_latitude`, `to_longitude`: coordinates of the next destination.
+When a next destination with coordinates is provided (a travel day):
+- You MUST execute a **`CalculateHeading`** tool call on your first turn, passing ALL FOUR required numeric coordinates:
+  - `from_latitude` (REQUIRED number): latitude of the current stop.
+  - `from_longitude` (REQUIRED number): longitude of the current stop.
+  - `to_latitude` (REQUIRED number): latitude of the next destination.
+  - `to_longitude` (REQUIRED number): longitude of the next destination — **NEVER omit `to_longitude`** when passing `to_latitude` and `to_location`.
   - `from_location`, `to_location`: names of the current stop and next destination.
   - `wind_direction_deg`, `wind_speed_kts`: prevailing or departure wind direction (in degrees) and wind speed (in knots) from the weather forecast.
+- If a prompt only states a distance/course without next-destination coordinates, do NOT call `CalculateHeading` — evaluate the stated course directly against the wind.
 - **Mandatory Transit Heading Alert:** You MUST always generate an alert based on the `CalculateHeading` result:
   - If `is_adverse_wind` is true with severity `"warning"`: emit a **Warning** alert with `category: "navigation"`, `icon: "air"`, and message describing beating into headwind (> 15 kts).
   - If `is_adverse_wind` is true with severity `"info"`: emit an **Info** alert with `category: "navigation"`, `icon: "air"`, and message describing moderate headwind (5–15 kts).
@@ -50,7 +53,7 @@ When a next destination is provided (a travel day):
 The input includes a **"Distance to next stop"** field and optional **"Next Destination"** and **"course"** (e.g., "12.3 nautical miles at a course of 45° to Vineyard Haven").
 
 - If the field contains an actual distance, this is a **travel day** — the crew must depart this stop to reach the next one. Navigation, passage hazards, and arrival-time rules apply.
-- Always run the **`CalculateHeading`** tool to analyze course and wind alignment on travel days.
+- When next-destination coordinates are provided on a travel day, always run the **`CalculateHeading`** tool (passing `from_latitude`, `from_longitude`, `to_latitude`, and `to_longitude`) to analyze course and wind alignment.
 - If the field says **"none"**, this is the **last stop** with no planned departure. **Do not generate any travel departure/arrival-time alerts.** Weather, tides, hydrographic hazards, and seasonal info alerts are still valid.
 
 ### Safety Rules

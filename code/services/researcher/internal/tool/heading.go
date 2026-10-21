@@ -7,14 +7,15 @@ import (
 
 // HeadingRequest represents the input parameters for the CalculateHeading tool.
 type HeadingRequest struct {
-	FromLatitude     float64  `json:"from_latitude"`
-	FromLongitude    float64  `json:"from_longitude"`
-	ToLatitude       float64  `json:"to_latitude"`
-	ToLongitude      float64  `json:"to_longitude"`
-	FromLocation     string   `json:"from_location,omitempty"`
-	ToLocation       string   `json:"to_location,omitempty"`
-	WindDirectionDeg *float64 `json:"wind_direction_deg,omitempty"`
-	WindSpeedKts     *float64 `json:"wind_speed_kts,omitempty"`
+	FromLatitude     float64  `json:"from_latitude" jsonschema:"Origin latitude in decimal degrees (required)."`
+	FromLongitude    float64  `json:"from_longitude" jsonschema:"Origin longitude in decimal degrees (required)."`
+	ToLatitude       float64  `json:"to_latitude" jsonschema:"Destination latitude in decimal degrees (required)."`
+	ToLongitude      float64  `json:"to_longitude" jsonschema:"Destination longitude in decimal degrees (required; always include alongside to_latitude)."`
+	FromLocation     string   `json:"from_location,omitempty" jsonschema:"Optional name of the origin stop."`
+	ToLocation       string   `json:"to_location,omitempty" jsonschema:"Optional name of the destination stop."`
+	WindDirectionDeg *float64 `json:"wind_direction_deg,omitempty" jsonschema:"Optional wind direction in degrees (0-360, direction wind is coming from)."`
+	WindSpeedKts     *float64 `json:"wind_speed_kts,omitempty" jsonschema:"Optional wind speed in knots."`
+	WindSpeedKt      *float64 `json:"wind_speed_kt,omitempty" jsonschema:"Alias for wind_speed_kts (optional wind speed in knots)."`
 }
 
 // HeadingResponse represents the structured result of the CalculateHeading tool.
@@ -57,12 +58,17 @@ func CalculateHeadingResult(req HeadingRequest) *HeadingResponse {
 		toDesc = fmt.Sprintf("(%.4f, %.4f)", req.ToLatitude, req.ToLongitude)
 	}
 
-	if req.WindDirectionDeg != nil && req.WindSpeedKts != nil {
+	windSpeedPtr := req.WindSpeedKts
+	if windSpeedPtr == nil {
+		windSpeedPtr = req.WindSpeedKt
+	}
+
+	if req.WindDirectionDeg != nil && windSpeedPtr != nil {
 		windDir := math.Mod(*req.WindDirectionDeg, 360)
 		if windDir < 0 {
 			windDir += 360
 		}
-		windSpeed := *req.WindSpeedKts
+		windSpeed := *windSpeedPtr
 		relAngle := RelativeWindAngle(heading, windDir)
 		relAngle = math.Round(relAngle*10) / 10
 		resp.RelativeWindAngle = &relAngle

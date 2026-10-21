@@ -56,9 +56,10 @@ const (
 )
 
 // allNauticalTools is the full briefing-grade bundle (environment, facilities,
-// safety, pilotage, and heading geometry) shared by the destination-research
-// agents. FilterGPXData is intentionally excluded: GPX smoothing runs
-// deterministically in Go on upload, not via an LLM tool call.
+// safety, and pilotage) shared by the destination-research agents.
+// CalculateHeading is scoped to Lookout (the only agent with a next-stop
+// destination), and FilterGPXData is intentionally excluded because GPX
+// smoothing runs deterministically in Go on upload.
 var allNauticalTools = []string{
 	toolGetTides,
 	toolGetWeather,
@@ -67,7 +68,6 @@ var allNauticalTools = []string{
 	toolGetSafetyAlerts,
 	toolQuerySailingDirections,
 	toolQueryCoastPilot,
-	toolCalculateHeading,
 }
 
 var Order = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout}
@@ -116,7 +116,6 @@ var specs = []spec{
 			toolGetWeather,
 			toolGetSunriseSunset,
 			toolGetSafetyAlerts,
-			toolCalculateHeading,
 		},
 		includeSearch:            true,
 		includeFacilityDiscovery: true,

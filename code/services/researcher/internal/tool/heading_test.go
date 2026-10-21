@@ -236,6 +236,23 @@ func TestCalculateHeadingResult(t *testing.T) {
 			wantRelation:    "tailwind",
 			wantHeadingNear: 83.0,
 		},
+		{
+			name: "WindSpeedKt singular alias",
+			req: HeadingRequest{
+				FromLatitude:     41.42,
+				FromLongitude:    -70.92,
+				ToLatitude:       41.45,
+				ToLongitude:      -70.58,
+				FromLocation:     "Cuttyhunk",
+				ToLocation:       "Vineyard Haven",
+				WindDirectionDeg: &windDirHeadwind,
+				WindSpeedKt:      &windSpeedGale,
+			},
+			wantAdverse:     true,
+			wantSeverity:    "warning",
+			wantRelation:    "headwind",
+			wantHeadingNear: 83.0,
+		},
 	}
 
 	for _, tt := range tests {

@@ -8,7 +8,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 3: Position 41.42\u00b0N, 70.92\u00b0W (Cuttyhunk). Forecast winds 36 knots gusting to 48 knots, wave height 14 ft. Distance to next stop is 15 nm at course 220\u00b0."
+                "text": "Audit safety for Stop 1 of 3: Position 41.42\u00b0N, -70.92\u00b0W (Cuttyhunk). Next Destination: Block Island (41.17\u00b0N, -71.56\u00b0W). Forecast winds 36 knots gusting to 48 knots, wave height 14 ft. Distance to next stop is 15 nm at course 220\u00b0."
               }
             ],
             "role": "user"
@@ -56,7 +56,7 @@
           "user_content": {
             "parts": [
               {
-                "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Distance to next stop is 12 nm at course 060\u00b0. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
+                "text": "Audit safety for Stop 1 of 2: Location: Cape Cod Canal (41.7400, -70.5700). Date: July 15, 2026. Next Destination: Provincetown (42.0500, -70.1800). Distance to next stop is 12 nm at course 060\u00b0. Weather is calm with wind 6 knots. Search sailing directions for local navigational hazards."
               }
             ],
             "role": "user"
