@@ -64,7 +64,7 @@ CRITICAL RULES:
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
 11. **References:** Populate the "references" field for each facility with at most 1 URL (the most direct source) if facility_discovery provides one. Keep each facility's "description" to ONE short sentence (under ~20 words). Dense stops can have 100+ facilities, so keep every entry compact.
-12. **Pilot Notes & Sailing Directions:** Synthesize the structured result from 'hydrographic_pilot' (and local pilot sources from search) into the 'pilot_notes' object. Map its fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and its `citations` into 'pilot_notes.sources'. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
+12. **Pilot Notes, Sailing Directions & Cross-Signal Passage Timing:** Synthesize the structured result from 'hydrographic_pilot', 'ComputePassageTimeline' (when a next destination is present), and local pilot sources from search into the 'pilot_notes' object. Map its fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, and its `citations` into 'pilot_notes.sources'. Populate `pilot_notes.departure_and_arrival_timing` explaining how departure tide height/stage (e.g. waiting for a rising tide over a shallow bar), transit speed/headwinds, arrival daylight margin vs. sunset, and Coast Pilot night-entry/unlit-aid constraints interact. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
 
 ```json
 {
@@ -101,6 +101,12 @@ CRITICAL RULES:
 	},
 	"pilot_notes": {
 		"overview": "Comprehensive hydrographic and pilotage overview for entering and staying in this harbor or area.",
+		"departure_and_arrival_timing": {
+			"recommended_departure_window": "09:30 AM – 10:30 AM",
+			"departure_tide_constraint": "How departure tide stage/height interacts with entrance channel or bar depth.",
+			"arrival_outlook": "Expected ETA at next stop, arrival tide state, and daylight margin before sunset.",
+			"night_entry_and_aids_warning": "Any night-entry risks, unlit buoys, or light outages from Coast Pilot / NGA notices if delayed past sunset."
+		},
 		"approach_and_channels": "Controlling depths, recommended approaches, entrance channels, navigational aids, and landmarks.",
 		"anchorages_and_moorings": "Designated anchorage areas, holding ground characteristics, shelter from wind/swells, and mooring field information.",
 		"regulations_and_hazards": "Speed limits, no-wake zones, bridge/overhead clearances, VHF channels, local harbormaster regulations, and specific hazards.",

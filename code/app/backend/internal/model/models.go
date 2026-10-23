@@ -180,8 +180,10 @@ type RegionWithSeasonality struct {
 
 // ProgressEvent is a real-time status update broadcast during async research operations.
 type ProgressEvent struct {
-	Stage   string `json:"stage"`
-	Message string `json:"message"`
+	Stage   string  `json:"stage"`
+	Section string  `json:"section,omitempty"`
+	Message string  `json:"message"`
+	Data    RawJSON `json:"data,omitempty"`
 }
 
 // VoyageRecommendation represents an AI-generated suggestion for a place to stay.
@@ -190,6 +192,8 @@ type VoyageRecommendation struct {
 	VoyageID    int64     `json:"voyage_id" db:"voyage_id"`
 	Name        string    `json:"name" db:"name"`
 	Type        string    `json:"type" db:"type"` // "Anchorage", "Mooring", "Marina"
+	VoyageRole  string    `json:"voyage_role,omitempty" db:"voyage_role"`
+	StayDetails RawJSON   `json:"stay_details,omitempty" db:"stay_details"`
 	Latitude    float64   `json:"latitude" db:"latitude"`
 	Longitude   float64   `json:"longitude" db:"longitude"`
 	RadiusMiles float64   `json:"radius_miles" db:"radius_miles"`

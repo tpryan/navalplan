@@ -56,7 +56,7 @@ let facilityClusterListener = null;
 const FACILITY_CLUSTER_ZOOM = 12;
 const activeFacilityFilters = new Set(['anchorage', 'marina', 'mooring', 'bar', 'restaurant', 'fuel', 'cafe', 'store', 'pharmacy', 'services']);
 let recommendationMarkers = []; // each entry: { marker: AdvancedMarkerElement, type: string }
-const activeFilters = new Set(['anchorage', 'mooring', 'hub', 'fuel']);
+const activeFilters = new Set(['start_end', 'marina', 'anchorage', 'mooring', 'hub', 'fuel']);
 let voyageRecommendations = [];
 let pilotCircle = null;
 let pilotCenterMarker = null;
@@ -460,26 +460,84 @@ async function reverseGeocode(latLng) {
     const { Geocoder } = await importLibrary("geocoding");
     const geocoder = new Geocoder();
     const response = await geocoder.geocode({ location: { lat, lng } });
-    const r = response.results[0];
-    if (!r) return { locationName: `${lat.toFixed(3)}, ${lng.toFixed(3)}`, preciseLocation: '' };
+    const results = response.results || [];
+    if (results.length === 0) return { locationName: `${lat.toFixed(3)}, ${lng.toFixed(3)}`, preciseLocation: '' };
 
-    const getComp = (type) => r.address_components.find(c => c.types.includes(type))?.long_name;
-    const locality = getComp('locality') || getComp('sublocality');
-    const region = getComp('administrative_area_level_1');
-    const country = getComp('country');
+    const { spherical } = await importLibrary("geometry");
+    const targetPos = { lat, lng };
 
-    let locationName = r.formatted_address;
-    if (locality && country) {
-        locationName = region ? `${locality}, ${region}, ${country}` : `${locality}, ${country}`;
-    } else if (region && country) {
-        locationName = `${region}, ${country}`;
-    } else if (country) {
-        locationName = country;
+    // Filter out distant or bogus reverse-geocode results (> 150 km from the requested lat/lng),
+    // such as a Plus Code or POI on open water that resolves to a different country (e.g. Hanoi, Vietnam).
+    const validResults = results.filter(res => {
+        const loc = res?.geometry?.location;
+        if (!loc) return false;
+        const rLat = typeof loc.lat === 'function' ? loc.lat() : loc.lat;
+        const rLng = typeof loc.lng === 'function' ? loc.lng() : loc.lng;
+        if (typeof rLat !== 'number' || typeof rLng !== 'number') return false;
+        const distMeters = spherical.computeDistanceBetween(targetPos, { lat: rLat, lng: rLng });
+        return distMeters <= 150000;
+    });
+
+    const extractPlaceLabel = (res) => {
+        if (!res || !Array.isArray(res.address_components)) return '';
+        const getComp = (type) => res.address_components.find(c => c.types.includes(type))?.long_name;
+        const locality = getComp('locality') || getComp('sublocality') || getComp('postal_town') || getComp('administrative_area_level_3');
+        const natural = getComp('natural_feature') || getComp('archipelago') || getComp('colloquial_area');
+        const county = getComp('administrative_area_level_2');
+        const region = getComp('administrative_area_level_1');
+        const country = getComp('country');
+        const place = locality || natural || county;
+        if (place && country) {
+            return region && region !== place ? `${place}, ${region}, ${country}` : `${place}, ${country}`;
+        }
+        if (region && country) {
+            return `${region}, ${country}`;
+        }
+        return '';
+    };
+
+    const pool = validResults.length > 0 ? validResults : [];
+    const preferred = pool.find(res =>
+        Array.isArray(res.types) && res.types.some(t => [
+            'locality', 'sublocality', 'natural_feature', 'colloquial_area',
+            'administrative_area_level_2', 'administrative_area_level_1'
+        ].includes(t)) && extractPlaceLabel(res) !== ''
+    ) || pool[0];
+
+    let locationName = preferred ? extractPlaceLabel(preferred) : '';
+    if (!locationName) {
+        for (const res of pool) {
+            locationName = extractPlaceLabel(res);
+            if (locationName) break;
+        }
+    }
+
+    // If open-water reverse geocoding returned no local place or a distant country mismatch,
+    // sample 4 cardinal shore points (~12 km W/E/N/S) to find the surrounding state/bay/town.
+    if (!locationName) {
+        for (const bearing of [270, 90, 0, 180]) {
+            try {
+                const shorePt = spherical.computeOffset(targetPos, 12000, bearing);
+                const shoreResp = await geocoder.geocode({ location: shorePt });
+                const shoreHit = (shoreResp.results || []).find(r => extractPlaceLabel(r) !== '');
+                if (shoreHit) {
+                    locationName = extractPlaceLabel(shoreHit);
+                    break;
+                }
+            } catch (_) {}
+        }
+    }
+
+    if (!locationName) {
+        locationName = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
     }
 
     let preciseLocation = '';
-    if (r.plus_code) {
-        preciseLocation = r.plus_code.compound_code || r.plus_code.global_code || '';
+    for (const res of pool) {
+        if (res.plus_code) {
+            preciseLocation = res.plus_code.compound_code || res.plus_code.global_code || '';
+            if (preciseLocation) break;
+        }
     }
 
     return { locationName, preciseLocation };
@@ -929,6 +987,8 @@ async function setVoyageModalTargetCoords(lat, lng, { pan = false, geocode = tru
     if (geocode) {
         try {
             const { locationName, preciseLocation } = await reverseGeocode({ lat, lng });
+            // Guard against out-of-order async geocode responses if coordinates changed while awaiting
+            if (inputLat && Math.abs(parseFloat(inputLat.value) - lat) > 1e-4) return;
             const locInput = document.getElementById('voyage-location-name');
             const preciseInput = document.getElementById('voyage-precise-location');
             if (locInput) locInput.value = locationName;
@@ -1018,8 +1078,8 @@ async function updateVoyageModalMapPreview() {
             zIndex: 100
         });
 
-        voyagePreviewMarker.addListener('drag', (e) => {
-            const newCenter = e.latLng;
+        voyagePreviewMarker.addListener('gmp-drag', (e) => {
+            const newCenter = e?.latLng || voyagePreviewMarker.position;
             if (!newCenter || !voyagePreviewCircle) return;
             voyagePreviewCircle.setCenter(newCenter);
             const currentRadius = voyagePreviewCircle.getRadius();
@@ -1028,17 +1088,21 @@ async function updateVoyageModalMapPreview() {
             }
             const displayCoords = document.getElementById('voyage-coords-display');
             if (displayCoords) {
-                displayCoords.textContent = `Lat: ${newCenter.lat().toFixed(4)}, Lng: ${newCenter.lng().toFixed(4)}`;
+                const cLat = typeof newCenter.lat === 'function' ? newCenter.lat() : newCenter.lat;
+                const cLng = typeof newCenter.lng === 'function' ? newCenter.lng() : newCenter.lng;
+                displayCoords.textContent = `Lat: ${cLat.toFixed(4)}, Lng: ${cLng.toFixed(4)}`;
             }
         });
 
-        voyagePreviewMarker.addListener('dragend', async (e) => {
+        const onCenterDragEnd = async (e) => {
             const pos = e?.latLng || voyagePreviewMarker.position;
             if (!pos) return;
             const dLat = typeof pos.lat === 'function' ? pos.lat() : pos.lat;
             const dLng = typeof pos.lng === 'function' ? pos.lng() : pos.lng;
             await setVoyageModalTargetCoords(dLat, dLng, { pan: false, geocode: true });
-        });
+        };
+        voyagePreviewMarker.addListener('dragend', onCenterDragEnd);
+        voyagePreviewMarker.addListener('gmp-dragend', onCenterDragEnd);
     } else {
         voyagePreviewMarker.map = map;
         voyagePreviewMarker.position = position;
@@ -3037,21 +3101,95 @@ async function renderRecommendations() {
         const { AdvancedMarkerElement } = await importLibrary("marker");
 
         const recLabels = {
-            hub: 'Resource Hub', anchorage: 'Anchorage', mooring: 'Mooring', fuel: 'Fuel Station',
+            start_end: 'Start / End Charter Base',
+            marina:    'Overnight Marina (Slips)',
+            hub:       'Overnight Marina (Slips)',
+            anchorage: 'Overnight Anchorage',
+            mooring:   'Overnight Mooring',
+            fuel:      'Fuel & Day Stop',
+        };
+
+        const isCharterOrStartBase = (rec) => {
+            const type = (rec.type || '').toLowerCase();
+            if (type.includes('anchor') || type.includes('moor') || type.includes('fuel') || type.includes('launch')) {
+                return false;
+            }
+            const name = (rec.name || '').toLowerCase();
+            const stopoverOnlyKeywords = [
+                'resort, spa', 'resort & spa', 'island resort', 'harbour inn', 'harbor inn',
+                "soper's hole", 'sopers hole', 'freshwater pond', 'scrub island', 'bitter end',
+                'saba rock', 'leverick', 'marina cay', 'cooper island', 'peter island',
+                'norman island', 'jost van dyke', 'st. michaels', 'st michaels', 'oxford',
+                'tilghman', 'knapps narrows', 'poplar island',
+            ];
+            if (stopoverOnlyKeywords.some(kw => name.includes(kw))) {
+                return false;
+            }
+
+            let sd = null;
+            if (rec.stay_details) {
+                try {
+                    sd = typeof rec.stay_details === 'string' ? JSON.parse(rec.stay_details) : rec.stay_details;
+                } catch (_) {}
+            }
+            if (sd && (sd.is_charter_base || (Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0))) {
+                return true;
+            }
+            const role = (rec.voyage_role || '').toLowerCase();
+            if (role === 'start_end_base') {
+                return true;
+            }
+
+            const text = `${rec.name || ''} ${rec.description || ''} ${rec.reasoning || ''}`.toLowerCase();
+            const charterSignals = [
+                'charter base', 'charter fleet', 'bareboat charter', 'yacht charter',
+                'charter company', 'charter companies', 'charter operator', 'embarkation base',
+                'sailing capital', 'starting point', 'embarkation', 'turnaround',
+                'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax',
+                'waypoints', 'cruise annapolis', 'annapolis bay charters', 'haven charters',
+                'annapolis city marina', 'annapolis harbor', 'annapolis harbour', 'port annapolis',
+                'bert jabin',
+                'san juan sailing', 'anacortes yacht', 'bellingham yacht',
+                'bvi yacht charters', 'horizon yacht', 'voyage charters', 'conch charters',
+                'tortola marine management', 'tmm yacht', 'footloose',
+            ];
+            return charterSignals.some(sig => text.includes(sig));
         };
 
         voyageRecommendations.forEach((rec) => {
+            if (typeof rec.latitude !== 'number' || typeof rec.longitude !== 'number' ||
+                Number.isNaN(rec.latitude) || Number.isNaN(rec.longitude)) {
+                return;
+            }
             const type = (rec.type || '').toLowerCase();
-            const filterKey = type.includes('anchor') ? 'anchorage' : type.includes('moor') ? 'mooring' : type.includes('fuel') ? 'fuel' : 'hub';
-            const accent = markerAccent(rec.type);
-            const dot = accentDot(accent, 28, filterKey);
+            const role = (rec.voyage_role || '').toLowerCase();
+            let filterKey;
+            if (isCharterOrStartBase(rec)) {
+                filterKey = 'start_end';
+            } else if (role === 'service_only' || role === 'day_stop' || type.includes('fuel') || type.includes('launch')) {
+                filterKey = 'fuel';
+            } else if (type.includes('anchor')) {
+                filterKey = 'anchorage';
+            } else if (type.includes('moor')) {
+                filterKey = 'mooring';
+            } else {
+                filterKey = 'marina';
+            }
+
+            const accent = filterKey === 'start_end' ? 'coral' : filterKey === 'marina' ? 'amber' : markerAccent(rec.type);
+            const iconKey = filterKey === 'start_end' ? 'start_end' : filterKey === 'marina' ? 'marina' : filterKey;
+            const pinSize = filterKey === 'start_end' ? 38 : 28;
+            const dot = accentDot(accent, pinSize, iconKey);
+            if (filterKey === 'start_end') {
+                dot.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.35), 0 3px 10px rgba(0,0,0,.45)';
+            }
 
             const marker = new AdvancedMarkerElement({
                 map,
                 position: { lat: rec.latitude, lng: rec.longitude },
                 content: dot,
-                title: rec.name,
-                zIndex: 20,
+                title: `${recLabels[filterKey] || 'Spot'}: ${rec.name}`,
+                zIndex: filterKey === 'start_end' ? 30 : 20,
             });
 
             if (!activeFilters.has(filterKey)) marker.map = null;
@@ -3100,11 +3238,46 @@ async function showRecommendationInfoWindow(rec, anchor, style) {
             Add to Itinerary
         </button>` : '';
 
+    let stayDetails = {};
+    if (rec.stay_details) {
+        try {
+            stayDetails = typeof rec.stay_details === 'string' ? JSON.parse(rec.stay_details) : rec.stay_details;
+        } catch (_) {}
+    }
+    const roleLabels = {
+        start_end_base: 'Start / End Charter Base',
+        overnight_stop: 'Overnight Stop',
+        day_stop: 'Day Stop',
+        service_only: 'Fuel & Service'
+    };
+    const roleBadgeHtml = rec.voyage_role && roleLabels[rec.voyage_role]
+        ? `<span style="display:inline-block;margin-left:6px;padding:2px 6px;border-radius:4px;background:${accentHex}22;color:${accentHex};font-size:10px;font-weight:800;text-transform:uppercase">${roleLabels[rec.voyage_role]}</span>`
+        : '';
+
+    const capPills = [];
+    if (stayDetails.is_charter_base) capPills.push('Charter Base');
+    if (stayDetails.has_transient_slips) capPills.push('Transient Slips');
+    if (stayDetails.has_moorings) capPills.push('Moorings');
+    if (stayDetails.has_anchorage) capPills.push('Overnight Anchorage');
+    if (stayDetails.has_fuel) capPills.push('Fuel');
+    const capPillsHtml = capPills.length > 0
+        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0">${capPills.map(p => `<span style="font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid ${accentHex}55;color:${inkHex}">${p}</span>`).join('')}</div>`
+        : '';
+    const stayNotesParts = [];
+    if (stayDetails.slip_notes) stayNotesParts.push(stayDetails.slip_notes);
+    if (stayDetails.holding_and_depth) stayNotesParts.push(`Holding: ${stayDetails.holding_and_depth}`);
+    if (stayDetails.protection) stayNotesParts.push(`Shelter: ${stayDetails.protection}`);
+    const stayNotesHtml = stayNotesParts.length > 0
+        ? `<p style="margin:4px 0 8px;font-size:12px;color:${mutedHex}">${stayNotesParts.join(' · ')}</p>`
+        : '';
+
     const content = `
         <div style="color:${inkHex};background:${surfaceHex};max-width:280px;font-family:system-ui,sans-serif;padding:4px">
             <b style="font-size:15px;font-weight:700;display:block;margin-bottom:4px">${rec.name}</b>
-            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${accentHex}">${style.label}</span>
+            <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${accentHex}">${style.label}</span>${roleBadgeHtml}
+            ${capPillsHtml}
             <p style="margin:8px 0;font-size:13px;line-height:1.5;color:${mutedHex}">${rec.description || ''}</p>
+            ${stayNotesHtml}
             <div style="background:${accentHex}18;border-left:3px solid ${accentHex};padding:8px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:13px;color:${inkHex};font-style:italic">"${rec.reasoning || ''}"</div>
             ${resourcesHtml}
             ${addButton}
@@ -3832,6 +4005,7 @@ async function handleResearchClick(stop, button) {
         // Start radar sweep on this stop's position
         if (map) startStopSweepSequence([stop]);
 
+        let partialBriefing = { stop_id: stop.id };
         // Stream progress updates
         if (resRes.session_id) {
             _stopProgressES = API.streamProgress(resRes.session_id, (evt) => {
@@ -3839,6 +4013,17 @@ async function handleResearchClick(stop, button) {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
+                }
+                if (evt && evt.stage === 'partial' && evt.section && evt.data) {
+                    if (evt.section === 'weather') partialBriefing.weather_summary = evt.data;
+                    else if (evt.section === 'tides') partialBriefing.tides = evt.data;
+                    else if (evt.section === 'sun') partialBriefing.sun_phase = evt.data;
+                    else if (evt.section === 'facilities') partialBriefing.facilities = evt.data;
+                    else if (evt.section === 'pilot_notes') partialBriefing.pilot_notes = evt.data;
+                    else if (evt.section === 'alerts') partialBriefing.safety_alerts = evt.data;
+                    try {
+                        showBriefing(partialBriefing);
+                    } catch (_) {}
                 }
                 if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
                     pushProgressStep(stopSteps, evt.message, evt.stage === 'done');
@@ -7088,15 +7273,65 @@ function generateGuideHTML(guide) {
         leftCol += `</div>`;
     }
 
-    // Major Hubs moved to full-width section below the 2-col grid
+    // Major Hubs & Start / End Bases moved to full-width section below the 2-col grid
     let hubsSection = '';
+    const startEndRecs = (typeof voyageRecommendations !== 'undefined' && Array.isArray(voyageRecommendations))
+        ? voyageRecommendations.filter(r => {
+            const role = (r.voyage_role || '').toLowerCase();
+            if (role === 'start_end_base') return true;
+            if (r.stay_details) {
+                try {
+                    const sd = typeof r.stay_details === 'string' ? JSON.parse(r.stay_details) : r.stay_details;
+                    if (sd && (sd.is_charter_base || (Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0))) return true;
+                } catch (_) {}
+            }
+            const t = (r.type || '').toLowerCase();
+            if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch')) return false;
+            const text = `${r.name || ''} ${r.description || ''} ${r.reasoning || ''}`.toLowerCase();
+            return ['charter base', 'charter fleet', 'bareboat charter', 'yacht charter', 'sailing capital', 'starting point', 'embarkation', 'turnaround', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'annapolis city marina', 'port annapolis', 'bert jabin', 'nanny cay', 'wickhams cay', 'hodges creek', 'parham town'].some(sig => text.includes(sig));
+        })
+        : [];
+
+    if (startEndRecs.length > 0) {
+        hubsSection += `<div class="np-report-item--non-sailing" style="margin-bottom:20px">`;
+        hubsSection += sectionChip('Recommended Start & End Bases (Charter & Turnaround Hubs)', 'coral');
+        hubsSection += `<div class="np-hub-grid">`;
+        startEndRecs.forEach(r => {
+            let sd = {};
+            if (r.stay_details) {
+                try { sd = typeof r.stay_details === 'string' ? JSON.parse(r.stay_details) : r.stay_details; } catch (_) {}
+            }
+            const fleets = Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0
+                ? `<div style="margin-top:6px;font-size:12px;color:var(--ink)"><strong>Charter Fleets:</strong> ${sd.charter_companies.join(', ')}</div>`
+                : '';
+            const refs = r.reference_links ? (typeof r.reference_links === 'string' ? JSON.parse(r.reference_links) : r.reference_links) : [];
+            hubsSection += `<div class="np-hub-card" style="border-left:3px solid var(--coral)">
+                <div class="np-hub-card__name">
+                    <span class="material-symbols-outlined" style="font-size:15px;vertical-align:middle;color:var(--coral);margin-right:4px">flag</span>
+                    ${r.name}
+                    <span style="display:inline-block;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.12);color:var(--coral);font-size:10px;font-weight:800;text-transform:uppercase">Start / End Base</span>
+                    ${r.url ? ` <a href="${r.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}
+                </div>
+                <p class="np-hub-card__desc">${r.description || ''}</p>
+                ${r.reasoning ? `<p class="np-hub-card__desc" style="font-style:italic;opacity:0.85">"${r.reasoning}"</p>` : ''}
+                ${fleets}
+                ${refs && refs.length ? renderReferences(refs) : ''}
+            </div>`;
+        });
+        hubsSection += `</div></div>`;
+    }
+
     if (guide.hubs && guide.hubs.length > 0) {
         hubsSection += `<div class="np-report-item--non-sailing">`;
-        hubsSection += sectionChip('Major Hubs', 'amber');
+        hubsSection += sectionChip('Major Hubs & Overnight Marinas', 'amber');
         hubsSection += `<div class="np-hub-grid">`;
         guide.hubs.forEach(h => {
-            hubsSection += `<div class="np-hub-card">
-                <div class="np-hub-card__name">${h.name}${h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
+            const isStartBase = h.voyage_role === 'start_end_base';
+            const badge = isStartBase
+                ? `<span style="display:inline-block;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.12);color:var(--coral);font-size:10px;font-weight:800;text-transform:uppercase">Start / End Base</span>`
+                : '';
+            hubsSection += `<div class="np-hub-card"${isStartBase ? ' style="border-left:3px solid var(--coral)"' : ''}>
+                <div class="np-hub-card__name">${h.name}${badge}${h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky);font-weight:400">(Website)</a>` : ''}</div>
                 <p class="np-hub-card__desc">${h.description}</p>
                 ${h.references && h.references.length ? renderReferences(h.references) : ''}
             </div>`;

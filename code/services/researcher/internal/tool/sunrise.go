@@ -22,10 +22,12 @@ type SunriseArgs struct {
 
 // SunriseResult defines the response structure for the get_sunrise_sunset tool.
 type SunriseResult struct {
-	Date     string `json:"date"`
-	Sunrise  string `json:"sunrise"`
-	Sunset   string `json:"sunset"`
-	TimeZone string `json:"time_zone"`
+	Date          string `json:"date"`
+	Sunrise       string `json:"sunrise"`
+	Sunset        string `json:"sunset"`
+	TimeZone      string `json:"time_zone"`
+	Digest        string `json:"digest,omitempty"`
+	SummaryDigest string `json:"summary_digest,omitempty"`
 }
 
 // TimezoneClient defines the interface for the Google Maps Timezone API client.
@@ -103,10 +105,14 @@ func (sp *SunriseProvider) GetSunriseSunset(ctx agent.Context, args SunriseArgs)
 
 	timeFmt := "2006-01-02T15:04:05"
 
-	return SunriseResult{
+	res := SunriseResult{
 		Date:     args.Date,
 		Sunrise:  localRise.Format(timeFmt),
 		Sunset:   localSet.Format(timeFmt),
 		TimeZone: timeZoneID,
-	}, nil
+	}
+	res.Digest = fmt.Sprintf("Sunrise %s, Sunset %s (%s)", res.Sunrise, res.Sunset, res.TimeZone)
+	res.SummaryDigest = res.Digest
+	setSessionState(ctx, StateKeyBriefingSun, res)
+	return res, nil
 }

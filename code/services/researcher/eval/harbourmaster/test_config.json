@@ -1,5 +1,26 @@
 {
   "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-3.5-flash-lite",
+        "num_samples": 1
+      },
+      "rubrics": [
+        {
+          "rubric_id": "json_format",
+          "rubric_content": {
+            "text_property": "The response is a valid JSON object containing weather_summary, sun_phase, tides, pilot_notes, and facilities."
+          }
+        },
+        {
+          "rubric_id": "departure_and_arrival_timing_populated",
+          "rubric_content": {
+            "text_property": "When a next destination is provided in the prompt, pilot_notes includes a 'departure_and_arrival_timing' object (or equivalent timing guidance) addressing the recommended departure window, departure tide constraints, arrival daylight margin vs sunset, and any night-entry / unlit-aid warnings."
+          }
+        }
+      ]
+    },
     "rubric_based_tool_use_quality_v1": {
       "threshold": 0.8,
       "judge_model_options": {

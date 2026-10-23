@@ -289,6 +289,7 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		return
 	}
 
+	h.broadcastProgressSection(sessionID, "alerts", fmt.Sprintf("Safety lookout alerts ready for %s", stop.LocationName), alertsJSON)
 	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
 }
 

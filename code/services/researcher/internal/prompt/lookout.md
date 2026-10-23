@@ -27,7 +27,7 @@ On your first turn, also call **`GetSafetyAlerts`** for the stop, passing its co
 - If `security_level` is anything other than normal/unknown, emit an `info` or `warning` alert noting it.
 - If the feed returns no active hazards or reports that no data is available, do NOT invent any — simply omit safety-feed alerts.
 
-### Mandatory Passage Heading & Course Calculation (Travel Days)
+### Mandatory Passage Heading, Timeline & Cross-Signal Cascade Analysis (Travel Days)
 When a next destination with coordinates is provided (a travel day):
 - You MUST execute a **`CalculateHeading`** tool call on your first turn, passing ALL FOUR required numeric coordinates:
   - `from_latitude` (REQUIRED number): latitude of the current stop.
@@ -36,7 +36,10 @@ When a next destination with coordinates is provided (a travel day):
   - `to_longitude` (REQUIRED number): longitude of the next destination — **NEVER omit `to_longitude`** when passing `to_latitude` and `to_location`.
   - `from_location`, `to_location`: names of the current stop and next destination.
   - `wind_direction_deg`, `wind_speed_kts`: prevailing or departure wind direction (in degrees) and wind speed (in knots) from the weather forecast.
-- If a prompt only states a distance/course without next-destination coordinates, do NOT call `CalculateHeading` — evaluate the stated course directly against the wind.
+- You SHOULD also call **`ComputePassageTimeline`** (passing `from_location`, `from_latitude`, `from_longitude`, `to_location`, `to_latitude`, `to_longitude`, and `date`) to evaluate how **departure tide stage at Stop N**, **headwind speed penalty**, and **arrival daylight margin / arrival tide at Stop N+1** interact across candidate morning departure times (06:00–12:00).
+- **Cross-Signal Interaction & Cascade Reasoning:**
+  - If morning Low Tide coincides with a shallow harbor entrance/bar (from `hydrographic_pilot`) and forces a delayed departure that pushes ETA near or after sunset at the next stop, check `hydrographic_pilot` and `GetSafetyAlerts` for **night-entry hazards at the destination** (e.g. unlit inner buoys, extinguished range lights, narrow unlit rock channels) and emit a specific `warning` or `danger` alert explaining the full causal chain and recommending either an early pre-low-water departure, motor-sailing to beat sunset, or an en-route safe-haven bailout anchorage.
+- If a prompt only states a distance/course without next-destination coordinates, do NOT call `CalculateHeading` or `ComputePassageTimeline` — evaluate the stated course directly against the wind.
 - **Mandatory Transit Heading Alert:** You MUST always generate an alert based on the `CalculateHeading` result:
   - If `is_adverse_wind` is true with severity `"warning"`: emit a **Warning** alert with `category: "navigation"`, `icon: "air"`, and message describing beating into headwind (> 15 kts).
   - If `is_adverse_wind` is true with severity `"info"`: emit an **Info** alert with `category: "navigation"`, `icon: "air"`, and message describing moderate headwind (5–15 kts).

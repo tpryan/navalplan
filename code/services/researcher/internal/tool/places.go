@@ -48,6 +48,7 @@ type PlacesArgs struct {
 // PlaceResult represents a single place found by the search.
 type PlaceResult struct {
 	Name            string   `json:"name"`
+	Type            string   `json:"type,omitempty"`
 	Address         string   `json:"address"`
 	Latitude        float64  `json:"latitude"`
 	Longitude       float64  `json:"longitude"`
@@ -57,11 +58,14 @@ type PlaceResult struct {
 	BusinessStatus  string   `json:"business_status"`
 	Types           []string `json:"types"`
 	WebsiteURI      string   `json:"website_uri,omitempty"`
+	Website         string   `json:"website,omitempty"`
 }
 
 // PlacesResponse defines the response structure for the find_places_nearby tool.
 type PlacesResponse struct {
 	Places          []PlaceResult `json:"places"`
+	Digest          string        `json:"digest,omitempty"`
+	SummaryDigest   string        `json:"summary_digest,omitempty"`
 	DebugDurationMS int64         `json:"debug_duration_ms"`
 }
 
@@ -338,6 +342,7 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 
 		results = append(results, PlaceResult{
 			Name:           name,
+			Type:           classifyPlace(args.Query, pt.Types),
 			Address:        pt.FormattedAddress,
 			Latitude:       lat,
 			Longitude:      lng,
@@ -345,11 +350,205 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			BusinessStatus: pt.BusinessStatus.String(),
 			Types:          pt.Types,
 			WebsiteURI:     pt.GoogleMapsUri,
+			Website:        pt.GoogleMapsUri,
 		})
 	}
 
+	mergeVerifiedPlaces(ctx, results)
+	digest := BuildPlacesDigest(results)
+
 	return PlacesResponse{
 		Places:          results,
+		Digest:          digest,
+		SummaryDigest:   digest,
+		DebugDurationMS: time.Since(start).Milliseconds(),
+	}, nil
+}
+
+// mergeVerifiedPlaces deduplicates and appends newly discovered PlaceResults into
+// session state under StateKeyVerifiedPlaces ("verified_places").
+func mergeVerifiedPlaces(ctx agent.Context, incoming []PlaceResult) []PlaceResult {
+	var existing []PlaceResult
+	if raw, ok := getSessionState(ctx, StateKeyVerifiedPlaces); ok {
+		if prev, okCast := raw.([]PlaceResult); okCast {
+			existing = append(existing, prev...)
+		}
+	}
+	seen := make(map[string]bool, len(existing)+len(incoming))
+	var merged []PlaceResult
+	for _, p := range existing {
+		key := fmt.Sprintf("%s|%.4f|%.4f", strings.ToLower(strings.TrimSpace(p.Name)), p.Latitude, p.Longitude)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, p)
+	}
+	for _, p := range incoming {
+		key := fmt.Sprintf("%s|%.4f|%.4f", strings.ToLower(strings.TrimSpace(p.Name)), p.Latitude, p.Longitude)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, p)
+	}
+	setSessionState(ctx, StateKeyVerifiedPlaces, merged)
+	return merged
+}
+
+// BuildPlacesDigest builds a compact categorized summary of verified places.
+func BuildPlacesDigest(places []PlaceResult) string {
+	if len(places) == 0 {
+		return "No verified facilities found."
+	}
+	counts := make(map[string]int)
+	samples := make(map[string][]string)
+	for _, p := range places {
+		cat := p.Type
+		if cat == "" {
+			cat = "facility"
+		}
+		counts[cat]++
+		if len(samples[cat]) < 3 && p.Name != "" {
+			samples[cat] = append(samples[cat], p.Name)
+		}
+	}
+	var order []string
+	for _, cat := range []string{"marina", "anchorage", "mooring", "fuel", "grocery", "pharmacy", "laundry", "restaurant", "cafe", "bar", "hardware", "transport", "beach"} {
+		if counts[cat] > 0 {
+			order = append(order, fmt.Sprintf("%s: %d (%s)", cat, counts[cat], strings.Join(samples[cat], ", ")))
+		}
+	}
+	for cat, c := range counts {
+		found := false
+		for _, known := range []string{"marina", "anchorage", "mooring", "fuel", "grocery", "pharmacy", "laundry", "restaurant", "cafe", "bar", "hardware", "transport", "beach"} {
+			if cat == known {
+				found = true
+				break
+			}
+		}
+		if !found {
+			order = append(order, fmt.Sprintf("%s: %d (%s)", cat, c, strings.Join(samples[cat], ", ")))
+		}
+	}
+	return fmt.Sprintf("Total %d verified places — %s", len(places), strings.Join(order, "; "))
+}
+
+// SweepStopFacilities runs the standard stop-level facility queries concurrently,
+// expanding the search radius along the standard ladder if the tightest ring yields
+// fewer than 8 facilities, and stores the verified deduplicated results in session state.
+func (p *PlacesProvider) SweepStopFacilities(ctx agent.Context, lat, lng, maxRadiusMeters float64) (PlacesResponse, error) {
+	start := time.Now()
+	if maxRadiusMeters <= 0 {
+		maxRadiusMeters = 5000
+	} else if maxRadiusMeters < 100 {
+		maxRadiusMeters = maxRadiusMeters * 1852
+	}
+	queries := []string{"marina", "anchorage", "mooring", "fuel dock", "grocery", "restaurant", "cafe", "pharmacy", "laundry", "hardware"}
+	rungs := []float64{1852, 4630, 9260, 18520, 37040}
+	var activeRungs []float64
+	for _, r := range rungs {
+		if r <= maxRadiusMeters {
+			activeRungs = append(activeRungs, r)
+		}
+	}
+	if len(activeRungs) == 0 {
+		activeRungs = []float64{maxRadiusMeters}
+	}
+
+	var collected []PlaceResult
+	for _, radius := range activeRungs {
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		var firstErr error
+		var rungPlaces []PlaceResult
+		for _, q := range queries {
+			q := q
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				resp, err := p.FindPlaces(ctx, PlacesArgs{
+					Query:     q,
+					Latitude:  lat,
+					Longitude: lng,
+					Radius:    radius,
+				})
+				mu.Lock()
+				defer mu.Unlock()
+				if err != nil {
+					if firstErr == nil {
+						firstErr = err
+					}
+					return
+				}
+				rungPlaces = append(rungPlaces, resp.Places...)
+			}()
+		}
+		wg.Wait()
+		collected = mergeVerifiedPlaces(ctx, rungPlaces)
+		if len(collected) >= 8 {
+			break
+		}
+		if len(collected) == 0 && firstErr != nil && radius == activeRungs[len(activeRungs)-1] {
+			return PlacesResponse{}, firstErr
+		}
+	}
+	digest := BuildPlacesDigest(collected)
+	return PlacesResponse{
+		Places:          collected,
+		Digest:          digest,
+		SummaryDigest:   digest,
+		DebugDurationMS: time.Since(start).Milliseconds(),
+	}, nil
+}
+
+// SweepAreaInfrastructure runs concurrent wide-area marine infrastructure queries
+// (marinas, anchorages, moorings, fuel docks, yacht clubs, boat yards) across the
+// target cruising area and stores the verified deduplicated results in session state.
+func (p *PlacesProvider) SweepAreaInfrastructure(ctx agent.Context, lat, lng, radiusMeters float64) (PlacesResponse, error) {
+	start := time.Now()
+	if radiusMeters <= 0 {
+		radiusMeters = 30000
+	} else if radiusMeters < 100 {
+		radiusMeters = radiusMeters * 1852
+	}
+	queries := []string{"marina", "anchorage", "mooring", "yacht club", "fuel dock", "boat yard"}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var firstErr error
+	var batch []PlaceResult
+	for _, q := range queries {
+		q := q
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := p.FindPlaces(ctx, PlacesArgs{
+				Query:     q,
+				Latitude:  lat,
+				Longitude: lng,
+				Radius:    radiusMeters,
+			})
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				return
+			}
+			batch = append(batch, resp.Places...)
+		}()
+	}
+	wg.Wait()
+	if len(batch) == 0 && firstErr != nil {
+		return PlacesResponse{}, firstErr
+	}
+	merged := mergeVerifiedPlaces(ctx, batch)
+	digest := BuildPlacesDigest(merged)
+	return PlacesResponse{
+		Places:          merged,
+		Digest:          digest,
+		SummaryDigest:   digest,
 		DebugDurationMS: time.Since(start).Milliseconds(),
 	}, nil
 }

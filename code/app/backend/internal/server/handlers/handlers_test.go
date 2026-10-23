@@ -638,6 +638,8 @@ func TestResearchBriefing(t *testing.T) {
 	mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 	mockStore.On("ListStops", voyageID, 0, 0).Return([]model.Stop{}, nil).Maybe()
+	mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil).Maybe()
+	mockStore.On("ListStopTracks", stopID).Return([]model.VoyageTrack{}, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
 
@@ -701,6 +703,8 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 		{ID: 10, LocationName: "Stop 1"},
 		{ID: 11, LocationName: "Stop 2"},
 	}, nil).Maybe()
+	mockStore.On("ListVoyageTracks", mock.Anything).Return([]model.VoyageTrack{}, nil).Maybe()
+	mockStore.On("ListStopTracks", mock.Anything).Return([]model.VoyageTrack{}, nil).Maybe()
 	mockStore.On("GetBriefing", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetVoyageGuide", mock.Anything).Return(nil, assert.AnError).Maybe()

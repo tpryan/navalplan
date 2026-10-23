@@ -65,15 +65,41 @@ type agentRunRequest struct {
 	} `json:"newMessage"`
 }
 
-// AgentEvent mirrors the ADK event structure.
+// AgentFunctionCall represents a tool invocation emitted in an ADK stream event.
+type AgentFunctionCall struct {
+	ID   string         `json:"id,omitempty"`
+	Name string         `json:"name"`
+	Args map[string]any `json:"args,omitempty"`
+}
+
+// AgentFunctionResponse represents a tool result emitted in an ADK stream event.
+type AgentFunctionResponse struct {
+	ID       string         `json:"id,omitempty"`
+	Name     string         `json:"name"`
+	Response map[string]any `json:"response,omitempty"`
+}
+
+// AgentEvent mirrors the ADK event structure, including intermediate tool calls
+// and session state deltas.
 type AgentEvent struct {
 	Content struct {
 		Parts []struct {
-			Text    string `json:"text"`
-			Thought bool   `json:"thought,omitempty"`
+			Text             string                 `json:"text"`
+			Thought          bool                   `json:"thought,omitempty"`
+			FunctionCall     *AgentFunctionCall     `json:"functionCall,omitempty"`
+			FunctionResponse *AgentFunctionResponse `json:"functionResponse,omitempty"`
 		} `json:"parts"`
 		Role string `json:"role"`
 	} `json:"content"`
+	Actions struct {
+		StateDelta map[string]json.RawMessage `json:"stateDelta,omitempty"`
+	} `json:"actions,omitempty"`
+}
+
+// EventStreamRunner is an optional interface implemented by AgentRunner for callers
+// that want live intermediate tool and state-delta events during streaming.
+type EventStreamRunner interface {
+	RunStreamingWithEvents(ctx context.Context, appName, userID, sessionID, prompt string, onEvent func(AgentEvent)) (string, error)
 }
 
 // CreateSession creates an agent session. state is optional; pass nil for no session state.
@@ -155,6 +181,13 @@ func (r *AgentRunner) RunSync(ctx context.Context, appName, userID, sessionID, p
 // text from all event parts. It handles SSE (data: ...), NDJSON, and JSON-array
 // response formats.
 func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, sessionID, prompt string) (string, error) {
+	return r.RunStreamingWithEvents(ctx, appName, userID, sessionID, prompt, nil)
+}
+
+// RunStreamingWithEvents streams the agent response and invokes onEvent (if non-nil)
+// for every decoded ADK AgentEvent (including intermediate FunctionCall, FunctionResponse,
+// and StateDelta events) as they arrive.
+func (r *AgentRunner) RunStreamingWithEvents(ctx context.Context, appName, userID, sessionID, prompt string, onEvent func(AgentEvent)) (string, error) {
 	target, err := r.getTarget(ctx, appName)
 	if err != nil {
 		return "", err
@@ -209,6 +242,9 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 			return "", fmt.Errorf("decode streaming events array: %w", err)
 		}
 		for _, e := range events {
+			if onEvent != nil {
+				onEvent(e)
+			}
 			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {
 				for _, p := range e.Content.Parts {
 					if p.Text != "" && !p.Thought {
@@ -254,6 +290,10 @@ func (r *AgentRunner) RunStreaming(ctx context.Context, appName, userID, session
 					break
 				}
 				continue
+			}
+
+			if onEvent != nil {
+				onEvent(e)
 			}
 
 			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {

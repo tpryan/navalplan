@@ -120,6 +120,30 @@
           "type": "FINAL_RESPONSE_QUALITY"
         }
       ]
+    },
+    {
+      "eval_id": "tide_delayed_departure_night_arrival_cascade",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Audit safety for Stop 1 of 2: Location: Cuttyhunk Pond (41.4244, -70.9317). Date: October 20, 2026. Next Destination: Menemsha Basin (41.3536, -70.7667). Distance to next stop: 24.0 nautical miles at a course of 115\u00b0 to Menemsha. Morning Low Tide at Cuttyhunk is at 08:30 AM (0.2 ft MLLW over a 6 ft controlling entrance channel sill, delaying safe departure until ~10:30 AM rising tide). Sunset is at 05:55 PM, and forecast wind is 17 knots from 115\u00b0 (dead ahead, slowing VMG to ~3.8 knots so a 10:30 AM departure arrives after sunset around 04:50\u201306:15 PM). Coast Pilot notes unlit inner channel buoys and strong tidal rips at the Menemsha jetties. Evaluate the interaction between the low-tide departure delay, headwind transit speed, sunset arrival window, and night-entry aids."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ],
+      "rubrics": [
+        {
+          "rubric_id": "tide_daylight_pilotage_cascade_alert",
+          "rubric_content": {
+            "text_property": "The response identifies the interaction between the morning low-tide departure constraint, slow upwind transit speed, and the risk of arriving near or after sunset at an entrance with unlit buoys/jetties (and recommends an earlier departure window, motor-sailing, or an alternative/bailout plan)."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        }
+      ]
     }
   ]
 }

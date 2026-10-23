@@ -10,10 +10,53 @@ import (
 // session. agenttool copies parent state into sub-agent sessions, so they are
 // visible to facility_discovery's tool calls too.
 const (
-	stateStopLatitude     = "stop_latitude"
-	stateStopLongitude    = "stop_longitude"
-	stateAreaRadiusMeters = "area_radius_meters"
+	stateStopLatitude       = "stop_latitude"
+	stateStopLongitude      = "stop_longitude"
+	stateAreaRadiusMeters   = "area_radius_meters"
+	StateKeyBriefingWeather = "briefing_weather"
+	StateKeyBriefingTides   = "briefing_tides"
+	StateKeyBriefingSun     = "briefing_sun"
+	StateKeyVerifiedPlaces  = "verified_places"
 )
+
+// setSessionState safely writes a key-value pair to the ADK session state if
+// available, recovering from mock contexts that panic on State().
+func setSessionState(ctx agent.Context, key string, val any) {
+	if ctx == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	st := ctx.State()
+	if st == nil {
+		return
+	}
+	if err := st.Set(key, val); err != nil {
+		slog.WarnContext(ctx, "Failed to set session state", "key", key, "error", err)
+	}
+}
+
+// getSessionState safely reads a key from the ADK session state if available.
+func getSessionState(ctx agent.Context, key string) (val any, ok bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	defer func() {
+		if recover() != nil {
+			val, ok = nil, false
+		}
+	}()
+	st := ctx.State()
+	if st == nil {
+		return nil, false
+	}
+	v, err := st.Get(key)
+	if err != nil || v == nil {
+		return nil, false
+	}
+	return v, true
+}
 
 // areaSearchRadius reads the voyage-wide area search radius (in meters) from
 // session state when running Local Pilot / area discovery.

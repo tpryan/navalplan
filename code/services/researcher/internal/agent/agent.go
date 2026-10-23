@@ -45,14 +45,16 @@ const (
 // spec.toolNames, so each agent receives only the tools its task needs
 // instead of the full "kitchen-sink" bundle.
 const (
-	toolGetTides               = "GetTides"
-	toolGetWeather             = "GetWeather"
-	toolGetSunriseSunset       = "GetSunriseSunset"
-	toolFindPlacesNearby       = "FindPlacesNearby"
-	toolGetSafetyAlerts        = "GetSafetyAlerts"
-	toolQuerySailingDirections = "QuerySailingDirections"
-	toolQueryCoastPilot        = "QueryCoastPilot"
-	toolCalculateHeading       = "CalculateHeading"
+	toolGetTides                    = "GetTides"
+	toolGetWeather                  = "GetWeather"
+	toolGetSunriseSunset            = "GetSunriseSunset"
+	toolFindPlacesNearby            = "FindPlacesNearby"
+	toolGetSafetyAlerts             = "GetSafetyAlerts"
+	toolQuerySailingDirections      = "QuerySailingDirections"
+	toolQueryCoastPilot             = "QueryCoastPilot"
+	toolCalculateHeading            = "CalculateHeading"
+	toolComputePassageTimeline      = "ComputePassageTimeline"
+	toolGetCandidateRegionsForMonth = "GetCandidateRegionsForMonth"
 )
 
 // allNauticalTools is the full briefing-grade bundle (environment, facilities,
@@ -93,14 +95,17 @@ var specs = []spec{
 		includeSearch: true,
 	},
 	{
-		// Debrief performs a post-voyage tactical review of a recorded track
-		// against its planned route. All telemetry is supplied directly in the
-		// prompt, so it needs no tools and no web search.
-		name:          Debrief,
-		description:   "A post-voyage tactical pilot that debriefs a recorded passage against its planned route.",
-		instruction:   prompt.Debrief,
-		temperature:   0.25,
-		toolNames:     nil,
+		// Debrief performs a post-voyage forensic tactical review of a recorded track
+		// against its planned route, and can look up historical weather and tides
+		// at timestamped anomaly windows.
+		name:        Debrief,
+		description: "A post-voyage tactical pilot that debriefs a recorded passage against its planned route.",
+		instruction: prompt.Debrief,
+		temperature: 0.25,
+		toolNames: []string{
+			toolGetWeather,
+			toolGetTides,
+		},
 		includeSearch: false,
 	},
 	{
@@ -116,19 +121,22 @@ var specs = []spec{
 			toolGetWeather,
 			toolGetSunriseSunset,
 			toolGetSafetyAlerts,
+			toolComputePassageTimeline,
 		},
 		includeSearch:            true,
 		includeFacilityDiscovery: true,
 		includeHydrographicPilot: true,
 	},
 	{
-		// Commodore performs global seasonal discovery from the open web only;
-		// it needs no station-level nautical tools.
-		name:          Commodore,
-		description:   "The Commodore - Global Seasonal Discovery Expert.",
-		instruction:   prompt.Commodore,
-		temperature:   0.25,
-		toolNames:     nil,
+		// Commodore combines canonical seasonal region geometries with live open-web
+		// seasonal anomaly and regatta research.
+		name:        Commodore,
+		description: "The Commodore - Global Seasonal Discovery Expert.",
+		instruction: prompt.Commodore,
+		temperature: 0.25,
+		toolNames: []string{
+			toolGetCandidateRegionsForMonth,
+		},
 		includeSearch: true,
 	},
 	{
@@ -146,8 +154,8 @@ var specs = []spec{
 		includeHydrographicPilot: true,
 	},
 	{
-		// Lookout audits safety: environment, pilotage, heading geometry, and
-		// navigational warnings. No places discovery and no web search.
+		// Lookout audits safety: environment, pilotage, heading geometry, passage
+		// timeline alignment, and navigational warnings. No places discovery and no web search.
 		name:        Lookout,
 		description: "A maritime safety auditor that analyzes stop data and returns structured safety alerts.",
 		instruction: prompt.Lookout,
@@ -157,6 +165,7 @@ var specs = []spec{
 			toolGetWeather,
 			toolGetSunriseSunset,
 			toolCalculateHeading,
+			toolComputePassageTimeline,
 			toolGetSafetyAlerts,
 		},
 		includeSearch:            false,

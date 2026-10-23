@@ -3,6 +3,7 @@ package tool
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/tpryan/openmeteogo"
@@ -45,6 +46,8 @@ type WeatherResult struct {
 	WaveHeight       float64   `json:"wave_height"`
 	WaveDirection    float64   `json:"wave_direction"`
 	WavePeriod       float64   `json:"wave_period"`
+	Digest           string    `json:"digest,omitempty"`
+	SummaryDigest    string    `json:"summary_digest,omitempty"`
 	DebugDurationMS  int64     `json:"debug_duration_ms"`
 }
 
@@ -117,6 +120,9 @@ func (wp *WeatherProvider) GetWeatherForecast(ctx agent.Context, args WeatherArg
 			result := wp.processResults(weather, marine, marineErr, false)
 			result.Date = args.Date
 			result.DebugDurationMS = time.Since(start).Milliseconds()
+			result.Digest = BuildWeatherDigest(result)
+			result.SummaryDigest = result.Digest
+			setSessionState(ctx, StateKeyBriefingWeather, result)
 			return result, nil
 		}
 	}
@@ -335,4 +341,106 @@ func DegreesToDirection(deg float64) string {
 	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
 	index := ((int(math.Floor((deg+11.25)/22.5)) % 16) + 16) % 16
 	return directions[index]
+}
+
+// DirectionToDegrees converts a 16-point cardinal direction back to degrees (0-360), or -1 if unknown.
+func DirectionToDegrees(dir string) float64 {
+	switch strings.ToUpper(strings.TrimSpace(dir)) {
+	case "N":
+		return 0
+	case "NNE":
+		return 22.5
+	case "NE":
+		return 45
+	case "ENE":
+		return 67.5
+	case "E":
+		return 90
+	case "ESE":
+		return 112.5
+	case "SE":
+		return 135
+	case "SSE":
+		return 157.5
+	case "S":
+		return 180
+	case "SSW":
+		return 202.5
+	case "SW":
+		return 225
+	case "WSW":
+		return 247.5
+	case "W":
+		return 270
+	case "WNW":
+		return 292.5
+	case "NW":
+		return 315
+	case "NNW":
+		return 337.5
+	default:
+		return -1
+	}
+}
+
+// BuildWeatherDigest constructs a compact analytical digest of a 24-hour marine
+// and atmospheric forecast, highlighting peak wind/gusts, departure (06-12) and
+// arrival (12-18) windows, wind shifts, precipitation hours, and wave peaks.
+func BuildWeatherDigest(r WeatherResult) string {
+	var parts []string
+	parts = append(parts, fmt.Sprintf("%s (%s): %s, %.0f-%.0f°F, peak wind %.1f kts (gusts %.1f kts) from %s, max waves %.1f ft @ %.0fs",
+		r.Date, r.ForecastType, r.Condition, r.MinTemp, r.MaxTemp, r.MaxWindKts, r.MaxGustsKts, r.WindDirection, r.WaveHeight, r.WavePeriod))
+
+	if len(r.HourlyWind) >= 18 {
+		var amPeak, pmPeak float64
+		var amDir, pmDir string
+		for h := 6; h < 12 && h < len(r.HourlyWind); h++ {
+			if r.HourlyWind[h] >= amPeak {
+				amPeak = r.HourlyWind[h]
+				if h < len(r.HourlyWindDir) {
+					amDir = r.HourlyWindDir[h]
+				}
+			}
+		}
+		for h := 12; h < 18 && h < len(r.HourlyWind); h++ {
+			if r.HourlyWind[h] >= pmPeak {
+				pmPeak = r.HourlyWind[h]
+				if h < len(r.HourlyWindDir) {
+					pmDir = r.HourlyWindDir[h]
+				}
+			}
+		}
+		parts = append(parts, fmt.Sprintf("Departure window (06-12): up to %.1f kts %s; Arrival window (12-18): up to %.1f kts %s",
+			amPeak, amDir, pmPeak, pmDir))
+	}
+
+	var shiftNotes []string
+	for h := 1; h < len(r.HourlyWindDir) && h < len(r.HourlyWind); h++ {
+		d1 := DirectionToDegrees(r.HourlyWindDir[h-1])
+		d2 := DirectionToDegrees(r.HourlyWindDir[h])
+		if d1 >= 0 && d2 >= 0 && (r.HourlyWind[h] >= 10 || r.HourlyWind[h-1] >= 10) {
+			diff := math.Abs(d2 - d1)
+			if diff > 180 {
+				diff = 360 - diff
+			}
+			if diff >= 90 {
+				shiftNotes = append(shiftNotes, fmt.Sprintf("%02d:00 (%s->%s @ %.0fkt)", h, r.HourlyWindDir[h-1], r.HourlyWindDir[h], r.HourlyWind[h]))
+			}
+		}
+	}
+	if len(shiftNotes) > 0 {
+		parts = append(parts, "Wind shifts: "+strings.Join(shiftNotes, ", "))
+	}
+
+	var precipHours []string
+	for h, p := range r.HourlyPrecip {
+		if p >= 0.05 {
+			precipHours = append(precipHours, fmt.Sprintf("%02d:00 (%.2f in)", h, p))
+		}
+	}
+	if len(precipHours) > 0 {
+		parts = append(parts, "Precip hours: "+strings.Join(precipHours, ", "))
+	}
+
+	return strings.Join(parts, ". ")
 }

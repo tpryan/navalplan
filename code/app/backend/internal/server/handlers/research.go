@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"app/internal/agent"
 	"app/internal/model"
 )
 
@@ -398,6 +399,33 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		prompt += "\n\n" + transitAndTrackPrompt
 	}
 
+	var stateWeather, stateTides, stateSun, statePlaces json.RawMessage
+	onEvent := func(evt agent.AgentEvent) {
+		for _, p := range evt.Content.Parts {
+			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+				h.broadcastProgress(sessionID, "tool", toolProgressMessage(p.FunctionCall.Name, stop.LocationName))
+			}
+		}
+		if len(evt.Actions.StateDelta) > 0 {
+			if wRaw, ok := evt.Actions.StateDelta["briefing_weather"]; ok && len(wRaw) > 0 {
+				stateWeather = wRaw
+				h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast ready for %s", stop.LocationName), wRaw)
+			}
+			if tRaw, ok := evt.Actions.StateDelta["briefing_tides"]; ok && len(tRaw) > 0 {
+				stateTides = tRaw
+				h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide chart ready for %s", stop.LocationName), tRaw)
+			}
+			if sRaw, ok := evt.Actions.StateDelta["briefing_sun"]; ok && len(sRaw) > 0 {
+				stateSun = sRaw
+				h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Daylight window ready for %s", stop.LocationName), sRaw)
+			}
+			if pRaw, ok := evt.Actions.StateDelta["verified_places"]; ok && len(pRaw) > 0 {
+				statePlaces = pRaw
+				h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Verified facilities ready for %s", stop.LocationName), pRaw)
+			}
+		}
+	}
+
 	progressStop := make(chan struct{})
 	go func() {
 		t := time.NewTicker(8 * time.Second)
@@ -420,7 +448,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			}
 		}
 	}()
-	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
+	responseText, err := h.Agent.RunStreamingWithEvents(ctx, appName, userID, agentSessionID, prompt, onEvent)
 	close(progressStop)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
@@ -449,6 +477,19 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
 		h.saveEmptyBriefing(ctx, stop)
 		return
+	}
+
+	if isEmptyOrNullJSON(output.WeatherSummary) && len(stateWeather) > 0 {
+		output.WeatherSummary = stateWeather
+	}
+	if isEmptyOrNullJSON(output.Tides) && len(stateTides) > 0 {
+		output.Tides = stateTides
+	}
+	if isEmptyOrNullJSON(output.SunPhase) && len(stateSun) > 0 {
+		output.SunPhase = stateSun
+	}
+	if isEmptyOrNullJSON(output.Facilities) && len(statePlaces) > 0 {
+		output.Facilities = statePlaces
 	}
 
 	if reusableFacilities != nil {
@@ -504,6 +545,12 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		Facilities:     model.RawJSON(output.Facilities),
 		PilotNotes:     model.RawJSON(output.PilotNotes),
 	}
+
+	h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast saved for %s", stop.LocationName), output.WeatherSummary)
+	h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide predictions saved for %s", stop.LocationName), output.Tides)
+	h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Sun phase saved for %s", stop.LocationName), output.SunPhase)
+	h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Facilities mapped for %s", stop.LocationName), output.Facilities)
+	h.broadcastProgressSection(sessionID, "pilot_notes", fmt.Sprintf("Pilot notes compiled for %s", stop.LocationName), output.PilotNotes)
 
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
 		slog.ErrorContext(ctx, "Failed to save briefing", "error", err)
@@ -688,13 +735,23 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 	}
 }
 
+func isEmptyOrNullJSON(raw json.RawMessage) bool {
+	s := strings.TrimSpace(string(raw))
+	return s == "" || s == "null" || s == "{}" || s == "[]"
+}
+
 func buildStopTransitAndTrackPrompt(next *model.Stop, distNM, course float64, hasCourse bool, plannedRouteInfo string) string {
 	var b strings.Builder
 	if next != nil {
-		fmt.Fprintf(&b, "Next destination: %s (%.4f, %.4f).", next.LocationName, next.Latitude, next.Longitude)
+		dateStr := ""
+		if !next.TargetDate.IsZero() {
+			dateStr = fmt.Sprintf(" on %s", next.TargetDate.Format("January 2, 2006"))
+		}
+		fmt.Fprintf(&b, "Next destination: %s (%.4f, %.4f)%s.", next.LocationName, next.Latitude, next.Longitude, dateStr)
 		if hasCourse && distNM > 0 {
 			fmt.Fprintf(&b, " Straight-line transit distance: %.1f NM on course %.0f° (%s).", distNM, course, bearingToCardinal(course))
 		}
+		b.WriteString(" Call ComputePassageTimeline (passing both departure and arrival coordinates) and hydrographic_pilot for BOTH this departure harbor and the next destination to evaluate departure tide gates, arrival daylight margins, and night-entry hazards.")
 	}
 	if plannedRouteInfo != "" {
 		if b.Len() > 0 {

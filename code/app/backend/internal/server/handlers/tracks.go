@@ -435,6 +435,7 @@ type plannedRouteMatch struct {
 	plannedTrackName string
 	plannedDist      float64
 	plannedDuration  string
+	plannedGeoJSON   model.RawJSON
 	voyageStopID     *int64
 	startStopID      *int64
 }
@@ -867,6 +868,7 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		plannedTrackName: matched.Name,
 		plannedDist:      dist,
 		plannedDuration:  dur,
+		plannedGeoJSON:   matched.GeoJSON,
 		voyageStopID:     startStopID,
 		startStopID:      startStopID,
 	}
@@ -991,6 +993,8 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 	weatherContext, parsedWeather := formatDebriefWeatherAndTides(briefing)
 
+	telemetry := gpx.AnalyzeGPXTelemetry(match.plannedGeoJSON, track.GeoJSON, track.RawGPX, avgSpd)
+
 	// Generate tactical insights using Pilot agent or rule-based fallback
 	prompt := fmt.Sprintf(
 		"Perform a post-voyage tactical pilot debrief comparing the ACTUAL recorded passage against the PLANNED route:\n"+
@@ -999,6 +1003,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 			"- Recorded Distance: %.2f NM vs Planned Distance: %.2f NM (Delta: %+.2f NM, %+.1f%% variance)\n"+
 			"%s\n"+
 			"- Vessel Speed: Average SOG %.1f kts, Maximum SOG %.1f kts\n"+
+			"%s\n"+
 			"%s\n"+
 			"Guidelines:\n"+
 			"- Be concise, direct, and tactical. Keep each section to 1-2 brief sentences.\n"+
@@ -1010,7 +1015,7 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 			"3. tacking_efficiency: 1 sentence on maneuvers, tacking angles, or leeway.\n"+
 			"4. weather_impact: 1 sentence on wind, sea state, or current effects.\n"+
 			"5. observations: 2-3 short, bulleted tactical takeaways for the skipper.",
-		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd, weatherContext,
+		track.Name, match.plannedTrackName, recDist, plannedDist, distDelta, pctOver, durComparison, avgSpd, maxSpd, weatherContext, telemetry.FormattedSummary,
 	)
 
 	if track.RawGPX != nil && len(*track.RawGPX) > 0 && len(*track.RawGPX) < 100000 {

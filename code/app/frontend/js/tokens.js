@@ -3,6 +3,7 @@
 
 /** Signal accent token name per facility / recommendation type. */
 export const MARKER_ACCENTS = {
+    start_end:    'coral',
     anchorage:    'teal',
     mooring:      'violet',
     marina:       'amber',
@@ -20,6 +21,7 @@ export const MARKER_ACCENTS = {
 
 /** Material Symbols icon name per facility type. */
 export const MARKER_ICONS = {
+    start_end:  'flag',
     anchorage:  'anchor',
     marina:     'directions_boat',
     mooring:    'link',

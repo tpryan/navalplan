@@ -202,6 +202,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						"required": []string{"from_latitude", "from_longitude", "to_latitude", "to_longitude"},
 					},
 				},
+				{
+					"name":        "ComputePassageTimeline",
+					"description": "Aligns departure stop and arrival destination tides, sunrise/sunset, weather, and headwind penalties across candidate morning departure times (06:00-12:00) to detect tide-gated departures, arrival after sunset, and wind-against-tide interactions.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"from_location":       map[string]string{"type": "string"},
+							"from_latitude":       map[string]string{"type": "number"},
+							"from_longitude":      map[string]string{"type": "number"},
+							"to_location":         map[string]string{"type": "string"},
+							"to_latitude":         map[string]string{"type": "number"},
+							"to_longitude":        map[string]string{"type": "number"},
+							"date":                map[string]string{"type": "string"},
+							"planned_distance_nm": map[string]string{"type": "number"},
+						},
+						"required": []string{"from_latitude", "from_longitude", "to_latitude", "to_longitude", "date"},
+					},
+				},
+				{
+					"name":        "GetCandidateRegionsForMonth",
+					"description": "Returns canonical, non-overlapping global sailing regions and verified GeoJSON bounding polygons across all 6 global macro zones and 4 tiers in season for the requested month (1-12).",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"month": map[string]string{"type": "number"},
+						},
+						"required": []string{"month"},
+					},
+				},
 			},
 		}
 	case "tools/call":
@@ -286,6 +315,18 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 			return nil, err
 		}
 		return h.Nautical.FetchHeading(agentCtx, req)
+	case "ComputePassageTimeline", "compute_passage_timeline":
+		var req tool.TimelineRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchPassageTimeline(agentCtx, req)
+	case "GetCandidateRegionsForMonth", "get_candidate_regions_for_month":
+		var req tool.CandidateRegionsArgs
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchCandidateRegions(agentCtx, req)
 	}
 	return nil, fmt.Errorf("unknown tool %s", callReq.Name)
 }

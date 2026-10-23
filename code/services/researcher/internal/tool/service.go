@@ -50,12 +50,26 @@ func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIK
 	}
 	providers = append(providers, sdp)
 
+	_, tlp, err := NewTimelineTool(wp, tp, sp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("timeline tool: %w", err)
+	}
+	providers = append(providers, tlp)
+
+	_, rp, err := NewCandidateRegionsTool()
+	if err != nil {
+		return nil, nil, fmt.Errorf("candidate regions tool: %w", err)
+	}
+	providers = append(providers, rp)
+
 	return &NauticalToolService{
 		Tides:             tp,
 		Weather:           wp,
 		Sunrise:           sp,
 		Places:            pp,
 		SailingDirections: sdp,
+		Timeline:          tlp,
+		Regions:           rp,
 	}, providers, nil
 }
 
@@ -130,12 +144,25 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("CalculateHeading: %w", err))
 	}
 
-	// Note: GPX smoothing/glitch removal is intentionally NOT exposed as an LLM
-	// tool; it runs deterministically in the backend on track upload (gpx.FilterGPX).
+	timelineTool, err := functiontool.New(functiontool.Config{
+		Name:        "ComputePassageTimeline",
+		Description: "Aligns departure stop and arrival destination tides, sunrise/sunset, weather, and headwind penalties across candidate morning departure times (06:00-12:00) to detect tide-gated departures, arrival after sunset, and wind-against-tide interactions.",
+	}, s.FetchPassageTimeline)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("ComputePassageTimeline: %w", err))
+	}
+
+	regionsTool, err := functiontool.New(functiontool.Config{
+		Name:        "GetCandidateRegionsForMonth",
+		Description: "Returns canonical, non-overlapping global sailing regions and verified GeoJSON bounding polygons across all 6 global macro zones and 4 tiers in season for the requested month (1-12).",
+	}, s.FetchCandidateRegions)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("GetCandidateRegionsForMonth: %w", err))
+	}
 
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool}, nil
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool, timelineTool, regionsTool}, nil
 }

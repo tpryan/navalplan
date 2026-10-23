@@ -15,7 +15,7 @@ func TestNauticalToolService_AsTools(t *testing.T) {
 
 	// FilterGPXData is intentionally no longer wrapped as an LLM tool (GPX
 	// smoothing runs deterministically in Go on upload).
-	wantNames := []string{"GetTides", "GetWeather", "GetSunriseSunset", "FindPlacesNearby", "GetSafetyAlerts", "QuerySailingDirections", "QueryCoastPilot", "CalculateHeading"}
+	wantNames := []string{"GetTides", "GetWeather", "GetSunriseSunset", "FindPlacesNearby", "GetSafetyAlerts", "QuerySailingDirections", "QueryCoastPilot", "CalculateHeading", "ComputePassageTimeline", "GetCandidateRegionsForMonth"}
 	if len(got) != len(wantNames) {
 		t.Fatalf("AsTools() returned %d tools, want %d", len(got), len(wantNames))
 	}

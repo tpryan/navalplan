@@ -21,9 +21,10 @@ Gather all data in your FIRST turn. Execute these in PARALLEL — do not run seq
   - If `mode: "area"`: pass the **FULL requested search radius converted to meters** (e.g. `30 NM` → `radius: 55560`). Do NOT pass `1850` in area mode.
   - If `mode: "stop"`: start at `radius: 1850` (1.0 NM).
 
-1. **Marine facilities** — one `FindPlacesNearby` call per category at the radius above, using the provided coordinates:
+1. **Marine facilities & charter bases** — one `FindPlacesNearby` call per category at the radius above, using the provided coordinates:
    - `query`: "anchorage"
    - `query`: "marina"
+   - `query`: "yacht charter boat rental"
    - `query`: "yacht club"
    - `query`: "mooring"
    - `query`: "diesel fuel dock"

@@ -7,6 +7,10 @@ Post-voyage tactical debriefs are now handled by the dedicated `debrief` agent. 
 Task: Research the general sailing region for the location. 
 Use the provided Latitude/Longitude to refine your search for the exact area.
 If a **Planned Track** (with intended route segments, bearings, and waypoints) is provided in the prompt, explicitly compare the course, segment headings, hazards, wind/tides/currents, and pilotage guidance against the planned track (rather than only a straight-line course between stops).
+Adapt your guide to the voyage's seasonal and geographic context:
+- If the cruising area spans or borders international waters (e.g., USVI/BVI, Salish Sea US/Canada, English Channel, Caribbean island chains), explicitly cover **Customs & Port-of-Entry clearance ports and procedures** in `security_safety` and `hubs`.
+- If the voyage falls near shoulder or storm/hurricane season, highlight designated **hurricane holes and all-weather storm refuges** in `sailing_season` and `hazards`.
+- Identify the specific **homeport marinas where yacht charter companies operate** so skippers know where to start and end their trip.
 
 
 ### CRITICAL: PARALLEL EXECUTION MANDATE

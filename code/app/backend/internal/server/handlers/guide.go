@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"app/internal/agent"
 	"app/internal/model"
 )
 
@@ -223,7 +224,13 @@ func (h *Handler) performGuideResearchLogic(voyage *model.Voyage, sessionID stri
 
 	prompt := fmt.Sprintf("Research sailing guide for location: %s.%s Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail, scope)
 
-	responseText, err := h.Agent.RunSync(ctx, appName, userID, agentSessionID, prompt)
+	responseText, err := h.Agent.RunStreamingWithEvents(ctx, appName, userID, agentSessionID, prompt, func(evt agent.AgentEvent) {
+		for _, p := range evt.Content.Parts {
+			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+				h.broadcastProgress(sessionID, "tool", toolProgressMessage(p.FunctionCall.Name, locName))
+			}
+		}
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		h.failGuideResearch(ctx, voyage, sessionID, "Research agent failed to respond")
@@ -270,6 +277,11 @@ func (h *Handler) performGuideResearchLogic(voyage *model.Voyage, sessionID stri
 		h.broadcastProgress(sessionID, "error", "Failed to save voyage guide")
 		return
 	}
+	if recs, err := h.DB.ListVoyageRecommendations(ctx, voyage.ID); err == nil && len(recs) > 0 {
+		h.syncStartEndBasesToGuide(ctx, voyage.ID, recs)
+	}
+	h.broadcastProgressSection(sessionID, "airports", "Airport & transit details ready", output.Airports)
+	h.broadcastProgressSection(sessionID, "country_info", "Country & emergency info ready", output.CountryInfo)
 	slog.InfoContext(ctx, "Voyage guide saved", "voyage_id", voyage.ID)
 	h.broadcastProgress(sessionID, "done", "Voyage guide research complete")
 }

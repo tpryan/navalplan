@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tpryan/niwago"
@@ -46,6 +47,8 @@ type TideResult struct {
 	Datum         string      `json:"datum,omitempty"`
 	Tides         []TideEvent `json:"tides"`
 	Note          string      `json:"note,omitempty"`
+	Digest        string      `json:"digest,omitempty"`
+	SummaryDigest string      `json:"summary_digest,omitempty"`
 }
 
 // RegionalTideProvider is implemented by each regional tide data source.
@@ -519,22 +522,72 @@ func (tm *TideManager) GetTides(ctx agent.Context, args TideArgs) (TideResult, e
 		}
 		result, err := p.GetTides(args.Latitude, args.Longitude, args.Date)
 		if err == nil {
+			result.Digest = BuildTideDigest(result, args.Date)
+			result.SummaryDigest = result.Digest
+			setSessionState(ctx, StateKeyBriefingTides, result)
 			return result, nil
 		}
 		lastErr = err
 	}
 	if lastErr != nil {
-		return TideResult{
+		res := TideResult{
 			StationName: "No local station",
 			Tides:       []TideEvent{},
 			Note:        fmt.Sprintf("Tidal data is not available yet for this region: %v", lastErr),
-		}, nil
+		}
+		res.Digest = BuildTideDigest(res, args.Date)
+		res.SummaryDigest = res.Digest
+		setSessionState(ctx, StateKeyBriefingTides, res)
+		return res, nil
 	}
-	return TideResult{
+	res := TideResult{
 		StationName: "No local station",
 		Tides:       []TideEvent{},
 		Note:        "Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters.",
-	}, nil
+	}
+	res.Digest = BuildTideDigest(res, args.Date)
+	res.SummaryDigest = res.Digest
+	setSessionState(ctx, StateKeyBriefingTides, res)
+	return res, nil
+}
+
+// BuildTideDigest constructs a compact analytical digest of tidal extremes,
+// tidal range, and station metadata for a given date.
+func BuildTideDigest(r TideResult, targetDate string) string {
+	if len(r.Tides) == 0 {
+		if r.Note != "" {
+			return fmt.Sprintf("Station: %s. %s", r.StationName, r.Note)
+		}
+		return fmt.Sprintf("Station: %s. No tidal events.", r.StationName)
+	}
+	minH := math.MaxFloat64
+	maxH := -math.MaxFloat64
+	var eventStrs []string
+	for _, e := range r.Tides {
+		if e.Height < minH {
+			minH = e.Height
+		}
+		if e.Height > maxH {
+			maxH = e.Height
+		}
+		if targetDate == "" || strings.HasPrefix(e.Time, targetDate) || len(eventStrs) < 6 {
+			eventStrs = append(eventStrs, fmt.Sprintf("%s %s (%.1f ft)", e.Type, e.Time, e.Height))
+		}
+	}
+	tidalRange := 0.0
+	if maxH >= minH {
+		tidalRange = maxH - minH
+	}
+	datum := r.Datum
+	if datum == "" {
+		datum = "local datum"
+	}
+	summary := fmt.Sprintf("Station: %s (%s, %.1f mi away), Range: %.1f ft, Events: %s",
+		r.StationName, datum, r.DistanceMiles, tidalRange, strings.Join(eventStrs, "; "))
+	if r.Note != "" {
+		summary += ". Note: " + r.Note
+	}
+	return summary
 }
 
 // haversineDistanceMiles returns the great-circle distance in miles between two

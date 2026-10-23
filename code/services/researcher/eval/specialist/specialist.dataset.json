@@ -1,94 +1,18 @@
-{
-  "eval_cases": [
-    {
-      "eval_case_id": "nantucket_navigator",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Identify resource hubs and anchorages for 41.2835 N, 70.0995 W (Nantucket, MA). Radius 10 nm."
-          }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "hub_identified",
-              "content": {
-                "property": {
-                  "description": "The agent identifies Nantucket Harbor as a major sailing hub."
-                }
-              }
-            },
-            {
-              "rubric_id": "json_format",
-              "content": {
-                "property": {
-                  "description": "The response is a valid JSON array of objects."
-                }
-              }
-            },
-            {
-              "rubric_id": "recommendations_have_urls",
-              "content": {
-                "property": {
-                  "description": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
-                }
-              }
-            },
-            {
-              "rubric_id": "facilities_found",
-              "content": {
-                "property": {
-                  "description": "The agent locates anchorages, moorings, or marinas for the requested area."
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "eval_case_id": "day_trip_anchorages",
-      "prompt": {
-        "role": "user",
-        "parts": [
-          {
-            "text": "Recommend 15 anchorages, moorings, and marinas within 15 nm of 41.2835°N, 70.0995°W (Nantucket, MA). This is a day trip — a single-day outing with no overnight stay. Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
-          }
-        ]
-      },
-      "rubric_groups": {
-        "agent_rubrics": {
-          "rubrics": [
-            {
-              "rubric_id": "json_format",
-              "content": {
-                "property": {
-                  "description": "The response is a valid JSON array of objects."
-                }
-              }
-            },
-            {
-              "rubric_id": "recommendations_have_urls",
-              "content": {
-                "property": {
-                  "description": "Every recommendation in the JSON response contains a valid 'url' and a non-empty 'reference_links' array."
-                }
-              }
-            },
-            {
-              "rubric_id": "day_trip_bias_adjusted",
-              "content": {
-                "property": {
-                  "description": "The recommendations favor moorings and easily reached day-use anchorages suited to a few hours, rather than secluded, hard-to-reach, overnight-only spots."
-                }
-              }
-            }
-          ]
-        }
-      }
-    }
-  ]
-}
+[
+  {
+    "query": "Identify resource hubs and anchorages for 41.2835 N, 70.0995 W (Nantucket, MA). Radius 10 nm.",
+    "reference": "JSON object with a 'recommendations' array containing Nantucket Boat Basin / Nantucket Harbor and nearby anchorages with voyage_role and stay_details."
+  },
+  {
+    "query": "Recommend 15 anchorages, moorings, and marinas within 15 nm of 41.2835°N, 70.0995°W (Nantucket, MA). This is a day trip — a single-day outing with no overnight stay. Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots.",
+    "reference": "JSON object with a 'recommendations' array favoring day-use anchorages and moorings classified with voyage_role 'day_stop'."
+  },
+  {
+    "query": "Recommend anchorages, moorings, marinas, and fuel docks within 15 nm of center coordinates (latitude: 18.4207, longitude: -64.6399, 18.4207°N, 64.6399°W; center reference point near Tortola, British Virgin Islands). Classify each recommendation with voyage_role ('start_end_base', 'overnight_stop', 'day_stop', or 'service_only') and stay_details. Ensure Tortola charter fleet bases (Road Town / Wickhams Cay, Nanny Cay, and Hodges Creek / Parham Town / East End) are identified as 'start_end_base' with charter_companies populated, while out-island and resort stopover marinas (such as Scrub Island, Virgin Gorda, Norman Island, Peter Island, Cooper Island, and Soper's Hole) are classified as 'overnight_stop'.",
+    "reference": "JSON object where Road Town / Wickhams Cay, Nanny Cay, and Hodges Creek / Parham Town have voyage_role 'start_end_base' and stay_details.is_charter_base true, while Scrub Island, Soper's Hole, Virgin Gorda, Norman Island, and Peter Island have voyage_role 'overnight_stop'."
+  },
+  {
+    "query": "Recommend anchorages, moorings, marinas, and fuel docks within 20 nm of center coordinates (latitude: 38.9784, longitude: -76.4922, 38.9784°N, 76.4922°W; center reference point near Annapolis, MD, Chesapeake Bay). Classify each recommendation with voyage_role ('start_end_base', 'overnight_stop', 'day_stop', or 'service_only') and stay_details. Ensure only verified commercial charter fleet bases (such as Annapolis / Eastport and Rock Hall) are classified as 'start_end_base', while overnight destination harbors and creek marinas (such as St. Michaels, Galesville, Deale, and Kent Island) are classified as 'overnight_stop'.",
+    "reference": "JSON object where Annapolis charter bases and Rock Hall have voyage_role 'start_end_base', while St. Michaels, Galesville, Deale, and Kent Island marinas/anchorages have voyage_role 'overnight_stop'."
+  }
+]

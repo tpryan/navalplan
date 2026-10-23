@@ -18,6 +18,7 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
 
 **MANDATORY TOOL CALLS (FIRST TURN):**
 1.  **A single `batch_google_search` call** — do NOT merely substitute the center town name into every query! Use the N/S/E/W boundary coordinates to identify the major harbors, rivers, and shores on ALL sides of the circle (e.g., both Western Shore / NW / SW harbors such as Annapolis, Severn River, South River, West River, Herring Bay AND Eastern Shore / NE / SE harbors such as Kent Island, Eastern Bay, Miles River, Chester River), and include queries across all of them:
+    - "All yacht charter company bases and exact homeport marinas in [Region] (e.g., Moorings, Sunsail, Dream Yacht, Navigare, MarineMax, Horizon, BVI Yacht Charters, Voyage, Conch, Footloose) with marina names"
     - "Complete list of safe anchorages and coves in [All Major Harbors & Rivers Across N/S/E/W of Circle] with official links"
     - "Best mooring ball fields, guest moorings, and municipal moorings in [All Major Harbors & Towns in Circle] reviews and websites"
     - "Major harbor hubs, marinas, yacht clubs, and boating centers across [Western/Northern Shores and Eastern/Southern Shores of Circle] official websites"
@@ -26,6 +27,16 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
     - "Hidden coves sheltered bays overnight anchorage [Western/NW/SW Rivers & Creeks in Circle]"
     - "Secluded anchorages off the beaten path [Eastern/NE/SE Rivers & Creeks in Circle]"
     - "Shallow draft anchorages and gunkholes across [All Tributaries in Circle]"
+
+### VOYAGE ROLE CLASSIFICATION (`voyage_role`) — STRICT REGION-AGNOSTIC RULES
+Every recommendation MUST be assigned a `voyage_role` from `"start_end_base"`, `"overnight_stop"`, `"day_stop"`, or `"service_only"`:
+- **`"start_end_base"` (ONLY Verified Charter Fleet Embarkation Bases):**
+  - A `"start_end_base"` is a marina or harbor hub where commercial bareboat/crewed yacht charter companies physically base their fleet for trip embarkation and return (e.g., Annapolis / Severn River or Rock Hall in the Chesapeake; Road Town, Nanny Cay, or Hodges Creek / Parham Town on Tortola in the BVI; Anacortes or Bellingham in the San Juans; Split/Trogir in Croatia; Marsh Harbour in the Abacos).
+  - **Verification Requirement:** Only set `voyage_role: "start_end_base"` and `stay_details.is_charter_base: true` when your `batch_google_search` or `facility_discovery` results confirm at least one named yacht charter operator at that harbor/marina, and list the operator names in `stay_details.charter_companies` (e.g. `["Cruise Annapolis", "Dream Yacht Charter", "Waypoints Yacht Charters"]`).
+  - **NEVER** assign `"start_end_base"` to destination resort marinas, quiet creek marinas, or out-island/peninsula stopover harbors where charterers only visit for a night or two (e.g., St. Michaels, Oxford, or Galesville in the Chesapeake; Scrub Island, Bitter End, or Norman Island in the BVI; Friday Harbor or Roche Harbor in the San Juans). Those are **`"overnight_stop"`**, even if `type` is `"Hub"` or `"Marina"`.
+- **`"overnight_stop"`:** Marinas with rentable transient overnight slips, guest mooring fields, and sheltered overnight anchorages where a crew stops for the night during the voyage.
+- **`"day_stop"`:** Day-use anchorages, lunch/snorkel stops, or day moorings unsuitable for overnight stays.
+- **`"service_only"`:** Standalone fuel docks, boat launches, or service yards.
 2.  **A `hydrographic_pilot` call** to extract hydrographic anchorages, coves, depths, currents, and local hazards from official pilot books (NOAA Coast Pilot and NGA Sailing Directions). Pass it the location/area name and coordinates; it returns structured pilotage intel with citations. Use its `anchorages_and_regulations`, `currents_and_tidal_rips`, and `hazards` to inform and justify your recommendations.
 3.  **A single `facility_discovery` call** to discover marine facilities and anchorages across the whole search area. Pass a structured request string containing `mode: "area"`, the exact center `latitude` and `longitude` as raw decimal numbers, the full `radius` in meters, the location/area name (naming shores on ALL sides of the boundary, e.g. both Western and Eastern shores), and the trip type. **NEVER omit `latitude`, `longitude`, or `radius` when calling `facility_discovery`, and NEVER substitute the coordinates of a single island or town.** It returns a geocoded, deduped, radius-filtered `facilities` array (marinas, anchorages, moorings, fuel docks, yacht clubs, boat launches, and wild/natural anchorages — with sector-distributed sampling across all compass bearings), each with `latitude`, `longitude`, `website`, `description`, `protection`, `holding`, `is_wild`, and `references`. Include EVERY verified marina, mooring field, fuel dock, and yacht club it returns across all shores.
 
@@ -64,12 +75,25 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
     {
       "name": "Name of the Location", 
       "type": "Marina", // Must be one of: "Hub", "Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"
+      "voyage_role": "start_end_base", // Must be one of: "start_end_base", "overnight_stop", "day_stop", "service_only"
+      "stay_details": {
+        "is_charter_base": true,
+        "charter_companies": ["The Moorings", "Sunsail"],
+        "has_transient_slips": true,
+        "slip_notes": "Transient visitor slips available; VHF 16 / Dockwa",
+        "has_moorings": true,
+        "has_anchorage": true,
+        "holding_and_depth": "10-15 ft mud, good holding",
+        "protection": "Sheltered from N, NE, E; exposed to S swell",
+        "has_fuel": true,
+        "provisioning": "Supermarket & chandlery within 0.3 NM"
+      },
       "latitude": 0.0, 
       "longitude": 0.0, 
       "radius_miles": 0.25, // For "Hub": 1.0-3.0. For individual spots ("Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"): 0.25-0.5.
       "url": "https://...", // MANDATORY: Official website or primary informational link.
       "description": "Summary of resources or description of the spot.",
-      "reasoning": "Why this area or spot is a primary target. Mention specific reviews found.",
+      "reasoning": "Why this area or spot is a primary target (e.g., primary charter embarkation base, or protected overnight stop with transient slips/anchorage). Mention specific reviews found.",
       "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 deep links.
     },
     ...

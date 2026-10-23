@@ -30,6 +30,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "cuttyhunk_to_block_island_tide_sunset_interaction",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Research anchorages and weather for Cuttyhunk, MA (41.4244 N, 70.9317 W, Lat: 41.424400, Lng: -70.931700) for October 15, 2026. Radius 5 nm.\n\nNext destination: Block Island Great Salt Pond (41.1856, -71.5775) on October 15, 2026. Straight-line transit distance: 29.8 NM on course 241° (WSW). Call ComputePassageTimeline (passing both departure and arrival coordinates) and hydrographic_pilot for BOTH this departure harbor and the next destination to evaluate departure tide gates, arrival daylight margins, and night-entry hazards."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

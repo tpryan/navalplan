@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"app/internal/model"
 )
 
 func TestHaversine(t *testing.T) {
@@ -126,6 +128,102 @@ func TestSearchBoundaryHint(t *testing.T) {
 			}
 			if !strings.Contains(got, tt.expectedW) {
 				t.Errorf("searchBoundaryHint() missing west boundary %s, got: %s", tt.expectedW, got)
+			}
+		})
+	}
+}
+
+func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
+	tests := []struct {
+		name            string
+		recName         string
+		recType         string
+		rawRole         string
+		desc            string
+		reasoning       string
+		stayDetailsJSON string
+		wantRole        string
+	}{
+		{
+			name:            "BVI Road Town Moorings base with charter companies",
+			recName:         "The Moorings Marina (Wickhams Cay II, Road Town)",
+			recType:         "Marina",
+			rawRole:         "start_end_base",
+			desc:            "Primary bareboat charter fleet embarkation marina in Road Town, Tortola.",
+			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["The Moorings","Sunsail"]}`,
+			wantRole:        "start_end_base",
+		},
+		{
+			name:            "BVI Parham Town / Hodges Creek Marina with Dream Yacht Charter",
+			recName:         "Hodges Creek Marina (Parham Town, East End Tortola)",
+			recType:         "Marina",
+			rawRole:         "overnight_stop",
+			desc:            "Major charter base for Dream Yacht Charter and MarineMax in East End Tortola.",
+			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Dream Yacht Charter","MarineMax"]}`,
+			wantRole:        "start_end_base",
+		},
+		{
+			name:            "BVI Scrub Island Resort Marina without charter fleet demoted to overnight_stop",
+			recName:         "Scrub Island Resort, Spa & Marina",
+			recType:         "Hub",
+			rawRole:         "start_end_base",
+			desc:            "Luxury resort marina with 55 deep-water transient slips, pool, and restaurants.",
+			reasoning:       "Great overnight stopover with resort amenities.",
+			stayDetailsJSON: `{"is_charter_base":true,"has_transient_slips":true}`,
+			wantRole:        "overnight_stop",
+		},
+		{
+			name:            "BVI Soper's Hole / West End stopover without charter fleet stays overnight_stop",
+			recName:         "Soper's Hole Marina (Freshwater Pond / West End)",
+			recType:         "Hub",
+			rawRole:         "start_end_base",
+			desc:            "Protected harbor with mooring balls, transient dockage, and provisioning.",
+			reasoning:       "Popular first or last night stopover with moorings.",
+			stayDetailsJSON: `{"has_moorings":true,"has_transient_slips":true}`,
+			wantRole:        "overnight_stop",
+		},
+		{
+			name:            "Chesapeake Annapolis charter base promoted to start_end_base",
+			recName:         "Annapolis City Marina / Eastport",
+			recType:         "Marina",
+			rawRole:         "start_end_base",
+			desc:            "Homeport embarkation base for Cruise Annapolis and Waypoints Yacht Charters.",
+			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Cruise Annapolis","Waypoints"]}`,
+			wantRole:        "start_end_base",
+		},
+		{
+			name:            "Chesapeake St. Michaels resort marina stays overnight_stop",
+			recName:         "St. Michaels Harbour Inn & Marina",
+			recType:         "Hub",
+			rawRole:         "start_end_base",
+			desc:            "Historic Eastern Shore harbor with transient slips, fuel, and dining.",
+			reasoning:       "Top overnight destination on the Miles River.",
+			stayDetailsJSON: `{"has_transient_slips":true}`,
+			wantRole:        "overnight_stop",
+		},
+		{
+			name:            "Fuel station always classified as service_only",
+			recName:         "Road Reef Fuel Dock",
+			recType:         "Fuel Station",
+			rawRole:         "overnight_stop",
+			desc:            "High-speed diesel and water dock.",
+			wantRole:        "service_only",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := model.VoyageRecommendation{
+				Name:        tc.recName,
+				Type:        tc.recType,
+				VoyageRole:  tc.rawRole,
+				Description: tc.desc,
+				Reasoning:   tc.reasoning,
+				StayDetails: model.RawJSON(tc.stayDetailsJSON),
+			}
+			normalizeRecommendationRole(&rec)
+			if rec.VoyageRole != tc.wantRole {
+				t.Errorf("normalizeRecommendationRole(%q) = %q, want %q", tc.recName, rec.VoyageRole, tc.wantRole)
 			}
 		})
 	}

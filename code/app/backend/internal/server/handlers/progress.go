@@ -124,6 +124,46 @@ func (h *Handler) broadcastProgress(sessionID, stage, message string) {
 	h.progressHub.broadcast(sessionID, model.ProgressEvent{Stage: stage, Message: message})
 }
 
+func (h *Handler) broadcastProgressSection(sessionID, section, message string, data json.RawMessage) {
+	if len(data) == 0 {
+		return
+	}
+	h.progressHub.broadcast(sessionID, model.ProgressEvent{
+		Stage:   "partial",
+		Section: section,
+		Message: message,
+		Data:    model.RawJSON(data),
+	})
+}
+
+func toolProgressMessage(toolName, location string) string {
+	switch toolName {
+	case "GetWeather":
+		return fmt.Sprintf("Fetching hourly marine & wind forecast for %s", location)
+	case "GetTides":
+		return fmt.Sprintf("Checking tide tables & currents for %s", location)
+	case "GetSunriseSunset":
+		return fmt.Sprintf("Calculating sunrise, sunset & daylight window for %s", location)
+	case "FindPlacesNearby", "facility_discovery":
+		return fmt.Sprintf("Scanning marinas, moorings & anchorages near %s", location)
+	case "hydrographic_pilot", "QueryCoastPilot", "QuerySailingDirections":
+		return fmt.Sprintf("Consulting NOAA Coast Pilot & NGA Sailing Directions for %s", location)
+	case "ComputePassageTimeline":
+		return fmt.Sprintf("Aligning departure tide, transit window & arrival daylight for %s", location)
+	case "GetSafetyAlerts":
+		return fmt.Sprintf("Checking active maritime safety notices near %s", location)
+	case "CalculateHeading":
+		return fmt.Sprintf("Evaluating course bearing against prevailing wind for %s", location)
+	case "GetCandidateRegionsForMonth":
+		return "Loading canonical sailing regions & seasonal baselines"
+	default:
+		if strings.Contains(toolName, "search") {
+			return fmt.Sprintf("Researching local cruising guides & hazard notices for %s", location)
+		}
+		return fmt.Sprintf("Running %s for %s", toolName, location)
+	}
+}
+
 func (h *Handler) StreamProgress(w http.ResponseWriter, r *http.Request) {
 	streamSSE(w, r, &h.progressHub, "progress", 30*time.Minute, func(evt model.ProgressEvent) bool {
 		return evt.Stage == "done" || strings.HasPrefix(evt.Stage, "error")

@@ -8,15 +8,21 @@
       },
       "rubrics": [
         {
-          "rubric_id": "hub_identified",
-          "rubric_content": {
-            "text_property": "The agent identifies Nantucket Harbor as a major sailing hub."
-          }
-        },
-        {
           "rubric_id": "json_format",
           "rubric_content": {
             "text_property": "The response is a valid JSON object with a top-level 'recommendations' key whose value is an array of recommendation objects, with no text outside the JSON block."
+          }
+        },
+        {
+          "rubric_id": "voyage_role_and_stay_details_populated",
+          "rubric_content": {
+            "text_property": "Recommendation objects include a 'voyage_role' field ('start_end_base', 'overnight_stop', 'day_stop', or 'service_only') and a 'stay_details' object."
+          }
+        },
+        {
+          "rubric_id": "start_end_base_vs_overnight_stop_accuracy",
+          "rubric_content": {
+            "text_property": "Only actual commercial yacht charter fleet embarkation bases (e.g. Tortola bases like Road Town, Nanny Cay, or Hodges Creek/Parham Town in the BVI; or Annapolis / Rock Hall in the Chesapeake) are classified with 'voyage_role': 'start_end_base' and 'stay_details.is_charter_base': true, while destination resort marinas, out-island stopovers (e.g. Scrub Island, Bitter End, Norman Island), and creek stopovers (e.g. St. Michaels, Oxford) are classified as 'overnight_stop'."
           }
         },
         {

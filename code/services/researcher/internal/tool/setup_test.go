@@ -2,6 +2,9 @@ package tool
 
 import (
 	"context"
+	"fmt"
+	"iter"
+	"sync"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/memory"
@@ -10,14 +13,61 @@ import (
 	"google.golang.org/genai"
 )
 
+type mapState struct {
+	mu   sync.RWMutex
+	data map[string]any
+}
+
+func newMapState() *mapState {
+	return &mapState{data: make(map[string]any)}
+}
+
+func (s *mapState) Get(key string) (any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.data[key]
+	if !ok {
+		return nil, fmt.Errorf("key %q not found", key)
+	}
+	return v, nil
+}
+
+func (s *mapState) Set(key string, val any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = val
+	return nil
+}
+
+func (s *mapState) All() iter.Seq2[string, any] {
+	return func(yield func(string, any) bool) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		for k, v := range s.data {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
 type mockToolContext struct {
 	agent.StrictContextMock
+	state session.State
 }
 
 func newMockContext() *mockToolContext {
 	return &mockToolContext{
 		StrictContextMock: agent.NewStrictContextMock(context.Background()),
 	}
+}
+
+func newStatefulMockContext() (*mockToolContext, *mapState) {
+	st := newMapState()
+	return &mockToolContext{
+		StrictContextMock: agent.NewStrictContextMock(context.Background()),
+		state:             st,
+	}, st
 }
 
 func (m mockToolContext) Actions() *session.EventActions {
@@ -69,7 +119,7 @@ func (m mockToolContext) SessionID() string {
 }
 
 func (m mockToolContext) State() session.State {
-	return nil
+	return m.state
 }
 
 func (m mockToolContext) UserContent() *genai.Content {

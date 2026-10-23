@@ -121,6 +121,8 @@ CREATE TABLE voyage_recommendation (
     voyage_id INTEGER REFERENCES voyage(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     type VARCHAR(50) NOT NULL,
+    voyage_role TEXT NOT NULL DEFAULT 'overnight_stop',
+    stay_details JSONB NOT NULL DEFAULT '{}'::jsonb,
     latitude FLOAT NOT NULL,
     longitude FLOAT NOT NULL,
     radius_miles FLOAT NOT NULL DEFAULT 5,

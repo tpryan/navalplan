@@ -140,17 +140,20 @@
       </div>
       <div id="pilot-controls" class="hidden">
         <span class="pilot-legend-title">Filter Spots</span>
+        <button class="pilot-filter-btn active" data-type="start_end">
+          <span class="pilot-dot" style="background:var(--coral)"></span>Start / End Bases
+        </button>
+        <button class="pilot-filter-btn active" data-type="marina">
+          <span class="pilot-dot" style="background:var(--amber)"></span>Overnight Slips
+        </button>
         <button class="pilot-filter-btn active" data-type="anchorage">
-          <span class="pilot-dot"></span>Anchorages
+          <span class="pilot-dot" style="background:var(--teal)"></span>Anchorages
         </button>
         <button class="pilot-filter-btn active" data-type="mooring">
-          <span class="pilot-dot"></span>Moorings
-        </button>
-        <button class="pilot-filter-btn active" data-type="hub">
-          <span class="pilot-dot"></span>Hubs
+          <span class="pilot-dot" style="background:var(--violet)"></span>Moorings
         </button>
         <button class="pilot-filter-btn active" data-type="fuel">
-          <span class="pilot-dot"></span>Fuel
+          <span class="pilot-dot" style="background:var(--sky)"></span>Fuel &amp; Day
         </button>
       </div>
       <div id="discovery-controls" class="hidden">
@@ -210,7 +213,7 @@
         <div class="form-group">
           <label>Starting Location</label>
           <div class="flex gap-sm">
-            <input type="text" id="voyage-location-name" name="location_name" placeholder="e.g. Seattle" />
+            <input type="text" id="voyage-location-name" name="location_name" autocomplete="off" placeholder="e.g. Seattle" />
             <button type="button" id="btn-use-map-center" class="btn secondary">Use Map Center</button>
           </div>
           <input type="hidden" id="voyage-lat" name="latitude" />

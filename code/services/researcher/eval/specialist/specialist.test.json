@@ -30,6 +30,36 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "bvi_charter_base_vs_overnight_stop_classification",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Recommend anchorages, moorings, marinas, and fuel docks within 15 nm of center coordinates (latitude: 18.4207, longitude: -64.6399, 18.4207°N, 64.6399°W; center reference point near Tortola, British Virgin Islands). Classify each recommendation with voyage_role ('start_end_base', 'overnight_stop', 'day_stop', or 'service_only') and stay_details. Ensure Tortola charter fleet bases (Road Town / Wickhams Cay, Nanny Cay, and Hodges Creek / Parham Town / East End) are identified as 'start_end_base' with charter_companies populated, while out-island and resort stopover marinas (such as Scrub Island, Virgin Gorda, Norman Island, Peter Island, Cooper Island, and Soper's Hole) are classified as 'overnight_stop'."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "chesapeake_charter_base_vs_overnight_stop_classification",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Recommend anchorages, moorings, marinas, and fuel docks within 20 nm of center coordinates (latitude: 38.9784, longitude: -76.4922, 38.9784°N, 76.4922°W; center reference point near Annapolis, MD, Chesapeake Bay). Classify each recommendation with voyage_role ('start_end_base', 'overnight_stop', 'day_stop', or 'service_only') and stay_details. Ensure only verified commercial charter fleet bases (such as Annapolis / Eastport and Rock Hall) are classified as 'start_end_base', while overnight destination harbors and creek marinas (such as St. Michaels, Galesville, Deale, and Kent Island) are classified as 'overnight_stop'."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

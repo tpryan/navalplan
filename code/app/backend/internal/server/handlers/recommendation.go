@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"app/internal/agent"
 	"app/internal/model"
 )
 
@@ -323,6 +324,19 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	var parsedCount int
+	onEvent := func(evt agent.AgentEvent) {
+		for _, p := range evt.Content.Parts {
+			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+				h.broadcastProgress(progressSessionID, "tool", toolProgressMessage(p.FunctionCall.Name, locInfo))
+			}
+		}
+		if len(evt.Actions.StateDelta) > 0 {
+			if rawPlaces, ok := evt.Actions.StateDelta["verified_places"]; ok && len(rawPlaces) > 0 {
+				h.broadcastProgressSection(progressSessionID, "facilities", fmt.Sprintf("Verified area infrastructure discovered near %s", locInfo), rawPlaces)
+			}
+		}
+	}
+
 	progressStop := make(chan struct{})
 	go func() {
 		t := time.NewTicker(10 * time.Second)
@@ -345,7 +359,7 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 			}
 		}
 	}()
-	fullText, err := h.Agent.RunStreaming(ctx, appName, userID, sessionID, prompt)
+	fullText, err := h.Agent.RunStreamingWithEvents(ctx, appName, userID, sessionID, prompt, onEvent)
 	close(progressStop)
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
@@ -417,4 +431,159 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 
 	h.broadcastProgress(progressSessionID, "done", fmt.Sprintf("Local Pilot complete — %d locations charted", parsedCount))
 	slog.InfoContext(ctx, "Generated recommendations for voyage", "count", parsedCount, "voyage_id", v.ID)
+
+	// Synchronize discovered Start/End Bases into the Voyage Guide's hubs list
+	// so the Destination Guide modal reflects the exact start/stop bases found by specialist.
+	h.syncStartEndBasesToGuide(ctx, v.ID, recommendations)
+}
+
+func (h *Handler) syncStartEndBasesToGuide(ctx context.Context, voyageID int64, recs []model.VoyageRecommendation) {
+	if len(recs) == 0 || h.DB == nil {
+		return
+	}
+	guide, err := h.DB.GetVoyageGuide(ctx, voyageID)
+	if err != nil || guide == nil || strings.HasPrefix(guide.Summary, "Error:") {
+		return
+	}
+
+	type hubItem struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		URL         string   `json:"url,omitempty"`
+		VoyageRole  string   `json:"voyage_role,omitempty"`
+		References  []string `json:"references,omitempty"`
+	}
+	var hubs []hubItem
+	if len(guide.Hubs) > 0 {
+		_ = json.Unmarshal(guide.Hubs, &hubs)
+	}
+
+	existingNames := make(map[string]int, len(hubs))
+	for i, hb := range hubs {
+		existingNames[strings.ToLower(strings.TrimSpace(hb.Name))] = i
+	}
+
+	changed := false
+	for _, r := range recs {
+		if !isVerifiedCharterEmbarkationBase(r.Name, r.Description, r.Reasoning, r.VoyageRole, string(r.StayDetails)) {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(r.Name))
+		if idx, exists := existingNames[key]; exists {
+			if hubs[idx].VoyageRole != "start_end_base" {
+				hubs[idx].VoyageRole = "start_end_base"
+				changed = true
+			}
+			continue
+		}
+		var refs []string
+		if len(r.References) > 0 {
+			_ = json.Unmarshal(r.References, &refs)
+		}
+		desc := r.Description
+		if r.Reasoning != "" && !strings.Contains(desc, r.Reasoning) {
+			desc = strings.TrimSpace(desc + " — " + r.Reasoning)
+		}
+		hubs = append([]hubItem{{
+			Name:        r.Name,
+			Description: desc,
+			URL:         r.URL,
+			VoyageRole:  "start_end_base",
+			References:  refs,
+		}}, hubs...)
+		existingNames[key] = 0
+		changed = true
+	}
+
+	if changed {
+		if updatedBytes, err := json.Marshal(hubs); err == nil {
+			guide.Hubs = model.RawJSON(updatedBytes)
+			_ = h.DB.CreateVoyageGuide(ctx, guide)
+		}
+	}
+}
+
+func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
+	t := strings.ToLower(strings.TrimSpace(rec.Type))
+	if strings.Contains(t, "fuel") || strings.Contains(t, "launch") {
+		rec.VoyageRole = "service_only"
+		return
+	}
+	if strings.Contains(t, "anchor") || strings.Contains(t, "moor") {
+		if strings.ToLower(strings.TrimSpace(rec.VoyageRole)) == "day_stop" {
+			rec.VoyageRole = "day_stop"
+			return
+		}
+		rec.VoyageRole = "overnight_stop"
+		return
+	}
+
+	role := strings.ToLower(strings.TrimSpace(rec.VoyageRole))
+	if isVerifiedCharterEmbarkationBase(rec.Name, rec.Description, rec.Reasoning, role, string(rec.StayDetails)) {
+		rec.VoyageRole = "start_end_base"
+		return
+	}
+
+	if role == "day_stop" || role == "service_only" {
+		rec.VoyageRole = role
+		return
+	}
+	rec.VoyageRole = "overnight_stop"
+}
+
+func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJSON string) bool {
+	var sd struct {
+		IsCharterBase    bool     `json:"is_charter_base"`
+		CharterCompanies []string `json:"charter_companies"`
+	}
+	if len(stayDetailsJSON) > 0 {
+		_ = json.Unmarshal([]byte(stayDetailsJSON), &sd)
+	}
+	if len(sd.CharterCompanies) > 0 {
+		return true
+	}
+
+	n := strings.ToLower(name)
+	full := strings.ToLower(name + " " + desc + " " + reasoning)
+
+	// Guard against resort/stopover marinas that are overnight destinations rather than embarkation bases.
+	stopoverOnlyKeywords := []string{
+		"resort, spa", "resort & spa", "island resort", "harbour inn", "harbor inn",
+		"soper's hole", "sopers hole", "freshwater pond", "scrub island", "bitter end",
+		"saba rock", "leverick", "marina cay", "cooper island", "peter island",
+		"norman island", "jost van dyke", "st. michaels", "st michaels", "oxford",
+		"tilghman", "knapps narrows", "poplar island",
+	}
+	isStopover := false
+	for _, kw := range stopoverOnlyKeywords {
+		if strings.Contains(n, kw) {
+			isStopover = true
+			break
+		}
+	}
+
+	// Region-agnostic positive evidence of a commercial charter embarkation base or primary sailing capital hub.
+	charterEvidence := []string{
+		"charter base", "charter fleet", "bareboat charter", "yacht charter",
+		"charter company", "charter companies", "charter operator", "embarkation base",
+		"sailing capital", "starting point", "embarkation", "turnaround",
+		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
+		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
+		"annapolis city marina", "annapolis harbor", "annapolis harbour", "port annapolis",
+		"eastport yacht", "bert jabin",
+		"san juan sailing", "anacortes yacht", "bellingham yacht",
+		"bvi yacht charters", "horizon yacht", "voyage charters", "conch charters",
+		"tortola marine management", "tmm yacht", "footloose", "kiriacoulis",
+		"istion", "angelina yacht", "sunsail base", "moorings base",
+	}
+	for _, sig := range charterEvidence {
+		if strings.Contains(full, sig) && !isStopover {
+			return true
+		}
+	}
+
+	if (role == "start_end_base" || sd.IsCharterBase) && !isStopover {
+		return true
+	}
+	return false
 }

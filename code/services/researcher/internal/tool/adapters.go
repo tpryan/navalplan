@@ -17,6 +17,8 @@ type NauticalToolService struct {
 	Sunrise           *SunriseProvider
 	Places            *PlacesProvider
 	SailingDirections *SailingDirectionsProvider
+	Timeline          *TimelineProvider
+	Regions           *RegionsProvider
 }
 
 // TideRequest represents the input for the GetTides MCP tool.
@@ -36,9 +38,11 @@ type McpTideEvent struct {
 
 // McpTideResponse represents the output for the GetTides MCP tool.
 type McpTideResponse struct {
-	StationName string         `json:"station_name"`
-	Events      []McpTideEvent `json:"events"`
-	Note        string         `json:"note,omitempty"`
+	StationName   string         `json:"station_name"`
+	Events        []McpTideEvent `json:"events"`
+	Note          string         `json:"note,omitempty"`
+	Digest        string         `json:"digest,omitempty"`
+	SummaryDigest string         `json:"summary_digest,omitempty"`
 }
 
 // WeatherRequest represents the input for the GetWeather MCP tool.
@@ -50,6 +54,8 @@ type WeatherRequest struct {
 // WeatherResponse represents the output for the GetWeather MCP tool.
 type WeatherResponse struct {
 	Summary          string    `json:"summary"`
+	Digest           string    `json:"digest,omitempty"`
+	SummaryDigest    string    `json:"summary_digest,omitempty"`
 	Condition        string    `json:"condition"`
 	TempMinF         float64   `json:"temp_min_f"`
 	TempMaxF         float64   `json:"temp_max_f"`
@@ -77,9 +83,11 @@ type SunriseRequest struct {
 
 // SunriseResponse represents the output for the GetSunriseSunset MCP tool.
 type SunriseResponse struct {
-	Sunrise  string `json:"sunrise"`
-	Sunset   string `json:"sunset"`
-	TimeZone string `json:"time_zone"`
+	Sunrise       string `json:"sunrise"`
+	Sunset        string `json:"sunset"`
+	TimeZone      string `json:"time_zone"`
+	Digest        string `json:"digest,omitempty"`
+	SummaryDigest string `json:"summary_digest,omitempty"`
 }
 
 // PlacesRequest represents the input for the FindPlacesNearby MCP tool.
@@ -113,7 +121,9 @@ type PlaceDetail struct {
 
 // McpPlacesResponse represents the output for the FindPlacesNearby MCP tool.
 type McpPlacesResponse struct {
-	Facilities []PlaceDetail `json:"facilities"`
+	Facilities    []PlaceDetail `json:"facilities"`
+	Digest        string        `json:"digest,omitempty"`
+	SummaryDigest string        `json:"summary_digest,omitempty"`
 }
 
 // SafetyRequest represents the input for the GetSafetyAlerts MCP tool.
@@ -146,8 +156,10 @@ func (s *NauticalToolService) FetchTides(ctx agent.Context, req TideRequest) (*M
 	}
 
 	res := &McpTideResponse{
-		StationName: result.StationName,
-		Note:        result.Note,
+		StationName:   result.StationName,
+		Note:          result.Note,
+		Digest:        result.Digest,
+		SummaryDigest: result.SummaryDigest,
 	}
 
 	for _, e := range result.Tides {
@@ -192,6 +204,8 @@ func (s *NauticalToolService) FetchWeather(ctx agent.Context, req WeatherRequest
 
 	return &WeatherResponse{
 		Summary:          fmt.Sprintf("%s with max winds of %.1f kts", result.Condition, result.MaxWindKts),
+		Digest:           result.Digest,
+		SummaryDigest:    result.SummaryDigest,
 		Condition:        result.Condition,
 		TempMinF:         result.MinTemp,
 		TempMaxF:         result.MaxTemp,
@@ -226,7 +240,6 @@ func (s *NauticalToolService) FetchSunriseSunset(ctx agent.Context, req SunriseR
 		return nil, err
 	}
 
-	// Format to HH:MM AM/PM as requested by Harbourmaster prompt
 	parseAndFormat := func(tStr string) string {
 		t, err := time.Parse("2006-01-02T15:04:05", tStr)
 		if err != nil {
@@ -236,9 +249,11 @@ func (s *NauticalToolService) FetchSunriseSunset(ctx agent.Context, req SunriseR
 	}
 
 	return &SunriseResponse{
-		Sunrise:  parseAndFormat(result.Sunrise),
-		Sunset:   parseAndFormat(result.Sunset),
-		TimeZone: result.TimeZone,
+		Sunrise:       parseAndFormat(result.Sunrise),
+		Sunset:        parseAndFormat(result.Sunset),
+		TimeZone:      result.TimeZone,
+		Digest:        result.Digest,
+		SummaryDigest: result.SummaryDigest,
 	}, nil
 }
 
@@ -260,17 +275,22 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 		return &McpPlacesResponse{Facilities: nil}, nil
 	}
 
-	res := &McpPlacesResponse{}
+	res := &McpPlacesResponse{
+		Digest:        result.Digest,
+		SummaryDigest: result.SummaryDigest,
+	}
 	for _, p := range result.Places {
 		detail := PlaceDetail{
-			Name:           p.Name,
-			Address:        p.Address,
-			Latitude:       p.Latitude,
-			Longitude:      p.Longitude,
-			BusinessStatus: p.BusinessStatus,
-			Website:        p.WebsiteURI,
-			DistanceMeters: p.DistanceMeters,
-			GoogleTypes:    p.Types,
+			Name:            p.Name,
+			Address:         p.Address,
+			Latitude:        p.Latitude,
+			Longitude:       p.Longitude,
+			Rating:          p.Rating,
+			UserRatingCount: p.UserRatingCount,
+			BusinessStatus:  p.BusinessStatus,
+			Website:         p.WebsiteURI,
+			DistanceMeters:  p.DistanceMeters,
+			GoogleTypes:     p.Types,
 		}
 		detail.Type = classifyPlace(req.Query, p.Types)
 		res.Facilities = append(res.Facilities, detail)
@@ -281,10 +301,6 @@ func (s *NauticalToolService) FetchPlacesNearby(ctx agent.Context, req PlacesReq
 
 // FetchSafetyAlerts extracts active global navigational warnings and localized security alerts.
 func (s *NauticalToolService) FetchSafetyAlerts(ctx agent.Context, req SafetyRequest) (*SafetyResponse, error) {
-	// Live navigational-warnings feed (NGA MSI). This is OFF by default and only
-	// reaches the network when NAVALPLAN_SAFETY_ALERTS_ENABLED is set; otherwise,
-	// and on any error, it returns an explicit "no data" response rather than
-	// fabricated hazards, so the safety audit is never seeded with mock data.
 	hazards, level := fetchSafetyAlerts(ctx, req.Latitude, req.Longitude, req.RadiusNM)
 	if hazards == nil {
 		hazards = []string{}
@@ -367,4 +383,22 @@ func (s *NauticalToolService) FetchHeading(ctx agent.Context, req HeadingRequest
 		return nil, fmt.Errorf("coordinates must be provided for both origin and destination")
 	}
 	return CalculateHeadingResult(req), nil
+}
+
+// FetchPassageTimeline computes the aligned departure and arrival timeline across both stops.
+func (s *NauticalToolService) FetchPassageTimeline(ctx agent.Context, req TimelineRequest) (TimelineResponse, error) {
+	if s.Timeline == nil {
+		tp := &TimelineProvider{weather: s.Weather, tides: s.Tides, sunrise: s.Sunrise}
+		return tp.ComputeTimeline(ctx, req)
+	}
+	return s.Timeline.ComputeTimeline(ctx, req)
+}
+
+// FetchCandidateRegions returns the canonical non-overlapping sailing regions for a given month.
+func (s *NauticalToolService) FetchCandidateRegions(ctx agent.Context, req CandidateRegionsArgs) (CandidateRegionsResponse, error) {
+	if s.Regions == nil {
+		rp := &RegionsProvider{}
+		return rp.GetCandidateRegions(ctx, req)
+	}
+	return s.Regions.GetCandidateRegions(ctx, req)
 }

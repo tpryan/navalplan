@@ -20,6 +20,26 @@ export function normalizePilotNotes(pilotNotes) {
   return data;
 }
 
+function formatTimingDetails(timing) {
+  if (!timing) return '';
+  if (typeof timing === 'string') return timing;
+  if (typeof timing !== 'object') return '';
+  const parts = [];
+  if (timing.recommended_departure_window) {
+    parts.push(`Recommended Departure: ${timing.recommended_departure_window}`);
+  }
+  if (timing.departure_tide_constraint) {
+    parts.push(timing.departure_tide_constraint);
+  }
+  if (timing.arrival_outlook) {
+    parts.push(timing.arrival_outlook);
+  }
+  if (timing.night_entry_and_aids_warning) {
+    parts.push(timing.night_entry_and_aids_warning);
+  }
+  return parts.join(' · ');
+}
+
 /**
  * PilotNotesBox — creates a DOM section element containing structured pilotage notes.
  * @param {object|string} pilotNotes
@@ -78,6 +98,7 @@ export function PilotNotesBox(pilotNotes) {
     grid.appendChild(card);
   };
 
+  addCard('schedule', 'Departure & Arrival Timing', formatTimingDetails(data.departure_and_arrival_timing));
   addCard('straighten', 'Approaches & Channels', data.approach_and_channels || data.approach || data.channels);
   addCard('anchor', 'Anchorages & Moorings', data.anchorages_and_moorings || data.anchorages || data.moorings);
   addCard('shield', 'Regulations & Hazards', data.regulations_and_hazards || data.regulations || data.hazards);
@@ -125,6 +146,7 @@ export function renderPilotNotesHTML(pilotNotes) {
   }
 
   const overview = data.overview || data.summary || data.description || '';
+  const timing = formatTimingDetails(data.departure_and_arrival_timing);
   const approach = data.approach_and_channels || data.approach || data.channels || '';
   const anchorages = data.anchorages_and_moorings || data.anchorages || data.moorings || '';
   const regulations = data.regulations_and_hazards || data.regulations || data.hazards || '';
@@ -136,6 +158,17 @@ export function renderPilotNotesHTML(pilotNotes) {
   }
 
   const subCards = [];
+  if (timing) {
+    subCards.push(`
+      <div class="pilot-note-card">
+        <div class="pilot-note-card__header">
+          <span class="material-symbols-outlined pilot-note-card__icon">schedule</span>
+          <strong>Departure & Arrival Timing</strong>
+        </div>
+        <div class="pilot-note-card__content">${esc(timing)}</div>
+      </div>
+    `);
+  }
   if (approach) {
     subCards.push(`
       <div class="pilot-note-card">

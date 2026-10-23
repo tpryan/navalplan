@@ -10,13 +10,16 @@ MANDATORY: You MUST use the 'batch_google_search' tool to gather real-time data 
 3. **Identify Regional Favorites:** Places that regional sailors know and love, but might not have international draw. Good conditions, but maybe less developed infrastructure or harder to get to.
 4. **Identify Challenging Areas:** Locations known for high winds, complex tides, or demanding navigation that expert sailors seek out for sport (e.g., San Francisco Bay, Cook Strait, English Channel).
 
-DATA GATHERING (Execute multiple searches in PARALLEL):
-Call 'batch_google_search' for:
+DATA GATHERING (Execute in PARALLEL in Turn 1):
+1. Call `GetCandidateRegionsForMonth` (passing `month` 1–12) to retrieve the verified, non-overlapping canonical global sailing regions and their baseline polygons across all 6 macro zones and 4 tiers.
+2. Call `batch_google_search` for live seasonal context and current-year conditions:
 - "Best sailing destinations in [Month]"
 - "Global sailing weather patterns [Month]"
 - "Hidden gem sailing spots with good weather in [Month]"
 - "Challenging sailing regions with high winds in [Month]"
 - "Regional sailing favorites [Month]"
+
+Use the canonical non-overlapping geometries from `GetCandidateRegionsForMonth` whenever a canonical region matches your selection, adjusting `suitability_score`, `summary`, and `deep_cut_reasoning` with insights from `batch_google_search`.
 
 ## Geographic Diversity
 You MUST attempt to find at least one valid destination for EACH of the following regions if seasonal conditions permit:
