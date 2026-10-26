@@ -417,3 +417,109 @@ func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
 		t.Errorf("expected harbourmaster prompt to instruct pilot comparison against planned track, got: %s", capturedHarbourPrompt)
 	}
 }
+
+func TestPerformStopResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
+	stop1 := &model.Stop{
+		ID:               1,
+		VoyageID:         10,
+		LocationName:     "Annapolis, MD",
+		Latitude:         38.9784,
+		Longitude:        -76.4922,
+		SearchRadius:     5,
+		SearchRadiusUnit: "NM",
+		TargetDate:       time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "sessions") {
+			w.Write([]byte(`{"name":"session"}`))
+			return
+		}
+		if r.URL.Path == "/api/run" {
+			var req struct {
+				AppName string `json:"appName"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			if req.AppName == "harbourmaster" {
+				// Emit tool call event with stateDelta (using raw tool struct field names)
+				// followed by a truncated/invalid JSON final response to verify salvage.
+				events := `[
+					{
+						"content": {
+							"role": "model",
+							"parts": [
+								{"text": "Checking conditions for {38.9784, -76.4922}..."},
+								{"functionCall": {"name": "GetWeather"}}
+							]
+						},
+						"actions": {
+							"stateDelta": {
+								"briefing_weather": {"condition":"Sunny","min_temp":65,"max_temp":81,"max_wind_kts":14.5,"wind_direction":"SW","wave_height":2.1,"digest":"Sunny, 65-81F, peak wind 14.5 kts"},
+								"briefing_tides": {"station_name":"Annapolis","tides":[{"time":"2026-06-15 06:12","type":"High","height":1.8}]},
+								"briefing_sun": {"sunrise":"2026-06-15T05:42:00","sunset":"2026-06-15T20:31:00"},
+								"verified_places": [{"name":"Annapolis City Marina","type":"marina","address":"410 Severn Ave","latitude":38.972,"longitude":-76.485,"website_uri":"https://annapoliscitymarina.com"}]
+							}
+						}
+					},
+					{
+						"content": {
+							"role": "model",
+							"parts": [{"text": "{\"pilot_notes\":{\"overview\":\"Truncated"}]
+						}
+					}
+				]`
+				w.Write([]byte(events))
+				return
+			}
+			w.Write([]byte(`[{"content":{"parts":[{"text":"[]"}],"role":"model"}}]`))
+		}
+	})
+
+	store := &mockResearchAndLookoutStore{
+		stops:       []model.Stop{*stop1},
+		savedAlerts: make(map[int64]model.RawJSON),
+	}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, r)
+			return rec.Result(), nil
+		}),
+	}
+	h := &Handler{
+		DB:          store,
+		AgentURL:    "http://agent.local",
+		AgentClient: client,
+		Agent:       &agent.AgentRunner{Client: client, Resolver: &agent.StaticResolver{BaseURL: "http://agent.local"}},
+		ResearchSem: make(chan struct{}, 10),
+	}
+
+	h.performStopResearchLogic(stop1, "")
+
+	if len(store.briefings) != 1 {
+		t.Fatalf("expected 1 salvaged briefing to be saved, got %d", len(store.briefings))
+	}
+	saved := store.briefings[0]
+	var wx map[string]any
+	if err := json.Unmarshal(saved.WeatherSummary, &wx); err != nil {
+		t.Fatalf("unmarshal weather: %v", err)
+	}
+	if wx["wind_speed_kt"] != 14.5 || wx["temp_max_f"] != float64(81) || wx["wave_height_ft"] != 2.1 {
+		t.Errorf("expected normalized weather fields (wind_speed_kt, temp_max_f, wave_height_ft), got: %v", wx)
+	}
+	var tides map[string]any
+	if err := json.Unmarshal(saved.Tides, &tides); err != nil {
+		t.Fatalf("unmarshal tides: %v", err)
+	}
+	if _, ok := tides["events"]; !ok {
+		t.Errorf("expected normalized tides.events field, got: %v", tides)
+	}
+	var sun map[string]any
+	if err := json.Unmarshal(saved.SunPhase, &sun); err != nil {
+		t.Fatalf("unmarshal sun: %v", err)
+	}
+	if sun["sunrise"] != "05:42 AM" || sun["sunset"] != "08:31 PM" {
+		t.Errorf("expected formatted sun_phase times, got: %v", sun)
+	}
+}

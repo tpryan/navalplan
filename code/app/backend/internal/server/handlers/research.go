@@ -408,20 +408,20 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		}
 		if len(evt.Actions.StateDelta) > 0 {
 			if wRaw, ok := evt.Actions.StateDelta["briefing_weather"]; ok && len(wRaw) > 0 {
-				stateWeather = wRaw
-				h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast ready for %s", stop.LocationName), wRaw)
+				stateWeather = normalizeStateWeather(wRaw)
+				h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast ready for %s", stop.LocationName), stateWeather)
 			}
 			if tRaw, ok := evt.Actions.StateDelta["briefing_tides"]; ok && len(tRaw) > 0 {
-				stateTides = tRaw
-				h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide chart ready for %s", stop.LocationName), tRaw)
+				stateTides = normalizeStateTides(tRaw)
+				h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide chart ready for %s", stop.LocationName), stateTides)
 			}
 			if sRaw, ok := evt.Actions.StateDelta["briefing_sun"]; ok && len(sRaw) > 0 {
-				stateSun = sRaw
-				h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Daylight window ready for %s", stop.LocationName), sRaw)
+				stateSun = normalizeStateSun(sRaw)
+				h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Daylight window ready for %s", stop.LocationName), stateSun)
 			}
 			if pRaw, ok := evt.Actions.StateDelta["verified_places"]; ok && len(pRaw) > 0 {
-				statePlaces = pRaw
-				h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Verified facilities ready for %s", stop.LocationName), pRaw)
+				statePlaces = normalizeStatePlaces(pRaw)
+				h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Verified facilities ready for %s", stop.LocationName), statePlaces)
 			}
 		}
 	}
@@ -450,33 +450,47 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	}()
 	responseText, err := h.Agent.RunStreamingWithEvents(ctx, appName, userID, agentSessionID, prompt, onEvent)
 	close(progressStop)
+	hasStateFallback := len(stateWeather) > 0 || len(stateTides) > 0 || len(stateSun) > 0 || len(statePlaces) > 0 || len(reusableFacilities) > 0
 	if err != nil {
 		slog.ErrorContext(ctx, "Agent run failed", "error", err)
 		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
 			h.broadcastProgress(sessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
 		}
-		h.saveEmptyBriefing(ctx, stop)
-		return
+		if !hasStateFallback {
+			h.saveEmptyBriefing(ctx, stop)
+			return
+		}
+		slog.WarnContext(ctx, "Salvaging stop briefing from session state after agent error", "stop_id", stop.ID)
 	}
-
-	if responseText == "" {
-		slog.ErrorContext(ctx, "No response from agent")
-		h.saveEmptyBriefing(ctx, stop)
-		return
-	}
-
-	h.broadcastProgress(sessionID, "parsing", fmt.Sprintf("Mapping facilities & saving briefing for %s", stop.LocationName))
-	responseText = cleanJSON(responseText)
 
 	var output AgentOutput
-	if err := json.Unmarshal([]byte(responseText), &output); err != nil {
-		if !strings.HasSuffix(strings.TrimSpace(responseText), "}") {
-			slog.ErrorContext(ctx, "Agent JSON output is incomplete; likely truncated at the model output token limit",
-				"stop_id", stop.ID, "location", stop.LocationName, "response_chars", len(responseText))
+	if responseText == "" {
+		if !hasStateFallback {
+			slog.ErrorContext(ctx, "No response from agent")
+			h.saveEmptyBriefing(ctx, stop)
+			return
 		}
-		slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", err, "raw", responseText)
-		h.saveEmptyBriefing(ctx, stop)
-		return
+		slog.WarnContext(ctx, "No text response from agent; salvaging stop briefing from session state", "stop_id", stop.ID)
+	} else {
+		h.broadcastProgress(sessionID, "parsing", fmt.Sprintf("Mapping facilities & saving briefing for %s", stop.LocationName))
+		cleaned := repairMathInJSON(cleanJSON(responseText))
+		if unmarshalErr := json.Unmarshal([]byte(cleaned), &output); unmarshalErr != nil {
+			if lastObj := extractLastJSONObject(responseText); lastObj != "" {
+				unmarshalErr = json.Unmarshal([]byte(repairMathInJSON(lastObj)), &output)
+			}
+			if unmarshalErr != nil {
+				if !strings.HasSuffix(strings.TrimSpace(cleaned), "}") {
+					slog.ErrorContext(ctx, "Agent JSON output is incomplete; likely truncated at the model output token limit",
+						"stop_id", stop.ID, "location", stop.LocationName, "response_chars", len(responseText))
+				}
+				slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", unmarshalErr, "raw", cleaned)
+				if !hasStateFallback {
+					h.saveEmptyBriefing(ctx, stop)
+					return
+				}
+				slog.WarnContext(ctx, "Salvaging stop briefing from session state after JSON parse error", "stop_id", stop.ID)
+			}
+		}
 	}
 
 	if isEmptyOrNullJSON(output.WeatherSummary) && len(stateWeather) > 0 {
@@ -738,6 +752,133 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 func isEmptyOrNullJSON(raw json.RawMessage) bool {
 	s := strings.TrimSpace(string(raw))
 	return s == "" || s == "null" || s == "{}" || s == "[]"
+}
+
+// extractLastJSONObject scans backwards from the last '}' in s to find the matching
+// top-level '{', handling cases where earlier model turns emitted braces before the
+// final JSON briefing object.
+func extractLastJSONObject(s string) string {
+	end := strings.LastIndex(s, "}")
+	if end < 0 {
+		return ""
+	}
+	for start := strings.LastIndex(s[:end], "{"); start >= 0; start = strings.LastIndex(s[:start], "{") {
+		candidate := s[start : end+1]
+		if json.Valid([]byte(candidate)) {
+			return candidate
+		}
+		if start == 0 {
+			break
+		}
+	}
+	return ""
+}
+
+func normalizeStateWeather(raw json.RawMessage) json.RawMessage {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	if _, ok := m["wind_speed_kt"]; !ok {
+		if v, ok := m["max_wind_kts"]; ok {
+			m["wind_speed_kt"] = v
+		}
+	}
+	if _, ok := m["temp_min_f"]; !ok {
+		if v, ok := m["min_temp"]; ok {
+			m["temp_min_f"] = v
+		}
+	}
+	if _, ok := m["temp_max_f"]; !ok {
+		if v, ok := m["max_temp"]; ok {
+			m["temp_max_f"] = v
+		}
+	}
+	if _, ok := m["wave_height_ft"]; !ok {
+		if v, ok := m["wave_height"]; ok {
+			m["wave_height_ft"] = v
+		}
+	}
+	if sum, _ := m["summary"].(string); sum == "" {
+		if dig, _ := m["digest"].(string); dig != "" {
+			m["summary"] = dig
+		} else if cond, _ := m["condition"].(string); cond != "" {
+			wind, _ := m["wind_speed_kt"].(float64)
+			m["summary"] = fmt.Sprintf("%s with max winds of %.1f kts", cond, wind)
+		}
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return b
+}
+
+func normalizeStateTides(raw json.RawMessage) json.RawMessage {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	if _, ok := m["events"]; !ok {
+		if tides, ok := m["tides"]; ok {
+			m["events"] = tides
+		}
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return b
+}
+
+func normalizeStateSun(raw json.RawMessage) json.RawMessage {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	formatISO := func(s string) string {
+		if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
+			return t.Format("03:04 PM")
+		}
+		return s
+	}
+	if sr, ok := m["sunrise"].(string); ok && sr != "" {
+		m["sunrise"] = formatISO(sr)
+	}
+	if ss, ok := m["sunset"].(string); ok && ss != "" {
+		m["sunset"] = formatISO(ss)
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return b
+}
+
+func normalizeStatePlaces(raw json.RawMessage) json.RawMessage {
+	var items []map[string]any
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return raw
+	}
+	for _, item := range items {
+		if _, ok := item["vicinity"]; !ok {
+			if addr, ok := item["address"].(string); ok && addr != "" {
+				item["vicinity"] = addr
+			}
+		}
+		if _, ok := item["references"]; !ok {
+			if uri, ok := item["website_uri"].(string); ok && uri != "" {
+				item["references"] = []string{uri}
+			} else if w, ok := item["website"].(string); ok && w != "" {
+				item["references"] = []string{w}
+			}
+		}
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return raw
+	}
+	return b
 }
 
 func buildStopTransitAndTrackPrompt(next *model.Stop, distNM, course float64, hasCourse bool, plannedRouteInfo string) string {

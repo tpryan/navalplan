@@ -84,6 +84,34 @@ func parseReasoningEngineRequest(reReq reasoningEngineRequest) (message, appName
 	return
 }
 
+func extractState(reReq reasoningEngineRequest) map[string]any {
+	var inputMap map[string]any
+	if m, ok := reReq.Input.(map[string]any); ok {
+		inputMap = m
+	}
+	for _, m := range []map[string]any{inputMap, reReq.Parameters} {
+		if m == nil {
+			continue
+		}
+		if st, ok := m["state"].(map[string]any); ok && len(st) > 0 {
+			return st
+		}
+	}
+	return nil
+}
+
+func eventHasFunctionCall(event *session.Event) bool {
+	if event == nil || event.Content == nil {
+		return false
+	}
+	for _, part := range event.Content.Parts {
+		if part != nil && part.FunctionCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
 type reasoningEngineHandlers struct {
 	loader  agent.Loader
 	session session.Service
@@ -102,6 +130,18 @@ func (h *reasoningEngineHandlers) newRunner(appName string) (*runner.Runner, err
 	})
 }
 
+func (h *reasoningEngineHandlers) ensureSessionWithState(r *http.Request, appName, userID, sessionID string, state map[string]any) {
+	if h.session == nil || len(state) == 0 {
+		return
+	}
+	_, _ = h.session.Create(r.Context(), &session.CreateRequest{
+		AppName:   appName,
+		UserID:    userID,
+		SessionID: sessionID,
+		State:     state,
+	})
+}
+
 func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request) {
 	var reReq reasoningEngineRequest
 	if err := json.NewDecoder(r.Body).Decode(&reReq); err != nil {
@@ -112,6 +152,7 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 	if sessionID == "" || sessionID == "default_session" {
 		sessionID = fmt.Sprintf("re_%d", time.Now().UnixNano())
 	}
+	h.ensureSessionWithState(r, appName, userID, sessionID, extractState(reReq))
 
 	runr, err := h.newRunner(appName)
 	if err != nil {
@@ -127,6 +168,9 @@ func (h *reasoningEngineHandlers) handle(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			slog.Error("reasoning engine run error", "error", err, "appName", appName, "sessionID", sessionID)
 			lastErr = err
+			continue
+		}
+		if eventHasFunctionCall(event) {
 			continue
 		}
 		if event.Content != nil && (event.Content.Role == "" || event.Content.Role == "model") {
@@ -167,6 +211,7 @@ func (h *reasoningEngineHandlers) handleStream(w http.ResponseWriter, r *http.Re
 	if sessionID == "" || sessionID == "default_session" {
 		sessionID = fmt.Sprintf("re_%d", time.Now().UnixNano())
 	}
+	h.ensureSessionWithState(r, appName, userID, sessionID, extractState(reReq))
 
 	runr, err := h.newRunner(appName)
 	if err != nil {
@@ -188,15 +233,28 @@ func (h *reasoningEngineHandlers) handleStream(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	seenPartialInTurn := false
 	for event, err := range resp {
 		if err != nil {
 			fmt.Fprintf(w, "event: error\ndata: %v\n\n", err)
 			f.Flush()
 			continue
 		}
+		if eventHasFunctionCall(event) {
+			seenPartialInTurn = false
+			continue
+		}
+		if event.Partial {
+			seenPartialInTurn = true
+		} else if seenPartialInTurn {
+			// Skip the aggregated full-turn model event emitted at the end of
+			// an SSE-streamed turn to avoid duplicating the entire JSON payload.
+			seenPartialInTurn = false
+			continue
+		}
 
 		var content string
-		if event.Content != nil && event.Content.Role == "model" {
+		if event.Content != nil && (event.Content.Role == "" || event.Content.Role == "model") {
 			for _, part := range event.Content.Parts {
 				if part.Text != "" && !part.Thought {
 					content += part.Text

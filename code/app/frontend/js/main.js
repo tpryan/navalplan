@@ -4052,6 +4052,10 @@ async function handleResearchClick(stop, button) {
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
                     return;
                 }
+                if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
+                    pushProgressStep(stopSteps, evt.message, evt.stage === 'done');
+                    updateStepperInCard(loadCard, stopSteps);
+                }
                 if (evt && evt.stage === 'partial' && evt.section && evt.data) {
                     if (evt.section === 'weather') partialBriefing.weather_summary = evt.data;
                     else if (evt.section === 'tides') partialBriefing.tides = evt.data;
@@ -4060,12 +4064,8 @@ async function handleResearchClick(stop, button) {
                     else if (evt.section === 'pilot_notes') partialBriefing.pilot_notes = evt.data;
                     else if (evt.section === 'alerts') partialBriefing.safety_alerts = evt.data;
                     try {
-                        showBriefing(partialBriefing);
+                        showBriefing(partialBriefing, false, { isPartial: true, progressCard: loadCard });
                     } catch (_) {}
-                }
-                if (evt && evt.message && !(typeof evt.stage === 'string' && evt.stage.startsWith('error'))) {
-                    pushProgressStep(stopSteps, evt.message, evt.stage === 'done');
-                    updateStepperInCard(loadCard, stopSteps);
                 }
             });
         }
@@ -4364,11 +4364,12 @@ function renderHourlyTimeline(weather, sun = {}) {
     return timeline;
 }
 
-async function showBriefing(briefing, doPushState = true) {
-    // Cache so itinerary cards can show weather chips
-    if (briefing && briefing.stop_id) briefingCache.set(briefing.stop_id, briefing);
+async function showBriefing(briefing, doPushState = true, options = {}) {
+    const { isPartial = false, progressCard = null } = options || {};
+    // Cache only complete briefings so itinerary cards and re-clicks don't get stuck with partial data
+    if (!isPartial && briefing && briefing.stop_id) briefingCache.set(briefing.stop_id, briefing);
 
-    if (doPushState && currentVoyage) {
+    if (!isPartial && doPushState && currentVoyage) {
         window.history.pushState({}, '', `/voyages/${currentVoyage.id}/stops/${briefing.stop_id}`);
     }
     const modal = document.getElementById('modal-briefing');
@@ -4416,133 +4417,155 @@ async function showBriefing(briefing, doPushState = true) {
 
     // §5.6 Signal briefing sections — built as DOM nodes
     const sections = document.createDocumentFragment();
+    if (isPartial && progressCard) {
+        sections.appendChild(progressCard);
+    }
 
-    const weather = briefing.weather_summary || {};
+    const rawWeather = briefing.weather_summary || {};
+    const weather = {
+        ...rawWeather,
+        wind_speed_kt: rawWeather.wind_speed_kt ?? rawWeather.max_wind_kts,
+        temp_max_f: rawWeather.temp_max_f ?? rawWeather.max_temp,
+        temp_min_f: rawWeather.temp_min_f ?? rawWeather.min_temp,
+        wave_height_ft: rawWeather.wave_height_ft ?? rawWeather.wave_height,
+        summary: rawWeather.summary || rawWeather.digest || '',
+    };
     const sun = briefing.sun_phase || {};
+    const hasWeatherSection = !isPartial || Boolean(briefing.weather_summary);
+    const hasTidesSection = !isPartial || Boolean(briefing.tides);
 
     // ── Weather ──────────────────────────────────────────────────────────────
     const weatherSec = document.createElement('div');
     weatherSec.className = 'briefing-section';
 
-    const wxHeader = document.createElement('h3');
-    wxHeader.className = 'briefing-header-icon';
-    wxHeader.innerHTML = `<span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span> Weather`;
-    weatherSec.appendChild(wxHeader);
+    if (hasWeatherSection) {
+        const wxHeader = document.createElement('h3');
+        wxHeader.className = 'briefing-header-icon';
+        wxHeader.innerHTML = `<span class="material-symbols-outlined">${getIconForWeather(weather.condition)}</span> Weather`;
+        weatherSec.appendChild(wxHeader);
 
-    const wxTiles = document.createElement('div');
-    wxTiles.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:8px';
+        const wxTiles = document.createElement('div');
+        wxTiles.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:8px';
 
-    if (!isInvalid(weather.condition)) {
-        wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, icon: getIconForWeather(weather.condition), accent: 'sky' }));
-    }
-    if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
-        wxTiles.appendChild(DataTile({
-            label: 'Wind',
-            value: `${weather.wind_speed_kt || 0} kt`,
-            sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction,
-            icon: 'air',
-            accent: 'sky'
-        }));
-    }
-    if (weather.temp_max_f || weather.temp_min_f) {
-        wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
-    }
-    if (weather.wave_height_ft > 0) {
-        const waveCompass = degreesToCompass(weather.wave_direction);
-        wxTiles.appendChild(DataTile({ 
-            label: 'Waves', 
-            value: `${weather.wave_height_ft.toFixed(1)} ft`, 
-            sub: `${waveCompass} ${weather.wave_period ? Math.round(weather.wave_period) + 's' : ''}`.trim(),
-            icon: 'waves', 
-            accent: 'teal' 
-        }));
-    }
-    weatherSec.appendChild(wxTiles);
+        if (!isInvalid(weather.condition)) {
+            wxTiles.appendChild(DataTile({ label: 'Conditions', value: weather.condition, icon: getIconForWeather(weather.condition), accent: 'sky' }));
+        }
+        if (!isInvalid(weather.wind_direction) || weather.wind_speed_kt) {
+            wxTiles.appendChild(DataTile({
+                label: 'Wind',
+                value: `${weather.wind_speed_kt || 0} kt`,
+                sub: isInvalid(weather.wind_direction) ? '' : weather.wind_direction,
+                icon: 'air',
+                accent: 'sky'
+            }));
+        }
+        if (weather.temp_max_f || weather.temp_min_f) {
+            wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
+        }
+        if (weather.wave_height_ft > 0) {
+            const waveCompass = degreesToCompass(weather.wave_direction);
+            wxTiles.appendChild(DataTile({ 
+                label: 'Waves', 
+                value: `${weather.wave_height_ft.toFixed(1)} ft`, 
+                sub: `${waveCompass} ${weather.wave_period ? Math.round(weather.wave_period) + 's' : ''}`.trim(),
+                icon: 'waves', 
+                accent: 'teal' 
+            }));
+        }
+        weatherSec.appendChild(wxTiles);
 
-    if (!isInvalid(weather.summary)) {
-        const wxSum = document.createElement('p');
-        wxSum.style.cssText = 'margin-top:8px;font-size:13px;color:var(--muted);line-height:1.5';
-        wxSum.textContent = weather.summary;
-        weatherSec.appendChild(wxSum);
-    }
+        if (!isInvalid(weather.summary)) {
+            const wxSum = document.createElement('p');
+            wxSum.style.cssText = 'margin-top:8px;font-size:13px;color:var(--muted);line-height:1.5';
+            wxSum.textContent = weather.summary;
+            weatherSec.appendChild(wxSum);
+        }
 
-    // Replace old wind tiles with the 24h timeline
-    const timeline = renderHourlyTimeline(weather, sun);
-    if (timeline) {
-        weatherSec.appendChild(timeline);
-    }
+        // Replace old wind tiles with the 24h timeline
+        const timeline = renderHourlyTimeline(weather, sun);
+        if (timeline) {
+            weatherSec.appendChild(timeline);
+        }
 
-    if (briefing.weather_last_updated) {
-        const wxAge = document.createElement('p');
-        wxAge.style.cssText = 'margin-top:6px;font-size:11px;color:var(--muted);font-style:italic';
-        const updatedAt = new Date(briefing.weather_last_updated);
-        wxAge.textContent = `Forecast as of ${updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
-        weatherSec.appendChild(wxAge);
+        if (briefing.weather_last_updated) {
+            const wxAge = document.createElement('p');
+            wxAge.style.cssText = 'margin-top:6px;font-size:11px;color:var(--muted);font-style:italic';
+            const updatedAt = new Date(briefing.weather_last_updated);
+            wxAge.textContent = `Forecast as of ${updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+            weatherSec.appendChild(wxAge);
+        }
     }
 
     // ── Tides (Injected under Weather) ────────────────────────────────────────
-    const tides = briefing.tides || {};
-    const allEvents = tides.events || [];
-    const displayEvents = allEvents.filter(e => e.time && e.time.startsWith(targetDateYMD));
-    const [y, m, d] = targetDateYMD.split('-');
-    const displayDateHeader = `${m}/${d}/${y}`;
+    if (hasTidesSection) {
+        const rawTides = briefing.tides || {};
+        const tides = {
+            ...rawTides,
+            events: rawTides.events || rawTides.tides || [],
+        };
+        const allEvents = tides.events || [];
+        const displayEvents = allEvents.filter(e => e.time && e.time.startsWith(targetDateYMD));
+        const [y, m, d] = targetDateYMD.split('-');
+        const displayDateHeader = `${m}/${d}/${y}`;
 
-    const tidesSec = document.createElement('div');
-    tidesSec.className = 'briefing-section';
-    tidesSec.style.marginTop = '16px'; // Add some spacing
+        const tidesSec = document.createElement('div');
+        tidesSec.className = 'briefing-section';
+        if (hasWeatherSection) tidesSec.style.marginTop = '16px'; // Add some spacing
 
-    const hasStation = tides.station_name && tides.station_name !== 'No local station' && tides.station_name !== 'Unknown Station';
-    const stationLabel = hasStation ? ` — ${tides.station_name}` : '';
+        const hasStation = tides.station_name && tides.station_name !== 'No local station' && tides.station_name !== 'Unknown Station';
+        const stationLabel = hasStation ? ` — ${tides.station_name}` : '';
 
-    const tidesHeader = document.createElement('h3');
-    tidesHeader.className = 'briefing-header-icon';
-    tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides${stationLabel} <span class="np-tides-meta">${displayDateHeader}</span>`;
-    tidesSec.appendChild(tidesHeader);
+        const tidesHeader = document.createElement('h3');
+        tidesHeader.className = 'briefing-header-icon';
+        tidesHeader.innerHTML = `<span class="material-symbols-outlined">waves</span> Tides${stationLabel} <span class="np-tides-meta">${displayDateHeader}</span>`;
+        tidesSec.appendChild(tidesHeader);
 
-    if (displayEvents.length > 0) {
-        const tideCanvasId = `briefingTideChart_${stop.id}`;
-        const tideWrap = document.createElement('div');
-        tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
-        const tideCanvas = document.createElement('canvas');
-        tideCanvas.id = tideCanvasId;
-        tideWrap.appendChild(tideCanvas);
-        tidesSec.appendChild(tideWrap);
-        requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
+        if (displayEvents.length > 0 && stop) {
+            const tideCanvasId = `briefingTideChart_${stop.id}`;
+            const tideWrap = document.createElement('div');
+            tideWrap.style.cssText = 'height:180px;border-radius:var(--radius-tile);overflow:hidden;margin-top:8px';
+            const tideCanvas = document.createElement('canvas');
+            tideCanvas.id = tideCanvasId;
+            tideWrap.appendChild(tideCanvas);
+            tidesSec.appendChild(tideWrap);
+            requestAnimationFrame(() => renderTideChart(tideCanvasId, tides, targetDateYMD));
 
-        const tbl = document.createElement('table');
-        tbl.className = 'briefing-table np-tides-table';
-        tbl.style.marginTop = '10px';
-        tbl.innerHTML = `<thead><tr>
-            <th class="briefing-th">Time</th>
-            <th class="briefing-th">Type</th>
-            <th class="briefing-th">Height</th>
-        </tr></thead>`;
-        const tbody = document.createElement('tbody');
-        displayEvents.forEach(e => {
-            let timeStr = e.time;
-            try {
-                const dt = new Date(e.time.replace(' ', 'T'));
-                if (!isNaN(dt.getTime())) {
-                    let hour = dt.getHours(), min = String(dt.getMinutes()).padStart(2,'0');
-                    const ap = hour >= 12 ? 'pm' : 'am';
-                    hour = hour % 12 || 12;
-                    timeStr = `${hour}:${min} ${ap}`;
-                }
-            } catch (_) {}
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="briefing-td">${timeStr}</td><td class="briefing-td">${e.type}</td><td class="briefing-td">${e.height_ft} ft</td>`;
-            tbody.appendChild(tr);
-        });
-        tbl.appendChild(tbody);
-        tidesSec.appendChild(tbl);
-    } else {
-        const noData = document.createElement('p');
-        noData.className = 'briefing-no-data';
-        const defaultNote = 'Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters (and becomes available within 7 days of the trip for UK/Ireland).';
-        noData.textContent = tides.note || defaultNote;
-        tidesSec.appendChild(noData);
+            const tbl = document.createElement('table');
+            tbl.className = 'briefing-table np-tides-table';
+            tbl.style.marginTop = '10px';
+            tbl.innerHTML = `<thead><tr>
+                <th class="briefing-th">Time</th>
+                <th class="briefing-th">Type</th>
+                <th class="briefing-th">Height</th>
+            </tr></thead>`;
+            const tbody = document.createElement('tbody');
+            displayEvents.forEach(e => {
+                let timeStr = e.time;
+                try {
+                    const dt = new Date(e.time.replace(' ', 'T'));
+                    if (!isNaN(dt.getTime())) {
+                        let hour = dt.getHours(), min = String(dt.getMinutes()).padStart(2,'0');
+                        const ap = hour >= 12 ? 'pm' : 'am';
+                        hour = hour % 12 || 12;
+                        timeStr = `${hour}:${min} ${ap}`;
+                    }
+                } catch (_) {}
+                const hVal = e.height_ft ?? e.height ?? 0;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="briefing-td">${timeStr}</td><td class="briefing-td">${e.type}</td><td class="briefing-td">${hVal} ft</td>`;
+                tbody.appendChild(tr);
+            });
+            tbl.appendChild(tbody);
+            tidesSec.appendChild(tbl);
+        } else {
+            const noData = document.createElement('p');
+            noData.className = 'briefing-no-data';
+            const defaultNote = 'Tidal data is not available yet for this region. Official prediction coverage is currently active for US, UK/Ireland, and NZ waters (and becomes available within 7 days of the trip for UK/Ireland).';
+            noData.textContent = tides.note || defaultNote;
+            tidesSec.appendChild(noData);
+        }
+        weatherSec.appendChild(tidesSec);
     }
-    weatherSec.appendChild(tidesSec);
 
     // ── Safety Lookout (Injected under Tides) ─────────────────────────────────
     const safetyAlerts = briefing.safety_alerts;
@@ -4554,7 +4577,9 @@ async function showBriefing(briefing, doPushState = true) {
         }
     }
 
-    sections.appendChild(weatherSec);
+    if (hasWeatherSection || hasTidesSection || (Array.isArray(safetyAlerts) && safetyAlerts.length > 0)) {
+        sections.appendChild(weatherSec);
+    }
 
     // ── Sun Phase ─────────────────────────────────────────────────────────────
     if (sun.sunrise || sun.sunset) {
@@ -4768,9 +4793,10 @@ async function redoBriefing(oldBriefing, btn) {
     try {
         const redoRes = await API.triggerResearch(oldBriefing.stop_id);
 
+        let partialBriefing = { stop_id: oldBriefing.stop_id };
         let redoProgressES = null;
         if (redoRes && redoRes.session_id) {
-            _stopProgressES = API.streamProgress(redoRes.session_id, (evt) => {
+            redoProgressES = API.streamProgress(redoRes.session_id, (evt) => {
                 if (evt.stage === 'error_503') {
                     set503Callback((count) => {})(1); // Force a 503 check/notification
                     showNotification('Model Busy', 'Our AI models are currently experiencing high demand. Please try again in a few minutes.');
@@ -4780,18 +4806,30 @@ async function redoBriefing(oldBriefing, btn) {
                     pushProgressStep(redoSteps, evt.message, evt.stage === 'done');
                     updateStepperInCard(redoCard, redoSteps);
                 }
+                if (evt && evt.stage === 'partial' && evt.section && evt.data) {
+                    if (evt.section === 'weather') partialBriefing.weather_summary = evt.data;
+                    else if (evt.section === 'tides') partialBriefing.tides = evt.data;
+                    else if (evt.section === 'sun') partialBriefing.sun_phase = evt.data;
+                    else if (evt.section === 'facilities') partialBriefing.facilities = evt.data;
+                    else if (evt.section === 'pilot_notes') partialBriefing.pilot_notes = evt.data;
+                    else if (evt.section === 'alerts') partialBriefing.safety_alerts = evt.data;
+                    try {
+                        showBriefing(partialBriefing, false, { isPartial: true, progressCard: redoCard });
+                    } catch (_) {}
+                }
             });
+            _stopProgressES = redoProgressES;
         }
 
         const oldTime = new Date(oldBriefing.created_at).getTime();
         const startTime = Date.now();
-        const TIMEOUT_MS = 45000; // 45 seconds
+        const TIMEOUT_MS = 300000; // 5 minutes
 
         // Poll
         const poll = setInterval(async () => {
             if (Date.now() - startTime > TIMEOUT_MS) {
                 clearInterval(poll);
-                if (redoProgressES) redoProgressES.close();
+                if (redoProgressES) { redoProgressES.close(); redoProgressES = null; }
                 content.innerHTML = '<div class="error-state"><p><strong>Research timed out.</strong></p><p>The agent is taking too long or encountered an error.</p></div>';
                 btn.disabled = false;
                 return;
@@ -4804,7 +4842,7 @@ async function redoBriefing(oldBriefing, btn) {
                     // Wait for newer timestamp
                     if (newTime > oldTime) {
                         clearInterval(poll);
-                        if (redoProgressES) redoProgressES.close();
+                        if (redoProgressES) { redoProgressES.close(); redoProgressES = null; }
                         btn.disabled = false;
                         showBriefing(b); // Re-render with new data
                         renderMapStops();

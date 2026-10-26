@@ -128,7 +128,9 @@ func (tp *TimelineProvider) ComputeTimeline(ctx agent.Context, req TimelineReque
 			}
 		}
 		if req.ToLatitude != 0 || req.ToLongitude != 0 {
-			if t, err := tp.tides.GetTides(ctx, TideArgs{
+			// Pass nil context so arrival-stop tide lookups do not overwrite the
+			// departure stop's briefing_tides in session state.
+			if t, err := tp.tides.GetTides(nil, TideArgs{
 				Latitude:  req.ToLatitude,
 				Longitude: req.ToLongitude,
 				Date:      req.Date,
@@ -152,7 +154,9 @@ func (tp *TimelineProvider) ComputeTimeline(ctx agent.Context, req TimelineReque
 			}
 		}
 		if req.ToLatitude != 0 || req.ToLongitude != 0 {
-			if s, err := tp.sunrise.GetSunriseSunset(ctx, SunriseArgs{
+			// Pass nil context so arrival-stop sun lookups do not overwrite the
+			// departure stop's briefing_sun in session state.
+			if s, err := tp.sunrise.GetSunriseSunset(nil, SunriseArgs{
 				Latitude:  req.ToLatitude,
 				Longitude: req.ToLongitude,
 				Date:      req.Date,

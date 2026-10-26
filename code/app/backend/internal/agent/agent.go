@@ -94,6 +94,16 @@ type AgentEvent struct {
 	Actions struct {
 		StateDelta map[string]json.RawMessage `json:"stateDelta,omitempty"`
 	} `json:"actions,omitempty"`
+	Partial bool `json:"partial,omitempty"`
+}
+
+func eventHasFunctionCall(e AgentEvent) bool {
+	for _, p := range e.Content.Parts {
+		if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // EventStreamRunner is an optional interface implemented by AgentRunner for callers
@@ -245,6 +255,9 @@ func (r *AgentRunner) RunStreamingWithEvents(ctx context.Context, appName, userI
 			if onEvent != nil {
 				onEvent(e)
 			}
+			if eventHasFunctionCall(e) {
+				continue
+			}
 			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {
 				for _, p := range e.Content.Parts {
 					if p.Text != "" && !p.Thought {
@@ -256,6 +269,7 @@ func (r *AgentRunner) RunStreamingWithEvents(ctx context.Context, appName, userI
 	} else {
 		multi := io.MultiReader(bytes.NewReader(firstByte[:n]), resp.Body)
 		reader := bufio.NewReader(multi)
+		seenPartialInTurn := false
 		for {
 			line, readErr := reader.ReadString('\n')
 			if readErr != nil && len(line) == 0 {
@@ -294,6 +308,24 @@ func (r *AgentRunner) RunStreamingWithEvents(ctx context.Context, appName, userI
 
 			if onEvent != nil {
 				onEvent(e)
+			}
+
+			if eventHasFunctionCall(e) {
+				seenPartialInTurn = false
+				if readErr == io.EOF {
+					break
+				}
+				continue
+			}
+
+			if e.Partial {
+				seenPartialInTurn = true
+			} else if seenPartialInTurn {
+				seenPartialInTurn = false
+				if readErr == io.EOF {
+					break
+				}
+				continue
 			}
 
 			if (e.Content.Role == "" || e.Content.Role == "model") && len(e.Content.Parts) > 0 {

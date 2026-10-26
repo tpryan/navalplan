@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
@@ -20,7 +21,8 @@ import (
 
 // ReasoningEngineRunner invokes agents using the Vertex AI Reasoning Engine API.
 type ReasoningEngineRunner struct {
-	Client *aiplatform.ReasoningEngineExecutionClient
+	Client        *aiplatform.ReasoningEngineExecutionClient
+	sessionStates sync.Map
 }
 
 // NewReasoningEngineRunner creates a new runner for Reasoning Engine.
@@ -34,7 +36,27 @@ func NewReasoningEngineRunner(ctx context.Context) (*ReasoningEngineRunner, erro
 
 func (r *ReasoningEngineRunner) CreateSession(ctx context.Context, resourceName, appName, userID, sessionID string, state map[string]any) error {
 	slog.DebugContext(ctx, "CreateSession called for Reasoning Engine", "resource", resourceName, "session", sessionID)
+	if len(state) > 0 && sessionID != "" {
+		r.sessionStates.Store(sessionID, state)
+	}
 	return nil
+}
+
+func (r *ReasoningEngineRunner) buildInputStruct(prompt, appName, userID, sessionID string) (*structpb.Struct, error) {
+	payload := map[string]any{
+		"input":     prompt,
+		"appName":   appName,
+		"userID":    userID,
+		"sessionID": sessionID,
+	}
+	if sessionID != "" {
+		if raw, ok := r.sessionStates.Load(sessionID); ok {
+			if st, okCast := raw.(map[string]any); okCast && len(st) > 0 {
+				payload["state"] = st
+			}
+		}
+	}
+	return structpb.NewStruct(payload)
 }
 
 func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appName, userID, sessionID, prompt string) (string, error) {
@@ -48,12 +70,7 @@ func (r *ReasoningEngineRunner) RunSync(ctx context.Context, resourceName, appNa
 	)
 	defer span.End()
 
-	input, err := structpb.NewStruct(map[string]any{
-		"input":     prompt,
-		"appName":   appName,
-		"userID":    userID,
-		"sessionID": sessionID,
-	})
+	input, err := r.buildInputStruct(prompt, appName, userID, sessionID)
 	if err != nil {
 		span.RecordError(err)
 		return "", fmt.Errorf("failed to create input struct: %w", err)
@@ -173,12 +190,7 @@ func (r *ReasoningEngineRunner) RunStreaming(ctx context.Context, resourceName, 
 	)
 	defer span.End()
 
-	input, err := structpb.NewStruct(map[string]any{
-		"input":     prompt,
-		"appName":   appName,
-		"userID":    userID,
-		"sessionID": sessionID,
-	})
+	input, err := r.buildInputStruct(prompt, appName, userID, sessionID)
 	if err != nil {
 		span.RecordError(err)
 		return "", fmt.Errorf("failed to create input struct: %w", err)
