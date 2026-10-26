@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM, groupColocatedStops, findNearbyJoinTargetStop } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -5331,18 +5331,52 @@ async function initMap() {
       }
       };
 
+      const proceedWithSaveOrJoinPrompt = () => {
+          const joinCandidate = findNearbyJoinTargetStop(currentStops, lat, lng, selectedDate, 2.0);
+          if (joinCandidate && joinCandidate.targetStop) {
+              const tStop = joinCandidate.targetStop;
+              const tName = displayLocationName(tStop.location_name);
+              const title = joinCandidate.isStartStop ? 'Join with Start Stop?' : `Join with Stop ${joinCandidate.stopNumber}?`;
+              const msg = joinCandidate.isStartStop
+                  ? `This point is near Stop 1 (${tName}). Join the start and finish so they share a single map marker and combined facility badge?`
+                  : `This point is near Stop ${joinCandidate.stopNumber} (${tName}). Join them at the same location so they share a single map marker and combined facility badge?`;
+              showNotification(
+                  title,
+                  msg,
+                  [
+                      {
+                          label: joinCandidate.isStartStop ? 'Join Start & Finish' : 'Join Stops',
+                          type: 'primary',
+                          hideClose: true,
+                          callback: () => {
+                              stopData.latitude = tStop.latitude;
+                              stopData.longitude = tStop.longitude;
+                              stopData.location_name = tStop.location_name;
+                              stopData.precise_location = tStop.precise_location || preciseLocation;
+                              doSave();
+                          }
+                      },
+                      { label: 'Keep Separate', type: 'secondary', hideClose: true, callback: doSave },
+                      { label: 'Cancel', type: 'secondary' },
+                  ]
+              );
+          } else {
+              doSave();
+          }
+      };
+
       if (stop && stop.location_name) {
           const existing = displayLocationName(stop.location_name);
           showNotification(
               'Change Location?',
               `This date is already set to "${existing}". Replace it with the new location?`,
               [
-                  { label: 'Replace', type: 'primary', hideClose: true, callback: doSave },
+                  { label: 'Replace', type: 'primary', hideClose: true, callback: proceedWithSaveOrJoinPrompt },
                   { label: 'Cancel', type: 'secondary' },
               ]
           );
       } else {
-          doSave();
+          proceedWithSaveOrJoinPrompt();
       }
     });
   }
@@ -5408,129 +5442,170 @@ async function initMap() {
         markers.push(cMarker);
     }
 
-        // Add Markers — landfalls get Signal numbered teardrop pins with rotating accents;
-        // passage points get a muted transit dot so they read as "under way", not a harbour.
-        let landfallIndex = 0;
+        // Add passage point markers first
         sortedStops.forEach((stop) => {
             if (!stop.latitude || !stop.longitude) return;
+            if (stop.stop_type !== 'passage_point') return;
 
-            if (stop.stop_type === 'passage_point') {
-                const dot = accentDot('muted', 20);
-                const icon = document.createElement('span');
-                icon.className = 'material-symbols-outlined';
-                icon.style.cssText = 'font-size:13px;color:#fff;line-height:1;pointer-events:none;user-select:none';
-                icon.textContent = 'explore';
-                dot.appendChild(icon);
+            const dot = accentDot('muted', 20);
+            const icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined';
+            icon.style.cssText = 'font-size:13px;color:#fff;line-height:1;pointer-events:none;user-select:none';
+            icon.textContent = 'explore';
+            dot.appendChild(icon);
 
-                const pMarker = new AdvancedMarkerElement({
-                    map: map,
-                    position: { lat: stop.latitude, lng: stop.longitude },
-                    content: dot,
-                    title: 'At-sea passage (extrapolated position)',
-                    zIndex: 50
-                });
-
-                pMarker.addListener('gmp-click', () => {
-                    if (activeInfoWindow) activeInfoWindow.close();
-                    const ink = tokenColor('ink');
-                    const surface = tokenColor('surface');
-                    const date = new Date(stop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
-                    activeInfoWindow = new InfoWindow({
-                        content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>At-sea passage</b><br><span style="color:${tokenColor('muted')}">${date} · weather extrapolated from route</span></div>`
-                    });
-                    activeInfoWindow.open(map, pMarker);
-                });
-
-                markers.push(pMarker);
-                return;
-            }
-
-            const index = landfallIndex++;
-            const accent = VOYAGE_ACCENTS[index % VOYAGE_ACCENTS.length];
-        const pinEl = MapPin({ accent, n: index + 1, label: `Stop ${index + 1}: ${displayLocationName(stop.location_name)}` });
-
-        const marker = new AdvancedMarkerElement({
-            map: map,
-            position: { lat: stop.latitude, lng: stop.longitude },
-            content: pinEl,
-            title: `${displayLocationName(stop.location_name)} (Day ${index + 1})`,
-            zIndex: 100
-        });
-
-        marker.addListener('gmp-click', () => {
-            if (activeInfoWindow) activeInfoWindow.close();
-            const ink = tokenColor('ink');
-            const surface = tokenColor('surface');
-            activeInfoWindow = new InfoWindow({
-                content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>${displayLocationName(stop.location_name)}</b><br><span style="color:${tokenColor('muted')}">Stop ${index + 1}</span></div>`
+            const pMarker = new AdvancedMarkerElement({
+                map: map,
+                position: { lat: stop.latitude, lng: stop.longitude },
+                content: dot,
+                title: 'At-sea passage (extrapolated position)',
+                zIndex: 50
             });
-            activeInfoWindow.open(map, marker);
+
+            pMarker.addListener('gmp-click', () => {
+                if (activeInfoWindow) activeInfoWindow.close();
+                const ink = tokenColor('ink');
+                const surface = tokenColor('surface');
+                const date = new Date(stop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                activeInfoWindow = new InfoWindow({
+                    content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>At-sea passage</b><br><span style="color:${tokenColor('muted')}">${date} · weather extrapolated from route</span></div>`
+                });
+                activeInfoWindow.open(map, pMarker);
+            });
+
+            markers.push(pMarker);
         });
 
-        markers.push(marker);
-    });
+        // Group co-located landfall stops (e.g. Start & Finish at the same harbor) into a single pin
+        const { groups: stopGroups } = groupColocatedStops(sortedStops, VOYAGE_ACCENTS, 2.0);
+        stopGroups.forEach((group) => {
+            const items = group.items;
+            const primaryStop = group.primaryStop;
+            const locLabel = displayLocationName(primaryStop.location_name);
+            const nums = items.map(it => it.stopNumber);
+            const accents = items.map(it => it.accent);
+            const isCombined = items.length > 1;
 
-    // Fetch and Draw Facilities
+            const pinEl = isCombined
+                ? MapPin({
+                    numbers: nums,
+                    accents,
+                    label: `Stops ${nums.join(' & ')}: ${locLabel}`
+                })
+                : MapPin({
+                    accent: accents[0],
+                    n: nums[0],
+                    label: `Stop ${nums[0]}: ${locLabel}`
+                });
+
+            const markerTitle = isCombined
+                ? `${locLabel} (Stops ${nums.join(' & ')})`
+                : `${locLabel} (Day ${nums[0]})`;
+
+            const marker = new AdvancedMarkerElement({
+                map: map,
+                position: group.position,
+                content: pinEl,
+                title: markerTitle,
+                zIndex: isCombined ? 105 : 100
+            });
+
+            marker.addListener('gmp-click', () => {
+                if (activeInfoWindow) activeInfoWindow.close();
+                const ink = tokenColor('ink');
+                const surface = tokenColor('surface');
+                const muted = tokenColor('muted');
+                const stopSummary = items.map(it => {
+                    const dStr = it.stop.target_date
+                        ? new Date(it.stop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                        : '';
+                    return dStr ? `Stop ${it.stopNumber} (${dStr})` : `Stop ${it.stopNumber}`;
+                }).join(' · ');
+                activeInfoWindow = new InfoWindow({
+                    content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>${locLabel}</b><br><span style="color:${muted}">${stopSummary}</span></div>`
+                });
+                activeInfoWindow.open(map, marker);
+            });
+
+            markers.push(marker);
+        });
+
+    // Fetch and Draw Facilities — combine badge counts for co-located stop groups
     (async () => {
-        for (const stop of sortedStops) {
+        for (const group of stopGroups) {
             try {
-                const b = await API.getBriefing(stop.id);
-                if (b && b.facilities) {
-                    const stopMarkers = [];
-                    b.facilities.forEach(f => {
-                         if (f.latitude && f.longitude) {
-                             const type = (f.type || '').toLowerCase();
-                             const filterKey = type.includes('anchor') ? 'anchorage'
-                                 : (type.includes('marina') || type.includes('yacht') || type.includes('launch') || type.includes('ramp')) ? 'marina'
-                                 : type.includes('moor') ? 'mooring'
-                                 : type.includes('restaurant') ? 'restaurant'
-                                 : type.includes('cafe') ? 'cafe'
-                                 : type.includes('bar') ? 'bar'
-                                 : type.includes('pharmac') ? 'pharmacy'
-                                 : (type.includes('store') || type.includes('grocery') || type.includes('market') || type.includes('provision')) ? 'store'
-                                 : (type.includes('service') || type.includes('hardware') || type.includes('chandler') || type.includes('bank') || type.includes('atm')) ? 'services'
-                                 : type.includes('fuel') ? 'fuel'
-                                 : 'other';
+                const groupMarkers = [];
+                const seenPinCoordKeys = new Set();
+                let combinedTotalCount = 0;
 
-                             const accent = markerAccent(f.type);
-                              const dot = accentDot(accent, 34, filterKey);
+                for (const item of group.items) {
+                    const stop = item.stop;
+                    const b = await API.getBriefing(stop.id);
+                    if (b && Array.isArray(b.facilities)) {
+                        b.facilities.forEach(f => {
+                            if (f.latitude && f.longitude) {
+                                combinedTotalCount++;
+                                const type = (f.type || '').toLowerCase();
+                                const filterKey = type.includes('anchor') ? 'anchorage'
+                                    : (type.includes('marina') || type.includes('yacht') || type.includes('launch') || type.includes('ramp')) ? 'marina'
+                                    : type.includes('moor') ? 'mooring'
+                                    : type.includes('restaurant') ? 'restaurant'
+                                    : type.includes('cafe') ? 'cafe'
+                                    : type.includes('bar') ? 'bar'
+                                    : type.includes('pharmac') ? 'pharmacy'
+                                    : (type.includes('store') || type.includes('grocery') || type.includes('market') || type.includes('provision')) ? 'store'
+                                    : (type.includes('service') || type.includes('hardware') || type.includes('chandler') || type.includes('bank') || type.includes('atm')) ? 'services'
+                                    : type.includes('fuel') ? 'fuel'
+                                    : 'other';
 
-                             const fMarker = new AdvancedMarkerElement({
-                                 map: null, // visibility managed by applyFacilityClustering()
-                                 position: { lat: f.latitude, lng: f.longitude },
-                                 content: dot,
-                                 title: f.name,
-                                 zIndex: 1
-                             });
+                                // Avoid stacking duplicate individual facility pins when zoomed in
+                                const coordKey = `${(f.name || '').toLowerCase().trim()}|${Number(f.latitude).toFixed(4)}|${Number(f.longitude).toFixed(4)}`;
+                                if (seenPinCoordKeys.has(coordKey)) {
+                                    return;
+                                }
+                                seenPinCoordKeys.add(coordKey);
 
-                             fMarker.addListener('gmp-click', () => {
-                                 showFacilityInfoWindow(f, fMarker, accent);
-                             });
-                             facilityMarkers.push({ marker: fMarker, type: filterKey });
-                             stopMarkers.push({ marker: fMarker, type: filterKey });
-                         }
-                    });
-                    if (stopMarkers.length > 0) {
-                        // Bubble sits at the stop's own coords (guaranteed valid; the
-                        // numbered pin renders there). zIndex:101 + the CSS offset in
-                        // facilityClusterBubble() keep it clear of that pin.
-                        const pos = { lat: stop.latitude, lng: stop.longitude };
-                        const clusterMarker = new AdvancedMarkerElement({
-                            map: null, // visibility managed by applyFacilityClustering()
-                            position: pos,
-                            content: facilityClusterBubble(stopMarkers.length),
-                            title: `${stopMarkers.length} facilities near ${displayLocationName(stop.location_name)}`,
-                            zIndex: 101,
+                                const accent = markerAccent(f.type);
+                                const dot = accentDot(accent, 34, filterKey);
+
+                                const fMarker = new AdvancedMarkerElement({
+                                    map: null, // visibility managed by applyFacilityClustering()
+                                    position: { lat: f.latitude, lng: f.longitude },
+                                    content: dot,
+                                    title: f.name,
+                                    zIndex: 1
+                                });
+
+                                fMarker.addListener('gmp-click', () => {
+                                    showFacilityInfoWindow(f, fMarker, accent);
+                                });
+                                facilityMarkers.push({ marker: fMarker, type: filterKey });
+                                groupMarkers.push({ marker: fMarker, type: filterKey });
+                            }
                         });
-                        clusterMarker.addListener('gmp-click', () => {
-                            map.panTo(pos);
-                            map.setZoom(Math.max((map.getZoom() || 0) + 2, FACILITY_CLUSTER_ZOOM));
-                        });
-                        facilityClusters.push({ position: pos, clusterMarker, markers: stopMarkers });
                     }
                 }
+
+                if (combinedTotalCount > 0) {
+                    const pos = group.position;
+                    const locLabel = displayLocationName(group.primaryStop.location_name);
+                    const stopNums = group.items.map(it => it.stopNumber);
+                    const titleSuffix = stopNums.length > 1 ? ` (Stops ${stopNums.join(' & ')})` : '';
+                    const clusterMarker = new AdvancedMarkerElement({
+                        map: null, // visibility managed by applyFacilityClustering()
+                        position: pos,
+                        content: facilityClusterBubble(combinedTotalCount),
+                        title: `${combinedTotalCount} facilities near ${locLabel}${titleSuffix}`,
+                        zIndex: 106,
+                    });
+                    clusterMarker.addListener('gmp-click', () => {
+                        map.panTo(pos);
+                        map.setZoom(Math.max((map.getZoom() || 0) + 2, FACILITY_CLUSTER_ZOOM));
+                    });
+                    facilityClusters.push({ position: pos, clusterMarker, markers: groupMarkers });
+                }
             } catch (err) {
-               // Ignore errors
+                // Ignore errors
             }
         }
         if (facilityMarkers.length > 0) {
@@ -5760,6 +5835,7 @@ async function updateRoutePolylines() {
 
     const { Polyline } = await importLibrary("maps");
     const routeLineColor = tokenColor('ink') || '#0B1220';
+    const { stopPositionMap } = groupColocatedStops(sortedStops, VOYAGE_ACCENTS, 2.0);
 
     for (let i = 0; i < sortedStops.length - 1; i++) {
         const fromStop = sortedStops[i];
@@ -5770,10 +5846,9 @@ async function updateRoutePolylines() {
             continue;
         }
 
-        const legCoords = [
-            { lat: fromStop.latitude, lng: fromStop.longitude },
-            { lat: toStop.latitude, lng: toStop.longitude }
-        ];
+        const fromPos = stopPositionMap.get(fromStop.id) || { lat: fromStop.latitude, lng: fromStop.longitude };
+        const toPos = stopPositionMap.get(toStop.id) || { lat: toStop.latitude, lng: toStop.longitude };
+        const legCoords = [fromPos, toPos];
 
         const poly = new Polyline({
             path: legCoords,

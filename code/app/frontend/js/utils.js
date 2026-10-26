@@ -1,4 +1,5 @@
 // Pure utility helpers — no state, no DOM beyond the a11y announcer.
+import { nmBetween } from './geometry.js';
 
 /**
  * Announce a message to screen readers via the #a11y-announcer live region.
@@ -717,6 +718,108 @@ export function applyReportFilterToDOM(root, filter = {}) {
     });
 
     return { tab: nextTab, day: nextDay };
+}
+
+/**
+ * groupColocatedStops — groups landfall stops that sit at the same harbor
+ * (within `thresholdNM` nautical miles of an earlier landfall stop) so they
+ * share a single combined map pin and a single combined facility count badge.
+ *
+ * @param {Array<Object>} sortedStops - Stops sorted chronologically
+ * @param {Array<string>} [accents]   - Palette token names (e.g. VOYAGE_ACCENTS)
+ * @param {number} [thresholdNM=2.0]  - Max distance in NM to merge stops into one group
+ * @returns {{ groups: Array<Object>, stopPositionMap: Map<any, {lat: number, lng: number}> }}
+ */
+export function groupColocatedStops(sortedStops, accents = ['coral', 'teal', 'violet', 'amber', 'sky', 'green'], thresholdNM = 2.0) {
+    const groups = [];
+    const stopPositionMap = new Map();
+    if (!Array.isArray(sortedStops) || sortedStops.length === 0) {
+        return { groups, stopPositionMap };
+    }
+
+    let landfallIndex = 0;
+    for (const stop of sortedStops) {
+        if (!stop || !stop.latitude || !stop.longitude) continue;
+        if (stop.stop_type === 'passage_point') continue;
+
+        const stopNumber = ++landfallIndex;
+        const accent = accents[(stopNumber - 1) % accents.length] || 'coral';
+
+        let matchedGroup = null;
+        for (const g of groups) {
+            const dNM = nmBetween(g.position, stop);
+            if (dNM != null && dNM <= thresholdNM) {
+                matchedGroup = g;
+                break;
+            }
+        }
+
+        if (matchedGroup) {
+            matchedGroup.items.push({ stop, stopNumber, accent });
+            if (stop.id != null) {
+                stopPositionMap.set(stop.id, matchedGroup.position);
+            }
+        } else {
+            const position = { lat: stop.latitude, lng: stop.longitude };
+            const newGroup = {
+                position,
+                primaryStop: stop,
+                items: [{ stop, stopNumber, accent }],
+            };
+            groups.push(newGroup);
+            if (stop.id != null) {
+                stopPositionMap.set(stop.id, position);
+            }
+        }
+    }
+
+    return { groups, stopPositionMap };
+}
+
+/**
+ * findNearbyJoinTargetStop — checks whether a map click at (`clickedLat`, `clickedLng`)
+ * for `selectedDate` is within `thresholdNM` of an existing landfall stop on a
+ * different date (prioritizing Stop 1, the start stop), so the UI can ask the user
+ * if they want to join the start and stop at the exact same coordinates.
+ *
+ * @param {Array<Object>} stops
+ * @param {number} clickedLat
+ * @param {number} clickedLng
+ * @param {string} selectedDate - "YYYY-MM-DD"
+ * @param {number} [thresholdNM=2.0]
+ * @returns {{ targetStop: Object, stopNumber: number, isStartStop: boolean, distanceNM: number } | null}
+ */
+export function findNearbyJoinTargetStop(stops, clickedLat, clickedLng, selectedDate, thresholdNM = 2.0) {
+    if (!Array.isArray(stops) || stops.length === 0 || typeof clickedLat !== 'number' || typeof clickedLng !== 'number') {
+        return null;
+    }
+    const sorted = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+    const candidates = [];
+    let landfallIndex = 0;
+
+    for (const s of sorted) {
+        if (!s || !s.latitude || !s.longitude || s.stop_type === 'passage_point') continue;
+        const stopNumber = ++landfallIndex;
+        const stopDate = String(s.target_date || '').split('T')[0];
+        if (selectedDate && stopDate === selectedDate) continue;
+
+        const dNM = nmBetween(s, { lat: clickedLat, lng: clickedLng });
+        if (dNM != null && dNM <= thresholdNM) {
+            candidates.push({
+                targetStop: s,
+                stopNumber,
+                isStartStop: stopNumber === 1,
+                distanceNM: dNM,
+            });
+        }
+    }
+
+    if (candidates.length === 0) return null;
+    // Prefer joining with Stop 1 (Start) when within threshold, otherwise closest stop
+    const startMatch = candidates.find(c => c.isStartStop);
+    if (startMatch) return startMatch;
+    candidates.sort((a, b) => a.distanceNM - b.distanceNM);
+    return candidates[0];
 }
 
 
