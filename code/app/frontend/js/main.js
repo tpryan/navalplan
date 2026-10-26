@@ -3144,7 +3144,20 @@ async function renderRecommendations() {
             hub:       'Overnight Marina (Slips)',
             anchorage: 'Overnight Anchorage',
             mooring:   'Overnight Mooring',
-            fuel:      'Fuel & Day Stop',
+            fuel:      'Fuel Station',
+        };
+
+        const isNonStopPassageWaypoint = (rec) => {
+            const name = (rec.name || '').toLowerCase();
+            const desc = `${rec.description || ''} ${rec.reasoning || ''}`.toLowerCase();
+            if (name.includes('waypoint') || name.includes('channel crossing') || name.includes('shipping lane') || name.includes('traffic separation')) {
+                return true;
+            }
+            if ((desc.includes('open ocean channel') || desc.includes('open-water passage') || desc.includes('shipping channel crossing')) &&
+                (desc.includes('2000+ ft') || desc.includes('1000+ ft') || desc.includes('open ocean crossing'))) {
+                return true;
+            }
+            return false;
         };
 
         const isCharterOrStartBase = (rec) => {

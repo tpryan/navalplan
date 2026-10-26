@@ -503,6 +503,20 @@ func (h *Handler) syncStartEndBasesToGuide(ctx context.Context, voyageID int64, 
 	}
 }
 
+func isOpenWaterPassageWaypoint(rec model.VoyageRecommendation) bool {
+	name := strings.ToLower(strings.TrimSpace(rec.Name))
+	desc := strings.ToLower(rec.Description + " " + rec.Reasoning + " " + string(rec.StayDetails))
+	if strings.Contains(name, "waypoint") || strings.Contains(name, "channel crossing") ||
+		strings.Contains(name, "shipping lane") || strings.Contains(name, "traffic separation") {
+		return true
+	}
+	if (strings.Contains(desc, "open ocean channel") || strings.Contains(desc, "open-water passage") || strings.Contains(desc, "shipping channel crossing")) &&
+		(strings.Contains(desc, "2000+ ft") || strings.Contains(desc, "1000+ ft") || strings.Contains(desc, "open ocean crossing")) {
+		return true
+	}
+	return false
+}
+
 func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 	t := strings.ToLower(strings.TrimSpace(rec.Type))
 	if strings.Contains(t, "fuel") || strings.Contains(t, "launch") {
