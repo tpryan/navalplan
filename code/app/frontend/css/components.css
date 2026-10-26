@@ -310,6 +310,36 @@
 }
 
 /* ─── Facility card (Voyage Report) ─────────────────────────────────────── */
+.np-facilities-wrapper {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.np-facilities-wrapper > .np-facilities-header {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+}
+
+@media (max-width: 1150px) {
+    .np-facilities-wrapper {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 840px) {
+    .np-facilities-wrapper {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .np-facilities-wrapper {
+        grid-template-columns: 1fr;
+    }
+}
+
 .np-facility-report-card {
     --accent: var(--sky);
     padding: 12px 14px;
@@ -317,11 +347,14 @@
     background: color-mix(in oklab, var(--accent) 8%, var(--surface));
     border: 1.5px solid color-mix(in oklab, var(--accent) 22%, var(--hair));
     box-shadow: 0 1px 4px rgba(0,0,0,.06);
-    margin-bottom: 8px;
+    margin-bottom: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 .np-facility-report-card__header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     margin-bottom: 6px;
 }
@@ -754,15 +787,373 @@
     display: none; /* knots label implied or in circle if needed, but let's hide to keep it clean */
 }
 
-/* ─── Sailing Mode ────────────────────────────────────────────────────────── */
+/* ─── Full-Screen Report & Two-Tier Filter Bar ────────────────────────────── */
+.np-report-fullscreen {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    top: 0;
+    left: 0;
+    border-radius: 0;
+    z-index: 1500;
+    background: var(--bg, #FAF9F6) !important;
+    background-color: var(--bg, #FAF9F6) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+body:has(#modal-report:not(.hidden)) #app,
+body:has(#modal-report:not(.hidden)) #map-container,
+body:has(#modal-report:not(.hidden)) #sidebar,
+body:has(#modal-report:not(.hidden)) #track-layer-controls {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.np-report-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--hair);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+    border-left: 1px solid var(--hair);
+    border-right: 1px solid var(--hair);
+}
+
+.np-report-top-bar {
+    padding: 12px 32px;
+    border-bottom: 1px solid var(--hair);
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.np-report-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#report-category-tabs,
+.np-report-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 32px;
+    border-bottom: 1px solid var(--hair);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.np-report-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--hair);
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.np-report-tab-btn .material-symbols-outlined {
+    font-size: 17px;
+}
+
+.np-report-tab-btn:hover {
+    color: var(--ink);
+    border-color: var(--sky);
+}
+
+.np-report-tab-btn.active,
+.np-report-tab-btn[aria-selected="true"] {
+    background: var(--sky);
+    color: #fff;
+    border-color: var(--sky);
+}
+
+#report-day-pills,
+.np-report-day-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 32px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: color-mix(in oklab, var(--surface) 85%, var(--bg-canvas));
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.np-report-day-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--hair);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Mobile Filter Dropdowns (shown on narrow viewports instead of pill rows) */
+.np-report-mobile-selects {
+    display: none;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px 16px;
+    background: color-mix(in oklab, var(--surface) 85%, var(--bg-canvas));
+    border-top: 1px solid var(--hair);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.np-report-select-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.np-report-select-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+
+.np-report-select {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--hair);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    #report-category-tabs,
+    .np-report-tabs,
+    #report-day-pills,
+    .np-report-day-pills {
+        display: none !important;
+    }
+
+    .np-report-mobile-selects {
+        display: grid;
+    }
+
+    .np-report-top-bar {
+        padding: 10px 16px;
+        gap: 8px;
+    }
+
+    .np-report-top-bar #modal-report-title {
+        font-size: 1.05rem;
+        line-height: 1.25;
+    }
+}
+
+@media (max-width: 420px) {
+    .np-report-mobile-selects {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+
+.np-report-day-pill:hover {
+    color: var(--ink);
+    border-color: var(--teal);
+}
+
+.np-report-day-pill.active,
+.np-report-day-pill[aria-selected="true"] {
+    background: var(--teal);
+    color: #fff;
+    border-color: var(--teal);
+}
+
+/* Single-Day Navigation Banner */
+.np-single-day-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    border-radius: var(--radius-tile);
+    background: color-mix(in oklab, var(--teal) 10%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--teal) 30%, var(--hair));
+    font-size: 13px;
+    color: var(--ink);
+}
+
+.np-single-day-banner__info {
+    font-weight: 600;
+}
+
+.np-single-day-banner__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.np-single-day-banner__btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--hair);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.np-single-day-banner__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Clickable Day-by-Day summary tiles */
+.np-day-tile[data-day] {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.np-day-tile[data-day]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Category & Day Filtering Rules */
 .np-report--sailing-only .np-report-item--non-sailing {
     display: none !important;
 }
 
-#btn-toggle-sailing-mode.active {
-    background: var(--sky);
-    color: #fff;
-    border-color: var(--sky);
+/* Compact hero map sits in the right column of .np-report-hero on any filtered view */
+.np-report-hero__map {
+    display: none;
+}
+
+.np-report-hero__map .np-report-map--compact {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    margin-bottom: 0;
+    border-radius: var(--radius-tile);
+}
+
+/* On any filtered view (tab != 'all' OR day != 'all'), hide Destination Overview & full-width map, and show the shrunk-down map in the 2-col hero slot */
+[data-report-tab]:not([data-report-tab="all"]) .np-destination-overview,
+[data-report-day]:not([data-report-day="all"]) .np-destination-overview,
+[data-report-tab]:not([data-report-tab="all"]) .np-report-map--full,
+[data-report-day]:not([data-report-day="all"]) .np-report-map--full {
+    display: none !important;
+}
+
+[data-report-tab]:not([data-report-tab="all"]) .np-report-hero__map,
+[data-report-day]:not([data-report-day="all"]) .np-report-hero__map {
+    display: block !important;
+}
+
+/* Destination Guide peer tab */
+[data-report-tab="guide"] [data-report-cats]:not([data-report-cats~="guide"]) {
+    display: none !important;
+}
+
+[data-report-tab="guide"] .np-report-stop {
+    display: none !important;
+}
+
+[data-report-tab="guide"] .np-guide-section {
+    display: block !important;
+}
+
+[data-report-tab="navigation"] [data-report-cats]:not([data-report-cats~="navigation"]) {
+    display: none !important;
+}
+
+[data-report-tab="navigation"] [data-alert-cat]:not([data-alert-cat~="navigation"]) {
+    display: none !important;
+}
+
+[data-report-tab="weather"] [data-report-cats]:not([data-report-cats~="weather"]) {
+    display: none !important;
+}
+
+[data-report-tab="weather"] [data-alert-cat]:not([data-alert-cat~="weather"]) {
+    display: none !important;
+}
+
+[data-report-tab="amenities"] [data-report-cats]:not([data-report-cats~="amenities"]) {
+    display: none !important;
+}
+
+[data-report-day]:not([data-report-day="all"]) [data-report-scope="overview"]:not(.np-guide-section) {
+    display: none !important;
+}
+
+[data-report-tab="all"][data-report-day]:not([data-report-day="all"]) .np-guide-section {
+    display: none !important;
+}
+
+/* Any day-filtered version omits the day-by-day weather bubble grid */
+[data-report-day]:not([data-report-day="all"]) .np-day-grid,
+[data-report-day]:not([data-report-day="all"]) .np-day-grid-label {
+    display: none !important;
+}
+
+.np-report-stop--hidden-day {
+    display: none !important;
+}
+
+[data-report-day]:not([data-report-day="all"]) .np-single-day-banner {
+    display: flex;
+}
+
+.np-facilities-wrapper--empty {
+    display: none !important;
+}
+
+@media print {
+    .np-report-filter-bar,
+    .np-single-day-banner__actions {
+        display: none !important;
+    }
 }
 
 /* ─── Hourly Timeline ────────────────────────────────────────────────────── */
@@ -1906,12 +2297,20 @@
 
 /* ─── ≤ 768px (mobile / tablet portrait) ────────────────────────────────── */
 @media (max-width: 768px) {
-    /* Report hero: two-col → single col */
+    /* Report hero: two-col → single col with breathing room */
     .np-report-hero {
         grid-template-columns: 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .np-report-hero .np-report-header {
+        margin-bottom: 12px;
     }
     .np-report-hero .np-destination-overview {
         height: auto;
+    }
+    .np-report-hero__map {
+        margin-top: 4px;
     }
 
     /* Guide two-col → single col */
@@ -2185,6 +2584,7 @@
 /* ── Pilotage & Sailing Directions Box ──────────────────────────────────── */
 .pilot-notes-section {
     margin-top: 16px;
+    margin-bottom: 16px;
 }
 
 .pilot-notes-container {
@@ -2197,26 +2597,45 @@
 .pilot-notes-overview,
 .pilot-notes-prose {
     font-size: 13px;
-    color: var(--on-surface-variant, var(--muted));
+    color: var(--muted);
     line-height: 1.5;
     margin: 0;
 }
 
 .pilot-notes-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
     margin-top: 6px;
 }
 
+@media (max-width: 1150px) {
+    .pilot-notes-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 840px) {
+    .pilot-notes-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .pilot-notes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .pilot-note-card {
-    background: var(--surface-2, var(--surface));
-    border: 1px solid var(--outline-variant, var(--hair));
+    background: var(--surface);
+    border: 1px solid var(--hair);
     border-radius: var(--radius-tile);
-    padding: 12px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    min-width: 0;
 }
 
 .pilot-note-card__header {
@@ -2225,18 +2644,36 @@
     gap: 6px;
     font-size: 13px;
     font-weight: 600;
-    color: var(--primary);
+    color: var(--ink);
 }
 
 .pilot-note-card__icon {
     font-size: 18px;
-    color: var(--teal, var(--primary));
+    color: var(--teal);
 }
 
 .pilot-note-card__content {
     font-size: 12.5px;
-    line-height: 1.45;
-    color: var(--on-surface);
+    line-height: 1.5;
+    color: var(--ink2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pilot-note-card__lead {
+    margin: 0;
+    color: var(--ink);
+}
+
+.pilot-note-card__lead strong {
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.pilot-note-card__para {
+    margin: 0;
+    color: var(--ink2);
 }
 
 .pilot-notes-sources {
@@ -2254,12 +2691,24 @@
 }
 
 .pilot-source-tag {
-    background: color-mix(in oklab, var(--primary) 8%, var(--surface));
-    border: 1px solid var(--outline-variant, var(--hair));
-    padding: 2px 6px;
-    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: color-mix(in oklab, var(--sky) 8%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--sky) 28%, var(--hair));
+    padding: 3px 8px;
+    border-radius: 999px;
     font-size: 11px;
-    color: var(--on-surface-variant);
+    font-weight: 600;
+    color: var(--sky);
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pilot-source-tag:hover {
+    background: color-mix(in oklab, var(--sky) 16%, var(--surface));
+    border-color: var(--sky);
+    text-decoration: underline;
 }
 
 

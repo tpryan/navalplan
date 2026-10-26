@@ -2,6 +2,7 @@
 :root {
   /* neutrals */
   --bg: #FAF9F6;
+  --bg-canvas: var(--bg);
   --surface: #FFFFFF;
   --ink: #0B1220;
   --ink2: #242E42;

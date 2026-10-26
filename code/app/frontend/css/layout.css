@@ -979,4 +979,73 @@ select.form-select:hover {
   100% { transform: scale(0.95); opacity: 0.8; }
 }
 
+/* ─── Full-Screen Report Workspace ───────────────────────────────────────── */
+.modal.np-report-fullscreen,
+.np-report-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  transform: none;
+  top: 0;
+  left: 0;
+  border-radius: 0;
+  z-index: 1500;
+  background: var(--bg, #FAF9F6) !important;
+  background-color: var(--bg, #FAF9F6) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0;
+  box-shadow: none;
+}
+
+.np-report-fullscreen #report-content {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+  flex: 1;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .np-report-fullscreen #report-content {
+    padding: 20px 16px 48px !important;
+  }
+  .np-report-top-bar,
+  #report-category-tabs,
+  .np-report-tabs,
+  #report-day-pills,
+  .np-report-day-pills {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media print {
+  .modal.np-report-fullscreen,
+  .np-report-fullscreen {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+
+  .np-report-fullscreen #report-content {
+    max-width: none;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .np-report-filter-bar,
+  .np-single-day-banner__actions {
+    display: none !important;
+  }
+}
+
+
 

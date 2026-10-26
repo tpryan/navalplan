@@ -1,4 +1,16 @@
-import { getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, parseDurationToMinutes } from '../js/utils.js';
+import {
+  getDebriefStopTitle,
+  generateDebriefsHTML,
+  calculateTimeVariance,
+  parseDurationToMinutes,
+  classifyFacilityReportCats,
+  formatFacilityLinkLabel,
+  buildStaticMapTrackPathsParam,
+  classifyAlertReportCat,
+  parseReportFilterFromLocation,
+  buildReportFilterSearch,
+  applyReportFilterToDOM,
+} from '../js/utils.js';
 
 describe('GPX Track UI & Rendering', () => {
   let container;
@@ -817,6 +829,34 @@ describe('GPX Track UI & Rendering', () => {
       expect(buildStaticPath(stops, tracksWithPlan)).toBe('');
       expect(buildStaticPath(stops, tracksNoPlan)).toContain('&path=color:0x999999ff|weight:1|37.8,-122.4|37.5,-122.5');
     });
+
+    it('builds static map path parameters for planned and recorded GPX tracks', () => {
+      const tracks = [
+        {
+          id: 'plan-1',
+          kind: 'planned',
+          simplified_geojson: {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [[-76.48, 38.97], [-76.35, 38.85], [-76.22, 38.78]],
+            },
+          },
+        },
+        {
+          id: 'rec-1',
+          kind: 'recorded',
+          geojson: JSON.stringify({
+            type: 'LineString',
+            coordinates: [[-76.48, 38.97], [-76.36, 38.86], [-76.22, 38.78]],
+          }),
+        },
+      ];
+
+      const param = buildStaticMapTrackPathsParam(tracks);
+      expect(param).toContain('&path=color:0x00B4D8d9|weight:3|38.97000,-76.48000|38.85000,-76.35000|38.78000,-76.22000');
+      expect(param).toContain('&path=color:0xFF6B35e6|weight:4|38.97000,-76.48000|38.86000,-76.36000|38.78000,-76.22000');
+    });
   });
 
   describe('Track Persistence across Stop Research and Map Re-renders', () => {
@@ -880,6 +920,123 @@ describe('GPX Track UI & Rendering', () => {
       expect(renderTrackPolylinesCalled).toBe(true);
       expect(trackPolylines.length).toBe(1);
       expect(trackControls.classList.contains('hidden')).toBe(false);
+    });
+  });
+
+  describe('Full-Screen Tabbed & Day-Filtered Voyage Report', () => {
+    it('classifies facility card types into navigation, amenities, or both', () => {
+      expect(classifyFacilityReportCats('Anchorage')).toBe('all navigation');
+      expect(classifyFacilityReportCats('Mooring')).toBe('all navigation');
+      expect(classifyFacilityReportCats('Fuel Station')).toBe('all navigation');
+      expect(classifyFacilityReportCats('Boat Launch')).toBe('all navigation');
+      expect(classifyFacilityReportCats('Marina')).toBe('all navigation amenities');
+      expect(classifyFacilityReportCats('Yacht Club')).toBe('all navigation amenities');
+      expect(classifyFacilityReportCats('Restaurant')).toBe('all amenities');
+      expect(classifyFacilityReportCats('Bar')).toBe('all amenities');
+      expect(classifyFacilityReportCats('Store')).toBe('all amenities');
+      expect(classifyFacilityReportCats('Pharmacy')).toBe('all amenities');
+      expect(formatFacilityLinkLabel('https://maps.google.com/?cid=12345')).toBe('[Google Maps]');
+      expect(formatFacilityLinkLabel('https://annapolisyachtclub.com')).toBe('[Website]');
+    });
+
+    it('classifies Safety Lookout alerts into navigation and weather categories', () => {
+      expect(classifyAlertReportCat({ category: 'navigation', message: 'Reef approach' })).toBe('all navigation');
+      expect(classifyAlertReportCat({ category: 'tides', message: 'Spring ebb current' })).toBe('all navigation weather');
+      expect(classifyAlertReportCat({ category: 'weather', message: 'Small craft advisory' })).toBe('all weather');
+      expect(classifyAlertReportCat({ category: 'sun', message: 'Early sunset' })).toBe('all weather');
+      expect(classifyAlertReportCat({ travel_table: [{ speed_kt: 5, travel_time: '2h' }] })).toBe('all navigation');
+    });
+
+    it('parses URL deep-linking and preserves backward compatibility for /report/sailing', () => {
+      expect(parseReportFilterFromLocation({ pathname: '/voyages/42/report', search: '' })).toEqual({
+        tab: 'all',
+        day: 'all',
+      });
+      expect(parseReportFilterFromLocation({ pathname: '/voyages/42/report', search: '?tab=guide' })).toEqual({
+        tab: 'guide',
+        day: 'all',
+      });
+      expect(parseReportFilterFromLocation({ pathname: '/voyages/42/report', search: '?tab=navigation&day=2' })).toEqual({
+        tab: 'navigation',
+        day: '2',
+      });
+      expect(parseReportFilterFromLocation({ pathname: '/voyages/42/report/sailing', search: '' })).toEqual({
+        tab: 'navigation',
+        day: 'all',
+      });
+      expect(parseReportFilterFromLocation({ pathname: '/voyages/42/print', search: '?sailing=1&day=3' })).toEqual({
+        tab: 'navigation',
+        day: '3',
+      });
+      expect(buildReportFilterSearch('all', 'all')).toBe('');
+      expect(buildReportFilterSearch('guide', 'all')).toBe('?tab=guide');
+      expect(buildReportFilterSearch('navigation', '2')).toBe('?tab=navigation&day=2');
+      expect(buildReportFilterSearch('weather', 'all')).toBe('?tab=weather');
+    });
+
+    it('applies category tab and single-day filtering state to the report DOM', () => {
+      const root = document.createElement('div');
+      root.id = 'modal-report';
+      root.setAttribute('data-report-tab', 'all');
+      root.setAttribute('data-report-day', 'all');
+      root.innerHTML = `
+        <div id="report-category-tabs">
+          <button data-tab="all" class="np-report-tab-btn active" aria-selected="true">All</button>
+          <button data-tab="navigation" class="np-report-tab-btn" aria-selected="false">Navigation</button>
+          <button data-tab="weather" class="np-report-tab-btn" aria-selected="false">Weather</button>
+          <button data-tab="amenities" class="np-report-tab-btn" aria-selected="false">Amenities</button>
+        </div>
+        <div id="report-day-pills">
+          <button data-day="all" class="np-report-day-pill active" aria-selected="true">All Days</button>
+          <button data-day="1" class="np-report-day-pill" aria-selected="false">Day 1: Road Town</button>
+          <button data-day="2" class="np-report-day-pill" aria-selected="false">Day 2: Norman Island</button>
+        </div>
+        <div id="report-content">
+          <div class="np-report-hero" data-report-scope="overview" data-report-cats="all navigation weather amenities"></div>
+          <div class="np-report-stop" data-stop-day="1">
+            <div class="np-facilities-wrapper">
+              <div class="np-facility-report-card" data-report-cats="all amenities">Restaurant</div>
+            </div>
+          </div>
+          <div class="np-report-stop" data-stop-day="2">
+            <div class="np-facilities-wrapper">
+              <div class="np-facility-report-card" data-report-cats="all navigation">Anchorage</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Switch to Navigation + Day 2
+      const applied = applyReportFilterToDOM(root, { tab: 'navigation', day: '2' });
+      expect(applied).toEqual({ tab: 'navigation', day: '2' });
+      expect(root.getAttribute('data-report-tab')).toBe('navigation');
+      expect(root.getAttribute('data-report-day')).toBe('2');
+
+      const navBtn = root.querySelector('[data-tab="navigation"]');
+      const allBtn = root.querySelector('[data-tab="all"]');
+      expect(navBtn.classList.contains('active')).toBe(true);
+      expect(navBtn.getAttribute('aria-selected')).toBe('true');
+      expect(allBtn.classList.contains('active')).toBe(false);
+
+      const day2Pill = root.querySelector('[data-day="2"]');
+      expect(day2Pill.classList.contains('active')).toBe(true);
+      expect(day2Pill.getAttribute('aria-selected')).toBe('true');
+
+      const stop1 = root.querySelector('.np-report-stop[data-stop-day="1"]');
+      const stop2 = root.querySelector('.np-report-stop[data-stop-day="2"]');
+      expect(stop1.classList.contains('np-report-stop--hidden-day')).toBe(true);
+      expect(stop2.classList.contains('np-report-stop--hidden-day')).toBe(false);
+
+      // Stop 1's facilities wrapper has only an 'amenities' card, so under 'navigation' it gets hidden
+      const stop1Wrapper = stop1.querySelector('.np-facilities-wrapper');
+      const stop2Wrapper = stop2.querySelector('.np-facilities-wrapper');
+      expect(stop1Wrapper.classList.contains('np-facilities-wrapper--empty')).toBe(true);
+      expect(stop2Wrapper.classList.contains('np-facilities-wrapper--empty')).toBe(false);
+
+      // Switch back to All Days
+      applyReportFilterToDOM(root, { day: 'all' });
+      expect(stop1.classList.contains('np-report-stop--hidden-day')).toBe(false);
+      expect(stop2.classList.contains('np-report-stop--hidden-day')).toBe(false);
     });
   });
 });

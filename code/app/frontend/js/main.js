@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -380,7 +380,8 @@ async function handleRoute(path, doPushState = true) {
             handleGuideClick(currentVoyage, btn, doPushState);
         } else if (parts[2] === 'report') {
             const sailing = parts[3] === 'sailing';
-            handleShowReport(doPushState, sailing);
+            const parsed = parseReportFilterFromLocation(window.location, sailing);
+            handleShowReport(doPushState, sailing, parsed);
         } else if (parts[2] === 'stops' && parts[3]) {
             const stopId = parseInt(parts[3]);
             if (!isNaN(stopId)) {
@@ -1423,18 +1424,48 @@ function initModalCloseListeners() {
     const btnCloseReport = document.getElementById('btn-close-report');
     const btnCopyReport = document.getElementById('btn-copy-report');
     const closeReport = () => {
-        modalReport.classList.add('hidden');
-        if (document.getElementById('modal-new-voyage').classList.contains('hidden')) {
-            modalOverlay.classList.add('hidden');
+        if (modalReport) modalReport.classList.add('hidden');
+        if (document.getElementById('modal-new-voyage')?.classList.contains('hidden')) {
+            if (modalOverlay) modalOverlay.classList.add('hidden');
+        }
+        if (currentVoyage && window.location.pathname.includes('/report')) {
+            window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
         }
     };
-    const btnPrintVoyage = document.getElementById('btn-print-voyage');
+    const btnPrintVoyage = document.getElementById('btn-print-report') || document.getElementById('btn-print-voyage');
     if (btnCloseReport) btnCloseReport.onclick = closeReport;
     if (btnCopyReport) btnCopyReport.onclick = handleCopyReport;
     if (btnPrintVoyage) btnPrintVoyage.addEventListener('click', () => {
         if (currentVoyage) {
-            const isSailing = document.getElementById('modal-report')?.classList.contains('np-report--sailing-only');
-            window.open(`/voyages/${currentVoyage.id}/print${isSailing ? '?sailing=1' : ''}`, '_blank');
+            const reportEl = document.getElementById('modal-report');
+            const tab = reportEl?.getAttribute('data-report-tab') || 'all';
+            const day = reportEl?.getAttribute('data-report-day') || 'all';
+            const qs = buildReportFilterSearch(tab, day);
+            window.open(`/voyages/${currentVoyage.id}/print${qs}`, '_blank');
+        }
+    });
+
+    // Keyboard navigation for Full-Screen Report (Escape to close, ArrowLeft/ArrowRight to step days)
+    document.addEventListener('keydown', (e) => {
+        const reportEl = document.getElementById('modal-report');
+        if (!reportEl || reportEl.classList.contains('hidden')) return;
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return;
+        if (e.key === 'Escape') {
+            closeReport();
+            return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            const curDay = reportEl.getAttribute('data-report-day') || 'all';
+            if (curDay === 'all') return;
+            const dayNum = parseInt(curDay, 10);
+            const totalDays = reportEl.querySelectorAll('.np-report-stop[data-stop-day]').length;
+            if (Number.isNaN(dayNum) || totalDays < 1) return;
+            const nextDay = e.key === 'ArrowLeft' ? dayNum - 1 : dayNum + 1;
+            if (nextDay >= 1 && nextDay <= totalDays) {
+                e.preventDefault();
+                setReportFilter({ day: String(nextDay) }, { root: reportEl, updateHistory: true });
+            }
         }
     });
 
@@ -1679,6 +1710,11 @@ async function handleCopyReport() {
         originalAttributes.push({ el, style: el.getAttribute('style'), class: el.getAttribute('class') });
 
         const cs = window.getComputedStyle(el);
+        if (cs.getPropertyValue('display') === 'none') {
+            el.setAttribute('style', 'display:none');
+            el.removeAttribute('class');
+            return;
+        }
         // Skip background on circle elements — they lose their shape in Docs and become colored bars
         const isCircle = el.offsetWidth > 0 &&
             parseFloat(cs.getPropertyValue('border-top-left-radius')) >= el.offsetWidth / 2;
@@ -1717,7 +1753,9 @@ async function handleCopyReport() {
 
     // 4. Copy to clipboard (Clipboard API with HTML, fallback to execCommand)
     try {
-        const htmlBlob = new Blob([content.outerHTML], { type: 'text/html' });
+        const clone = content.cloneNode(true);
+        clone.querySelectorAll('[style*="display:none"], [style*="display: none"]').forEach(n => n.remove());
+        const htmlBlob = new Blob([clone.outerHTML], { type: 'text/html' });
         const textBlob = new Blob([content.innerText], { type: 'text/plain' });
         await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
         btnCopyReport.textContent = 'Copied!';
@@ -4657,7 +4695,7 @@ async function showBriefing(briefing, doPushState = true) {
                 link.target = '_blank';
                 link.rel = 'noopener';
                 link.className = 'np-facility-briefing-item__website';
-                link.textContent = website;
+                link.textContent = formatFacilityLinkLabel(website);
                 li.appendChild(link);
             }
 
@@ -4869,6 +4907,8 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
     const box = document.createElement('div');
     box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
     box.id = 'np-safety-overview';
+    box.setAttribute('data-report-cats', 'all navigation weather');
+    box.setAttribute('data-report-scope', 'overview');
 
     const header = document.createElement('div');
     header.className = 'lookout-header';
@@ -4892,6 +4932,9 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
         briefing.safety_alerts.forEach(a => {
             const alertEl = document.createElement('div');
             alertEl.className = `lookout-alert lookout-alert--${a.severity || 'info'}`;
+            const alertCats = classifyAlertReportCat(a);
+            alertEl.setAttribute('data-alert-cat', alertCats);
+            alertEl.setAttribute('data-report-cats', alertCats);
             alertEl.innerHTML = `<span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${DOMPurify.sanitize(normalizeLookoutIcon(a.icon))}</span>
                 <div class="lookout-alert__text">
                     <span class="lookout-alert__msg">${DOMPurify.sanitize(a.message || '')}</span>
@@ -5939,6 +5982,7 @@ function renderTracksList() {
                             await API.deleteVoyageTrack(currentVoyage.id, trackId);
                             await loadAndRenderTracks(currentVoyage.id);
                             renderTracksList();
+                            captureAndUploadMap(currentVoyage.id).catch(err => console.warn('Failed to update report map after track delete', err));
                         } catch (err) {
                             showNotification('Error', err.message || 'Failed to delete track');
                         }
@@ -6004,6 +6048,7 @@ async function handleTrackUpload(e) {
         form.reset();
         await loadAndRenderTracks(currentVoyage.id);
         renderTracksList();
+        await captureAndUploadMap(currentVoyage.id);
     } catch (err) {
         showNotification('Upload Failed', err.message || 'Could not process GPX file');
     } finally {
@@ -6272,6 +6317,9 @@ async function captureAndUploadMap(voyageId) {
             }
         }
 
+        // Draw planned and recorded GPX track polylines on the static map
+        pathParam += buildStaticMapTrackPathsParam(currentTracks);
+
         // If the last stop is very close to the first, omit it to avoid overlap
         const first = stopsToDraw[0];
         const last = stopsToDraw[stopsToDraw.length - 1];
@@ -6322,17 +6370,183 @@ async function captureAndUploadMap(voyageId) {
     }
 }
 
-    async function handleShowReport(doPushState = true, sailing = false) {
+function populateReportDayPills(sortedStops = [], activeDay = 'all', rootEl = document.getElementById('modal-report')) {
+    if (!rootEl) return;
+    const pillsContainer = rootEl.querySelector('#report-day-pills') || rootEl.querySelector('.np-report-day-pills');
+    const daySelect = rootEl.querySelector('#report-day-select') || rootEl.querySelector('.np-report-day-select');
+
+    const normActive = String(activeDay || 'all');
+    let pillsHtml = `<button type="button" class="np-report-day-pill ${normActive === 'all' ? 'active' : ''}" role="tab" aria-selected="${normActive === 'all' ? 'true' : 'false'}" data-day="all">All Days</button>`;
+    let optionsHtml = `<option value="all">All Days</option>`;
+    sortedStops.forEach((stop, idx) => {
+        const dayStr = String(idx + 1);
+        const shortLoc = displayLocationName(stop.location_name || stop.name || `Stop ${dayStr}`).split(',')[0].trim();
+        const isSel = normActive === dayStr;
+        pillsHtml += `<button type="button" class="np-report-day-pill ${isSel ? 'active' : ''}" role="tab" aria-selected="${isSel ? 'true' : 'false'}" data-day="${dayStr}">Day ${dayStr}: ${esc(shortLoc)}</button>`;
+        optionsHtml += `<option value="${dayStr}">Day ${dayStr}: ${esc(shortLoc)}</option>`;
+    });
+    if (pillsContainer) {
+        pillsContainer.innerHTML = DOMPurify.sanitize(pillsHtml, { ADD_ATTR: ['role', 'aria-selected'] });
+    }
+    if (daySelect) {
+        daySelect.innerHTML = DOMPurify.sanitize(optionsHtml);
+        daySelect.value = normActive;
+    }
+}
+
+function setReportFilter(filter = {}, options = {}) {
+    const root = options.root || document.getElementById('modal-report') || document.querySelector('[data-report-tab]');
+    if (!root) return { tab: 'all', day: 'all' };
+
+    const applied = applyReportFilterToDOM(root, filter);
+
+    // Scroll report container back to top
+    const scrollEl = root.querySelector('#report-content') || root.querySelector('.modal-content-scroll') || root;
+    if (scrollEl && typeof scrollEl.scrollTo === 'function') {
+        scrollEl.scrollTo({ top: 0, behavior: 'instant' });
+    } else if (scrollEl) {
+        scrollEl.scrollTop = 0;
+    }
+
+    // Update URL query params if requested
+    if (options.updateHistory && typeof window !== 'undefined' && window.history?.replaceState) {
+        const basePath = options.basePath || window.location.pathname.replace(/\/sailing$/, '');
+        const qs = buildReportFilterSearch(applied.tab, applied.day);
+        window.history.replaceState({}, '', `${basePath}${qs}`);
+    }
+
+    // Re-trigger Chart.js resize if a tide canvas becomes visible
+    if (['all', 'navigation', 'weather'].includes(applied.tab)) {
+        setTimeout(() => {
+            if (!ChartLib || typeof ChartLib.getChart !== 'function') return;
+            root.querySelectorAll('canvas[id^="reportTideChart_"], canvas[id^="reportMiniTideChart_"]').forEach(canvas => {
+                const chart = ChartLib.getChart(canvas);
+                if (chart && typeof chart.resize === 'function') {
+                    chart.resize();
+                }
+            });
+        }, 20);
+    }
+
+    return applied;
+}
+
+if (typeof window !== 'undefined') {
+    window.setReportFilter = setReportFilter;
+}
+
+function wireReportFilterListeners(rootEl, options = {}) {
+    if (!rootEl || rootEl.dataset.reportFilterWired === 'true') return;
+    rootEl.dataset.reportFilterWired = 'true';
+
+    rootEl.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('[data-tab]');
+        if (tabBtn && rootEl.contains(tabBtn)) {
+            const tab = tabBtn.getAttribute('data-tab');
+            setReportFilter({ tab }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+            return;
+        }
+
+        const dayPill = e.target.closest('.np-report-day-pill[data-day]');
+        if (dayPill && rootEl.contains(dayPill)) {
+            const day = dayPill.getAttribute('data-day');
+            setReportFilter({ day }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+            return;
+        }
+
+        const stepBtn = e.target.closest('.np-single-day-banner__btn[data-step-day]');
+        if (stepBtn && rootEl.contains(stepBtn) && !stepBtn.disabled) {
+            const day = stepBtn.getAttribute('data-step-day');
+            setReportFilter({ day }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+            return;
+        }
+
+        const dayTile = e.target.closest('.np-day-tile[data-day]');
+        if (dayTile && rootEl.contains(dayTile)) {
+            const day = dayTile.getAttribute('data-day');
+            setReportFilter({ day }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+        }
+    });
+
+    rootEl.addEventListener('change', (e) => {
+        if (e.target.matches('#report-category-select, .np-report-category-select')) {
+            setReportFilter({ tab: e.target.value }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+            return;
+        }
+        if (e.target.matches('#report-day-select, .np-report-day-select')) {
+            setReportFilter({ day: e.target.value }, { root: rootEl, updateHistory: true, basePath: options.basePath });
+        }
+    });
+}
+
+function buildReportFilterBarHTML() {
+    return `
+        <div class="np-report-filter-bar">
+            <div id="report-category-tabs" class="np-report-tabs" role="tablist" aria-label="Report categories">
+                <button type="button" class="np-report-tab-btn active" role="tab" aria-selected="true" data-tab="all">
+                    <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+                    <span>All</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="guide">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <span>Destination Guide</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="navigation">
+                    <span class="material-symbols-outlined" aria-hidden="true">explore</span>
+                    <span>Navigation</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="weather">
+                    <span class="material-symbols-outlined" aria-hidden="true">air</span>
+                    <span>Weather &amp; Tides</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="amenities">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    <span>Amenities &amp; Shore</span>
+                </button>
+            </div>
+            <div id="report-day-pills" class="np-report-day-pills" role="tablist" aria-label="Report days">
+                <button type="button" class="np-report-day-pill active" role="tab" aria-selected="true" data-day="all">All Days</button>
+            </div>
+            <div class="np-report-mobile-selects">
+                <label class="np-report-select-wrap">
+                    <span class="np-report-select-label">Section</span>
+                    <select id="report-category-select" class="form-select np-report-select" aria-label="Report category">
+                        <option value="all">All Sections</option>
+                        <option value="guide">Destination Guide</option>
+                        <option value="navigation">Navigation</option>
+                        <option value="weather">Weather &amp; Tides</option>
+                        <option value="amenities">Amenities &amp; Shore</option>
+                    </select>
+                </label>
+                <label class="np-report-select-wrap">
+                    <span class="np-report-select-label">Day</span>
+                    <select id="report-day-select" class="form-select np-report-select" aria-label="Report day">
+                        <option value="all">All Days</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    `;
+}
+
+    async function handleShowReport(doPushState = true, sailing = false, filterOverride = null) {
         if (!currentVoyage) return;
+        const initialFilter = filterOverride || parseReportFilterFromLocation(window.location, sailing);
         if (doPushState) {
-            const path = `/voyages/${currentVoyage.id}/report${sailing ? '/sailing' : ''}`;
+            const params = new URLSearchParams();
+            if (initialFilter.tab && initialFilter.tab !== 'all') params.set('tab', initialFilter.tab);
+            if (initialFilter.day && initialFilter.day !== 'all') params.set('day', initialFilter.day);
+            const qs = params.toString();
+            const path = `/voyages/${currentVoyage.id}/report${qs ? '?' + qs : ''}`;
             window.history.pushState({}, '', path);
         }
 
         const btn = document.getElementById("btn-export-voyage");
-        const originalContent = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
+        const originalContent = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = "<span class=\"material-symbols-outlined spin\">sync</span>";
+        }
 
         try {
             // 1. Fetch Pilot Report data (Voyage, Guide, Recommendations)
@@ -6342,8 +6556,8 @@ async function captureAndUploadMap(voyageId) {
             const recommendations = pilotReport.recommendations;
             const debriefs = pilotReport.debriefs || [];
 
-            // 2. Check/Capture Map
-            if (!mapURL) {
+            // 2. Check/Capture Map (refresh when tracks are present so planned/actual polylines are included)
+            if (!mapURL || (currentTracks && currentTracks.length > 0)) {
                  const captured = await captureAndUploadMap(currentVoyage.id);
                  if (captured) {
                      // Check again to get the fresh URL
@@ -6369,29 +6583,37 @@ async function captureAndUploadMap(voyageId) {
             // 5. Build HTML using consolidated generator
             const html = generateReportHTML(currentVoyage, sortedStops, briefings, guide, recommendations, hasBriefings, mapURL, debriefs);
 
-            // 6. Show Modal
+            // 6. Show Full-Screen Report View (no backdrop overlay required)
             const modal = document.getElementById("modal-report");
             const content = document.getElementById("report-content");
             const modalOverlay = document.getElementById("modal-overlay");
+            const reportTitle = document.getElementById("modal-report-title");
+            if (reportTitle && currentVoyage.title) {
+                reportTitle.textContent = `Voyage Report: ${currentVoyage.title}`;
+            }
 
             const closeReport = () => {
                 modal.classList.add('hidden');
-                modalOverlay.classList.add('hidden');
+                if (modalOverlay) modalOverlay.classList.add('hidden');
                 if (currentVoyage) {
                     window.history.pushState({}, '', `/voyages/${currentVoyage.id}`);
                 }
             };
-            document.getElementById('btn-close-report').onclick = closeReport;
-            modalOverlay.onclick = closeReport;
+            const btnClose = document.getElementById('btn-close-report');
+            if (btnClose) btnClose.onclick = closeReport;
 
             content.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
             modal.classList.remove("hidden");
-            modalOverlay.classList.remove("hidden");
+            if (modalOverlay) modalOverlay.classList.add("hidden");
 
-            // Inject Share button
-            const headerControls = modal.querySelector('.modal-header-row .flex.gap-sm');
+            populateReportDayPills(sortedStops, initialFilter.day, modal);
+            wireReportFilterListeners(modal);
+            setReportFilter(initialFilter, { root: modal, updateHistory: true });
+
+            // Wire Share button
+            const headerControls = modal.querySelector('.np-report-actions') || modal.querySelector('.modal-header-row .flex.gap-sm');
             let btnShare = document.getElementById('btn-share-report');
-            if (!btnShare) {
+            if (!btnShare && headerControls) {
                 btnShare = document.createElement('button');
                 btnShare.id = 'btn-share-report';
                 btnShare.className = 'btn-icon icon-xl';
@@ -6399,37 +6621,10 @@ async function captureAndUploadMap(voyageId) {
                 btnShare.innerHTML = '<span class="material-symbols-outlined">share</span>';
                 headerControls.insertBefore(btnShare, headerControls.firstChild);
             }
-            btnShare.onclick = () => handleShareClick(guide);
-
-            // Wire Sailing Mode toggle
-            const btnSailingMode = document.getElementById('btn-toggle-sailing-mode');
-            if (btnSailingMode) {
-                // Set initial state
-                if (sailing) {
-                    btnSailingMode.classList.add('active');
-                    modal.classList.add('np-report--sailing-only');
-                } else {
-                    btnSailingMode.classList.remove('active');
-                    modal.classList.remove('np-report--sailing-only');
-                }
-                
-                btnSailingMode.onclick = () => {
-                    const active = btnSailingMode.classList.toggle('active');
-                    if (active) {
-                        modal.classList.add('np-report--sailing-only');
-                    } else {
-                        modal.classList.remove('np-report--sailing-only');
-                    }
-                    // Update URL when toggling
-                    if (currentVoyage) {
-                        const newPath = `/voyages/${currentVoyage.id}/report${active ? '/sailing' : ''}`;
-                        window.history.replaceState({}, '', newPath);
-                    }
-                };
-            }
+            if (btnShare) btnShare.onclick = () => handleShareClick(guide);
 
             // Wire Safety Audit button
-            const btnVoyageLookout = document.getElementById('btn-voyage-lookout');
+            const btnVoyageLookout = document.getElementById('btn-run-safety-audit') || document.getElementById('btn-voyage-lookout');
             if (btnVoyageLookout) {
                 btnVoyageLookout.onclick = () => runVoyageLookout(currentVoyage, sortedStops, content, btnVoyageLookout);
             }
@@ -6449,10 +6644,13 @@ async function captureAndUploadMap(voyageId) {
             console.error(err);
             showNotification('Error', "Failed to generate report.");
         } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalContent;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
         }
     }
+    const handleReportClick = handleShowReport;
 
 
 // ─── Voyage Guide ─────────────────────────────────────────────────────────────
@@ -7239,12 +7437,13 @@ function generateGuideHTML(guide) {
         </div>`;
 
     // Overview + Hazards (left col)
-    let leftCol = `<div class="np-report-item--non-sailing">`;
+    let leftCol = `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
     leftCol += sectionChip('Overview', 'coral');
     leftCol += `<p class="np-overview-summary">${guide.summary || 'No summary available.'}</p>`;
     leftCol += `</div>`;
 
     if (guide.hazards && guide.hazards.length > 0) {
+        leftCol += `<div class="np-guide-hazards" data-report-cats="all guide">`;
         leftCol += sectionChip('Regional Hazards', 'amber');
         guide.hazards.forEach(h => {
             const t = (h.title || '').toLowerCase();
@@ -7252,10 +7451,11 @@ function generateGuideHTML(guide) {
             const accent = t.includes('current') || t.includes('wind') ? 'sky' : 'amber';
             leftCol += hazardCard(h.title + (h.url ? ` <a href="${h.url}" target="_blank" style="color:var(--sky)">(Info)</a>` : ''), h.description, h.references, accent, icon);
         });
+        leftCol += `</div>`;
     }
 
     if (guide.security_safety && (guide.security_safety.summary || guide.security_safety.crime_report)) {
-        leftCol += `<div class="np-report-item--non-sailing">`;
+        leftCol += `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
         const s = guide.security_safety;
         const riskAccent = (s.risk_level || '').toLowerCase() === 'high' ? 'coral' : (s.risk_level || '').toLowerCase() === 'medium' ? 'amber' : 'teal';
         leftCol += sectionChip('Security & Safety', riskAccent);
@@ -7293,7 +7493,7 @@ function generateGuideHTML(guide) {
         : [];
 
     if (startEndRecs.length > 0) {
-        hubsSection += `<div class="np-report-item--non-sailing" style="margin-bottom:20px">`;
+        hubsSection += `<div class="np-report-item--non-sailing" data-report-cats="all guide" style="margin-bottom:20px">`;
         hubsSection += sectionChip('Recommended Start & End Bases (Charter & Turnaround Hubs)', 'coral');
         hubsSection += `<div class="np-hub-grid">`;
         startEndRecs.forEach(r => {
@@ -7322,7 +7522,7 @@ function generateGuideHTML(guide) {
     }
 
     if (guide.hubs && guide.hubs.length > 0) {
-        hubsSection += `<div class="np-report-item--non-sailing">`;
+        hubsSection += `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
         hubsSection += sectionChip('Major Hubs & Overnight Marinas', 'amber');
         hubsSection += `<div class="np-hub-grid">`;
         guide.hubs.forEach(h => {
@@ -7340,7 +7540,7 @@ function generateGuideHTML(guide) {
     }
 
     if (guide.points_of_interest && guide.points_of_interest.length > 0) {
-        leftCol += `<div class="np-report-item--non-sailing">`;
+        leftCol += `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
         leftCol += sectionChip('Points of Interest', 'violet');
         guide.points_of_interest.forEach(poi => {
             leftCol += `<div class="np-poi-item">
@@ -7359,7 +7559,7 @@ function generateGuideHTML(guide) {
         const s = guide.sailing_season;
         const bestMonths = s.primary_season_months || [];
         const stormMonths = s.storm_season_months || [];
-        rightCol += `<div class="np-report-item--non-sailing">`;
+        rightCol += `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
         rightCol += sectionChip('Sailing Season', 'teal');
         rightCol += `<div class="np-season-card">`;
         rightCol += `<div class="np-season-month-grid">`;
@@ -7394,7 +7594,7 @@ function generateGuideHTML(guide) {
         glanceTiles.push({ label: 'Currency', value: `${cur.symbol || ''} ${cur.code}`.trim(), accent: 'amber' });
     }
     if (glanceTiles.length > 0) {
-        rightCol += `<div class="np-report-item--non-sailing">`;
+        rightCol += `<div class="np-report-item--non-sailing" data-report-cats="all guide">`;
         rightCol += sectionChip('At a Glance', 'sky');
         rightCol += `<div class="np-glance-grid">`;
         glanceTiles.forEach(({ label, value, accent }) => {
@@ -7410,7 +7610,7 @@ function generateGuideHTML(guide) {
 
     if (guide.charter_info) {
         const c = guide.charter_info;
-        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing">`;
+        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing" data-report-cats="all guide">`;
         charterAirportsHTML += sectionChip('Charter Info', 'amber');
         charterAirportsHTML += `<div class="np-charter-card">
             <div>Available: <strong style="color:var(--ink)">${c.is_charter_destination ? 'Yes ✓' : 'No'}</strong></div>`;
@@ -7425,7 +7625,7 @@ function generateGuideHTML(guide) {
     }
 
     if (guide.airports && guide.airports.length > 0) {
-        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing">`;
+        charterAirportsHTML += `<div class="np-charter-airports-col np-report-item--non-sailing" data-report-cats="all guide">`;
         charterAirportsHTML += sectionChip('Nearest Airports', 'sky');
         guide.airports.forEach(a => {
             const type = a.type ? a.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
@@ -7441,7 +7641,7 @@ function generateGuideHTML(guide) {
     }
 
     if (charterAirportsHTML) {
-        rightCol += `<div class="np-charter-airports-row">${charterAirportsHTML}</div>`;
+        rightCol += `<div class="np-charter-airports-row" data-report-cats="all guide">${charterAirportsHTML}</div>`;
     }
 
     return `
@@ -7457,7 +7657,7 @@ function alertToHTML(a) {
     const hasTbl = Array.isArray(a.travel_table) && a.travel_table.length > 0;
     const hasDep = hasTbl && a.travel_table.some(r => r.depart_by);
     const tblHTML = hasTbl ? `
-        <table class="lookout-travel-table">
+        <table class="lookout-travel-table" data-report-cats="all navigation">
             <thead><tr>
                 <th>Speed</th><th>Travel time</th>${hasDep ? '<th>Depart by</th>' : ''}
             </tr></thead>
@@ -7468,7 +7668,8 @@ function alertToHTML(a) {
             </tr>`).join('')}</tbody>
         </table>` : '';
     const travelClass = hasTbl ? 'lookout-alert--travel' : `lookout-alert--${esc(a.severity || 'info')}`;
-    return `<div class="lookout-alert ${travelClass}">
+    const alertCats = classifyAlertReportCat(a);
+    return `<div class="lookout-alert ${travelClass}" data-alert-cat="${alertCats}" data-report-cats="${alertCats}">
         <span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${esc(normalizeLookoutIcon(a.icon))}</span>
         <div class="lookout-alert__text">
             <span class="lookout-alert__msg">${esc(a.message || '')}</span>
@@ -7532,9 +7733,15 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             <span class="np-destination-overview__cta">↓ Full guide below</span>
         </div>` : '';
 
-    // ── Hero: header + stats (left) / overview (right) ───────────────────────
+    const mapImgUrl = mapURL ? `${mapURL}${mapURL.includes('?') ? '&' : '?'}t=${Date.now()}` : '';
+    const heroMapCol = mapImgUrl ? `
+        <div class="np-report-hero__map">
+            <img src="${mapImgUrl}" alt="Voyage Map" class="np-report-map np-report-map--compact" />
+        </div>` : '';
+
+    // ── Hero: header + stats (left) / overview or compact map (right) ────────
     let html = `
-        <div class="np-report-hero">
+        <div class="np-report-hero" data-report-cats="all guide navigation weather amenities">
             <div class="np-report-hero__left">
                 <div class="np-report-header">
                     <span class="np-report-header__tag">Voyage Report</span>
@@ -7579,14 +7786,13 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 </div>
             </div>
             ${overviewCol}
+            ${heroMapCol}
         </div>
     `;
 
-    // ── Map Snapshot ──────────────────────────────────────────────────────────
-    if (mapURL) {
-        const sep = mapURL.includes('?') ? '&' : '?';
-        const url = `${mapURL}${sep}t=${Date.now()}`;
-        html += `<img src="${url}" alt="Voyage Map" class="np-report-map np-report-item--non-sailing" />`;
+    // ── Map Snapshot (Full-width only on All Filters + All Days) ──────────────
+    if (mapImgUrl) {
+        html += `<img src="${mapImgUrl}" alt="Voyage Map" class="np-report-map np-report-map--full np-report-item--non-sailing" data-report-scope="overview" data-report-cats="all" />`;
     }
 
     // ── Check-in status ───────────────────────────────────────────────────────
@@ -7596,7 +7802,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         const lat = voyage.checkin_latitude.toFixed(4);
         const lng = voyage.checkin_longitude.toFixed(4);
         html += `
-            <div class="np-checkin-badge np-report-item--non-sailing" id="np-checkin-badge">
+            <div class="np-checkin-badge np-report-item--non-sailing" id="np-checkin-badge" data-report-scope="overview" data-report-cats="all navigation">
                 <span class="material-symbols-outlined">my_location</span>
                 <span><strong>Last Captain Check-in:</strong> ${locName} (${lat}, ${lng}) · ${checkinDate}</span>
                 <div class="flex gap-sm align-center" style="margin-left:auto">
@@ -7609,8 +7815,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Day by day grid ───────────────────────────────────────────────────────
     if (hasBriefings) {
         const dayGridClass = sortedStops.length < 5 ? 'np-day-grid np-day-grid--fill' : 'np-day-grid';
-        html += `<span class="np-section-label">Day by Day</span>`;
-        html += `<div class="${dayGridClass}" style="--day-count:${sortedStops.length}">`;
+        html += `<span class="np-section-label np-day-grid-label" data-report-scope="overview" data-report-cats="all weather">Day by Day</span>`;
+        html += `<div class="${dayGridClass}" data-report-scope="overview" data-report-cats="all weather" style="--day-count:${sortedStops.length}">`;
         sortedStops.forEach((stop, idx) => {
             const briefing = briefings.find(br => br && br.stop_id === stop.id) || {};
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
@@ -7624,7 +7830,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const nextStop = sortedStops[idx + 1];
             const distNm = nextStop ? nmBetween(stop, nextStop) : null;
             html += `
-                <div class="np-day-tile" style="--accent:var(--${accent})">
+                <div class="np-day-tile" data-day="${idx + 1}" style="--accent:var(--${accent})">
                     <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
                     <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
                     ${w.condition ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">${getIconForWeather(w.condition)}</span>${w.condition}</div>` : ''}
@@ -7658,7 +7864,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
             }, 'info');
 
-            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview">
+            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview" data-report-scope="overview" data-report-cats="all navigation weather">
                 <div class="lookout-header">
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                     <h3>Safety Overview</h3>
@@ -7695,7 +7901,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Full Destination Guide ────────────────────────────────────────────────
     if (guide) {
         html += `
-            <div class="np-guide-section np-report-item--non-sailing">
+            <div class="np-guide-section np-report-item--non-sailing" data-report-scope="overview" data-report-cats="all guide">
                 <span class="np-guide-section__eyebrow">Destination Guide</span>
                 ${generateGuideHTML(guide)}
             </div>
@@ -7705,10 +7911,10 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     // ── Recommendations (discovery mode) ─────────────────────────────────────
     if (!hasBriefings && recommendations && recommendations.length > 0) {
         const groups = {
-            marina:    { title: 'Resource Hubs & Marinas', accent: 'amber', items: [] },
-            anchorage: { title: 'Recommended Anchorages', accent: 'teal',  items: [] },
-            mooring:   { title: 'Mooring Fields',          accent: 'violet',items: [] },
-            other:     { title: 'Other Recommendations',   accent: 'sky',   items: [] },
+            marina:    { title: 'Resource Hubs & Marinas', accent: 'amber', items: [], cats: 'all guide navigation amenities' },
+            anchorage: { title: 'Recommended Anchorages', accent: 'teal',  items: [], cats: 'all guide navigation' },
+            mooring:   { title: 'Mooring Fields',          accent: 'violet',items: [], cats: 'all guide navigation' },
+            other:     { title: 'Other Recommendations',   accent: 'sky',   items: [], cats: 'all guide amenities' },
         };
         recommendations.forEach(rec => {
             const t = (rec.type || '').toLowerCase();
@@ -7718,9 +7924,9 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             else groups.other.items.push(rec);
         });
         ['marina','anchorage','mooring','other'].forEach(key => {
-            const { title, accent, items } = groups[key];
+            const { title, accent, items, cats } = groups[key];
             if (!items.length) return;
-            html += `<div class="np-rec-section">
+            html += `<div class="np-rec-section" data-report-scope="overview" data-report-cats="${cats}">
                 <span class="np-eyebrow-accent" style="--accent:var(--${accent})">${title}</span>`;
             items.forEach(rec => {
                 const ra = markerAccent(rec.type);
@@ -7824,14 +8030,35 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const dateStr = stop.target_date
                 ? new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'})
                 : '';
+            const shortDateStr = stop.target_date
+                ? new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'short', month:'short', day:'numeric'})
+                : '';
             const w = b.weather_summary || {};
             const sun = b.sun_phase || {};
             const legNum = idx + 1;
             const stopDebriefs = stopDebriefsMap.get(idx) || [];
+            const curShortName = displayLocationName(stop.location_name || stop.name || '').split(',')[0].trim();
+            const nextStop = sortedStops[idx + 1];
+            const nextShortName = nextStop ? displayLocationName(nextStop.location_name || nextStop.name || '').split(',')[0].trim() : '';
+            const distNm = nextStop ? nmBetween(stop, nextStop) : null;
+            const legSummary = nextStop
+                ? `${esc(curShortName)} → ${esc(nextShortName)}${distNm !== null ? ` (${distNm.toFixed(1)} NM)` : ''}`
+                : esc(curShortName);
+            const hasPrev = idx > 0;
+            const hasNext = idx < sortedStops.length - 1;
 
             html += `
-                <div class="np-report-stop" style="--accent:var(--${accent})">
-                    <div class="np-report-stop__header">
+                <div class="np-report-stop" data-stop-day="${idx + 1}" style="--accent:var(--${accent})">
+                    <div class="np-single-day-banner">
+                        <div class="np-single-day-banner__info">
+                            Day ${idx + 1} of ${sortedStops.length}${shortDateStr ? ` · ${shortDateStr}` : ''}${legSummary ? ` · ${legSummary}` : ''}
+                        </div>
+                        <div class="np-single-day-banner__actions">
+                            <button type="button" class="np-single-day-banner__btn" data-step-day="${idx}" ${hasPrev ? '' : 'disabled'}>← Prev Day</button>
+                            <button type="button" class="np-single-day-banner__btn" data-step-day="${idx + 2}" ${hasNext ? '' : 'disabled'}>Next Day →</button>
+                        </div>
+                    </div>
+                    <div class="np-report-stop__header" data-report-cats="all navigation weather amenities">
                         <div class="np-report-stop__number">${idx+1}</div>
                         <div>
                             <div class="np-report-stop__title">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
@@ -7842,7 +8069,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             // Weather tiles
             if (!isInvalidVal(w.condition)) {
-                html += `<div class="np-weather-grid">`;
+                html += `<div class="np-weather-grid" data-report-cats="all weather">`;
                 if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
@@ -7860,29 +8087,29 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 // Add 24h Hourly Timeline
                 const timelineHTML = generateHourlyTimelineHTML(w, sun);
                 if (timelineHTML) {
-                    html += `<div class="np-hourly-timeline">${timelineHTML}</div>`;
+                    html += `<div class="np-hourly-timeline" data-report-cats="all weather">${timelineHTML}</div>`;
                 }
 
                 if (b.weather_last_updated) {
                     const updatedAt = new Date(b.weather_last_updated);
                     const label = updatedAt.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-                    html += `<p style="margin:4px 0 8px;font-size:11px;color:var(--muted);font-style:italic">Forecast as of ${label}</p>`;
+                    html += `<p data-report-cats="all weather" style="margin:4px 0 8px;font-size:11px;color:var(--muted);font-style:italic">Forecast as of ${label}</p>`;
                 }
             }
 
             // Tide chart canvas or availability notice
             if (b.tides && Array.isArray(b.tides.events) && b.tides.events.length > 0) {
-                html += `<div class="np-tide-chart-wrap"><canvas id="reportTideChart_${idx}"></canvas></div>`;
+                html += `<div class="np-tide-chart-wrap" data-report-cats="all navigation weather"><canvas id="reportTideChart_${idx}"></canvas></div>`;
             } else if (b.tides && b.tides.note) {
-                html += `<p class="briefing-no-data" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>${DOMPurify.sanitize(b.tides.note)}</p>`;
+                html += `<p class="briefing-no-data" data-report-cats="all navigation weather" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>${DOMPurify.sanitize(b.tides.note)}</p>`;
             } else if (b.tides) {
-                html += `<p class="briefing-no-data" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>Tidal data is not available yet for this region.</p>`;
+                html += `<p class="briefing-no-data" data-report-cats="all navigation weather" style="margin:8px 0;font-size:12px;color:var(--muted);"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>Tidal data is not available yet for this region.</p>`;
             }
 
             // Safety alerts (Moved after tides)
             if (Array.isArray(b.safety_alerts) && b.safety_alerts.length > 0) {
                 const alertsHtml = b.safety_alerts.map(alertToHTML).join('');
-                html += `<div class="lookout-box" style="margin:16px 0">
+                html += `<div class="lookout-box" data-report-cats="all navigation weather" style="margin:16px 0">
                     <div class="lookout-header">
                         <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                         <h3>Safety Lookout</h3>
@@ -7895,7 +8122,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (b.pilot_notes) {
                 const pilotHtml = renderPilotNotesHTML(b.pilot_notes);
                 if (pilotHtml) {
-                    html += pilotHtml;
+                    html += `<div class="np-pilot-notes-wrap" data-report-cats="all navigation">${pilotHtml}</div>`;
                 }
             }
 
@@ -7912,15 +8139,16 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             })();
 
             if (isReturnStop) {
-                html += `<p class="np-caption" style="font-style:italic">Facilities omitted — return to starting area.</p>`;
+                html += `<p class="np-caption" data-report-cats="all navigation amenities" style="font-style:italic">Facilities omitted — return to starting area.</p>`;
             } else if (b.facilities && b.facilities.length > 0) {
-                html += `<div class="np-report-item--non-sailing">`;
+                html += `<div class="np-facilities-wrapper np-report-item--non-sailing" data-report-cats="all navigation amenities">`;
                 html += `<span class="np-facilities-header">Facilities</span>`;
                 b.facilities.forEach(f => {
                     const fa = markerAccent(f.type);
+                    const fCats = classifyFacilityReportCats(f.type);
                     const desc = typeof f.details === 'string' ? f.details : (f.details?.description || '');
                     const address = f.address || (typeof f.details === 'object' && f.details?.address) || '';
-                    html += `<div class="np-facility-report-card" style="--accent:var(--${fa})">
+                    html += `<div class="np-facility-report-card" data-report-cats="${fCats}" data-facility-type="${esc(f.type || 'Facility')}" style="--accent:var(--${fa})">
                         <div class="np-facility-report-card__header">
                             <span class="np-facility-report-card__name">${esc(f.name)}</span>
                             <span class="np-facility-report-card__badge">${esc(f.type || 'Facility')}</span>
@@ -7928,7 +8156,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         ${address ? `<p class="np-facility-report-card__address">${esc(address)}</p>` : ''}
                         ${desc ? `<p class="np-facility-report-card__desc">${esc(desc)}</p>` : ''}
                         ${f.rating ? `<p class="np-facility-report-card__rating">${'★'.repeat(Math.round(f.rating))}${'☆'.repeat(5-Math.round(f.rating))} ${f.rating.toFixed(1)}</p>` : ''}
-                        ${f.website ? `<a href="${f.website}" target="_blank" class="np-facility-report-card__website">${esc(f.website)}</a>` : ''}
+                        ${f.website ? `<a href="${f.website}" target="_blank" rel="noopener noreferrer" class="np-facility-report-card__website">${esc(formatFacilityLinkLabel(f.website))}</a>` : ''}
                         ${renderReferences(f.references)}
                     </div>`;
                 });
@@ -7947,7 +8175,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                         ? `Passage Tactical Debrief — Leg ${legNum}`
                         : `Passage Tactical Debrief`;
                     html += `
-                        <div class="np-report-stop-debrief">
+                        <div class="np-report-stop-debrief" data-report-cats="all navigation weather">
                             <span class="np-facilities-header">${debriefTitle}</span>
                             ${stopDebriefHtml}
                         </div>
@@ -7973,59 +8201,41 @@ function renderSharedReport(data, container, sailing = false, token = '') {
 
     const hasBriefings = briefings.some(b => b !== null);
     const mapURL = data.map_url;
+    const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+    const initialFilter = parseReportFilterFromLocation(window.location, sailing);
 
     const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL, debriefs);
 
-    // Create shared report container with header
+    // Create shared report container with header + two-tier filter bar
     const headerHTML = `
         <div class="shared-report-header">
             <div class="shared-report-header__inner">
                 <div class="shared-report-header__brand">NavalPlan</div>
                 <div class="flex gap-sm align-center">
-                    <button id="btn-shared-toggle-sailing" class="btn-icon icon-xl" title="Sailing Mode: Focus on essential data" aria-label="Toggle sailing mode">
-                        <span class="material-symbols-outlined">sailing</span>
-                    </button>
-                    <div class="header-divider"></div>
-                    <button onclick="window.print()" class="btn-icon icon-xl" title="Print Report" aria-label="Print report">
+                    <button id="btn-shared-print" class="btn-icon icon-xl" title="Print Report" aria-label="Print report">
                         <span class="material-symbols-outlined">print</span>
                     </button>
                 </div>
             </div>
         </div>
+        ${buildReportFilterBarHTML()}
     `;
 
     // Inject and Render - Wrapped in a container for styling (max-width etc)
-    container.innerHTML = headerHTML + DOMPurify.sanitize(`<div id="shared-report-body" class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target'] });
+    container.setAttribute('data-report-tab', initialFilter.tab);
+    container.setAttribute('data-report-day', initialFilter.day);
+    container.innerHTML = headerHTML + DOMPurify.sanitize(`<div id="shared-report-body" class="shared-report-content">${html}</div>`, { ADD_ATTR: ['target', 'role', 'aria-selected', 'aria-label'] });
 
-    // Wire up Sailing Mode for Shared View
-    const btnSailing = document.getElementById('btn-shared-toggle-sailing');
-    const reportBody = document.getElementById('shared-report-body');
-    if (btnSailing && reportBody) {
-        // Set initial state
-        if (sailing) {
-            btnSailing.classList.add('active');
-            reportBody.classList.add('np-report--sailing-only');
-        }
+    const btnPrint = container.querySelector('#btn-shared-print');
+    if (btnPrint) btnPrint.onclick = () => window.print();
 
-        btnSailing.onclick = () => {
-            const active = btnSailing.classList.toggle('active');
-            if (active) {
-                reportBody.classList.add('np-report--sailing-only');
-            } else {
-                reportBody.classList.remove('np-report--sailing-only');
-            }
-            // Update URL when toggling
-            if (token) {
-                const newPath = `/shared/${token}${active ? '/sailing' : ''}`;
-                window.history.replaceState({}, '', newPath);
-            }
-        };
-    }
+    const basePath = token ? `/shared/${token}` : window.location.pathname.replace(/\/sailing$/, '');
+    populateReportDayPills(sortedStops, initialFilter.day, container);
+    wireReportFilterListeners(container, { basePath });
+    setReportFilter(initialFilter, { root: container, updateHistory: Boolean(token), basePath });
 
     // ... (Chart rendering logic preserved below) ...
     setTimeout(() => {
-        const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
-
         sortedStops.forEach((stop, idx) => {
             const b = briefings.find(br => br.stop_id === stop.id) || {};
             // Main Chart
@@ -8044,10 +8254,9 @@ function renderSharedReport(data, container, sailing = false, token = '') {
 async function initPrintMode(voyageId) {
     document.body.classList.add('print-view');
     document.documentElement.classList.add('print-view');
-    const isSailing = new URLSearchParams(window.location.search).get('sailing') === '1' || window.location.pathname.endsWith('/sailing');
-    if (isSailing) {
-        document.body.classList.add('np-report--sailing-only');
-    }
+    const initialFilter = parseReportFilterFromLocation(window.location);
+    document.body.setAttribute('data-report-tab', initialFilter.tab);
+    document.body.setAttribute('data-report-day', initialFilter.day);
     const app = document.getElementById('app');
     app.innerHTML = '<div class="loading-state"><span class="material-symbols-outlined spin loading-icon">sync</span><p>Preparing print view…</p></div>';
 
@@ -8090,47 +8299,35 @@ function renderPrintReport(data, container) {
     const debriefs = data.debriefs || [];
     const hasBriefings = briefings.some(b => b !== null);
     const mapURL = data.map_url;
-
-    const isSailing = new URLSearchParams(window.location.search).get('sailing') === '1' || window.location.pathname.endsWith('/sailing');
+    const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+    const initialFilter = parseReportFilterFromLocation(window.location);
 
     const printBar = `
         <div class="np-print-bar">
             <a href="/voyages/${voyage.id || ''}" class="btn secondary">← Back</a>
-            <button class="btn secondary ${isSailing ? 'active' : ''}" id="btn-print-toggle-sailing">
-                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:18px">sailing</span>
-                Sailing Mode
-            </button>
-            <button class="btn primary" onclick="window.print()">
+            <button class="btn primary" id="btn-print-execute">
                 <span class="material-symbols-outlined" style="vertical-align:middle;font-size:18px">print</span>
                 Print / Save as PDF
             </button>
-        </div>`;
+        </div>
+        ${buildReportFilterBarHTML()}`;
 
     const html = generateReportHTML(voyage, stops, briefings, guide, recommendations, hasBriefings, mapURL, debriefs);
 
+    container.setAttribute('data-report-tab', initialFilter.tab);
+    container.setAttribute('data-report-day', initialFilter.day);
     container.innerHTML = DOMPurify.sanitize(
-        `${printBar}<div class="print-report-content ${isSailing ? 'np-report--sailing-only' : ''}">${html}</div>`,
-        { ADD_ATTR: ['target'] }
+        `${printBar}<div class="print-report-content">${html}</div>`,
+        { ADD_ATTR: ['target', 'role', 'aria-selected', 'aria-label'] }
     );
 
-    // Re-attach print bar button (DOMPurify strips onclick; use event delegation instead)
-    const printBtn = container.querySelector('.np-print-bar .btn.primary');
+    const printBtn = container.querySelector('#btn-print-execute') || container.querySelector('.np-print-bar .btn.primary');
     if (printBtn) printBtn.addEventListener('click', () => window.print());
 
-    const toggleSailingBtn = container.querySelector('#btn-print-toggle-sailing');
-    if (toggleSailingBtn) {
-        toggleSailingBtn.addEventListener('click', () => {
-            const reportContent = container.querySelector('.print-report-content');
-            if (reportContent) {
-                const active = reportContent.classList.toggle('np-report--sailing-only');
-                toggleSailingBtn.classList.toggle('active', active);
-                document.body.classList.toggle('np-report--sailing-only', active);
-                const basePath = `/voyages/${voyage.id || ''}/print`;
-                const newPath = active ? `${basePath}/sailing` : basePath;
-                window.history.replaceState({}, '', newPath);
-            }
-        });
-    }
+    const basePath = `/voyages/${voyage.id || ''}/print`;
+    populateReportDayPills(sortedStops, initialFilter.day, container);
+    wireReportFilterListeners(container, { basePath });
+    setReportFilter(initialFilter, { root: container, updateHistory: true, basePath });
 
     // Move metric grid to sit beside the map in a flex row
     const metricGrid = container.querySelector('.np-metric-grid');
@@ -8138,13 +8335,14 @@ function renderPrintReport(data, container) {
     if (metricGrid && map) {
         const row = document.createElement('div');
         row.className = 'np-print-map-row';
+        row.setAttribute('data-report-scope', 'overview');
+        row.setAttribute('data-report-cats', 'all navigation weather amenities');
         map.parentNode.insertBefore(row, map);
         row.appendChild(map);
         row.appendChild(metricGrid);
     }
 
     setTimeout(() => {
-        const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
         sortedStops.forEach((stop, idx) => {
             const b = briefings.find(br => br && br.stop_id === stop.id) || {};
             if (b.tides && b.tides.events) {

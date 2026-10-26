@@ -88,4 +88,38 @@ describe('renderPilotNotesHTML string renderer', () => {
     expect(html).toContain('Important navigation warning');
     expect(html).not.toContain('np-report-item--non-sailing');
   });
+
+  it('structures Departure & Arrival Timing with bold Recommended Departure and separate paragraphs', () => {
+    const pilotNotes = {
+      departure_and_arrival_timing: {
+        recommended_departure_window: '12:00 PM (ETA 05:47 PM, 133 min before sunset)',
+        departure_tide_constraint: 'Departing near low tide requires verifying channel depths.',
+        arrival_outlook: 'Expected arrival in Talbot County around 05:47 PM.',
+        night_entry_and_aids_warning: 'Exercise caution regarding unlit buoys.'
+      }
+    };
+
+    const html = renderPilotNotesHTML(pilotNotes);
+    expect(html).toContain('pilot-note-card__lead');
+    expect(html).toContain('<strong>Recommended Departure: 12:00 PM (ETA 05:47 PM, 133 min before sunset)</strong>');
+    expect(html).toContain('<p class="pilot-note-card__para">Departing near low tide requires verifying channel depths.</p>');
+    expect(html).toContain('<p class="pilot-note-card__para">Expected arrival in Talbot County around 05:47 PM.</p>');
+    expect(html).toContain('<p class="pilot-note-card__para">Exercise caution regarding unlit buoys.</p>');
+  });
+
+  it('links pilotage source citations to Coast Pilot PDFs, eCFR sections, and search fallbacks', () => {
+    const pilotNotes = {
+      overview: 'Severn River approach.',
+      sources: [
+        'NOAA Coast Pilot 3, Chapter 13',
+        '33 CFR § 110.159',
+        'Annapolis City Code Title 15.10'
+      ]
+    };
+
+    const html = renderPilotNotesHTML(pilotNotes);
+    expect(html).toContain('href="https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp3/CPB3_WEB.pdf"');
+    expect(html).toContain('href="https://www.ecfr.gov/current/title-33/section-110.159"');
+    expect(html).toContain('href="https://www.google.com/search?q=Annapolis%20City%20Code%20Title%2015.10"');
+  });
 });

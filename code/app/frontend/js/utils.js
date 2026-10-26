@@ -466,4 +466,258 @@ export function isWithinTrackingWindow(voyage, nowMs = Date.now()) {
     return nowMs >= (startMs - GRACE_MS) && nowMs <= (endMs + GRACE_MS);
 }
 
+/**
+ * Classifies a stop facility type into report category tokens.
+ * - Anchorage, Mooring, Fuel Station, Boat Launch -> 'all navigation'
+ * - Marina, Yacht Club -> 'all navigation amenities'
+ * - Restaurant, Bar, Cafe, Store, Pharmacy, Services (and others) -> 'all amenities'
+ *
+ * @param {string} type
+ * @returns {string}
+ */
+export function classifyFacilityReportCats(type) {
+    const t = String(type || '').toLowerCase().trim();
+    if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch') || t.includes('ramp')) {
+        return 'all navigation';
+    }
+    if (t.includes('marina') || t.includes('yacht club') || t.includes('yacht')) {
+        return 'all navigation amenities';
+    }
+    return 'all amenities';
+}
+
+/**
+ * Formats a concise link label for facility URLs ([Google Maps] for Google Maps URLs, [Website] otherwise).
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function formatFacilityLinkLabel(url) {
+    const u = String(url || '').toLowerCase();
+    if (u.includes('maps.google.') || u.includes('google.com/maps') || u.includes('goo.gl/maps') || u.includes('maps.app.goo.gl')) {
+        return '[Google Maps]';
+    }
+    return '[Website]';
+}
+
+/**
+ * Builds Google Static Maps `&path=...` parameters for planned and recorded GPX tracks.
+ * Downsamples coordinates per track to keep the static map URL within length limits.
+ *
+ * @param {Array} tracks
+ * @param {number} [maxPointsPerTrack=50]
+ * @returns {string}
+ */
+export function buildStaticMapTrackPathsParam(tracks, maxPointsPerTrack = 50) {
+    if (!Array.isArray(tracks) || tracks.length === 0) return '';
+    let param = '';
+
+    tracks.forEach(track => {
+        if (!track) return;
+        const rawGeo = track.simplified_geojson || track.geojson;
+        if (!rawGeo) return;
+
+        let geoData = rawGeo;
+        if (typeof rawGeo === 'string') {
+            try { geoData = JSON.parse(rawGeo); } catch (_) { return; }
+        }
+
+        const coords = geoData?.geometry?.coordinates || geoData?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return;
+
+        // Downsample while preserving start and end points
+        let sampled = coords;
+        if (coords.length > maxPointsPerTrack && maxPointsPerTrack >= 2) {
+            sampled = [];
+            const step = (coords.length - 1) / (maxPointsPerTrack - 1);
+            for (let i = 0; i < maxPointsPerTrack - 1; i++) {
+                sampled.push(coords[Math.round(i * step)]);
+            }
+            sampled.push(coords[coords.length - 1]);
+        }
+
+        // GeoJSON is [lng, lat]; Static Maps path expects lat,lng
+        const pointsStr = sampled
+            .filter(pt => Array.isArray(pt) && pt.length >= 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1]))
+            .map(pt => `${Number(pt[1]).toFixed(5)},${Number(pt[0]).toFixed(5)}`)
+            .join('|');
+
+        if (!pointsStr || !pointsStr.includes('|')) return;
+
+        const isPlanned = track.kind === 'planned';
+        const style = isPlanned ? 'color:0x00B4D8d9|weight:3' : 'color:0xFF6B35e6|weight:4';
+        param += `&path=${style}|${pointsStr}`;
+    });
+
+    return param;
+}
+
+/**
+ * Classifies a Safety Lookout alert into report category tokens.
+ * - navigation -> 'all navigation'
+ * - tides      -> 'all navigation weather'
+ * - weather/sun -> 'all weather'
+ *
+ * @param {object} alert
+ * @returns {string}
+ */
+export function classifyAlertReportCat(alert) {
+    if (!alert || typeof alert !== 'object') return 'all navigation weather';
+    const cat = String(alert.category || alert.type || '').toLowerCase().trim();
+    if (cat === 'navigation' || cat === 'nav') return 'all navigation';
+    if (cat === 'tides' || cat === 'tide') return 'all navigation weather';
+    if (cat === 'weather' || cat === 'sun' || cat === 'wind' || cat === 'waves') return 'all weather';
+    if (Array.isArray(alert.travel_table) && alert.travel_table.length > 0) return 'all navigation';
+    const hint = `${alert.icon || ''} ${alert.message || ''}`.toLowerCase();
+    if (hint.includes('tide') || hint.includes('current') || hint.includes('slack')) return 'all navigation weather';
+    if (hint.includes('wind') || hint.includes('wave') || hint.includes('storm') || hint.includes('gale') || hint.includes('sun') || hint.includes('twilight') || hint.includes('rain') || hint.includes('squall')) {
+        return 'all weather';
+    }
+    if (hint.includes('anchor') || hint.includes('channel') || hint.includes('shoal') || hint.includes('reef') || hint.includes('depart') || hint.includes('approach')) {
+        return 'all navigation';
+    }
+    return 'all navigation weather';
+}
+
+/**
+ * Parses report tab and day filter state from a Location or URL-like object.
+ * Preserves backward compatibility for /report/sailing and ?sailing=1 by mapping to tab=navigation.
+ *
+ * @param {Location|{pathname?: string, search?: string}|string} loc
+ * @param {boolean} [legacySailing=false]
+ * @returns {{ tab: string, day: string }}
+ */
+export function parseReportFilterFromLocation(loc, legacySailing = false) {
+    let pathname = '';
+    let search = '';
+    if (typeof loc === 'string') {
+        const qIdx = loc.indexOf('?');
+        pathname = qIdx >= 0 ? loc.slice(0, qIdx) : loc;
+        search = qIdx >= 0 ? loc.slice(qIdx) : '';
+    } else if (loc && typeof loc === 'object') {
+        pathname = String(loc.pathname || '');
+        search = String(loc.search || '');
+    }
+
+    const params = new URLSearchParams(search);
+    const rawTab = (params.get('tab') || '').toLowerCase().trim();
+    const rawDay = (params.get('day') || '').toLowerCase().trim();
+    const isSailingPath = legacySailing || pathname.endsWith('/sailing') || params.get('sailing') === '1';
+
+    let tab = 'all';
+    if (['all', 'guide', 'navigation', 'weather', 'amenities'].includes(rawTab)) {
+        tab = rawTab;
+    } else if (rawTab === 'destination-guide' || rawTab === 'destination') {
+        tab = 'guide';
+    } else if (rawTab === 'sailing' || rawTab === 'nav') {
+        tab = 'navigation';
+    } else if (rawTab === 'activities' || rawTab === 'shore') {
+        tab = 'amenities';
+    } else if (isSailingPath) {
+        tab = 'navigation';
+    }
+
+    let day = 'all';
+    if (rawDay && rawDay !== 'all') {
+        const parsedDay = parseInt(rawDay, 10);
+        if (!Number.isNaN(parsedDay) && parsedDay >= 1) {
+            day = String(parsedDay);
+        }
+    }
+
+    return { tab, day };
+}
+
+/**
+ * Builds query string for report filter state (?tab=...&day=...).
+ * Returns empty string when both tab and day are 'all'.
+ *
+ * @param {string} tab
+ * @param {string|number} day
+ * @returns {string}
+ */
+export function buildReportFilterSearch(tab = 'all', day = 'all') {
+    const params = new URLSearchParams();
+    if (tab && tab !== 'all') params.set('tab', String(tab));
+    if (day && String(day) !== 'all') params.set('day', String(day));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+}
+
+/**
+ * Applies category tab and day filter state to a report root container element.
+ *
+ * @param {Element} root
+ * @param {{ tab?: string, day?: string|number }} filter
+ * @returns {{ tab: string, day: string }}
+ */
+export function applyReportFilterToDOM(root, filter = {}) {
+    if (!root) return { tab: 'all', day: 'all' };
+    const currentTab = root.getAttribute('data-report-tab') || 'all';
+    const currentDay = root.getAttribute('data-report-day') || 'all';
+
+    let nextTab = filter.tab != null ? String(filter.tab).toLowerCase().trim() : currentTab;
+    if (nextTab === 'destination-guide' || nextTab === 'destination') nextTab = 'guide';
+    if (nextTab === 'sailing') nextTab = 'navigation';
+    if (nextTab === 'activities') nextTab = 'amenities';
+    if (!['all', 'guide', 'navigation', 'weather', 'amenities'].includes(nextTab)) {
+        nextTab = 'all';
+    }
+
+    let nextDay = filter.day != null ? String(filter.day).toLowerCase().trim() : currentDay;
+    if (nextDay !== 'all') {
+        const n = parseInt(nextDay, 10);
+        nextDay = (!Number.isNaN(n) && n >= 1) ? String(n) : 'all';
+    }
+
+    root.setAttribute('data-report-tab', nextTab);
+    root.setAttribute('data-report-day', nextDay);
+    root.classList.remove('np-report--sailing-only');
+
+    // Update category tab buttons
+    root.querySelectorAll('#report-category-tabs [data-tab], .np-report-tabs [data-tab]').forEach(btn => {
+        const isMatch = btn.getAttribute('data-tab') === nextTab;
+        btn.classList.toggle('active', isMatch);
+        btn.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+    });
+
+    // Update day pill buttons
+    root.querySelectorAll('#report-day-pills [data-day], .np-report-day-pills [data-day]').forEach(pill => {
+        const isMatch = pill.getAttribute('data-day') === nextDay;
+        pill.classList.toggle('active', isMatch);
+        pill.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+    });
+
+    // Sync mobile dropdown selects if present
+    const catSelect = root.querySelector('#report-category-select, .np-report-category-select');
+    if (catSelect && catSelect.value !== nextTab) {
+        catSelect.value = nextTab;
+    }
+    const daySelect = root.querySelector('#report-day-select, .np-report-day-select');
+    if (daySelect && daySelect.value !== nextDay) {
+        daySelect.value = nextDay;
+    }
+
+    // Update stop day visibility
+    root.querySelectorAll('.np-report-stop[data-stop-day]').forEach(stopEl => {
+        const stopDay = stopEl.getAttribute('data-stop-day');
+        const hidden = nextDay !== 'all' && stopDay !== nextDay;
+        stopEl.classList.toggle('np-report-stop--hidden-day', hidden);
+    });
+
+    // Hide facilities wrapper if zero child facility cards match the active category tab
+    root.querySelectorAll('.np-facilities-wrapper').forEach(wrapper => {
+        const cards = Array.from(wrapper.querySelectorAll('.np-facility-report-card'));
+        const matchingCount = cards.filter(card => {
+            if (nextTab === 'all') return true;
+            const cats = (card.getAttribute('data-report-cats') || '').split(/\s+/);
+            return cats.includes(nextTab);
+        }).length;
+        wrapper.classList.toggle('np-facilities-wrapper--empty', cards.length > 0 && matchingCount === 0);
+    });
+
+    return { tab: nextTab, day: nextDay };
+}
+
+
 

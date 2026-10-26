@@ -306,18 +306,62 @@
     </div>
 
     <!-- Report Modal -->
-    <div id="modal-report" class="modal hidden modal-scrollable flex flex-col" role="dialog" aria-modal="true" aria-labelledby="modal-report-title">
-        <div class="modal-header-row flex justify-between align-center">
-            <h2 id="modal-report-title" class="m-0">Voyage Report</h2>
-            <div class="flex gap-sm align-center">
-                <button id="btn-toggle-sailing-mode" class="btn-icon icon-xl" title="Sailing Mode: Focus on essential data" aria-label="Toggle sailing mode">
-                    <span class="material-symbols-outlined">sailing</span>
+    <div id="modal-report" class="modal hidden modal-scrollable flex flex-col np-report-fullscreen" role="dialog" aria-modal="true" aria-labelledby="modal-report-title" data-report-tab="all" data-report-day="all">
+        <div class="np-report-filter-bar">
+            <div class="modal-header-row np-report-top-bar flex justify-between align-center">
+                <div class="flex gap-md align-center">
+                    <button id="btn-close-report" class="btn secondary btn-sm np-report-back-btn" aria-label="Close report">← Back to Voyage</button>
+                    <h2 id="modal-report-title" class="m-0">Voyage Report</h2>
+                </div>
+                <div class="flex gap-sm align-center np-report-actions">
+                    <button id="btn-run-safety-audit" class="btn-icon icon-xl" title="Run Safety Audit for All Stops" aria-label="Run safety audit for all stops"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+                    <button id="btn-share-report" class="btn-icon icon-xl" title="Share Report" aria-label="Share report"><span class="material-symbols-outlined" aria-hidden="true">share</span></button>
+                    <button id="btn-copy-report" class="btn-icon icon-xl" title="Copy to Clipboard" aria-label="Copy report to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
+                    <button id="btn-print-report" class="btn-icon icon-xl" title="Open Print View" aria-label="Open print view"><span class="material-symbols-outlined" aria-hidden="true">print</span></button>
+                </div>
+            </div>
+            <div id="report-category-tabs" class="np-report-tabs" role="tablist" aria-label="Report categories">
+                <button type="button" class="np-report-tab-btn active" role="tab" aria-selected="true" data-tab="all">
+                    <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+                    <span>All</span>
                 </button>
-                <div class="header-divider"></div>
-                <button id="btn-voyage-lookout" class="btn-icon icon-xl" title="Run Safety Audit for All Stops" aria-label="Run safety audit for all stops"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
-                <button id="btn-copy-report" class="btn-icon icon-xl" title="Copy to Clipboard" aria-label="Copy report to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
-                <button id="btn-print-voyage" class="btn-icon icon-xl" title="Open Print View" aria-label="Open print view"><span class="material-symbols-outlined" aria-hidden="true">print</span></button>
-                <button id="btn-close-report" class="btn-icon icon-xl" aria-label="Close report"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="guide">
+                    <span class="material-symbols-outlined" aria-hidden="true">menu_book</span>
+                    <span>Destination Guide</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="navigation">
+                    <span class="material-symbols-outlined" aria-hidden="true">explore</span>
+                    <span>Navigation</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="weather">
+                    <span class="material-symbols-outlined" aria-hidden="true">air</span>
+                    <span>Weather &amp; Tides</span>
+                </button>
+                <button type="button" class="np-report-tab-btn" role="tab" aria-selected="false" data-tab="amenities">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    <span>Amenities &amp; Shore</span>
+                </button>
+            </div>
+            <div id="report-day-pills" class="np-report-day-pills" role="tablist" aria-label="Report days">
+                <button type="button" class="np-report-day-pill active" role="tab" aria-selected="true" data-day="all">All Days</button>
+            </div>
+            <div class="np-report-mobile-selects">
+                <label class="np-report-select-wrap">
+                    <span class="np-report-select-label">Section</span>
+                    <select id="report-category-select" class="form-select np-report-select" aria-label="Report category">
+                        <option value="all">All Sections</option>
+                        <option value="guide">Destination Guide</option>
+                        <option value="navigation">Navigation</option>
+                        <option value="weather">Weather &amp; Tides</option>
+                        <option value="amenities">Amenities &amp; Shore</option>
+                    </select>
+                </label>
+                <label class="np-report-select-wrap">
+                    <span class="np-report-select-label">Day</span>
+                    <select id="report-day-select" class="form-select np-report-select" aria-label="Report day">
+                        <option value="all">All Days</option>
+                    </select>
+                </label>
             </div>
         </div>
         <div id="report-content" class="report-body modal-content-scroll">
