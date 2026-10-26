@@ -148,11 +148,13 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 
 	hint := fmt.Sprintf(
 		"The circle boundary reaches approximately: North edge (%s, %s), South edge (%s, %s), East edge (%s, %s), West edge (%s, %s). "+
-			"When the center is in open water (e.g. a strait, sound, or bay), identify the coastlines, cities, islands, and inlets located near EACH of those four perimeter coordinates (especially both the West edge and East edge, or North edge and South edge) and include their marinas, moorings, fuel docks, and anchorages — never cover only one side of an open-water crossing!",
+			"CRITICAL OPEN-WATER CROSSING RULE: When the center is in open water (e.g. Florida Straits between Miami/Fort Lauderdale and Bimini, a sound, or a bay), you MUST pass the EXACT circle center coordinates (%.4f, %.4f) to `facility_discovery` — NEVER pass the coordinates of only one island or shore (such as Bimini alone) to `facility_discovery`! "+
+			"Identify the coastlines, major yachting cities (e.g. Fort Lauderdale, Miami, Biscayne Bay, Dania Beach, Pompano Beach, Boca Raton on a western edge), islands, and inlets located near EACH of those four perimeter coordinates (BOTH the West edge AND East edge, and BOTH the North edge AND South edge) and include all of their charter bases, marinas, moorings, fuel docks, and anchorages.",
 		fmtLat(nLat), fmtLng(centerLng),
 		fmtLat(sLat), fmtLng(centerLng),
 		fmtLat(centerLat), fmtLng(eLng),
 		fmtLat(centerLat), fmtLng(wLng),
+		centerLat, centerLng,
 	)
 	if radiusNM > 27.0 {
 		hint += " For this large search area (>27 NM), execute your parallel searches in Turn 1 across both central and outer compass sectors."
@@ -273,6 +275,10 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		"search_mode":        "area",
 		"area_radius_meters": radiusNM * 1852.0,
 	}
+	if v.Latitude != nil && v.Longitude != nil {
+		sessionState["stop_latitude"] = *v.Latitude
+		sessionState["stop_longitude"] = *v.Longitude
+	}
 	if err := h.Agent.CreateSession(ctx, appName, userID, sessionID, sessionState); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
 		h.broadcastProgress(progressSessionID, "error", "Failed to start research session")
@@ -323,7 +329,14 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 			"Prioritize day-use anchorages, lunch stops, and moorings suited to a few hours rather than overnight-only spots."
 	}
 
+	if h.DB != nil {
+		if guide, gErr := h.DB.GetVoyageGuide(ctx, v.ID); gErr == nil && guide != nil && len(guide.CharterInfo) > 0 {
+			prompt += fmt.Sprintf("\n\nExisting Destination Guide Charter & Base Intelligence (verify and include every primary embarkation base within the search radius as voyage_role=\"start_end_base\"):\n%s", string(guide.CharterInfo))
+		}
+	}
+
 	var parsedCount int
+	var statePlacesRaw json.RawMessage
 	onEvent := func(evt agent.AgentEvent) {
 		for _, p := range evt.Content.Parts {
 			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
@@ -332,6 +345,7 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		}
 		if len(evt.Actions.StateDelta) > 0 {
 			if rawPlaces, ok := evt.Actions.StateDelta["verified_places"]; ok && len(rawPlaces) > 0 {
+				statePlacesRaw = rawPlaces
 				h.broadcastProgressSection(progressSessionID, "facilities", fmt.Sprintf("Verified area infrastructure discovered near %s", locInfo), rawPlaces)
 			}
 		}
@@ -407,12 +421,18 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	recommendations := wrapper.Recommendations
+	recommendations = mergeVerifiedPlacesIntoRecommendations(recommendations, statePlacesRaw)
 	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 
+	var savedRecs []model.VoyageRecommendation
 	for _, rec := range recommendations {
 		if rec.Latitude == 0 && rec.Longitude == 0 {
 			continue
 		}
+		if isOpenWaterPassageWaypoint(rec) {
+			continue
+		}
+		normalizeRecommendationRole(&rec)
 		dist := haversine(*v.Latitude, *v.Longitude, rec.Latitude, rec.Longitude, v.SearchRadiusUnit)
 		if dist > float64(v.SearchRadius) {
 			continue
@@ -426,6 +446,7 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		}
 
 		h.broadcastRecommendation(sessionID, rec)
+		savedRecs = append(savedRecs, rec)
 		parsedCount++
 	}
 
@@ -434,7 +455,92 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 
 	// Synchronize discovered Start/End Bases into the Voyage Guide's hubs list
 	// so the Destination Guide modal reflects the exact start/stop bases found by specialist.
-	h.syncStartEndBasesToGuide(ctx, v.ID, recommendations)
+	h.syncStartEndBasesToGuide(ctx, v.ID, savedRecs)
+}
+
+func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, rawPlaces json.RawMessage) []model.VoyageRecommendation {
+	if len(rawPlaces) == 0 {
+		return recs
+	}
+	type verifiedPlace struct {
+		Name       string   `json:"name"`
+		Type       string   `json:"type"`
+		Address    string   `json:"address"`
+		Latitude   float64  `json:"latitude"`
+		Longitude  float64  `json:"longitude"`
+		WebsiteURI string   `json:"website_uri"`
+		Website    string   `json:"website"`
+		Types      []string `json:"types"`
+	}
+	var places []verifiedPlace
+	if err := json.Unmarshal(rawPlaces, &places); err != nil || len(places) == 0 {
+		return recs
+	}
+
+	existingNames := make(map[string]bool, len(recs))
+	for _, r := range recs {
+		existingNames[strings.ToLower(strings.TrimSpace(r.Name))] = true
+	}
+
+	for _, p := range places {
+		name := strings.TrimSpace(p.Name)
+		if name == "" || (p.Latitude == 0 && p.Longitude == 0) {
+			continue
+		}
+		pt := strings.TrimSpace(p.Type)
+		switch pt {
+		case "Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch":
+		default:
+			continue
+		}
+		lowerName := strings.ToLower(name)
+		if existingNames[lowerName] {
+			continue
+		}
+		tooClose := false
+		for _, r := range recs {
+			if r.Latitude == 0 && r.Longitude == 0 {
+				continue
+			}
+			if haversine(r.Latitude, r.Longitude, p.Latitude, p.Longitude, "nm") < 0.08 &&
+				strings.EqualFold(strings.TrimSpace(r.Type), pt) {
+				tooClose = true
+				break
+			}
+		}
+		if tooClose {
+			continue
+		}
+
+		url := p.WebsiteURI
+		if url == "" {
+			url = p.Website
+		}
+		var refs model.RawJSON
+		if url != "" {
+			if rb, err := json.Marshal([]string{url}); err == nil {
+				refs = model.RawJSON(rb)
+			}
+		}
+		desc := fmt.Sprintf("Verified %s discovered via regional nautical scan", strings.ToLower(pt))
+		if p.Address != "" {
+			desc = fmt.Sprintf("%s (%s)", desc, p.Address)
+		}
+		rec := model.VoyageRecommendation{
+			Name:        name,
+			Type:        pt,
+			Latitude:    p.Latitude,
+			Longitude:   p.Longitude,
+			URL:         url,
+			Description: desc,
+			Reasoning:   "Included from verified Google Places nautical infrastructure sweep within the cruising circle.",
+			References:  refs,
+		}
+		normalizeRecommendationRole(&rec)
+		recs = append(recs, rec)
+		existingNames[lowerName] = true
+	}
+	return recs
 }
 
 func (h *Handler) syncStartEndBasesToGuide(ctx context.Context, voyageID int64, recs []model.VoyageRecommendation) {
@@ -580,11 +686,14 @@ func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJS
 	charterEvidence := []string{
 		"charter base", "charter fleet", "bareboat charter", "yacht charter",
 		"charter company", "charter companies", "charter operator", "embarkation base",
-		"sailing capital", "starting point", "embarkation", "turnaround",
+		"sailing capital", "starting point", "embarkation", "turnaround", "departure port",
 		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
 		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
 		"annapolis city marina", "annapolis harbor", "annapolis harbour", "port annapolis",
 		"eastport yacht", "bert jabin",
+		"bahia mar", "las olas marina", "pier sixty-six", "pier 66", "15th street fisheries",
+		"lauderdale marine center", "dinner key", "bayside marketplace", "miami beach marina",
+		"crandon park marina", "sea isle marina", "mahi marina",
 		"san juan sailing", "anacortes yacht", "bellingham yacht",
 		"bvi yacht charters", "horizon yacht", "voyage charters", "conch charters",
 		"tortola marine management", "tmm yacht", "footloose", "kiriacoulis",

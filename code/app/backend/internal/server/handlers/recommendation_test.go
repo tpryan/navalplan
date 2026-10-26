@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -209,6 +210,14 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			desc:            "High-speed diesel and water dock.",
 			wantRole:        "service_only",
 		},
+		{
+			name:            "South Florida Bahia Mar / Fort Lauderdale charter hub promoted to start_end_base",
+			recName:         "Bahia Mar Yachting Center",
+			recType:         "Marina",
+			rawRole:         "overnight_stop",
+			desc:            "Major Fort Lauderdale embarkation marina and charter base.",
+			wantRole:        "start_end_base",
+		},
 	}
 
 	for _, tc := range tests {
@@ -226,5 +235,34 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 				t.Errorf("normalizeRecommendationRole(%q) = %q, want %q", tc.recName, rec.VoyageRole, tc.wantRole)
 			}
 		})
+	}
+}
+
+func TestMergeVerifiedPlacesIntoRecommendations(t *testing.T) {
+	initial := []model.VoyageRecommendation{
+		{
+			Name:       "Bimini Blue Water Marina",
+			Type:       "Marina",
+			VoyageRole: "overnight_stop",
+			Latitude:   25.7265,
+			Longitude:  -79.2974,
+		},
+	}
+	rawPlaces := json.RawMessage(`[
+		{"name":"Bahia Mar Yachting Center","type":"Marina","address":"801 Seabreeze Blvd, Fort Lauderdale, FL","latitude":26.1132,"longitude":-80.1062,"website_uri":"https://bahiamar.com"},
+		{"name":"Dinner Key Marina","type":"Marina","address":"3400 Pan American Dr, Miami, FL","latitude":25.7275,"longitude":-80.2341,"website_uri":"https://miami.gov"},
+		{"name":"Bimini Blue Water Marina","type":"Marina","address":"Alice Town, Bimini","latitude":25.7265,"longitude":-79.2974},
+		{"name":"Random Restaurant","type":"Restaurant","address":"Miami, FL","latitude":25.7617,"longitude":-80.1918}
+	]`)
+
+	merged := mergeVerifiedPlacesIntoRecommendations(initial, rawPlaces)
+	if len(merged) != 3 {
+		t.Fatalf("expected 3 recommendations after merging verified places, got %d", len(merged))
+	}
+	if merged[1].Name != "Bahia Mar Yachting Center" || merged[1].VoyageRole != "start_end_base" {
+		t.Errorf("expected Bahia Mar Yachting Center as start_end_base, got name=%q role=%q", merged[1].Name, merged[1].VoyageRole)
+	}
+	if merged[2].Name != "Dinner Key Marina" || merged[2].VoyageRole != "start_end_base" {
+		t.Errorf("expected Dinner Key Marina as start_end_base, got name=%q role=%q", merged[2].Name, merged[2].VoyageRole)
 	}
 }

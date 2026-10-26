@@ -231,17 +231,18 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		// open-water centers cover every shore inside the circle.
 		// Marinas use 8 compass sectors (45° steps) with SearchNearby(DISTANCE) so
 		// diagonal harbors (e.g. Annapolis at 315° NW or Deale at 225° SW from Kent
-		// Island) get dedicated 20-marina circles; untyped anchorage/mooring text
-		// queries use 4 cardinal sectors (0°, 90°, 180°, 270°).
+		// Island, or Miami/Fort Lauderdale at 250°–300° W/NW across the Gulf Stream
+		// from Bimini) get dedicated 20-marina circles; untyped anchorage/mooring text
+		// queries also use 8 compass sectors so wide open-water crossings hit both coasts.
 		if requestedRadius > 15000 && (args.Latitude != 0 || args.Longitude != 0) && shouldSectorFanOut(args.Query) {
 			sectorNearbyTypes := wideAreaNearbyTypes(args.Query)
 			bearings := []float64{0, 90, 180, 270}
-			sectorOffset := requestedRadius * 0.55
+			sectorOffset := requestedRadius * 0.65
 			sectorBiasRadius := requestedRadius * 0.55
 			if len(sectorNearbyTypes) > 0 {
 				bearings = []float64{0, 45, 90, 135, 180, 225, 270, 315}
-				sectorOffset = requestedRadius * 0.60
-				sectorBiasRadius = requestedRadius * 0.50
+				sectorOffset = requestedRadius * 0.65
+				sectorBiasRadius = requestedRadius * 0.55
 			}
 			if sectorBiasRadius > 50000 {
 				sectorBiasRadius = 50000

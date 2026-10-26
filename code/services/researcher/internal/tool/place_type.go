@@ -167,7 +167,7 @@ func nearbyTypesForQuery(query string) []string {
 // distance from that sector point, covering every shore around an open-water center.
 func wideAreaNearbyTypes(query string) []string {
 	q := strings.ToLower(query)
-	if strings.Contains(q, "marina") {
+	if strings.Contains(q, "marina") || strings.Contains(q, "charter") || strings.Contains(q, "rental") {
 		return []string{"marina"}
 	}
 	return nearbyTypesForQuery(query)
@@ -181,5 +181,7 @@ func shouldSectorFanOut(query string) bool {
 	q := strings.ToLower(query)
 	return strings.Contains(q, "marina") ||
 		strings.Contains(q, "anchorage") ||
-		strings.Contains(q, "mooring")
+		strings.Contains(q, "mooring") ||
+		strings.Contains(q, "charter") ||
+		strings.Contains(q, "rental")
 }

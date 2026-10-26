@@ -3195,11 +3195,14 @@ async function renderRecommendations() {
             const charterSignals = [
                 'charter base', 'charter fleet', 'bareboat charter', 'yacht charter',
                 'charter company', 'charter companies', 'charter operator', 'embarkation base',
-                'sailing capital', 'starting point', 'embarkation', 'turnaround',
+                'sailing capital', 'starting point', 'embarkation', 'turnaround', 'departure port',
                 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax',
                 'waypoints', 'cruise annapolis', 'annapolis bay charters', 'haven charters',
                 'annapolis city marina', 'annapolis harbor', 'annapolis harbour', 'port annapolis',
                 'bert jabin',
+                'bahia mar', 'las olas marina', 'pier sixty-six', 'pier 66', '15th street fisheries',
+                'lauderdale marine center', 'dinner key', 'bayside marketplace', 'miami beach marina',
+                'crandon park marina', 'sea isle marina', 'mahi marina',
                 'san juan sailing', 'anacortes yacht', 'bellingham yacht',
                 'bvi yacht charters', 'horizon yacht', 'voyage charters', 'conch charters',
                 'tortola marine management', 'tmm yacht', 'footloose',
@@ -3212,12 +3215,15 @@ async function renderRecommendations() {
                 Number.isNaN(rec.latitude) || Number.isNaN(rec.longitude)) {
                 return;
             }
+            if (isNonStopPassageWaypoint(rec)) {
+                return;
+            }
             const type = (rec.type || '').toLowerCase();
             const role = (rec.voyage_role || '').toLowerCase();
             let filterKey;
             if (isCharterOrStartBase(rec)) {
                 filterKey = 'start_end';
-            } else if (role === 'service_only' || role === 'day_stop' || type.includes('fuel') || type.includes('launch')) {
+            } else if (role === 'service_only' || type.includes('fuel') || type.includes('launch')) {
                 filterKey = 'fuel';
             } else if (type.includes('anchor')) {
                 filterKey = 'anchorage';
@@ -3235,18 +3241,24 @@ async function renderRecommendations() {
                 dot.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.35), 0 3px 10px rgba(0,0,0,.45)';
             }
 
+            const displayLabel = role === 'day_stop' && filterKey === 'anchorage'
+                ? 'Day Anchorage'
+                : role === 'day_stop' && filterKey === 'mooring'
+                ? 'Day Mooring'
+                : (recLabels[filterKey] || 'Spot');
+
             const marker = new AdvancedMarkerElement({
                 map,
                 position: { lat: rec.latitude, lng: rec.longitude },
                 content: dot,
-                title: `${recLabels[filterKey] || 'Spot'}: ${rec.name}`,
+                title: `${displayLabel}: ${rec.name}`,
                 zIndex: filterKey === 'start_end' ? 30 : 20,
             });
 
             if (!activeFilters.has(filterKey)) marker.map = null;
 
             marker.addListener('gmp-click', () => {
-                showRecommendationInfoWindow(rec, marker, { accent, label: recLabels[filterKey] || 'Spot' });
+                showRecommendationInfoWindow(rec, marker, { accent, label: displayLabel });
             });
 
             recommendationMarkers.push({ marker, type: filterKey });
