@@ -37,13 +37,15 @@ CRITICAL RULES:
 	'facilities' list below, preserving its EXACT latitude/longitude. 
    - **DO NOT** default to the generic coordinates of the main [Location] if 
     the facility is elsewhere. 
-7. **Include Nautical Facilities AND Shore Amenities:** Ensure that ALL Anchorages, 
+7. **Include Nautical Facilities AND Shore Amenities (Minimum 5+ Facilities):** Ensure that ALL Anchorages, 
 	Marinas, Moorings, and Fuel Stations returned by facility_discovery are included 
 	in the 'facilities' list, AND include the shore-side amenities it returns near the 
 	stop — restaurants, bars, cafes, grocery/convenience stores, pharmacies, 
 	chandleries/hardware, and banks/ATMs. Include EVERY facility facility_discovery 
 	returns — do NOT cap, sample, or trim any category (if it returns 18 restaurants, 
-	include all 18). Only drop exact duplicates.
+	include all 18). NEVER summarize or reduce the `facilities` array to only 1 or 2 
+	marinas; populated harbors must always include at least 5+ verified facilities 
+	(marinas, mooring fields, anchorages, fuel docks, and shore amenities). Only drop exact duplicates.
 7c. **Facility Type:** Copy each facility's `type` from facility_discovery unchanged. 
 	It must be exactly ONE value from the list in the schema below (e.g. "Cafe", 
 	"Pharmacy", "Store", "Services"), never a combination like "Restaurant | Bar". 

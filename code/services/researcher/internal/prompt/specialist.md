@@ -76,13 +76,21 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
 - NEVER guess or estimate non-zero coordinates from memory. Either use tool-returned coordinates, exact converted coordinates from text, or `0.0, 0.0` for backend geocoding.
 - **YOU MUST CALCULATE ALL FINAL COORDINATES. DO NOT OUTPUT MATH EXPRESSIONS.**
 
+Schema rules for each recommendation object:
+- `"type"`: Must be one of `"Hub"`, `"Marina"`, `"Anchorage"`, `"Mooring"`, `"Fuel Station"`, `"Yacht Club"`, `"Boat Launch"`.
+- `"voyage_role"`: Must be one of `"start_end_base"`, `"overnight_stop"`, `"day_stop"`, `"service_only"`.
+- `"radius_miles"`: For `"Hub"`: `1.0`–`3.0`. For individual spots (`"Marina"`, `"Anchorage"`, `"Mooring"`, `"Fuel Station"`, `"Yacht Club"`, `"Boat Launch"`): `0.25`–`0.5`.
+- `"url"`: MANDATORY official website or primary informational link.
+- `"reference_links"`: MANDATORY array of at least 2–3 deep links.
+- Every JSON key MUST be enclosed in double quotes (`"key":`), and any double quotes inside string values MUST be escaped (`\"`). Never include `//` comments or trailing `...` inside the JSON output.
+
 ```json
 {
   "recommendations": [
     {
-      "name": "Name of the Location", 
-      "type": "Marina", // Must be one of: "Hub", "Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"
-      "voyage_role": "start_end_base", // Must be one of: "start_end_base", "overnight_stop", "day_stop", "service_only"
+      "name": "Name of the Location",
+      "type": "Marina",
+      "voyage_role": "start_end_base",
       "stay_details": {
         "is_charter_base": true,
         "charter_companies": ["The Moorings", "Sunsail"],
@@ -95,15 +103,14 @@ Produce a JSON object containing a "recommendations" array of recommendation obj
         "has_fuel": true,
         "provisioning": "Supermarket & chandlery within 0.3 NM"
       },
-      "latitude": 0.0, 
-      "longitude": 0.0, 
-      "radius_miles": 0.25, // For "Hub": 1.0-3.0. For individual spots ("Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch"): 0.25-0.5.
-      "url": "https://...", // MANDATORY: Official website or primary informational link.
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "radius_miles": 0.25,
+      "url": "https://...",
       "description": "Summary of resources or description of the spot.",
       "reasoning": "Why this area or spot is a primary target (e.g., primary charter embarkation base, or protected overnight stop with transient slips/anchorage). Mention specific reviews found.",
-      "reference_links": ["https://link1.com", "https://link2.com"] // MANDATORY: At least 2-3 deep links.
-    },
-    ...
+      "reference_links": ["https://link1.com", "https://link2.com"]
+    }
   ]
 }
 ```

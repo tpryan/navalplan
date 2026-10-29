@@ -16,6 +16,16 @@ func TestExtractJSONPayload(t *testing.T) {
 	if got := extractJSONPayload(arr); got != `[{"severity": "danger"}]` {
 		t.Errorf("extractJSONPayload(arr) = %q", got)
 	}
+
+	halfQuoted := `{"stay_details": {"is_charter_base": true, has_moorings": true, holding_and_depth: "12 ft mud",}}`
+	if got := extractJSONPayload(halfQuoted); got != `{"stay_details": {"is_charter_base": true, "has_moorings": true, "holding_and_depth": "12 ft mud"}}` {
+		t.Errorf("extractJSONPayload(halfQuoted) = %q", got)
+	}
+
+	truncatedArr := "```json\n{\"recommendations\": [{\"name\": \"Nanny Cay\", \"type\": \"Marina\", \"description\": \"Base\"}, {\"name\": \"Cut"
+	if got := extractJSONPayload(truncatedArr); got != "{\"recommendations\": [{\"name\": \"Nanny Cay\", \"type\": \"Marina\", \"description\": \"Base\"}\n]}" {
+		t.Errorf("extractJSONPayload(truncatedArr) = %q", got)
+	}
 }
 
 func TestScoreHarbourmasterOutput(t *testing.T) {
@@ -133,6 +143,10 @@ func TestScoreLookoutOutput(t *testing.T) {
 	if s, d, f := scoreLookoutOutput(cascadeJSON, "cascade"); s < 100 || d < 100 || len(f) > 0 {
 		t.Errorf("scoreLookoutOutput(cascade) = (%.1f, %.1f, %v)", s, d, f)
 	}
+	adverseWeatherCatJSON := `[{"severity":"warning","category":"weather","message":"Forecast 18 kt wind from 085 deg is dead ahead on the 83 deg course to Vineyard Haven, requiring beating into headwinds.","action":"Reef early or motor-sail.","icon":"air"}]`
+	if s, d, f := scoreLookoutOutput(adverseWeatherCatJSON, "adverse_wind"); s < 100 || d < 100 || len(f) > 0 {
+		t.Errorf("scoreLookoutOutput(adverse_wind weather cat) = (%.1f, %.1f, %v)", s, d, f)
+	}
 }
 
 func TestScorePilotAndCommodoreAndDebriefAndSubAgents(t *testing.T) {
@@ -221,8 +235,8 @@ func TestScorePilotAndCommodoreAndDebriefAndSubAgents(t *testing.T) {
 
 func TestFilterEvalCasesAndFormatScorecard(t *testing.T) {
 	all := allEvalCases()
-	if len(all) != 23 {
-		t.Fatalf("len(allEvalCases()) = %d, want 23", len(all))
+	if len(all) != 26 {
+		t.Fatalf("len(allEvalCases()) = %d, want 26", len(all))
 	}
 
 	hmOnly := filterEvalCases(all, "harbourmaster", "")

@@ -112,7 +112,7 @@ Return **only** a raw JSON array with no markdown fences, no prose, and no expla
 ]
 ```
 
-CRITICAL: `"category"` MUST be strictly one of `"weather"`, `"tides"`, `"navigation"`, or `"sun"`. Never use `"waves"`, `"wind"`, or `"storm"` as a `"category"` — wind, wave height, wave period, and sea-state alerts MUST always use `"category": "weather"` (with `"icon": "waves"`, `"air"`, or `"storm"`).
+CRITICAL: `"category"` MUST be strictly one of `"weather"`, `"tides"`, `"navigation"`, or `"sun"`. Never use `"waves"`, `"wind"`, or `"storm"` as a `"category"` — ambient wind speed, wave height, wave period, and sea-state alerts use `"category": "weather"` (with `"icon": "waves"`, `"air"`, or `"storm"`), whereas course-vs-wind / `CalculateHeading` / headwind-beating alerts MUST always use `"category": "navigation"` (with `"icon": "air"` or `"explore"`).
 
 Use these icon names from Material Symbols: `storm`, `air`, `waves`, `tsunami`, `anchor`, `warning`, `explore`, `route`, `alt_route`, `straighten`, `directions_boat`, `light_mode`, `wb_twilight`, `schedule`, `thermostat`, `trending_up`, `trending_down`, `height` (for bridge clearances/overhead hazards), `water` (for currents/shoals), `sailing`, `speed`.
 

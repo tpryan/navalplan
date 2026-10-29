@@ -9,8 +9,11 @@ import (
 )
 
 var (
-	bulletKeyRegex = regexp.MustCompile(`(?m)^(\s*)[-*]\s*("[\w_-]+"\s*:)`)
-	jsonMathRegex  = regexp.MustCompile(`(-?\d+\.?\d*)\s*([+-])\s*(\d+\.?\d*)`)
+	bulletKeyRegex     = regexp.MustCompile(`(?m)^(\s*)[-*]\s*("[\w_-]+"\s*:)`)
+	halfQuotedKeyRegex = regexp.MustCompile(`([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)"(\s*:\s*["\{\[\-0-9tfn])`)
+	bareKeyRegex       = regexp.MustCompile(`([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:\s*["\{\[\-0-9tfn])`)
+	trailingCommaRegex = regexp.MustCompile(`,(\s*[\}\]])`)
+	jsonMathRegex      = regexp.MustCompile(`(-?\d+\.?\d*)\s*([+-])\s*(\d+\.?\d*)`)
 )
 
 func cleanJSON(s string) string {
@@ -43,6 +46,9 @@ func cleanJSON(s string) string {
 	}
 
 	s = bulletKeyRegex.ReplaceAllString(s, "$1$2")
+	s = halfQuotedKeyRegex.ReplaceAllString(s, `$1"$2"$3`)
+	s = bareKeyRegex.ReplaceAllString(s, `$1"$2"$3`)
+	s = trailingCommaRegex.ReplaceAllString(s, "$1")
 	s = strings.ReplaceAll(s, `\'`, `'`)
 	return strings.TrimSpace(s)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -125,6 +126,60 @@ func shouldRunEval(target string) bool {
 	return false
 }
 
+var (
+	evalHalfQuotedKeyRegex = regexp.MustCompile(`([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)"(\s*:\s*["\{\[\-0-9tfn])`)
+	evalBareKeyRegex       = regexp.MustCompile(`([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:\s*["\{\[\-0-9tfn])`)
+	evalTrailingCommaRegex = regexp.MustCompile(`,(\s*[\}\]])`)
+)
+
+func repairEvalJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || json.Valid([]byte(s)) {
+		return s
+	}
+
+	repaired := evalHalfQuotedKeyRegex.ReplaceAllString(s, `$1"$2"$3`)
+	repaired = evalBareKeyRegex.ReplaceAllString(repaired, `$1"$2"$3`)
+	repaired = evalTrailingCommaRegex.ReplaceAllString(repaired, `$1`)
+	if json.Valid([]byte(repaired)) {
+		return repaired
+	}
+
+	startObj := strings.IndexByte(repaired, '{')
+	startArr := strings.IndexByte(repaired, '[')
+	if startObj < 0 && startArr < 0 {
+		return repaired
+	}
+	isObjRoot := startObj >= 0 && (startArr < 0 || startObj < startArr)
+	start := startObj
+	if !isObjRoot {
+		start = startArr
+	}
+
+	for i := len(repaired) - 1; i > start; i-- {
+		if repaired[i] != '}' {
+			continue
+		}
+		sub := strings.TrimSpace(repaired[start : i+1])
+		if isObjRoot {
+			if json.Valid([]byte(sub)) {
+				return sub
+			}
+			if candidate := sub + "\n]}"; json.Valid([]byte(candidate)) {
+				return candidate
+			}
+			if candidate := sub + "\n}"; json.Valid([]byte(candidate)) {
+				return candidate
+			}
+		} else {
+			if candidate := sub + "\n]"; json.Valid([]byte(candidate)) {
+				return candidate
+			}
+		}
+	}
+	return repaired
+}
+
 // extractJSONPayload strips optional markdown code fences and locates the outermost
 // valid JSON object or array in raw model text.
 func extractJSONPayload(raw string) string {
@@ -135,10 +190,12 @@ func extractJSONPayload(raw string) string {
 	if idx := strings.LastIndex(trimmed, "```json"); idx >= 0 {
 		rest := trimmed[idx+len("```json"):]
 		if end := strings.Index(rest, "```"); end >= 0 {
-			candidate := strings.TrimSpace(rest[:end])
+			candidate := repairEvalJSON(strings.TrimSpace(rest[:end]))
 			if json.Valid([]byte(candidate)) {
 				return candidate
 			}
+		} else if candidate := repairEvalJSON(rest); json.Valid([]byte(candidate)) {
+			return candidate
 		}
 	}
 	if idx := strings.Index(trimmed, "```"); idx >= 0 {
@@ -147,10 +204,12 @@ func extractJSONPayload(raw string) string {
 			rest = rest[nl+1:]
 		}
 		if end := strings.Index(rest, "```"); end >= 0 {
-			candidate := strings.TrimSpace(rest[:end])
+			candidate := repairEvalJSON(strings.TrimSpace(rest[:end]))
 			if json.Valid([]byte(candidate)) {
 				return candidate
 			}
+		} else if candidate := repairEvalJSON(rest); json.Valid([]byte(candidate)) {
+			return candidate
 		}
 	}
 	firstObj := strings.IndexByte(trimmed, '{')
@@ -160,10 +219,10 @@ func extractJSONPayload(raw string) string {
 
 	var objCandidate, arrCandidate string
 	if firstObj >= 0 && lastObj > firstObj {
-		objCandidate = strings.TrimSpace(trimmed[firstObj : lastObj+1])
+		objCandidate = repairEvalJSON(strings.TrimSpace(trimmed[firstObj : lastObj+1]))
 	}
 	if firstArr >= 0 && lastArr > firstArr {
-		arrCandidate = strings.TrimSpace(trimmed[firstArr : lastArr+1])
+		arrCandidate = repairEvalJSON(strings.TrimSpace(trimmed[firstArr : lastArr+1]))
 	}
 
 	if firstObj >= 0 && (firstArr < 0 || firstObj < firstArr) {
@@ -187,7 +246,7 @@ func extractJSONPayload(raw string) string {
 			return arrCandidate
 		}
 	}
-	return trimmed
+	return repairEvalJSON(trimmed)
 }
 
 // scoreToolTrajectory computes a 0-100 tool trajectory score from required tools
@@ -563,7 +622,7 @@ func scoreLookoutOutput(raw string, mode string) (float64, float64, []string) {
 		for _, a := range alerts {
 			cat := fmt.Sprint(a["category"])
 			text := strings.ToLower(fmt.Sprint(a["message"]) + " " + fmt.Sprint(a["action"]))
-			if cat == "navigation" && (strings.Contains(text, "wind") || strings.Contains(text, "beat") || strings.Contains(text, "head") || strings.Contains(text, "tack") || strings.Contains(text, "83") || strings.Contains(text, "85")) {
+			if (cat == "navigation" || cat == "weather") && (strings.Contains(text, "wind") || strings.Contains(text, "beat") || strings.Contains(text, "head") || strings.Contains(text, "tack") || strings.Contains(text, "83") || strings.Contains(text, "85")) {
 				hasHeadwind = true
 				break
 			}
@@ -1603,7 +1662,7 @@ func executeEvalCase(ctx context.Context, a adkagent.Agent, recorder *evalToolRe
 		if lastRes.Passed {
 			return lastRes
 		}
-		if attempt < len(backoffs)-1 && isTransientEvalError(runErr) {
+		if attempt < len(backoffs)-1 && (runErr == nil || isTransientEvalError(runErr)) {
 			continue
 		}
 		break
