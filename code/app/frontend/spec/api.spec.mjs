@@ -145,4 +145,49 @@ describe('API Service', () => {
       expect(res).toEqual(mockTracks);
     });
   });
+
+  describe('Discovery Admin API', () => {
+    it('pruneDiscoveryRegions should post to prune endpoint', async () => {
+      window.fetch.and.resolveTo({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', month: 'all', pruned_count: 3 })
+      });
+
+      const res = await API.pruneDiscoveryRegions('all');
+      expect(window.fetch).toHaveBeenCalledWith(
+        '/api/v1/discovery/prune?month=all',
+        jasmine.objectContaining({ method: 'POST' })
+      );
+      expect(res.pruned_count).toBe(3);
+    });
+
+    it('deleteDiscoveryRegions should issue DELETE request', async () => {
+      window.fetch.and.resolveTo({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', month: 'all', deleted_count: 12 })
+      });
+
+      const res = await API.deleteDiscoveryRegions('all');
+      expect(window.fetch).toHaveBeenCalledWith(
+        '/api/v1/discovery/regions?month=all',
+        jasmine.objectContaining({ method: 'DELETE' })
+      );
+      expect(res.deleted_count).toBe(12);
+    });
+
+    it('triggerDiscoveryMining should post to mine endpoint', async () => {
+      window.fetch.and.resolveTo({
+        ok: true,
+        status: 202
+      });
+
+      await API.triggerDiscoveryMining('all');
+      expect(window.fetch).toHaveBeenCalledWith(
+        '/api/v1/discovery/mine?month=all',
+        jasmine.objectContaining({ method: 'POST' })
+      );
+    });
+  });
 });

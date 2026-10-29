@@ -405,6 +405,28 @@
         <button id="btn-close-admin" class="btn-icon icon-xl"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div class="p-md">
+        <h3>Discovery Locations</h3>
+        <div class="flex gap-sm align-center mb-lg">
+           <select id="admin-discovery-month" aria-label="Discovery month scope" class="p-sm border-radius border">
+              <option value="all">All Months</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+           </select>
+           <button type="button" id="btn-admin-discovery-prune" class="btn secondary">Prune</button>
+           <button type="button" id="btn-admin-discovery-delete" class="btn danger">Delete</button>
+           <button type="button" id="btn-admin-discovery-mine" class="btn primary">Rerun</button>
+        </div>
+
         <h3>Invite New User</h3>
         <form id="form-invite-user" class="flex gap-sm mb-lg">
            <input type="email" id="invite-email" name="email" required placeholder="user@example.com" class="flex-grow w-full p-sm border-radius border" />

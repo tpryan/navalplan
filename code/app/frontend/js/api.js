@@ -322,27 +322,29 @@ export const API = {
     return res.json();
   },
 
-      async triggerDiscoveryMining(month) {
+  async triggerDiscoveryMining(month = 'all') {
+    const res = await apiFetch(`${API_BASE}/discovery/mine?month=${encodeURIComponent(month)}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to trigger discovery mining');
+    return res;
+  },
 
-          const res = await apiFetch(`${API_BASE}/discovery/mine?month=${month}`, { method: 'POST' });
+  async pruneDiscoveryRegions(month = 'all') {
+    const res = await apiFetch(`${API_BASE}/discovery/prune?month=${encodeURIComponent(month)}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to prune discovery regions');
+    return res.json();
+  },
 
-          if (!res.ok) throw new Error('Failed to trigger discovery mining');
+  async deleteDiscoveryRegions(month = 'all') {
+    const res = await apiFetch(`${API_BASE}/discovery/regions?month=${encodeURIComponent(month)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete discovery regions');
+    return res.json();
+  },
 
-          return res;
-
-      },
-
-  
-
-      async deleteDiscoverySeasonality(regionID, month) {
-
-          const res = await apiFetch(`${API_BASE}/discovery/regions/${regionID}/months/${month}`, { method: 'DELETE' });
-
-          if (!res.ok) throw new Error('Failed to delete discovery seasonality');
-
-          return res;
-
-      },
+  async deleteDiscoverySeasonality(regionID, month) {
+    const res = await apiFetch(`${API_BASE}/discovery/regions/${regionID}/months/${month}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete discovery seasonality');
+    return res;
+  },
 
     // Admin
     async listAdminUsers(page = 1, limit = 20, view = 'active') {

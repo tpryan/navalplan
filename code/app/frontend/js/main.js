@@ -812,6 +812,12 @@ function initDiscoveryListeners() {
     if (btnDiscover) btnDiscover.addEventListener('click', () => toggleDiscoveryMode(true));
     if (btnCloseDiscovery) btnCloseDiscovery.addEventListener('click', () => toggleDiscoveryMode(false));
 
+    window.addEventListener('discovery:updated', () => {
+        if (currentMode === 'discovery') {
+            loadDiscoveryRegions(currentDiscoveryMonth);
+        }
+    });
+
     const btnCloseDiscoveryIntro = document.getElementById('btn-close-discovery-intro');
     if (btnCloseDiscoveryIntro) {
         btnCloseDiscoveryIntro.addEventListener('click', () => {

@@ -78,6 +78,52 @@ func (h *Handler) DeleteDiscoveryRegionSeasonality(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) DeleteDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
+	monthStr := r.URL.Query().Get("month")
+	slog.InfoContext(r.Context(), fmt.Sprintf("DeleteDiscoveryRegions request received for month %s", monthStr))
+
+	var months []int
+	if monthStr == "" || monthStr == "all" {
+		monthStr = "all"
+		for m := 1; m <= 12; m++ {
+			months = append(months, m)
+		}
+	} else {
+		m, err := strconv.Atoi(monthStr)
+		if err != nil || m < 1 || m > 12 {
+			writeError(w, http.StatusBadRequest, "Invalid month parameter")
+			return
+		}
+		months = []int{m}
+	}
+
+	deletedCount := 0
+	for _, m := range months {
+		regions, err := h.DB.ListRegionsByMonth(r.Context(), m)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to list discovery regions for deletion", "month", m, "error", err)
+			writeError(w, http.StatusInternalServerError, "Failed to delete discovery regions")
+			return
+		}
+		for _, reg := range regions {
+			if err := h.DB.DeleteSeasonality(r.Context(), int(reg.SailingRegion.ID), m); err != nil {
+				slog.ErrorContext(r.Context(), "Failed to delete seasonality for region", "region_id", reg.SailingRegion.ID, "month", m, "error", err)
+				writeError(w, http.StatusInternalServerError, "Failed to delete discovery regions")
+				return
+			}
+			deletedCount++
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":        "ok",
+		"month":         monthStr,
+		"deleted_count": deletedCount,
+	})
+}
+
 func (h *Handler) DiscoveryMining(w http.ResponseWriter, r *http.Request) {
 	monthStr := r.URL.Query().Get("month")
 	slog.InfoContext(r.Context(), fmt.Sprintf("DiscoveryMining request received for month %s", monthStr))

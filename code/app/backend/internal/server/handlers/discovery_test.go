@@ -232,3 +232,34 @@ func TestPruneDuplicateRegions_StackedSocietyIslands(t *testing.T) {
 		t.Errorf("expected lower-score region 11 to be deleted")
 	}
 }
+
+func TestDeleteDiscoveryRegions_AllMonths(t *testing.T) {
+	store := &pruneMockStore{
+		regions: map[int][]model.RegionWithSeasonality{
+			1: {{SailingRegion: model.SailingRegion{ID: 1, Name: "Caribbean"}}},
+			7: {{SailingRegion: model.SailingRegion{ID: 2, Name: "Mediterranean"}}},
+		},
+	}
+
+	h := &Handler{DB: store}
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/discovery/regions", h.DeleteDiscoveryRegions)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/discovery/regions?month=all", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if int(resp["deleted_count"].(float64)) != 2 {
+		t.Errorf("expected deleted_count=2, got %v", resp["deleted_count"])
+	}
+	if store.deletedRegion[1] != 1 || store.deletedRegion[2] != 7 {
+		t.Errorf("unexpected deletedRegion map: %v", store.deletedRegion)
+	}
+}

@@ -106,6 +106,81 @@ export function initAdminUI() {
             btn.textContent = originalText;
         }
     });
+
+    const getDiscoveryScope = () => {
+        const sel = document.getElementById('admin-discovery-month');
+        const value = sel ? sel.value : 'all';
+        const label = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : 'All Months';
+        return { value, label };
+    };
+
+    document.getElementById('btn-admin-discovery-prune')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const { value: month, label } = getDiscoveryScope();
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Pruning...';
+        try {
+            const res = await API.pruneDiscoveryRegions(month);
+            const count = res?.pruned_count ?? 0;
+            showNotification('Discovery Pruned', `Pruned ${count} duplicate location${count === 1 ? '' : 's'} (${label}).`);
+            window.dispatchEvent(new CustomEvent('discovery:updated'));
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', 'Failed to prune discovery locations');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
+
+    document.getElementById('btn-admin-discovery-delete')?.addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        const { value: month, label } = getDiscoveryScope();
+        showNotification('Delete Discovery Locations', `Delete all discovery locations for ${label}?`, [
+            {
+                label: 'Delete',
+                type: 'danger',
+                hideClose: true,
+                callback: async () => {
+                    const originalText = btn.textContent;
+                    btn.disabled = true;
+                    btn.textContent = 'Deleting...';
+                    try {
+                        const res = await API.deleteDiscoveryRegions(month);
+                        const count = res?.deleted_count ?? 0;
+                        showNotification('Discovery Deleted', `Deleted ${count} discovery location${count === 1 ? '' : 's'} (${label}).`);
+                        window.dispatchEvent(new CustomEvent('discovery:updated'));
+                    } catch (err) {
+                        console.error(err);
+                        showNotification('Error', 'Failed to delete discovery locations');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                },
+            },
+            { label: 'Cancel', type: 'secondary' },
+        ]);
+    });
+
+    document.getElementById('btn-admin-discovery-mine')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const { value: month, label } = getDiscoveryScope();
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Starting...';
+        try {
+            await API.triggerDiscoveryMining(month);
+            showNotification('Discovery Started', `Discovery mining started in the background for ${label}.`);
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', 'Failed to start discovery mining');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
 }
 
 // Reflects the active view on the tab buttons.
