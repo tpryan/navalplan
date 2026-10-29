@@ -30,6 +30,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "october_shoulder_season_arbitrage",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify prime sailing regions for the month of October, highlighting shoulder-season synoptic windows, low-latitude cyclone-belt refuges, and high-energy tidal/wind passages."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

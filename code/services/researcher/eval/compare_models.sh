@@ -87,7 +87,7 @@ start_service() {
   ln -sf "$ROOT/.env" "$RES_DIR/.env"
   echo "from . import agent" > "$RES_DIR/__init__.py"
   : > "$ROOT/agent.log"
-  ( cd "$RES_DIR" && NAVALPLAN_AGENT_MODEL="$model" ./researcher-service ) > "$ROOT/agent.log" 2>&1 &
+  ( cd "$RES_DIR" && NAVALPLAN_AGENT_MODEL="$model" NAVALPLAN_COMMODORE_MODEL="$model" ./researcher-service ) > "$ROOT/agent.log" 2>&1 &
   for _ in $(seq 1 30); do
     lsof -i :8081 >/dev/null 2>&1 && break
     sleep 1

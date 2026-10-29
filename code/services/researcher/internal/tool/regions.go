@@ -41,7 +41,7 @@ func NewCandidateRegionsTool() (tool.Tool, *RegionsProvider, error) {
 	rp := &RegionsProvider{}
 	t, err := functiontool.New(functiontool.Config{
 		Name:        "GetCandidateRegionsForMonth",
-		Description: "Returns canonical, non-overlapping global sailing regions and verified GeoJSON bounding polygons across all 6 global macro zones (North America, Caribbean/Atlantic, Europe/Med, Asia, Oceania, South America) and 4 tiers (Standard, Hidden Gem, Regional Favorite, Challenging) in season for the requested month (1-12).",
+		Description: "Returns canonical, non-overlapping global sailing regions and verified GeoJSON bounding polygons across all 6 global macro zones (North America, Caribbean/Atlantic, Europe/Med, Asia, Oceania, South America) and 5 tiers (Standard, Classic Locale, Hidden Gem, Regional Favorite, Challenging) in season for the requested month (1-12).",
 	}, rp.GetCandidateRegions)
 	return t, rp, err
 }
@@ -148,6 +148,76 @@ var canonicalSailingRegions = []CanonicalRegion{
 		AvgTempC:          20,
 		BaselineNotes:     "Rain-shadow summer cruising with deep fjords, strong tidal passes, and abundant state park moorings.",
 		Geometry:          rectPolygon(-123.35, 48.35, -122.55, 48.85),
+	},
+	{
+		Name:              "Southern New England (Newport, Buzzards Bay, Martha's Vineyard & Nantucket)",
+		MacroZone:         "North America",
+		Type:              "Island Group",
+		Tier:              "Classic Locale",
+		IsHiddenGem:       false,
+		PrimeMonths:       []int{5, 6, 7, 8, 9, 10},
+		DefaultScore:      95,
+		AvgWindSpeedKnots: 16,
+		AvgTempC:          23,
+		BaselineNotes:     "America's historic yachting capital: reliable 15-20 kt afternoon SW thermal sea breezes across Narragansett Bay, Buzzards Bay, Block Island, Martha's Vineyard, and Nantucket Sound.",
+		Geometry: map[string]any{
+			"type": "Polygon",
+			"coordinates": [][][]float64{{
+				{-71.65, 41.10},
+				{-70.85, 41.05},
+				{-69.90, 41.20},
+				{-69.95, 41.75},
+				{-70.75, 41.75},
+				{-71.50, 41.65},
+				{-71.65, 41.10},
+			}},
+		},
+	},
+	{
+		Name:              "Chesapeake Bay (Annapolis & Eastern Shore)",
+		MacroZone:         "North America",
+		Type:              "Coastal",
+		Tier:              "Classic Locale",
+		IsHiddenGem:       false,
+		PrimeMonths:       []int{4, 5, 6, 9, 10},
+		DefaultScore:      92,
+		AvgWindSpeedKnots: 14,
+		AvgTempC:          22,
+		BaselineNotes:     "Storied American sailing ground with hundreds of protected gunkholes, historic Eastern Shore towns, and crisp spring/autumn breezes.",
+		Geometry: map[string]any{
+			"type": "Polygon",
+			"coordinates": [][][]float64{{
+				{-76.60, 37.60},
+				{-75.95, 37.65},
+				{-75.85, 38.65},
+				{-76.05, 39.35},
+				{-76.55, 39.15},
+				{-76.60, 37.60},
+			}},
+		},
+	},
+	{
+		Name:              "Antigua & Classic Leeward Islands",
+		MacroZone:         "Caribbean / Atlantic",
+		Type:              "Island Group",
+		Tier:              "Classic Locale",
+		IsHiddenGem:       false,
+		PrimeMonths:       []int{1, 2, 3, 4, 11, 12},
+		DefaultScore:      93,
+		AvgWindSpeedKnots: 18,
+		AvgTempC:          27,
+		BaselineNotes:     "Historic Nelson's Dockyard in English Harbour, classic regatta traditions, and exhilarating trade-wind ocean swells.",
+		Geometry: map[string]any{
+			"type": "Polygon",
+			"coordinates": [][][]float64{{
+				{-62.95, 16.95},
+				{-61.60, 16.90},
+				{-61.55, 17.75},
+				{-62.35, 18.15},
+				{-63.15, 17.85},
+				{-62.95, 16.95},
+			}},
+		},
 	},
 	{
 		Name:              "Maine Coast (Penobscot Bay)",

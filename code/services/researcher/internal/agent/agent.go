@@ -17,6 +17,7 @@ import (
 	"github.com/tpryan/navalplan/services/researcher/internal/tool"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/model/gemini"
 	"google.golang.org/adk/v2/runner"
 	adksession "google.golang.org/adk/v2/session"
@@ -32,12 +33,14 @@ import (
 const maxOutputTokens = 65536
 
 const (
-	Harbourmaster = "harbourmaster"
-	Pilot         = "pilot"
-	Debrief       = "debrief"
-	Commodore     = "commodore"
-	Specialist    = "specialist"
-	Lookout       = "lookout"
+	Harbourmaster     = "harbourmaster"
+	Pilot             = "pilot"
+	Debrief           = "debrief"
+	Commodore         = "commodore"
+	Specialist        = "specialist"
+	Lookout           = "lookout"
+	FacilityDiscovery = "facility_discovery"
+	HydrographicPilot = "hydrographic_pilot"
 )
 
 // Nautical tool names, exactly as registered in
@@ -73,6 +76,10 @@ var allNauticalTools = []string{
 }
 
 var Order = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout}
+
+// EvalOrder lists all 8 agents evaluated by the Go-native evaluation suite
+// (the 6 top-level agents plus the 2 specialist sub-agents).
+var EvalOrder = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout, FacilityDiscovery, HydrographicPilot}
 
 type spec struct {
 	name                     string
@@ -129,13 +136,16 @@ var specs = []spec{
 	},
 	{
 		// Commodore combines canonical seasonal region geometries with live open-web
-		// seasonal anomaly and regatta research.
+		// seasonal anomaly and regatta research plus NGA Sailing Directions and
+		// NOAA Coast Pilot RAG climatology & pilotage intelligence.
 		name:        Commodore,
 		description: "The Commodore - Global Seasonal Discovery Expert.",
 		instruction: prompt.Commodore,
 		temperature: 0.25,
 		toolNames: []string{
 			toolGetCandidateRegionsForMonth,
+			toolQuerySailingDirections,
+			toolQueryCoastPilot,
 		},
 		includeSearch: true,
 	},
@@ -190,10 +200,7 @@ func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCa
 			return nil, fmt.Errorf("assembling tools for %s: %w", sp.name, err)
 		}
 
-		modelName := cfg.ModelName
-		if sp.name == Commodore && cfg.CommodoreModelName != "" {
-			modelName = cfg.CommodoreModelName
-		}
+		modelName := cfg.ModelForAgent(sp.name)
 		slog.Info("config", "agent", sp.name, "model", modelName)
 
 		a, err := createAgent(ctx, cfg, before, after, &agentConfig{
@@ -210,6 +217,61 @@ func Build(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCa
 		built[sp.name] = a
 	}
 	return built, nil
+}
+
+// BuildAll builds the 6 top-level agents plus standalone instances of the
+// facility_discovery and hydrographic_pilot sub-agents so all 8 agents can be
+// evaluated directly in the Go-native evaluation suite.
+func BuildAll(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (map[string]agent.Agent, error) {
+	built, err := Build(ctx, cfg, before, after, researcherTools)
+	if err != nil {
+		return nil, err
+	}
+
+	facilityAgent, err := BuildFacilityDiscoveryAgent(ctx, cfg, before, after, researcherTools)
+	if err != nil {
+		return nil, fmt.Errorf("creating %s agent: %w", FacilityDiscovery, err)
+	}
+	built[FacilityDiscovery] = facilityAgent
+
+	hydroAgent, err := BuildHydrographicPilotAgent(ctx, cfg, before, after, researcherTools)
+	if err != nil {
+		return nil, fmt.Errorf("creating %s agent: %w", HydrographicPilot, err)
+	}
+	built[HydrographicPilot] = hydroAgent
+
+	return built, nil
+}
+
+// BuildSingle constructs only the named agent (any of the 6 top-level agents or
+// the 2 specialist sub-agents) so parallel evaluation workers can isolate per-case
+// tool callbacks without rebuilding all 8 agents.
+func BuildSingle(ctx context.Context, cfg *config.Config, agentName string, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (agent.Agent, error) {
+	switch agentName {
+	case FacilityDiscovery:
+		return BuildFacilityDiscoveryAgent(ctx, cfg, before, after, researcherTools)
+	case HydrographicPilot:
+		return BuildHydrographicPilotAgent(ctx, cfg, before, after, researcherTools)
+	}
+	for _, sp := range specs {
+		if sp.name != agentName {
+			continue
+		}
+		agentTools, err := toolsFor(ctx, cfg, before, after, sp, researcherTools)
+		if err != nil {
+			return nil, fmt.Errorf("assembling tools for %s: %w", sp.name, err)
+		}
+		modelName := cfg.ModelForAgent(sp.name)
+		return createAgent(ctx, cfg, before, after, &agentConfig{
+			name:        sp.name,
+			modelName:   modelName,
+			description: sp.description,
+			instruction: sp.instruction,
+			tools:       agentTools,
+			temperature: sp.temperature,
+		})
+	}
+	return nil, fmt.Errorf("unknown agent %q", agentName)
 }
 
 func toolsFor(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, sp spec, researcherTools []adktool.Tool) ([]adktool.Tool, error) {
@@ -262,6 +324,30 @@ func toolByName(tools []adktool.Tool, name string) (adktool.Tool, error) {
 	return nil, fmt.Errorf("tool %q is not registered", name)
 }
 
+// BuildFacilityDiscoveryAgent constructs a standalone facility_discovery agent.
+func BuildFacilityDiscoveryAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (agent.Agent, error) {
+	placesTool, err := toolByName(researcherTools, toolFindPlacesNearby)
+	if err != nil {
+		return nil, fmt.Errorf("facility_discovery: %w", err)
+	}
+
+	searchTools, err := createSearchTools(ctx, cfg, before, after, FacilityDiscovery+"_search_specialist")
+	if err != nil {
+		return nil, err
+	}
+
+	tools := append([]adktool.Tool{placesTool}, searchTools...)
+
+	return createAgent(ctx, cfg, before, after, &agentConfig{
+		name:        FacilityDiscovery,
+		modelName:   cfg.ModelForAgent(FacilityDiscovery),
+		description: "Searches, validates, dedupes, and geocodes marine facilities and anchorages (marinas, moorings, yacht clubs, fuel docks, boat launches, and wild anchorages) within a geographic radius.",
+		instruction: prompt.FacilityDiscovery,
+		tools:       tools,
+		temperature: 0.25,
+	})
+}
+
 // createFacilityDiscoveryTool builds the facility_discovery sub-agent and wraps
 // it as a single ADK tool that harbourmaster and specialist delegate to for
 // marine facility and wild-anchorage discovery. The sub-agent combines
@@ -269,30 +355,32 @@ func toolByName(tools []adktool.Tool, name string) (adktool.Tool, error) {
 // geminitool.GoogleSearch), so it never mixes grounded search with function
 // calling in a single model request.
 func createFacilityDiscoveryTool(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (adktool.Tool, error) {
-	placesTool, err := toolByName(researcherTools, toolFindPlacesNearby)
-	if err != nil {
-		return nil, fmt.Errorf("facility_discovery: %w", err)
-	}
-
-	searchTools, err := createSearchTools(ctx, cfg, before, after, "facility_discovery_search_specialist")
+	facilityAgent, err := BuildFacilityDiscoveryAgent(ctx, cfg, before, after, researcherTools)
 	if err != nil {
 		return nil, err
 	}
-
-	tools := append([]adktool.Tool{placesTool}, searchTools...)
-
-	facilityAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
-		name:        "facility_discovery",
-		description: "Searches, validates, dedupes, and geocodes marine facilities and anchorages (marinas, moorings, yacht clubs, fuel docks, boat launches, and wild anchorages) within a geographic radius.",
-		instruction: prompt.FacilityDiscovery,
-		tools:       tools,
-		temperature: 0.25,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	return agenttool.New(facilityAgent, nil), nil
+}
+
+// BuildHydrographicPilotAgent constructs a standalone hydrographic_pilot agent.
+func BuildHydrographicPilotAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (agent.Agent, error) {
+	sailingTool, err := toolByName(researcherTools, toolQuerySailingDirections)
+	if err != nil {
+		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
+	}
+	coastPilotTool, err := toolByName(researcherTools, toolQueryCoastPilot)
+	if err != nil {
+		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
+	}
+
+	return createAgent(ctx, cfg, before, after, &agentConfig{
+		name:        HydrographicPilot,
+		modelName:   cfg.ModelForAgent(HydrographicPilot),
+		description: "Retrieves official hydrographic and pilotage intelligence (channel depths, bridge clearances, tidal rips, currents, anchorages, regulations, hazards) from NOAA Coast Pilot and NGA Sailing Directions, with consistent citations.",
+		instruction: prompt.HydrographicPilot,
+		tools:       []adktool.Tool{sailingTool, coastPilotTool},
+		temperature: 0.1,
+	})
 }
 
 // createHydrographicPilotTool builds the hydrographic_pilot sub-agent and wraps
@@ -303,37 +391,21 @@ func createFacilityDiscoveryTool(ctx context.Context, cfg *config.Config, before
 // instructions across every agent prompt. The sub-agent uses only the two RAG
 // tools (no web search).
 func createHydrographicPilotTool(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, researcherTools []adktool.Tool) (adktool.Tool, error) {
-	sailingTool, err := toolByName(researcherTools, toolQuerySailingDirections)
-	if err != nil {
-		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
-	}
-	coastPilotTool, err := toolByName(researcherTools, toolQueryCoastPilot)
-	if err != nil {
-		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
-	}
-
-	hydroAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
-		name:        "hydrographic_pilot",
-		description: "Retrieves official hydrographic and pilotage intelligence (channel depths, bridge clearances, tidal rips, currents, anchorages, regulations, hazards) from NOAA Coast Pilot and NGA Sailing Directions, with consistent citations.",
-		instruction: prompt.HydrographicPilot,
-		tools:       []adktool.Tool{sailingTool, coastPilotTool},
-		temperature: 0.1,
-	})
+	hydroAgent, err := BuildHydrographicPilotAgent(ctx, cfg, before, after, researcherTools)
 	if err != nil {
 		return nil, err
 	}
-
 	return agenttool.New(hydroAgent, nil), nil
 }
 
 func supportsThinkingBudget(model string) bool {
-	return !strings.HasPrefix(model, "gemini-4")
+	return !strings.HasPrefix(model, "gemini-4") && !config.IsClaudeModel(model)
 }
 
 func createAgent(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, acfg *agentConfig) (agent.Agent, error) {
 	targetModel := acfg.modelName
 	if targetModel == "" {
-		targetModel = cfg.ModelName
+		targetModel = cfg.ModelForAgent(acfg.name)
 	}
 
 	genConfig := &genai.GenerateContentConfig{
@@ -346,35 +418,41 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 		genConfig.ThinkingConfig = &genai.ThinkingConfig{ThinkingBudget: &budget}
 	}
 
-	// Select the Gemini authentication backend:
-	// 1. Vertex AI (genai.BackendVertexAI): Used when cfg.UseVertexAI is true (or
-	//    GOOGLE_GENAI_USE_VERTEXAI="true"/"1" in the environment). Authenticates via
-	//    Google Cloud Application Default Credentials (the service account IAM identity
-	//    attached to Cloud Run / Vertex AI Agent Runtime, or local gcloud ADC).
-	//    Does not use or require a GEMINI_API_KEY string.
-	// 2. Google AI Studio (genai.BackendGeminiAPI, default): Authenticates using the
-	//    static cfg.GeminiAPIKey string (GEMINI_API_KEY).
-	var clientCfg *genai.ClientConfig
-	useVertex := cfg.UseVertexAI || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1"
-	if useVertex {
-		loc := cfg.GeminiLocation
-		if loc == "" {
-			loc = os.Getenv("GOOGLE_CLOUD_LOCATION")
-		}
-		if loc == "" {
-			loc = "global"
-		}
-		clientCfg = &genai.ClientConfig{
-			Project:  cfg.Project,
-			Location: loc,
-			Backend:  genai.BackendVertexAI,
-		}
+	var m model.LLM
+	var err error
+	if config.IsClaudeModel(targetModel) {
+		m, err = NewClaudeModel(ctx, targetModel, cfg)
 	} else {
-		clientCfg = &genai.ClientConfig{
-			APIKey: cfg.GeminiAPIKey,
+		// Select the Gemini authentication backend:
+		// 1. Vertex AI (genai.BackendVertexAI): Used when cfg.UseVertexAI is true (or
+		//    GOOGLE_GENAI_USE_VERTEXAI="true"/"1" in the environment). Authenticates via
+		//    Google Cloud Application Default Credentials (the service account IAM identity
+		//    attached to Cloud Run / Vertex AI Agent Runtime, or local gcloud ADC).
+		//    Does not use or require a GEMINI_API_KEY string.
+		// 2. Google AI Studio (genai.BackendGeminiAPI, default): Authenticates using the
+		//    static cfg.GeminiAPIKey string (GEMINI_API_KEY).
+		var clientCfg *genai.ClientConfig
+		useVertex := cfg.UseVertexAI || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1"
+		if useVertex {
+			loc := cfg.GeminiLocation
+			if loc == "" {
+				loc = os.Getenv("GOOGLE_CLOUD_LOCATION")
+			}
+			if loc == "" {
+				loc = "global"
+			}
+			clientCfg = &genai.ClientConfig{
+				Project:  cfg.Project,
+				Location: loc,
+				Backend:  genai.BackendVertexAI,
+			}
+		} else {
+			clientCfg = &genai.ClientConfig{
+				APIKey: cfg.GeminiAPIKey,
+			}
 		}
+		m, err = gemini.NewModel(ctx, targetModel, clientCfg)
 	}
-	m, err := gemini.NewModel(ctx, targetModel, clientCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -403,6 +481,7 @@ func createAgent(ctx context.Context, cfg *config.Config, before llmagent.Before
 func createSearchTools(ctx context.Context, cfg *config.Config, before llmagent.BeforeToolCallback, after llmagent.AfterToolCallback, name string) ([]adktool.Tool, error) {
 	searchAgent, err := createAgent(ctx, cfg, before, after, &agentConfig{
 		name:        name,
+		modelName:   cfg.ModelForAgent(name),
 		description: "Finds information on the web using Google Search.",
 		instruction: prompt.SearchSpecialist,
 		tools: []adktool.Tool{
@@ -441,11 +520,11 @@ func createSearchTools(ctx context.Context, cfg *config.Config, before llmagent.
 			for event, err := range resp {
 				if err != nil {
 					slog.Error("Search agent stream error", "query", query, "error", err)
-					continue
+					return "", err
 				}
-				if event.Content != nil && event.Content.Role == "model" {
-					for _, part := range event.Content.Parts {
-						if part.Text != "" && !part.Thought {
+				if event != nil && event.LLMResponse.Content != nil {
+					for _, part := range event.LLMResponse.Content.Parts {
+						if part.Text != "" {
 							text += part.Text
 						}
 					}

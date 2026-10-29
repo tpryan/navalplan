@@ -5216,9 +5216,10 @@ async function initMap() {
       const tier = feature.getProperty('tier');
       if (tier) {
           let token = 'teal';
-          if (tier === 'Hidden Gem' || tier === 'Deep Cut') token = 'violet';
-          else if (tier === 'Regional Favorite')            token = 'amber';
-          else if (tier === 'Challenging')                  token = 'coral';
+          if (tier === 'Hidden Gem' || tier === 'Deep Cut')                    token = 'violet';
+          else if (tier === 'Classic Locale' || tier === 'Classic Sailing Locale') token = 'sky';
+          else if (tier === 'Regional Favorite')                               token = 'amber';
+          else if (tier === 'Challenging')                                     token = 'coral';
 
           const color = tokenColor(token);
           return {
@@ -7173,7 +7174,7 @@ async function toggleDiscoveryMode(active, targetMonth, doPushState = true) {
 
 async function loadDiscoveryRegions(month) {
     try {
-        discoveryRegions = await API.getDiscoveryRegions(month);
+        discoveryRegions = (await API.getDiscoveryRegions(month)) || [];
         renderDiscoveryLayer();
     } catch (err) {
         console.error('Failed to load discovery regions:', err);
@@ -7191,7 +7192,7 @@ async function renderDiscoveryLayer() {
     // Convert to GeoJSON
     const geojson = {
         type: 'FeatureCollection',
-        features: discoveryRegions.map(r => ({
+        features: (discoveryRegions || []).map(r => ({
             type: 'Feature',
             geometry: {
                 type: 'Polygon',
@@ -7234,9 +7235,10 @@ async function showRegionBriefing(props, month) {
 
     // Tier → accent + label
     const tierAccent = (tier) => {
-        if (tier === 'Hidden Gem' || tier === 'Deep Cut') return 'violet';
-        if (tier === 'Regional Favorite')                 return 'amber';
-        if (tier === 'Challenging')                       return 'coral';
+        if (tier === 'Hidden Gem' || tier === 'Deep Cut')                    return 'violet';
+        if (tier === 'Classic Locale' || tier === 'Classic Sailing Locale')  return 'sky';
+        if (tier === 'Regional Favorite')                                    return 'amber';
+        if (tier === 'Challenging')                                          return 'coral';
         return 'teal';
     };
     const accent = tierAccent(props.tier);

@@ -112,6 +112,8 @@ Return **only** a raw JSON array with no markdown fences, no prose, and no expla
 ]
 ```
 
+CRITICAL: `"category"` MUST be strictly one of `"weather"`, `"tides"`, `"navigation"`, or `"sun"`. Never use `"waves"`, `"wind"`, or `"storm"` as a `"category"` — wind, wave height, wave period, and sea-state alerts MUST always use `"category": "weather"` (with `"icon": "waves"`, `"air"`, or `"storm"`).
+
 Use these icon names from Material Symbols: `storm`, `air`, `waves`, `tsunami`, `anchor`, `warning`, `explore`, `route`, `alt_route`, `straighten`, `directions_boat`, `light_mode`, `wb_twilight`, `schedule`, `thermostat`, `trending_up`, `trending_down`, `height` (for bridge clearances/overhead hazards), `water` (for currents/shoals), `sailing`, `speed`.
 
 If there are no safety concerns or significant trends, return an empty array: `[]`

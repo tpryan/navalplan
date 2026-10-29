@@ -73,6 +73,39 @@
           ]
         }
       }
+    },
+    {
+      "eval_case_id": "october_shoulder_season_arbitrage",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Identify prime sailing regions for the month of October, highlighting shoulder-season synoptic windows, low-latitude cyclone-belt refuges, and high-energy tidal/wind passages."
+          }
+        ]
+      },
+      "rubric_groups": {
+        "agent_rubrics": {
+          "rubrics": [
+            {
+              "rubric_id": "synoptic_and_hydrographic_reasoning",
+              "content": {
+                "property": {
+                  "description": "Every returned region includes a non-empty 'deep_cut_reasoning' detailing specific synoptic wind regimes, seasonal arbitrage, and hydrographic/tidal pilotage characteristics."
+                }
+              }
+            },
+            {
+              "rubric_id": "json_format",
+              "content": {
+                "property": {
+                  "description": "The response is a valid JSON array of 8-12 non-overlapping region objects across at least 4 of the 5 tiers (including 'Classic Locale') and at least 3 macro-zones."
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }

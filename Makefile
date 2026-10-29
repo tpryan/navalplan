@@ -380,30 +380,47 @@ vet-researcher:
 
 # --- Evaluation ---
 
-eval: eval-all
+MODELS ?= gemini-3.5-flash-lite,gemini-4-argon,claude-haiku-4-5@20251001,claude-sonnet-4-5@20250929
+
+eval:
+	@echo "Running Go-native researcher agent evaluations..."
+	@cd code/services/researcher && RUN_EVAL=1 AGENTS="$(AGENTS)" CASES="$(CASES)" go test -mod=vendor -v -timeout 45m -run '^TestEval$$' .
+
+eval-all: eval
+
+eval-compare:
+	@echo "Running Go-native multi-model evaluation comparison..."
+	@cd code/services/researcher && RUN_EVAL=1 MODELS="$(MODELS)" AGENTS="$(AGENTS)" CASES="$(CASES)" go test -mod=vendor -v -timeout 90m -run '^TestEval_ModelComparison$$' .
 
 eval-harbourmaster:
-	@$(MAKE) eval-agent AGENT=harbourmaster
+	@$(MAKE) eval AGENTS=harbourmaster
 
 eval-pilot:
-	@$(MAKE) eval-agent AGENT=pilot
+	@$(MAKE) eval AGENTS=pilot
 
 eval-commodore:
-	@$(MAKE) eval-agent AGENT=commodore
+	@$(MAKE) eval AGENTS=commodore
 
 eval-specialist:
-	@$(MAKE) eval-agent AGENT=specialist
+	@$(MAKE) eval AGENTS=specialist
 
 eval-lookout:
-	@$(MAKE) eval-agent AGENT=lookout
+	@$(MAKE) eval AGENTS=lookout
 
-# Compare one or more agent models on the full suite (pass/fail + timing).
-# Defaults to the three models below; override with MODELS="m1 m2 ...".
-MODELS?=gemini-3.5-flash-lite gemini-3.8-flash gemini-4-argon
-eval-compare:
+eval-debrief:
+	@$(MAKE) eval AGENTS=debrief
+
+eval-facility-discovery:
+	@$(MAKE) eval AGENTS=facility_discovery
+
+eval-hydrographic-pilot:
+	@$(MAKE) eval AGENTS=hydrographic_pilot
+
+# Legacy Python ADK evaluation targets
+eval-adk-compare:
 	@bash code/services/researcher/eval/compare_models.sh $(MODELS)
 
-eval-agent:
+eval-adk-agent:
 	@if [ "$(VERBOSE)" != "1" ]; then \
 		echo "Evaluating NavalPlan Agent ($$AGENT)... (Set VERBOSE=1 for full output)"; \
 	else \
@@ -449,7 +466,7 @@ eval-agent:
 	rm -f code/services/researcher/__init__.py code/services/researcher/agent.py; \
 	exit $$EXIT_CODE
 
-eval-all:
+eval-adk:
 	@echo "Compiling Go researcher service..."
 	@(cd code/services/researcher && go build -mod=vendor -o researcher-service .)
 	@echo "Starting Go agent service once for parallel evaluation..."

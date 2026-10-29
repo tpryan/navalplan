@@ -42,6 +42,9 @@ func (h *Handler) GetDiscoveryRegions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to list regions")
 		return
 	}
+	if regions == nil {
+		regions = []model.RegionWithSeasonality{}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(regions)
@@ -188,7 +191,7 @@ func isRegionDuplicate(nameA, nameB string, b1, b2 orb.Bound) (bool, float64, fl
 	c1 := b1.Center()
 	c2 := b2.Center()
 	centerDistDeg := math.Hypot(c1.X()-c2.X(), c1.Y()-c2.Y())
-	if centerDistDeg < 3.5 {
+	if centerDistDeg < 1.8 {
 		return true, iou, containment
 	}
 	kA := normalizeRegionKey(nameA)
@@ -234,9 +237,12 @@ func computeBoundsStats(b1, b2 orb.Bound) (iou, containment float64) {
 
 func getTierPriority(tier string, isHiddenGem bool) int {
 	if tier == "Challenging" {
-		return 4
+		return 5
 	}
 	if isHiddenGem || tier == "Hidden Gem" || tier == "Deep Cut" {
+		return 4
+	}
+	if tier == "Classic Locale" || tier == "Classic Sailing Locale" {
 		return 3
 	}
 	if tier == "Regional Favorite" {
@@ -411,7 +417,7 @@ func (h *Handler) performDiscoveryMining(ctx context.Context, month int) {
 		}
 	}
 
-	prompt := fmt.Sprintf("Identify top sailing destinations, deep cuts, and challenging sailing areas (for expert sailors, such as San Francisco Bay) for the month of %s. Ensure GLOBAL coverage (North America, Europe, Asia, Oceania, Caribbean). Return at most ONE region per archipelago, island group, or coastal basin, and ensure all bounding boxes are at least 300 NM (~5 degrees) apart. Return JSON only.", monthName)
+	prompt := fmt.Sprintf("Identify 8 to 12 top sailing destinations across all 5 tiers (Standard, Classic Locale, Hidden Gem, Regional Favorite, and Challenging) for the month of %s. Call GetCandidateRegionsForMonth, QuerySailingDirections, QueryCoastPilot, and batch_google_search in parallel in Turn 1. Include qualifying Classic Locales (storied yachting capitals and maritime heritage waters in season during %s, such as Southern New England — Newport, Buzzards Bay, Martha's Vineyard & Nantucket, Chesapeake Bay, The Solent, or Antigua), synthesize at least 3 novel destinations beyond the baseline candidate seed, span at least 4 global macro-zones, and populate deep_cut_reasoning on EVERY region with a 2-3 sentence synoptic & hydrographic pilotage brief (naming prevailing wind regimes, currents/tidal gates, and seasonal arbitrage grounded in NGA Sailing Directions and NOAA Coast Pilot). Return at most ONE region per archipelago or bay, and ensure all region centers are at least 120 NM (~2 degrees) apart. Return JSON only.", monthName, monthName)
 	if len(existingNames) > 0 {
 		prompt += fmt.Sprintf(" Existing regions already active for %s: [%s]. Do NOT output a second region covering the same archipelago, island group, or coast under a variant name or shifted bounding box.", monthName, strings.Join(existingNames, ", "))
 	}

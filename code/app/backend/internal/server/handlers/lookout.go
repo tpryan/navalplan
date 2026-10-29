@@ -261,6 +261,11 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 	}
 
 	for i := range alerts {
+		if rawCat, ok := alerts[i]["category"].(string); ok {
+			alerts[i]["category"] = normalizeLookoutAlertCategory(rawCat)
+		} else {
+			alerts[i]["category"] = "navigation"
+		}
 		if rawIcon, ok := alerts[i]["icon"].(string); ok {
 			alerts[i]["icon"] = normalizeLookoutAlertIcon(rawIcon)
 		} else {
@@ -769,5 +774,21 @@ func normalizeLookoutAlertIcon(icon string) string {
 		return "warning"
 	default:
 		return clean
+	}
+}
+
+func normalizeLookoutAlertCategory(cat string) string {
+	clean := strings.ToLower(strings.TrimSpace(cat))
+	switch clean {
+	case "weather", "waves", "wave", "wind", "storm", "sea_state", "seas", "swell":
+		return "weather"
+	case "tides", "tide", "current", "currents", "tidal_rip":
+		return "tides"
+	case "sun", "daylight", "sunset", "sunrise", "twilight":
+		return "sun"
+	case "navigation", "pilotage", "hazard", "hazards", "route", "channel":
+		return "navigation"
+	default:
+		return "navigation"
 	}
 }

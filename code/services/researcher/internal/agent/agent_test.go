@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/tpryan/navalplan/services/researcher/internal/config"
 	adktool "google.golang.org/adk/v2/tool"
 )
 
@@ -91,19 +92,24 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 		}
 	}
 
-	// Pilot keeps the RAG tools directly and does not use the sub-agent.
-	pilot := byName[Pilot]
-	if pilot.includeHydrographicPilot {
-		t.Errorf("pilot: includeHydrographicPilot = true, want false")
-	}
-	var hasSailing bool
-	for _, tn := range pilot.toolNames {
-		if tn == toolQuerySailingDirections {
-			hasSailing = true
+	// Pilot and Commodore keep the RAG tools directly and do not use the sub-agent.
+	for _, directRAGAgent := range []string{Pilot, Commodore} {
+		ag := byName[directRAGAgent]
+		if ag.includeHydrographicPilot {
+			t.Errorf("%s: includeHydrographicPilot = true, want false", directRAGAgent)
 		}
-	}
-	if !hasSailing {
-		t.Errorf("pilot: expected to keep %q directly", toolQuerySailingDirections)
+		var hasSailing, hasCoastPilot bool
+		for _, tn := range ag.toolNames {
+			if tn == toolQuerySailingDirections {
+				hasSailing = true
+			}
+			if tn == toolQueryCoastPilot {
+				hasCoastPilot = true
+			}
+		}
+		if !hasSailing || !hasCoastPilot {
+			t.Errorf("%s: expected direct RAG tools (%q=%v, %q=%v)", directRAGAgent, toolQuerySailingDirections, hasSailing, toolQueryCoastPilot, hasCoastPilot)
+		}
 	}
 }
 
@@ -132,10 +138,46 @@ func TestSupportsThinkingBudget(t *testing.T) {
 		{"gemini-2.5-flash", true},
 		{"gemini-4-argon", false},
 		{"gemini-4.0-pro", false},
+		{"claude-sonnet-4-5", false},
 	}
 	for _, tc := range tests {
 		if got := supportsThinkingBudget(tc.model); got != tc.want {
 			t.Errorf("supportsThinkingBudget(%q) = %v, want %v", tc.model, got, tc.want)
 		}
+	}
+}
+
+func TestEvalOrderAndModelResolution(t *testing.T) {
+	if len(EvalOrder) != 8 {
+		t.Fatalf("len(EvalOrder) = %d, want 8", len(EvalOrder))
+	}
+	cfg := &config.Config{
+		ModelName:          "gemini-3.5-flash-lite",
+		CommodoreModelName: "gemini-4-argon",
+		LookoutModelName:   "gemini-2.5-flash",
+	}
+	if got := cfg.ModelForAgent(Commodore); got != "gemini-4-argon" {
+		t.Errorf("ModelForAgent(Commodore) = %q, want gemini-4-argon", got)
+	}
+	if got := cfg.ModelForAgent(Lookout); got != "gemini-2.5-flash" {
+		t.Errorf("ModelForAgent(Lookout) = %q, want gemini-2.5-flash", got)
+	}
+	if got := cfg.ModelForAgent(FacilityDiscovery); got != "gemini-3.5-flash-lite" {
+		t.Errorf("ModelForAgent(FacilityDiscovery) = %q, want gemini-3.5-flash-lite", got)
+	}
+	cfg.SetUniformModel("gemini-2.5-pro")
+	for _, name := range EvalOrder {
+		if got := cfg.ModelForAgent(name); got != "gemini-2.5-pro" {
+			t.Errorf("after SetUniformModel, ModelForAgent(%q) = %q, want gemini-2.5-pro", name, got)
+		}
+	}
+	cfg.SetUniformModel("claude-sonnet-4-5")
+	for _, name := range EvalOrder {
+		if got := cfg.ModelForAgent(name); got != "claude-sonnet-4-5" {
+			t.Errorf("after SetUniformModel(claude), ModelForAgent(%q) = %q, want claude-sonnet-4-5", name, got)
+		}
+	}
+	if got := cfg.ModelForAgent(Harbourmaster + "_search_specialist"); got != "gemini-3.5-flash-lite" {
+		t.Errorf("search specialist model with uniform claude = %q, want gemini-3.5-flash-lite", got)
 	}
 }

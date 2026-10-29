@@ -9,7 +9,7 @@ import (
 
 // ListRegionsByMonth returns all regions that have seasonality data for the given month.
 func (db *DB) ListRegionsByMonth(ctx context.Context, month int) ([]model.RegionWithSeasonality, error) {
-	var regions []model.RegionWithSeasonality
+	regions := make([]model.RegionWithSeasonality, 0)
 	query := `
 		SELECT 
 			r.*,
