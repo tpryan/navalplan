@@ -227,6 +227,25 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			stayDetailsJSON: `{"is_charter_base":false,"charter_companies":[]}`,
 			wantRole:        "start_end_base",
 		},
+		{
+			name:            "Offshore Block Island Great Salt Pond mentioning Newport in reasoning stays overnight_stop and clears charter fields",
+			recName:         "Block Island Great Salt Pond (New Harbor)",
+			recType:         "Hub",
+			rawRole:         "start_end_base",
+			desc:            "World-famous island cruising destination just south of Narragansett Bay entrance.",
+			reasoning:       "An absolute must-visit destination within comfortable cruising range of Newport and Buzzards Bay.",
+			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Bareboat Sailing Charters"]}`,
+			wantRole:        "overnight_stop",
+		},
+		{
+			name:            "Private Yacht Club overlooking Newport Harbor stays overnight_stop",
+			recName:         "New York Yacht Club Harbour Court",
+			recType:         "Yacht Club",
+			rawRole:         "start_end_base",
+			desc:            "Renowned yacht club station overlooking Newport Harbor and Narragansett Bay.",
+			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":[]}`,
+			wantRole:        "overnight_stop",
+		},
 	}
 
 	for _, tc := range tests {
@@ -243,11 +262,15 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			if rec.VoyageRole != tc.wantRole {
 				t.Errorf("normalizeRecommendationRole(%q) = %q, want %q", tc.recName, rec.VoyageRole, tc.wantRole)
 			}
+			var sd map[string]any
+			_ = json.Unmarshal(rec.StayDetails, &sd)
 			if tc.wantRole == "start_end_base" {
-				var sd map[string]any
-				_ = json.Unmarshal(rec.StayDetails, &sd)
 				if isBase, _ := sd["is_charter_base"].(bool); !isBase {
 					t.Errorf("normalizeRecommendationRole(%q) expected stay_details.is_charter_base=true, got %v", tc.recName, sd)
+				}
+			} else if sd != nil {
+				if isBase, _ := sd["is_charter_base"].(bool); isBase {
+					t.Errorf("normalizeRecommendationRole(%q) expected stay_details.is_charter_base=false on %s, got %v", tc.recName, tc.wantRole, sd)
 				}
 			}
 		})

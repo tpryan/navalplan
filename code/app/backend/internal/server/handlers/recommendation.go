@@ -479,20 +479,54 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 }
 
 func isCharterOperatorPlace(name string, types []string) bool {
+	nl := strings.ToLower(name)
+	// Exclude museums, fishing charters, tour boats, ferries, and small-craft rentals
+	// that are not bareboat/crewed cruising yacht charter embarkation bases.
+	nonCruisingKeywords := []string{
+		"museum", "herreshoff", "fishing", "sportfishing", "angler", "bait",
+		"ferry", "water taxi", "launch service", "parasail", "kayak", "paddle",
+		"jet ski", "pontoon", "whale watch", "harbor tour", "sightseeing",
+	}
+	for _, kw := range nonCruisingKeywords {
+		if strings.Contains(nl, kw) {
+			return false
+		}
+	}
 	for _, t := range types {
 		tl := strings.ToLower(strings.TrimSpace(t))
 		if tl == "yacht_charter" || tl == "boat_rental" {
 			return true
 		}
 	}
-	nl := strings.ToLower(name)
-	return strings.Contains(nl, "charter") ||
-		strings.Contains(nl, "boat rental") ||
-		strings.Contains(nl, "yacht rental") ||
-		strings.Contains(nl, "sailing school")
+	return strings.Contains(nl, "yacht charter") ||
+		strings.Contains(nl, "sailing charter") ||
+		strings.Contains(nl, "bareboat")
+}
+
+func clearCharterBaseFromStayDetails(rec *model.VoyageRecommendation) {
+	if len(rec.StayDetails) == 0 {
+		return
+	}
+	var sd map[string]any
+	if err := json.Unmarshal(rec.StayDetails, &sd); err != nil || sd == nil {
+		return
+	}
+	_, hasBase := sd["is_charter_base"]
+	_, hasCompanies := sd["charter_companies"]
+	if !hasBase && !hasCompanies {
+		return
+	}
+	sd["is_charter_base"] = false
+	sd["charter_companies"] = []string{}
+	if b, err := json.Marshal(sd); err == nil {
+		rec.StayDetails = model.RawJSON(b)
+	}
 }
 
 func addCharterCompanyToRecommendation(rec *model.VoyageRecommendation, companyName string) {
+	if isStopoverOrNonBaseLocation(rec.Name, rec.Type) {
+		return
+	}
 	companyName = strings.TrimSpace(companyName)
 	var sd map[string]any
 	if len(rec.StayDetails) > 0 {
@@ -573,10 +607,9 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 
 		if isCharterPlace {
 			bestIdx := -1
-			bestDist := 2.0
+			bestDist := 0.5
 			for i := range recs {
-				rt := strings.ToLower(strings.TrimSpace(recs[i].Type))
-				if rt != "hub" && rt != "marina" {
+				if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Type) {
 					continue
 				}
 				if recs[i].Latitude == 0 && recs[i].Longitude == 0 {
@@ -639,7 +672,7 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 			Reasoning:   "Included from verified Google Places nautical infrastructure sweep within the cruising circle.",
 			References:  refs,
 		}
-		if isCharterPlace {
+		if isCharterPlace && !isStopoverOrNonBaseLocation(rec.Name + " " + p.Address, rec.Type) {
 			addCharterCompanyToRecommendation(&rec, name)
 		}
 		normalizeRecommendationRole(&rec)
@@ -670,44 +703,47 @@ func enrichRecommendationsFromGuide(recs []model.VoyageRecommendation, guide *mo
 	}
 
 	harborSynonyms := map[string][]string{
-		"dartmouth":    {"padanaram", "south wharf", "new bedford", "apponagansett"},
-		"padanaram":    {"dartmouth", "south wharf", "apponagansett"},
-		"cape yachts":  {"south wharf", "padanaram", "dartmouth"},
-		"nauti jane":   {"south wharf", "padanaram", "dartmouth"},
-		"swift yacht":  {"padanaram", "south wharf", "dartmouth", "newport"},
-		"buzzards bay": {"padanaram", "marion", "mattapoisett", "red brook", "kingman", "new bedford"},
-		"newport":      {"newport harbor", "goat island", "bowen", "bannister"},
+		"dartmouth":    {"padanaram", "south wharf", "south dartmouth"},
+		"padanaram":    {"padanaram", "south wharf", "south dartmouth"},
+		"cape yachts":  {"south wharf", "padanaram"},
+		"nauti jane":   {"south wharf", "padanaram"},
+		"swift yacht":  {"padanaram", "south wharf"},
+		"buzzards bay": {"padanaram", "south wharf"},
+		"newport":      {"newport harbor", "newport yachting center", "goat island", "bowen's wharf", "bannister's wharf"},
 	}
 
 	for _, comp := range charter.Companies {
 		compName := strings.TrimSpace(comp.Name)
-		if compName == "" {
+		if compName == "" || !isCharterOperatorPlace(compName, []string{"yacht_charter"}) {
 			continue
 		}
 		haystack := strings.ToLower(comp.Name + " " + comp.BaseMarina + " " + comp.Location + " " + comp.URL)
 		var matchTokens []string
 		for _, field := range []string{comp.BaseMarina, comp.Location} {
 			f := strings.ToLower(strings.TrimSpace(field))
+			if idx := strings.Index(f, ","); idx > 0 {
+				f = strings.TrimSpace(f[:idx])
+			}
 			if len(f) >= 4 {
 				matchTokens = append(matchTokens, f)
 			}
 		}
 		for kw, syns := range harborSynonyms {
 			if strings.Contains(haystack, kw) {
-				matchTokens = append(matchTokens, kw)
 				matchTokens = append(matchTokens, syns...)
 			}
 		}
 
 		for i := range recs {
-			rt := strings.ToLower(strings.TrimSpace(recs[i].Type))
-			if rt != "hub" && rt != "marina" {
+			if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Type) {
 				continue
 			}
-			recText := strings.ToLower(recs[i].Name + " " + recs[i].Description + " " + recs[i].Reasoning)
+			// Match strictly against recommendation Name (never Description or Reasoning,
+			// which often mention nearby cities like "within cruising range of Newport").
+			recName := strings.ToLower(recs[i].Name)
 			matched := false
 			for _, tok := range matchTokens {
-				if tok != "" && strings.Contains(recText, tok) {
+				if tok != "" && strings.Contains(recName, tok) {
 					matched = true
 					break
 				}
@@ -799,18 +835,56 @@ func isOpenWaterPassageWaypoint(rec model.VoyageRecommendation) bool {
 	return false
 }
 
+func isStopoverOrNonBaseLocation(name, recType string) bool {
+	t := strings.ToLower(strings.TrimSpace(recType))
+	if strings.Contains(t, "anchor") || strings.Contains(t, "moor") ||
+		strings.Contains(t, "fuel") || strings.Contains(t, "launch") ||
+		strings.Contains(t, "yacht club") {
+		return true
+	}
+	n := strings.ToLower(name)
+	stopoverOnlyKeywords := []string{
+		"resort, spa", "resort & spa", "island resort", "harbour inn", "harbor inn",
+		"soper's hole", "sopers hole", "freshwater pond", "scrub island", "bitter end",
+		"saba rock", "leverick", "marina cay", "cooper island", "peter island",
+		"norman island", "jost van dyke", "st. michaels", "st michaels", "oxford",
+		"tilghman", "knapps narrows", "poplar island",
+		"block island", "great salt pond", "new shoreham", "old harbor", "payne's dock", "champlain's",
+		"cuttyhunk", "gosnold", "hadley harbor", "naushon", "tarpaulin cove", "pasque", "nashawena", "penikese",
+		"edgartown", "vineyard haven", "oak bluffs", "menemsha", "lake tashmoo", "chappaquiddick", "katama",
+		"dutch island", "prudence island", "patience island", "hope island", "conanicut", "jamestown",
+		"mackerel cove", "friday harbor", "roche harbor", "lopez island", "orcas island",
+		"kingman", "red brook", "pope's island", "popes island", "fairhaven shipyard", "bristol harbor",
+		"herreshoff", "mattapoisett", "marion harbor", "sippican", "burr brothers",
+	}
+	for _, kw := range stopoverOnlyKeywords {
+		if strings.Contains(n, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 	t := strings.ToLower(strings.TrimSpace(rec.Type))
 	if strings.Contains(t, "fuel") || strings.Contains(t, "launch") {
 		rec.VoyageRole = "service_only"
+		clearCharterBaseFromStayDetails(rec)
 		return
 	}
 	if strings.Contains(t, "anchor") || strings.Contains(t, "moor") {
 		if strings.ToLower(strings.TrimSpace(rec.VoyageRole)) == "day_stop" {
 			rec.VoyageRole = "day_stop"
+			clearCharterBaseFromStayDetails(rec)
 			return
 		}
 		rec.VoyageRole = "overnight_stop"
+		clearCharterBaseFromStayDetails(rec)
+		return
+	}
+	if isStopoverOrNonBaseLocation(rec.Name, rec.Type) {
+		rec.VoyageRole = "overnight_stop"
+		clearCharterBaseFromStayDetails(rec)
 		return
 	}
 
@@ -831,6 +905,7 @@ func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 		return
 	}
 
+	clearCharterBaseFromStayDetails(rec)
 	if role == "day_stop" || role == "service_only" {
 		rec.VoyageRole = role
 		return
@@ -839,6 +914,9 @@ func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 }
 
 func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJSON string) bool {
+	if isStopoverOrNonBaseLocation(name, "") {
+		return false
+	}
 	var sd struct {
 		IsCharterBase    bool     `json:"is_charter_base"`
 		CharterCompanies []string `json:"charter_companies"`
@@ -846,56 +924,53 @@ func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJS
 	if len(stayDetailsJSON) > 0 {
 		_ = json.Unmarshal([]byte(stayDetailsJSON), &sd)
 	}
-	if len(sd.CharterCompanies) > 0 {
-		return true
+	for _, c := range sd.CharterCompanies {
+		if isCharterOperatorPlace(c, []string{"yacht_charter"}) {
+			return true
+		}
 	}
 
 	n := strings.ToLower(name)
 	full := strings.ToLower(name + " " + desc + " " + reasoning)
 
-	// Guard against resort/stopover marinas that are overnight destinations rather than embarkation bases.
-	stopoverOnlyKeywords := []string{
-		"resort, spa", "resort & spa", "island resort", "harbour inn", "harbor inn",
-		"soper's hole", "sopers hole", "freshwater pond", "scrub island", "bitter end",
-		"saba rock", "leverick", "marina cay", "cooper island", "peter island",
-		"norman island", "jost van dyke", "st. michaels", "st michaels", "oxford",
-		"tilghman", "knapps narrows", "poplar island",
-	}
-	isStopover := false
-	for _, kw := range stopoverOnlyKeywords {
-		if strings.Contains(n, kw) {
-			isStopover = true
-			break
-		}
-	}
-
-	// Region-agnostic positive evidence of a commercial charter embarkation base or primary sailing capital hub.
-	charterEvidence := []string{
-		"charter base", "charter fleet", "bareboat charter", "yacht charter",
-		"charter company", "charter companies", "charter operator", "embarkation base",
-		"sailing capital", "yachting capital", "starting point", "embarkation", "turnaround", "departure port",
-		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
-		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
+	// Known embarkation marina/harbor names must match the recommendation's OWN name
+	// (never desc/reasoning, which often mention nearby cities like "across from Newport").
+	embarkationBaseNames := []string{
 		"annapolis city marina", "annapolis harbor", "annapolis harbour", "port annapolis",
 		"eastport yacht", "bert jabin",
-		"newport harbor", "newport yachting center", "bowen's wharf", "bannister's wharf",
-		"bareboat sailing charters", "america's cup charters", "onwatch sailing",
-		"south wharf yacht", "cape yachts", "nauti jane", "swift yacht", "buzzards bay yacht",
+		"newport harbor", "newport yachting center", "goat island marina", "bowen's wharf", "bannister's wharf",
+		"south wharf yacht", "padanaram",
 		"bahia mar", "las olas marina", "pier sixty-six", "pier 66", "15th street fisheries",
 		"lauderdale marine center", "dinner key", "bayside marketplace", "miami beach marina",
 		"crandon park marina", "sea isle marina", "mahi marina",
+		"nanny cay", "wickhams cay", "hodges creek", "parham town",
+	}
+	for _, baseName := range embarkationBaseNames {
+		if strings.Contains(n, baseName) {
+			return true
+		}
+	}
+
+	// Explicit charter embarkation phrases and verified fleet names.
+	charterEvidence := []string{
+		"charter base", "charter fleet", "bareboat charter", "embarkation base", "charter embarkation",
+		"sailing capital", "yachting capital", "departure port",
+		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
+		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
+		"bareboat sailing charters", "america's cup charters", "onwatch sailing",
+		"cape yachts", "nauti jane", "swift yacht", "buzzards bay yacht",
 		"san juan sailing", "anacortes yacht", "bellingham yacht",
 		"bvi yacht charters", "horizon yacht", "voyage charters", "conch charters",
 		"tortola marine management", "tmm yacht", "footloose", "kiriacoulis",
 		"istion", "angelina yacht", "sunsail base", "moorings base",
 	}
 	for _, sig := range charterEvidence {
-		if strings.Contains(full, sig) && !isStopover {
+		if strings.Contains(full, sig) {
 			return true
 		}
 	}
 
-	if (role == "start_end_base" || sd.IsCharterBase) && !isStopover {
+	if role == "start_end_base" || sd.IsCharterBase {
 		return true
 	}
 	return false

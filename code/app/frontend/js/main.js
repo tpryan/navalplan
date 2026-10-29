@@ -3162,7 +3162,7 @@ async function renderRecommendations() {
 
         const isCharterOrStartBase = (rec) => {
             const type = (rec.type || '').toLowerCase();
-            if (type.includes('anchor') || type.includes('moor') || type.includes('fuel') || type.includes('launch')) {
+            if (type.includes('anchor') || type.includes('moor') || type.includes('fuel') || type.includes('launch') || type.includes('yacht club')) {
                 return false;
             }
             const name = (rec.name || '').toLowerCase();
@@ -3172,6 +3172,13 @@ async function renderRecommendations() {
                 'saba rock', 'leverick', 'marina cay', 'cooper island', 'peter island',
                 'norman island', 'jost van dyke', 'st. michaels', 'st michaels', 'oxford',
                 'tilghman', 'knapps narrows', 'poplar island',
+                'block island', 'great salt pond', 'new shoreham', 'old harbor', "payne's dock", "champlain's",
+                'cuttyhunk', 'gosnold', 'hadley harbor', 'naushon', 'tarpaulin cove', 'pasque', 'nashawena', 'penikese',
+                'edgartown', 'vineyard haven', 'oak bluffs', 'menemsha', 'lake tashmoo', 'chappaquiddick', 'katama',
+                'dutch island', 'prudence island', 'patience island', 'hope island', 'conanicut', 'jamestown',
+                'mackerel cove', 'friday harbor', 'roche harbor', 'lopez island', 'orcas island',
+                'kingman', 'red brook', "pope's island", 'popes island', 'fairhaven shipyard', 'bristol harbor',
+                'herreshoff', 'mattapoisett', 'marion harbor', 'sippican', 'burr brothers',
             ];
             if (stopoverOnlyKeywords.some(kw => name.includes(kw))) {
                 return false;
@@ -7618,6 +7625,24 @@ function generateGuideHTML(guide) {
     let hubsSection = '';
     const startEndRecs = (typeof voyageRecommendations !== 'undefined' && Array.isArray(voyageRecommendations))
         ? voyageRecommendations.filter(r => {
+            const t = (r.type || '').toLowerCase();
+            if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch') || t.includes('yacht club')) return false;
+            const n = (r.name || '').toLowerCase();
+            const stopoverOnly = [
+                'resort, spa', 'resort & spa', 'island resort', 'harbour inn', 'harbor inn',
+                "soper's hole", 'sopers hole', 'freshwater pond', 'scrub island', 'bitter end',
+                'saba rock', 'leverick', 'marina cay', 'cooper island', 'peter island',
+                'norman island', 'jost van dyke', 'st. michaels', 'st michaels', 'oxford',
+                'tilghman', 'knapps narrows', 'poplar island',
+                'block island', 'great salt pond', 'new shoreham', 'old harbor', "payne's dock", "champlain's",
+                'cuttyhunk', 'gosnold', 'hadley harbor', 'naushon', 'tarpaulin cove', 'pasque', 'nashawena', 'penikese',
+                'edgartown', 'vineyard haven', 'oak bluffs', 'menemsha', 'lake tashmoo', 'chappaquiddick', 'katama',
+                'dutch island', 'prudence island', 'patience island', 'hope island', 'conanicut', 'jamestown',
+                'mackerel cove', 'friday harbor', 'roche harbor', 'lopez island', 'orcas island',
+                'kingman', 'red brook', "pope's island", 'popes island', 'fairhaven shipyard', 'bristol harbor',
+                'herreshoff', 'mattapoisett', 'marion harbor', 'sippican', 'burr brothers',
+            ];
+            if (stopoverOnly.some(kw => n.includes(kw))) return false;
             const role = (r.voyage_role || '').toLowerCase();
             if (role === 'start_end_base') return true;
             if (r.stay_details) {
@@ -7626,10 +7651,8 @@ function generateGuideHTML(guide) {
                     if (sd && (sd.is_charter_base || (Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0))) return true;
                 } catch (_) {}
             }
-            const t = (r.type || '').toLowerCase();
-            if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch')) return false;
             const text = `${r.name || ''} ${r.description || ''} ${r.reasoning || ''}`.toLowerCase();
-            return ['charter base', 'charter fleet', 'bareboat charter', 'yacht charter', 'sailing capital', 'yachting capital', 'starting point', 'embarkation', 'turnaround', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'annapolis city marina', 'port annapolis', 'bert jabin', 'newport harbor', 'newport yachting center', "bowen's wharf", "bannister's wharf", 'bareboat sailing charters', "america's cup charters", 'onwatch sailing', 'south wharf yacht', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht', 'nanny cay', 'wickhams cay', 'hodges creek', 'parham town'].some(sig => text.includes(sig));
+            return ['charter base', 'charter fleet', 'bareboat charter', 'embarkation base', 'charter embarkation', 'sailing capital', 'yachting capital', 'departure port', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'bareboat sailing charters', "america's cup charters", 'onwatch sailing', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht'].some(sig => text.includes(sig));
         })
         : [];
 
