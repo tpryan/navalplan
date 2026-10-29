@@ -146,25 +146,25 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 		wantRole        string
 	}{
 		{
-			name:            "BVI Road Town Moorings base with charter companies",
-			recName:         "The Moorings Marina (Wickhams Cay II, Road Town)",
+			name:            "Marina with verified charter companies is start_end_base",
+			recName:         "Wickhams Cay II Marina",
 			recType:         "Marina",
 			rawRole:         "start_end_base",
-			desc:            "Primary bareboat charter fleet embarkation marina in Road Town, Tortola.",
+			desc:            "Primary bareboat charter fleet embarkation marina.",
 			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["The Moorings","Sunsail"]}`,
 			wantRole:        "start_end_base",
 		},
 		{
-			name:            "BVI Parham Town / Hodges Creek Marina with Dream Yacht Charter",
-			recName:         "Hodges Creek Marina (Parham Town, East End Tortola)",
+			name:            "Overnight marina with verified charter companies promoted to start_end_base",
+			recName:         "Hodges Creek Marina",
 			recType:         "Marina",
 			rawRole:         "overnight_stop",
-			desc:            "Major charter base for Dream Yacht Charter and MarineMax in East End Tortola.",
+			desc:            "Major charter base for bareboat fleets.",
 			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Dream Yacht Charter","MarineMax"]}`,
 			wantRole:        "start_end_base",
 		},
 		{
-			name:            "BVI Scrub Island Resort Marina without charter fleet demoted to overnight_stop",
+			name:            "Resort marina without charter fleet demoted to overnight_stop",
 			recName:         "Scrub Island Resort, Spa & Marina",
 			recType:         "Hub",
 			rawRole:         "start_end_base",
@@ -174,7 +174,7 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			wantRole:        "overnight_stop",
 		},
 		{
-			name:            "BVI Soper's Hole / West End stopover without charter fleet stays overnight_stop",
+			name:            "Stopover harbor without charter fleet or charter base evidence demoted to overnight_stop",
 			recName:         "Soper's Hole Marina (Freshwater Pond / West End)",
 			recType:         "Hub",
 			rawRole:         "start_end_base",
@@ -184,21 +184,21 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			wantRole:        "overnight_stop",
 		},
 		{
-			name:            "Chesapeake Annapolis charter base promoted to start_end_base",
+			name:            "Mainland charter base with charter companies promoted to start_end_base",
 			recName:         "Annapolis City Marina / Eastport",
 			recType:         "Marina",
 			rawRole:         "start_end_base",
-			desc:            "Homeport embarkation base for Cruise Annapolis and Waypoints Yacht Charters.",
+			desc:            "Homeport embarkation base for bareboat yacht charters.",
 			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Cruise Annapolis","Waypoints"]}`,
 			wantRole:        "start_end_base",
 		},
 		{
-			name:            "Chesapeake St. Michaels resort marina stays overnight_stop",
+			name:            "Harbour inn marina stays overnight_stop",
 			recName:         "St. Michaels Harbour Inn & Marina",
 			recType:         "Hub",
 			rawRole:         "start_end_base",
-			desc:            "Historic Eastern Shore harbor with transient slips, fuel, and dining.",
-			reasoning:       "Top overnight destination on the Miles River.",
+			desc:            "Historic harbor with transient slips, fuel, and dining.",
+			reasoning:       "Top overnight destination on the river.",
 			stayDetailsJSON: `{"has_transient_slips":true}`,
 			wantRole:        "overnight_stop",
 		},
@@ -211,38 +211,29 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			wantRole:        "service_only",
 		},
 		{
-			name:            "South Florida Bahia Mar / Fort Lauderdale charter hub promoted to start_end_base",
+			name:            "Marina with explicit embarkation base description promoted to start_end_base",
 			recName:         "Bahia Mar Yachting Center",
 			recType:         "Marina",
 			rawRole:         "overnight_stop",
-			desc:            "Major Fort Lauderdale embarkation marina and charter base.",
+			desc:            "Major embarkation marina and charter base.",
 			wantRole:        "start_end_base",
 		},
 		{
-			name:            "New England Newport Harbor yachting capital promoted to start_end_base",
-			recName:         "Newport Harbor & Downtown Waterfront Hub",
-			recType:         "Hub",
-			rawRole:         "overnight_stop",
-			desc:            "The premier yachting capital of New England, offering extensive mooring fields, world-class marinas, and complete marine services.",
-			stayDetailsJSON: `{"is_charter_base":false,"charter_companies":[]}`,
-			wantRole:        "start_end_base",
-		},
-		{
-			name:            "Offshore Block Island Great Salt Pond mentioning Newport in reasoning stays overnight_stop and clears charter fields",
+			name:            "Offshore salt pond stopover mentioning nearby charter hub in reasoning stays overnight_stop and clears charter fields",
 			recName:         "Block Island Great Salt Pond (New Harbor)",
 			recType:         "Hub",
 			rawRole:         "start_end_base",
-			desc:            "World-famous island cruising destination just south of Narragansett Bay entrance.",
+			desc:            "World-famous island cruising destination featuring massive mooring fields and vibrant onshore life.",
 			reasoning:       "An absolute must-visit destination within comfortable cruising range of Newport and Buzzards Bay.",
 			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":["Bareboat Sailing Charters"]}`,
 			wantRole:        "overnight_stop",
 		},
 		{
-			name:            "Private Yacht Club overlooking Newport Harbor stays overnight_stop",
+			name:            "Private Yacht Club stays overnight_stop",
 			recName:         "New York Yacht Club Harbour Court",
 			recType:         "Yacht Club",
 			rawRole:         "start_end_base",
-			desc:            "Renowned yacht club station overlooking Newport Harbor and Narragansett Bay.",
+			desc:            "Renowned yacht club station overlooking the harbor.",
 			stayDetailsJSON: `{"is_charter_base":true,"charter_companies":[]}`,
 			wantRole:        "overnight_stop",
 		},
@@ -280,17 +271,31 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 func TestEnrichRecommendationsFromGuide_AttachesCharterCompanies(t *testing.T) {
 	recs := []model.VoyageRecommendation{
 		{
-			Name:        "Padanaram Harbor (Apponagansett Bay)",
-			Type:        "Hub",
+			Name:        "South Wharf Yacht Yard & Marina (Padanaram)",
+			Type:        "Marina",
 			VoyageRole:  "overnight_stop",
-			Description: "Quintessential New England harbor town on the western shore of Buzzards Bay.",
+			Latitude:    41.5845,
+			Longitude:   -70.9462,
+			Description: "Full-service marina on the western shore of the bay.",
 			StayDetails: model.RawJSON(`{"is_charter_base":false,"charter_companies":[]}`),
 		},
 		{
 			Name:        "Newport Harbor & Downtown Waterfront Hub",
 			Type:        "Hub",
 			VoyageRole:  "overnight_stop",
-			Description: "Historic Narragansett Bay harbor.",
+			Latitude:    41.4900,
+			Longitude:   -71.3128,
+			Description: "Historic harbor hub.",
+			StayDetails: model.RawJSON(`{"is_charter_base":false,"charter_companies":[]}`),
+		},
+		{
+			Name:        "Great Salt Pond (New Harbor, Block Island)",
+			Type:        "Hub",
+			VoyageRole:  "overnight_stop",
+			Latitude:    41.1850,
+			Longitude:   -71.5775,
+			Description: "Landlocked island cruising stopover.",
+			Reasoning:   "Within easy cruising range of Newport and Padanaram.",
 			StayDetails: model.RawJSON(`{"is_charter_base":false,"charter_companies":[]}`),
 		},
 	}
@@ -298,13 +303,14 @@ func TestEnrichRecommendationsFromGuide_AttachesCharterCompanies(t *testing.T) {
 		CharterInfo: model.RawJSON(`{
 			"is_charter_destination": true,
 			"companies": [
-				{"name": "Nauti Jane's Boat Rentals (Cape Yachts)", "url": "https://www.nautijanesboatrentals.com/"},
+				{"name": "Nauti Jane's Yacht Charters", "base_marina": "South Wharf Yacht Yard", "location": "Padanaram, MA", "url": "https://www.nautijanesboatrentals.com/"},
 				{"name": "Bareboat Sailing Charters", "base_marina": "Goat Island / Newport Harbor", "location": "Newport, RI", "url": "https://www.bareboatsailing.com/"}
 			]
 		}`),
 	}
 	enrichRecommendationsFromGuide(recs, guide)
-	for i, r := range recs {
+	for i := 0; i < 2; i++ {
+		r := recs[i]
 		if r.VoyageRole != "start_end_base" {
 			t.Errorf("recs[%d] (%s) VoyageRole = %q, want start_end_base", i, r.Name, r.VoyageRole)
 		}
@@ -316,6 +322,9 @@ func TestEnrichRecommendationsFromGuide_AttachesCharterCompanies(t *testing.T) {
 		if !sd.IsCharterBase || len(sd.CharterCompanies) == 0 {
 			t.Errorf("recs[%d] (%s) expected is_charter_base=true and non-empty charter_companies, got %+v", i, r.Name, sd)
 		}
+	}
+	if recs[2].VoyageRole != "overnight_stop" {
+		t.Errorf("expected island stopover recs[2] (%s) to remain overnight_stop, got %q", recs[2].Name, recs[2].VoyageRole)
 	}
 }
 
@@ -330,7 +339,7 @@ func TestMergeVerifiedPlacesIntoRecommendations(t *testing.T) {
 		},
 	}
 	rawPlaces := json.RawMessage(`[
-		{"name":"Bahia Mar Yachting Center","type":"Marina","address":"801 Seabreeze Blvd, Fort Lauderdale, FL","latitude":26.1132,"longitude":-80.1062,"website_uri":"https://bahiamar.com"},
+		{"name":"Bahia Mar Yacht Charters","type":"Marina","address":"801 Seabreeze Blvd, Fort Lauderdale, FL","latitude":26.1132,"longitude":-80.1062,"website_uri":"https://bahiamar.com","types":["marina","yacht_charter"]},
 		{"name":"Dinner Key Marina","type":"Marina","address":"3400 Pan American Dr, Miami, FL","latitude":25.7275,"longitude":-80.2341,"website_uri":"https://miami.gov"},
 		{"name":"Newport Yacht Charters","type":"Marina","address":"Bowen's Wharf, Newport, RI","latitude":41.4885,"longitude":-71.3150,"website_uri":"https://newportyachtcharters.com","types":["point_of_interest","yacht_charter"]},
 		{"name":"Bimini Blue Water Marina","type":"Marina","address":"Alice Town, Bimini","latitude":25.7265,"longitude":-79.2974},
@@ -341,11 +350,11 @@ func TestMergeVerifiedPlacesIntoRecommendations(t *testing.T) {
 	if len(merged) != 4 {
 		t.Fatalf("expected 4 recommendations after merging verified places, got %d", len(merged))
 	}
-	if merged[1].Name != "Bahia Mar Yachting Center" || merged[1].VoyageRole != "start_end_base" {
-		t.Errorf("expected Bahia Mar Yachting Center as start_end_base, got name=%q role=%q", merged[1].Name, merged[1].VoyageRole)
+	if merged[1].Name != "Bahia Mar Yacht Charters" || merged[1].VoyageRole != "start_end_base" {
+		t.Errorf("expected Bahia Mar Yacht Charters as start_end_base, got name=%q role=%q", merged[1].Name, merged[1].VoyageRole)
 	}
-	if merged[2].Name != "Dinner Key Marina" || merged[2].VoyageRole != "start_end_base" {
-		t.Errorf("expected Dinner Key Marina as start_end_base, got name=%q role=%q", merged[2].Name, merged[2].VoyageRole)
+	if merged[2].Name != "Dinner Key Marina" || merged[2].VoyageRole != "overnight_stop" {
+		t.Errorf("expected plain marina Dinner Key Marina as overnight_stop, got name=%q role=%q", merged[2].Name, merged[2].VoyageRole)
 	}
 	if merged[3].Name != "Newport Yacht Charters" || merged[3].VoyageRole != "start_end_base" {
 		t.Errorf("expected Newport Yacht Charters as start_end_base, got name=%q role=%q", merged[3].Name, merged[3].VoyageRole)

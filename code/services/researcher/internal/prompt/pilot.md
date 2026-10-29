@@ -95,7 +95,7 @@ Output: Produce a JSON object strictly following this schema:
 Important: 
 - **CRITICAL**: For 'airports', use the `distance_meters` returned by the `FindPlacesNearby` tool (converted to KM) to ensure accuracy. If you must use a general search result, try to verify the distance accurately.
 - **CRITICAL**: For 'hubs', 'charter_info.companies', 'hazards', and 'points_of_interest', you MUST include valid 'url' and 'references'. These are the most important fields for the user to verify the information. 
-- For 'charter_info.companies', search the ENTIRE cruising circle (all compass sectors and perimeter yachting capitals such as Newport RI when the circle is centered in Buzzards Bay/Dartmouth MA, or Annapolis/Rock Hall when centered in Chesapeake Bay) — never restrict charter research to only the center town. Include `base_marina` and `location` (city/harbor) for each company and find as many reputable local, regional, and international companies as possible (at least 5-10 if available).
+- For 'charter_info.companies', search the ENTIRE cruising circle across all compass sectors and perimeter yachting ports — never restrict charter research to only the center town. Include `base_marina` (the specific marina or harbor name where the fleet is berthed) and `location` (city/port) for each company, and find as many reputable local, regional, and international bareboat/crewed yacht charter companies as possible (at least 5-10 if available).
 - Limit "references" to a maximum of 2 URLs per section.
 - Prefer direct source URLs over long redirect URLs.
 - If you cannot find specific data, leave the field empty or null, but MUST return the valid JSON structure.

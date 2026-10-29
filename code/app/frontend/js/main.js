@@ -3160,27 +3160,32 @@ async function renderRecommendations() {
             return false;
         };
 
-        const isCharterOrStartBase = (rec) => {
+        const isNonCharterBaseFacility = (rec) => {
             const type = (rec.type || '').toLowerCase();
             if (type.includes('anchor') || type.includes('moor') || type.includes('fuel') || type.includes('launch') || type.includes('yacht club')) {
-                return false;
+                return true;
             }
             const name = (rec.name || '').toLowerCase();
-            const stopoverOnlyKeywords = [
-                'resort, spa', 'resort & spa', 'island resort', 'harbour inn', 'harbor inn',
-                "soper's hole", 'sopers hole', 'freshwater pond', 'scrub island', 'bitter end',
-                'saba rock', 'leverick', 'marina cay', 'cooper island', 'peter island',
-                'norman island', 'jost van dyke', 'st. michaels', 'st michaels', 'oxford',
-                'tilghman', 'knapps narrows', 'poplar island',
-                'block island', 'great salt pond', 'new shoreham', 'old harbor', "payne's dock", "champlain's",
-                'cuttyhunk', 'gosnold', 'hadley harbor', 'naushon', 'tarpaulin cove', 'pasque', 'nashawena', 'penikese',
-                'edgartown', 'vineyard haven', 'oak bluffs', 'menemsha', 'lake tashmoo', 'chappaquiddick', 'katama',
-                'dutch island', 'prudence island', 'patience island', 'hope island', 'conanicut', 'jamestown',
-                'mackerel cove', 'friday harbor', 'roche harbor', 'lopez island', 'orcas island',
-                'kingman', 'red brook', "pope's island", 'popes island', 'fairhaven shipyard', 'bristol harbor',
-                'herreshoff', 'mattapoisett', 'marion harbor', 'sippican', 'burr brothers',
+            const nonBaseCategoryKeywords = [
+                'resort, spa', 'resort & spa', 'island resort', 'beach resort',
+                'harbour inn', 'harbor inn', 'beach club', 'shipyard', 'boatworks',
+                'marine railway', 'museum', 'state park', 'national park',
+                'wildlife refuge', 'nature reserve', 'salt pond', 'inner harbor & pond',
+                'mooring field',
             ];
-            if (stopoverOnlyKeywords.some(kw => name.includes(kw))) {
+            if (nonBaseCategoryKeywords.some(kw => name.includes(kw))) {
+                return true;
+            }
+            const fullText = `${rec.name || ''} ${rec.description || ''} ${rec.reasoning || ''}`.toLowerCase();
+            const hasExplicitCharterBase = ['charter base', 'charter fleet', 'bareboat charter', 'embarkation base', 'charter embarkation'].some(sig => fullText.includes(sig));
+            if (!hasExplicitCharterBase && ['island cruising destination', 'out-island', 'uninhabited', 'hurricane hole', 'stopover'].some(sig => fullText.includes(sig))) {
+                return true;
+            }
+            return false;
+        };
+
+        const isCharterOrStartBase = (rec) => {
+            if (isNonCharterBaseFacility(rec)) {
                 return false;
             }
 
@@ -3190,32 +3195,19 @@ async function renderRecommendations() {
                     sd = typeof rec.stay_details === 'string' ? JSON.parse(rec.stay_details) : rec.stay_details;
                 } catch (_) {}
             }
-            if (sd && (sd.is_charter_base || (Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0))) {
+            if (sd && Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0) {
                 return true;
             }
             const role = (rec.voyage_role || '').toLowerCase();
-            if (role === 'start_end_base') {
+            if (role === 'start_end_base' && sd && sd.is_charter_base) {
                 return true;
             }
 
             const text = `${rec.name || ''} ${rec.description || ''} ${rec.reasoning || ''}`.toLowerCase();
             const charterSignals = [
-                'charter base', 'charter fleet', 'bareboat charter', 'yacht charter',
-                'charter company', 'charter companies', 'charter operator', 'embarkation base',
-                'sailing capital', 'yachting capital', 'starting point', 'embarkation', 'turnaround', 'departure port',
-                'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax',
-                'waypoints', 'cruise annapolis', 'annapolis bay charters', 'haven charters',
-                'annapolis city marina', 'annapolis harbor', 'annapolis harbour', 'port annapolis',
-                'bert jabin',
-                'newport harbor', 'newport yachting center', "bowen's wharf", "bannister's wharf",
-                'bareboat sailing charters', "america's cup charters", 'onwatch sailing',
-                'south wharf yacht', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht',
-                'bahia mar', 'las olas marina', 'pier sixty-six', 'pier 66', '15th street fisheries',
-                'lauderdale marine center', 'dinner key', 'bayside marketplace', 'miami beach marina',
-                'crandon park marina', 'sea isle marina', 'mahi marina',
-                'san juan sailing', 'anacortes yacht', 'bellingham yacht',
-                'bvi yacht charters', 'horizon yacht', 'voyage charters', 'conch charters',
-                'tortola marine management', 'tmm yacht', 'footloose',
+                'charter base', 'charter fleet', 'bareboat charter',
+                'embarkation base', 'charter embarkation', 'homeport for charter',
+                'turnaround base',
             ];
             return charterSignals.some(sig => text.includes(sig));
         };
@@ -7628,31 +7620,27 @@ function generateGuideHTML(guide) {
             const t = (r.type || '').toLowerCase();
             if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch') || t.includes('yacht club')) return false;
             const n = (r.name || '').toLowerCase();
-            const stopoverOnly = [
-                'resort, spa', 'resort & spa', 'island resort', 'harbour inn', 'harbor inn',
-                "soper's hole", 'sopers hole', 'freshwater pond', 'scrub island', 'bitter end',
-                'saba rock', 'leverick', 'marina cay', 'cooper island', 'peter island',
-                'norman island', 'jost van dyke', 'st. michaels', 'st michaels', 'oxford',
-                'tilghman', 'knapps narrows', 'poplar island',
-                'block island', 'great salt pond', 'new shoreham', 'old harbor', "payne's dock", "champlain's",
-                'cuttyhunk', 'gosnold', 'hadley harbor', 'naushon', 'tarpaulin cove', 'pasque', 'nashawena', 'penikese',
-                'edgartown', 'vineyard haven', 'oak bluffs', 'menemsha', 'lake tashmoo', 'chappaquiddick', 'katama',
-                'dutch island', 'prudence island', 'patience island', 'hope island', 'conanicut', 'jamestown',
-                'mackerel cove', 'friday harbor', 'roche harbor', 'lopez island', 'orcas island',
-                'kingman', 'red brook', "pope's island", 'popes island', 'fairhaven shipyard', 'bristol harbor',
-                'herreshoff', 'mattapoisett', 'marion harbor', 'sippican', 'burr brothers',
+            const nonBaseCategories = [
+                'resort, spa', 'resort & spa', 'island resort', 'beach resort',
+                'harbour inn', 'harbor inn', 'beach club', 'shipyard', 'boatworks',
+                'marine railway', 'museum', 'state park', 'national park',
+                'wildlife refuge', 'nature reserve', 'salt pond', 'inner harbor & pond',
+                'mooring field',
             ];
-            if (stopoverOnly.some(kw => n.includes(kw))) return false;
-            const role = (r.voyage_role || '').toLowerCase();
-            if (role === 'start_end_base') return true;
+            if (nonBaseCategories.some(kw => n.includes(kw))) return false;
+            const text = `${r.name || ''} ${r.description || ''} ${r.reasoning || ''}`.toLowerCase();
+            const hasExplicitCharterBase = ['charter base', 'charter fleet', 'bareboat charter', 'embarkation base', 'charter embarkation'].some(sig => text.includes(sig));
+            if (!hasExplicitCharterBase && ['island cruising destination', 'out-island', 'uninhabited', 'hurricane hole', 'stopover'].some(sig => text.includes(sig))) {
+                return false;
+            }
             if (r.stay_details) {
                 try {
                     const sd = typeof r.stay_details === 'string' ? JSON.parse(r.stay_details) : r.stay_details;
-                    if (sd && (sd.is_charter_base || (Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0))) return true;
+                    if (sd && Array.isArray(sd.charter_companies) && sd.charter_companies.length > 0) return true;
+                    if ((r.voyage_role || '').toLowerCase() === 'start_end_base' && sd && sd.is_charter_base) return true;
                 } catch (_) {}
             }
-            const text = `${r.name || ''} ${r.description || ''} ${r.reasoning || ''}`.toLowerCase();
-            return ['charter base', 'charter fleet', 'bareboat charter', 'embarkation base', 'charter embarkation', 'sailing capital', 'yachting capital', 'departure port', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'bareboat sailing charters', "america's cup charters", 'onwatch sailing', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht'].some(sig => text.includes(sig));
+            return ['charter base', 'charter fleet', 'bareboat charter', 'embarkation base', 'charter embarkation', 'homeport for charter', 'turnaround base'].some(sig => text.includes(sig));
         })
         : [];
 

@@ -148,8 +148,8 @@ func searchBoundaryHint(centerLat, centerLng float64, radiusNM float64) string {
 
 	hint := fmt.Sprintf(
 		"The circle boundary reaches approximately: North edge (%s, %s), South edge (%s, %s), East edge (%s, %s), West edge (%s, %s). "+
-			"CRITICAL OPEN-WATER CROSSING RULE: When the center is in open water (e.g. Florida Straits between Miami/Fort Lauderdale and Bimini, a sound, or a bay), you MUST pass the EXACT circle center coordinates (%.4f, %.4f) to `facility_discovery` — NEVER pass the coordinates of only one island or shore (such as Bimini alone) to `facility_discovery`! "+
-			"Identify the coastlines, major yachting cities (e.g. Fort Lauderdale, Miami, Biscayne Bay, Dania Beach, Pompano Beach, Boca Raton on a western edge), islands, and inlets located near EACH of those four perimeter coordinates (BOTH the West edge AND East edge, and BOTH the North edge AND South edge) and include all of their charter bases, marinas, moorings, fuel docks, and anchorages.",
+			"CRITICAL OPEN-WATER CROSSING RULE: When the center is in open water (such as a strait, sound, channel, or bay), you MUST pass the EXACT circle center coordinates (%.4f, %.4f) to `facility_discovery` — NEVER pass the coordinates of only one island or shore to `facility_discovery`! "+
+			"Identify the coastlines, major yachting ports, islands, and inlets located near EACH of those four perimeter coordinates (BOTH the West edge AND East edge, and BOTH the North edge AND South edge) and include all of their charter bases, marinas, moorings, fuel docks, and anchorages.",
 		fmtLat(nLat), fmtLng(centerLng),
 		fmtLat(sLat), fmtLng(centerLng),
 		fmtLat(centerLat), fmtLng(eLng),
@@ -483,9 +483,10 @@ func isCharterOperatorPlace(name string, types []string) bool {
 	// Exclude museums, fishing charters, tour boats, ferries, and small-craft rentals
 	// that are not bareboat/crewed cruising yacht charter embarkation bases.
 	nonCruisingKeywords := []string{
-		"museum", "herreshoff", "fishing", "sportfishing", "angler", "bait",
+		"museum", "fishing", "sportfishing", "angler", "bait",
 		"ferry", "water taxi", "launch service", "parasail", "kayak", "paddle",
-		"jet ski", "pontoon", "whale watch", "harbor tour", "sightseeing",
+		"canoe", "jet ski", "pontoon", "whale watch", "dolphin", "harbor tour",
+		"sightseeing", "dinner cruise", "sunset cruise", "party boat",
 	}
 	for _, kw := range nonCruisingKeywords {
 		if strings.Contains(nl, kw) {
@@ -524,7 +525,7 @@ func clearCharterBaseFromStayDetails(rec *model.VoyageRecommendation) {
 }
 
 func addCharterCompanyToRecommendation(rec *model.VoyageRecommendation, companyName string) {
-	if isStopoverOrNonBaseLocation(rec.Name, rec.Type) {
+	if isStopoverOrNonBaseLocation(rec.Name, rec.Description, rec.Reasoning, rec.Type) {
 		return
 	}
 	companyName = strings.TrimSpace(companyName)
@@ -609,7 +610,7 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 			bestIdx := -1
 			bestDist := 0.5
 			for i := range recs {
-				if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Type) {
+				if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Description, recs[i].Reasoning, recs[i].Type) {
 					continue
 				}
 				if recs[i].Latitude == 0 && recs[i].Longitude == 0 {
@@ -672,7 +673,7 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 			Reasoning:   "Included from verified Google Places nautical infrastructure sweep within the cruising circle.",
 			References:  refs,
 		}
-		if isCharterPlace && !isStopoverOrNonBaseLocation(rec.Name + " " + p.Address, rec.Type) {
+		if isCharterPlace && !isStopoverOrNonBaseLocation(rec.Name+" "+p.Address, rec.Description, rec.Reasoning, rec.Type) {
 			addCharterCompanyToRecommendation(&rec, name)
 		}
 		normalizeRecommendationRole(&rec)
@@ -682,6 +683,44 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 	return recs
 }
 
+func extractDistinctiveLocationTokens(fields ...string) []string {
+	genericWords := map[string]bool{
+		"marina": true, "harbor": true, "harbour": true, "yacht": true, "yachts": true,
+		"yachting": true, "center": true, "centre": true, "club": true, "yard": true,
+		"boatyard": true, "wharf": true, "dock": true, "docks": true, "pier": true,
+		"basin": true, "cove": true, "port": true, "point": true, "island": true,
+		"islands": true, "sound": true, "river": true, "creek": true, "channel": true,
+		"passage": true, "north": true, "south": true, "east": true, "west": true,
+		"inner": true, "outer": true, "upper": true, "lower": true, "downtown": true,
+		"waterfront": true, "village": true, "town": true, "city": true, "county": true,
+		"state": true, "united": true, "states": true, "charter": true, "charters": true,
+		"sailing": true, "boat": true, "boats": true, "rental": true, "rentals": true,
+	}
+	var tokens []string
+	seen := make(map[string]bool)
+	for _, raw := range fields {
+		f := strings.ToLower(strings.TrimSpace(raw))
+		if f == "" {
+			continue
+		}
+		if idx := strings.Index(f, ","); idx > 0 {
+			phrase := strings.TrimSpace(f[:idx])
+			if len(phrase) >= 4 && !genericWords[phrase] && !seen[phrase] {
+				seen[phrase] = true
+				tokens = append(tokens, phrase)
+			}
+		}
+		cleaned := strings.NewReplacer("/", " ", ",", " ", "(", " ", ")", " ", "-", " ").Replace(f)
+		for _, w := range strings.Fields(cleaned) {
+			if len(w) >= 4 && !genericWords[w] && !seen[w] {
+				seen[w] = true
+				tokens = append(tokens, w)
+			}
+		}
+	}
+	return tokens
+}
+
 func enrichRecommendationsFromGuide(recs []model.VoyageRecommendation, guide *model.VoyageGuide) {
 	if len(recs) == 0 || guide == nil || len(guide.CharterInfo) == 0 {
 		return
@@ -689,10 +728,12 @@ func enrichRecommendationsFromGuide(recs []model.VoyageRecommendation, guide *mo
 	var charter struct {
 		IsCharterDestination bool `json:"is_charter_destination"`
 		Companies            []struct {
-			Name       string `json:"name"`
-			BaseMarina string `json:"base_marina"`
-			Location   string `json:"location"`
-			URL        string `json:"url"`
+			Name       string  `json:"name"`
+			BaseMarina string  `json:"base_marina"`
+			Location   string  `json:"location"`
+			Latitude   float64 `json:"latitude"`
+			Longitude  float64 `json:"longitude"`
+			URL        string  `json:"url"`
 		} `json:"companies"`
 	}
 	if err := json.Unmarshal(guide.CharterInfo, &charter); err != nil {
@@ -702,50 +743,32 @@ func enrichRecommendationsFromGuide(recs []model.VoyageRecommendation, guide *mo
 		return
 	}
 
-	harborSynonyms := map[string][]string{
-		"dartmouth":    {"padanaram", "south wharf", "south dartmouth"},
-		"padanaram":    {"padanaram", "south wharf", "south dartmouth"},
-		"cape yachts":  {"south wharf", "padanaram"},
-		"nauti jane":   {"south wharf", "padanaram"},
-		"swift yacht":  {"padanaram", "south wharf"},
-		"buzzards bay": {"padanaram", "south wharf"},
-		"newport":      {"newport harbor", "newport yachting center", "goat island", "bowen's wharf", "bannister's wharf"},
-	}
-
 	for _, comp := range charter.Companies {
 		compName := strings.TrimSpace(comp.Name)
 		if compName == "" || !isCharterOperatorPlace(compName, []string{"yacht_charter"}) {
 			continue
 		}
-		haystack := strings.ToLower(comp.Name + " " + comp.BaseMarina + " " + comp.Location + " " + comp.URL)
-		var matchTokens []string
-		for _, field := range []string{comp.BaseMarina, comp.Location} {
-			f := strings.ToLower(strings.TrimSpace(field))
-			if idx := strings.Index(f, ","); idx > 0 {
-				f = strings.TrimSpace(f[:idx])
-			}
-			if len(f) >= 4 {
-				matchTokens = append(matchTokens, f)
-			}
-		}
-		for kw, syns := range harborSynonyms {
-			if strings.Contains(haystack, kw) {
-				matchTokens = append(matchTokens, syns...)
-			}
-		}
+		matchTokens := extractDistinctiveLocationTokens(comp.BaseMarina, comp.Location)
 
 		for i := range recs {
-			if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Type) {
+			if isStopoverOrNonBaseLocation(recs[i].Name, recs[i].Description, recs[i].Reasoning, recs[i].Type) {
 				continue
 			}
-			// Match strictly against recommendation Name (never Description or Reasoning,
-			// which often mention nearby cities like "within cruising range of Newport").
-			recName := strings.ToLower(recs[i].Name)
 			matched := false
-			for _, tok := range matchTokens {
-				if tok != "" && strings.Contains(recName, tok) {
+			if comp.Latitude != 0 && comp.Longitude != 0 && recs[i].Latitude != 0 && recs[i].Longitude != 0 {
+				if haversine(comp.Latitude, comp.Longitude, recs[i].Latitude, recs[i].Longitude, "nm") <= 0.8 {
 					matched = true
-					break
+				}
+			}
+			if !matched {
+				// Match strictly against recommendation Name (never Description or Reasoning,
+				// which often mention nearby cities like "within cruising range of ...").
+				recName := strings.ToLower(recs[i].Name)
+				for _, tok := range matchTokens {
+					if tok != "" && strings.Contains(recName, tok) {
+						matched = true
+						break
+					}
 				}
 			}
 			if matched {
@@ -835,7 +858,10 @@ func isOpenWaterPassageWaypoint(rec model.VoyageRecommendation) bool {
 	return false
 }
 
-func isStopoverOrNonBaseLocation(name, recType string) bool {
+// isStopoverOrNonBaseLocation uses strictly region-independent structural rules
+// (facility type, generic non-base facility category, and stopover/island description
+// semantics) to identify locations that cannot be commercial charter embarkation bases.
+func isStopoverOrNonBaseLocation(name, desc, reasoning, recType string) bool {
 	t := strings.ToLower(strings.TrimSpace(recType))
 	if strings.Contains(t, "anchor") || strings.Contains(t, "moor") ||
 		strings.Contains(t, "fuel") || strings.Contains(t, "launch") ||
@@ -843,23 +869,34 @@ func isStopoverOrNonBaseLocation(name, recType string) bool {
 		return true
 	}
 	n := strings.ToLower(name)
-	stopoverOnlyKeywords := []string{
-		"resort, spa", "resort & spa", "island resort", "harbour inn", "harbor inn",
-		"soper's hole", "sopers hole", "freshwater pond", "scrub island", "bitter end",
-		"saba rock", "leverick", "marina cay", "cooper island", "peter island",
-		"norman island", "jost van dyke", "st. michaels", "st michaels", "oxford",
-		"tilghman", "knapps narrows", "poplar island",
-		"block island", "great salt pond", "new shoreham", "old harbor", "payne's dock", "champlain's",
-		"cuttyhunk", "gosnold", "hadley harbor", "naushon", "tarpaulin cove", "pasque", "nashawena", "penikese",
-		"edgartown", "vineyard haven", "oak bluffs", "menemsha", "lake tashmoo", "chappaquiddick", "katama",
-		"dutch island", "prudence island", "patience island", "hope island", "conanicut", "jamestown",
-		"mackerel cove", "friday harbor", "roche harbor", "lopez island", "orcas island",
-		"kingman", "red brook", "pope's island", "popes island", "fairhaven shipyard", "bristol harbor",
-		"herreshoff", "mattapoisett", "marion harbor", "sippican", "burr brothers",
+	nonBaseCategoryKeywords := []string{
+		"resort, spa", "resort & spa", "island resort", "beach resort",
+		"harbour inn", "harbor inn", "beach club", "shipyard", "boatworks",
+		"marine railway", "museum", "state park", "national park",
+		"wildlife refuge", "nature reserve", "salt pond", "inner harbor & pond",
+		"mooring field",
 	}
-	for _, kw := range stopoverOnlyKeywords {
+	for _, kw := range nonBaseCategoryKeywords {
 		if strings.Contains(n, kw) {
 			return true
+		}
+	}
+
+	full := strings.ToLower(name + " " + desc + " " + reasoning)
+	hasExplicitCharterBase := strings.Contains(full, "charter base") ||
+		strings.Contains(full, "charter fleet") ||
+		strings.Contains(full, "bareboat charter") ||
+		strings.Contains(full, "embarkation base") ||
+		strings.Contains(full, "charter embarkation")
+	if !hasExplicitCharterBase {
+		stopoverPhrases := []string{
+			"island cruising destination", "out-island", "uninhabited",
+			"hurricane hole", "first or last night stopover", "overnight stopover",
+		}
+		for _, sp := range stopoverPhrases {
+			if strings.Contains(full, sp) {
+				return true
+			}
 		}
 	}
 	return false
@@ -882,7 +919,7 @@ func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 		clearCharterBaseFromStayDetails(rec)
 		return
 	}
-	if isStopoverOrNonBaseLocation(rec.Name, rec.Type) {
+	if isStopoverOrNonBaseLocation(rec.Name, rec.Description, rec.Reasoning, rec.Type) {
 		rec.VoyageRole = "overnight_stop"
 		clearCharterBaseFromStayDetails(rec)
 		return
@@ -914,7 +951,7 @@ func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 }
 
 func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJSON string) bool {
-	if isStopoverOrNonBaseLocation(name, "") {
+	if isStopoverOrNonBaseLocation(name, desc, reasoning, "") {
 		return false
 	}
 	var sd struct {
@@ -930,39 +967,13 @@ func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJS
 		}
 	}
 
-	n := strings.ToLower(name)
 	full := strings.ToLower(name + " " + desc + " " + reasoning)
 
-	// Known embarkation marina/harbor names must match the recommendation's OWN name
-	// (never desc/reasoning, which often mention nearby cities like "across from Newport").
-	embarkationBaseNames := []string{
-		"annapolis city marina", "annapolis harbor", "annapolis harbour", "port annapolis",
-		"eastport yacht", "bert jabin",
-		"newport harbor", "newport yachting center", "goat island marina", "bowen's wharf", "bannister's wharf",
-		"south wharf yacht", "padanaram",
-		"bahia mar", "las olas marina", "pier sixty-six", "pier 66", "15th street fisheries",
-		"lauderdale marine center", "dinner key", "bayside marketplace", "miami beach marina",
-		"crandon park marina", "sea isle marina", "mahi marina",
-		"nanny cay", "wickhams cay", "hodges creek", "parham town",
-	}
-	for _, baseName := range embarkationBaseNames {
-		if strings.Contains(n, baseName) {
-			return true
-		}
-	}
-
-	// Explicit charter embarkation phrases and verified fleet names.
+	// Region-agnostic positive evidence of a commercial charter embarkation base.
 	charterEvidence := []string{
-		"charter base", "charter fleet", "bareboat charter", "embarkation base", "charter embarkation",
-		"sailing capital", "yachting capital", "departure port",
-		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
-		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
-		"bareboat sailing charters", "america's cup charters", "onwatch sailing",
-		"cape yachts", "nauti jane", "swift yacht", "buzzards bay yacht",
-		"san juan sailing", "anacortes yacht", "bellingham yacht",
-		"bvi yacht charters", "horizon yacht", "voyage charters", "conch charters",
-		"tortola marine management", "tmm yacht", "footloose", "kiriacoulis",
-		"istion", "angelina yacht", "sunsail base", "moorings base",
+		"charter base", "charter fleet", "bareboat charter",
+		"embarkation base", "charter embarkation", "homeport for charter",
+		"turnaround base",
 	}
 	for _, sig := range charterEvidence {
 		if strings.Contains(full, sig) {
@@ -970,8 +981,5 @@ func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJS
 		}
 	}
 
-	if role == "start_end_base" || sd.IsCharterBase {
-		return true
-	}
 	return false
 }
