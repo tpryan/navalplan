@@ -36,6 +36,7 @@ var queryRules = []queryRule{
 	{regexp.MustCompile(`\b(fuel|diesel)\b`), TypeFuelStation, true},
 	{regexp.MustCompile(`\byacht club`), TypeYachtClub, true},
 	{regexp.MustCompile(`\b(boat launch|ramp)\b`), TypeBoatLaunch, true},
+	{regexp.MustCompile(`\b(charter|boat rental|yacht rental)\b`), TypeMarina, true},
 	{regexp.MustCompile(`\bmarina`), TypeMarina, false},
 	{regexp.MustCompile(`\b(cove|bay|harbou?r)\b`), TypeAnchorage, false},
 	{regexp.MustCompile(`\brestaurant`), TypeRestaurant, false},
@@ -165,9 +166,15 @@ func nearbyTypesForQuery(query string) []string {
 // sector fan-out (> 15 km). Using SearchNearby with IncludedTypes={"marina"} on
 // each compass sector guarantees up to 20 marinas per sector ranked strictly by
 // distance from that sector point, covering every shore around an open-water center.
+// Note: charter/rental queries ("yacht charter boat rental") intentionally return nil
+// here so sector fan-out runs SearchText with the actual charter query across all 8
+// compass sectors rather than collapsing into a duplicate IncludedTypes={"marina"} lookup.
 func wideAreaNearbyTypes(query string) []string {
 	q := strings.ToLower(query)
-	if strings.Contains(q, "marina") || strings.Contains(q, "charter") || strings.Contains(q, "rental") {
+	if strings.Contains(q, "charter") || strings.Contains(q, "rental") {
+		return nil
+	}
+	if strings.Contains(q, "marina") {
 		return []string{"marina"}
 	}
 	return nearbyTypesForQuery(query)

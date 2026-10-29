@@ -24,8 +24,8 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
 1.  **A single `batch_google_search` call** with ALL of these queries:
     - "Sailing season months hurricane season [Location]"
     - "Sailing hazards coral reefs currents [Location] official guides"
-    - "Major sailing hubs marinas [Location] official websites and links"
-    - "Comprehensive list of yacht charter companies in [Location] with websites"
+    - "Major sailing hubs marinas [Location & All Major Yachting Harbors Inside Search Circle] official websites and links"
+    - "Comprehensive list of yacht charter companies, bareboat/crewed charter fleets, and exact homeport marinas across [Location & All Major Yachting Harbors Inside Search Circle] with websites"
     - "Nearest airports to [Location] codes and links"
     - "Currency language emergency numbers [Location]"
     - "Security safety crime report for tourists and sailors in [Location] 2024 2025"
@@ -35,6 +35,7 @@ To minimize latency and ensure a complete guide, you MUST gather all necessary d
     - `territory`: "all" (or "us" for US waters, "international" for others)
 3.  **Multiple `FindPlacesNearby` calls** (Use the provided Latitude/Longitude):
     - `query`: "marina", `radius`: 50000
+    - `query`: "yacht charter boat rental", `radius`: 50000
     - `query`: "anchorage", `radius`: 50000
     - `query`: "yacht club", `radius`: 50000
     - `query`: "harbor", `radius`: 50000
@@ -70,7 +71,7 @@ Output: Produce a JSON object strictly following this schema:
   "charter_info": {
 	 "is_charter_destination": true,
 	 "companies": [
-		 { "name": "...", "url": "...", "references" : [...]}
+		 { "name": "...", "base_marina": "...", "location": "...", "url": "...", "references" : [...]}
 	 ]
   },
   "airports": [
@@ -94,7 +95,7 @@ Output: Produce a JSON object strictly following this schema:
 Important: 
 - **CRITICAL**: For 'airports', use the `distance_meters` returned by the `FindPlacesNearby` tool (converted to KM) to ensure accuracy. If you must use a general search result, try to verify the distance accurately.
 - **CRITICAL**: For 'hubs', 'charter_info.companies', 'hazards', and 'points_of_interest', you MUST include valid 'url' and 'references'. These are the most important fields for the user to verify the information. 
-- For 'charter_info.companies', try to find as many reputable local and international companies as possible (at least 5-10 if available).
+- For 'charter_info.companies', search the ENTIRE cruising circle (all compass sectors and perimeter yachting capitals such as Newport RI when the circle is centered in Buzzards Bay/Dartmouth MA, or Annapolis/Rock Hall when centered in Chesapeake Bay) — never restrict charter research to only the center town. Include `base_marina` and `location` (city/harbor) for each company and find as many reputable local, regional, and international companies as possible (at least 5-10 if available).
 - Limit "references" to a maximum of 2 URLs per section.
 - Prefer direct source URLs over long redirect URLs.
 - If you cannot find specific data, leave the field empty or null, but MUST return the valid JSON structure.

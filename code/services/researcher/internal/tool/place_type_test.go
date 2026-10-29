@@ -11,6 +11,7 @@ func TestClassifyPlace(t *testing.T) {
 		// Every query in facility_discovery.md yields a renderable type.
 		{"anchorage", nil, TypeAnchorage},
 		{"marina", []string{"marina", "point_of_interest"}, TypeMarina},
+		{"yacht charter boat rental", []string{"point_of_interest", "travel_agency"}, TypeMarina},
 		{"yacht club", []string{"point_of_interest"}, TypeYachtClub},
 		{"mooring", nil, TypeMooring},
 		{"diesel fuel dock", []string{"marina"}, TypeFuelStation},

@@ -15,6 +15,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "buzzards_bay_newport_wide_circle_guide",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Research sailing guide for location: Dartmouth, Massachusetts, United States (including Newport) (Lat: 41.529371, Lng: -70.959654). Cover the entire cruising area within a 36 nm (~36 nm) radius of this center point, not just the immediate vicinity of the center location — explicitly include major yachting harbors and yacht charter companies across all sectors of the circle (including Dartmouth, Massachusetts, United States (including Newport)). The circle boundary reaches approximately: North edge (42.13°N, 70.96°W), South edge (40.93°N, 70.96°W), East edge (41.53°N, 70.16°W), West edge (41.53°N, 71.76°W). Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

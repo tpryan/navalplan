@@ -3195,11 +3195,14 @@ async function renderRecommendations() {
             const charterSignals = [
                 'charter base', 'charter fleet', 'bareboat charter', 'yacht charter',
                 'charter company', 'charter companies', 'charter operator', 'embarkation base',
-                'sailing capital', 'starting point', 'embarkation', 'turnaround', 'departure port',
+                'sailing capital', 'yachting capital', 'starting point', 'embarkation', 'turnaround', 'departure port',
                 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax',
                 'waypoints', 'cruise annapolis', 'annapolis bay charters', 'haven charters',
                 'annapolis city marina', 'annapolis harbor', 'annapolis harbour', 'port annapolis',
                 'bert jabin',
+                'newport harbor', 'newport yachting center', "bowen's wharf", "bannister's wharf",
+                'bareboat sailing charters', "america's cup charters", 'onwatch sailing',
+                'south wharf yacht', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht',
                 'bahia mar', 'las olas marina', 'pier sixty-six', 'pier 66', '15th street fisheries',
                 'lauderdale marine center', 'dinner key', 'bayside marketplace', 'miami beach marina',
                 'crandon park marina', 'sea isle marina', 'mahi marina',
@@ -7626,7 +7629,7 @@ function generateGuideHTML(guide) {
             const t = (r.type || '').toLowerCase();
             if (t.includes('anchor') || t.includes('moor') || t.includes('fuel') || t.includes('launch')) return false;
             const text = `${r.name || ''} ${r.description || ''} ${r.reasoning || ''}`.toLowerCase();
-            return ['charter base', 'charter fleet', 'bareboat charter', 'yacht charter', 'sailing capital', 'starting point', 'embarkation', 'turnaround', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'annapolis city marina', 'port annapolis', 'bert jabin', 'nanny cay', 'wickhams cay', 'hodges creek', 'parham town'].some(sig => text.includes(sig));
+            return ['charter base', 'charter fleet', 'bareboat charter', 'yacht charter', 'sailing capital', 'yachting capital', 'starting point', 'embarkation', 'turnaround', 'the moorings', 'sunsail', 'dream yacht', 'navigare', 'marinemax', 'waypoints', 'cruise annapolis', 'annapolis city marina', 'port annapolis', 'bert jabin', 'newport harbor', 'newport yachting center', "bowen's wharf", "bannister's wharf", 'bareboat sailing charters', "america's cup charters", 'onwatch sailing', 'south wharf yacht', 'cape yachts', 'nauti jane', 'swift yacht', 'buzzards bay yacht', 'nanny cay', 'wickhams cay', 'hodges creek', 'parham town'].some(sig => text.includes(sig));
         })
         : [];
 

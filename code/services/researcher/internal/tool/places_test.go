@@ -302,4 +302,13 @@ func TestFindPlaces_WideAreaSectorFanOut(t *testing.T) {
 	if textCalls != 1 || nearbyCalls != 0 {
 		t.Errorf("yacht club wide-area calls: got text=%d nearby=%d, want text=1 nearby=0", textCalls, nearbyCalls)
 	}
+
+	// "yacht charter boat rental" at 30 km -> fans out across 8 compass sectors using SearchText (1 center + 8 sectors = 9 SearchText calls, 0 SearchNearby calls).
+	textCalls, nearbyCalls = 0, 0
+	if _, err := p.FindPlaces(newMockContext(), PlacesArgs{Query: "yacht charter boat rental", Latitude: 10.0, Longitude: 20.0, Radius: 30000}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if textCalls != 9 || nearbyCalls != 0 {
+		t.Errorf("yacht charter wide-area calls: got text=%d nearby=%d, want text=9 nearby=0", textCalls, nearbyCalls)
+	}
 }

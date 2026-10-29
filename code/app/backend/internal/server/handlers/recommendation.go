@@ -207,6 +207,12 @@ func (h *Handler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
+	if guide, gErr := h.DB.GetVoyageGuide(r.Context(), voyageID); gErr == nil && guide != nil {
+		enrichRecommendationsFromGuide(recommendations, guide)
+	}
+	for i := range recommendations {
+		normalizeRecommendationRole(&recommendations[i])
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -295,7 +301,15 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 
 	locInfo := ""
 	if v.LocationName != nil {
-		locInfo = *v.LocationName
+		locInfo = strings.TrimSpace(*v.LocationName)
+	}
+	titleHint := strings.TrimSpace(v.Title)
+	if titleHint != "" && !strings.Contains(strings.ToLower(locInfo), strings.ToLower(titleHint)) {
+		if locInfo == "" {
+			locInfo = titleHint
+		} else {
+			locInfo = fmt.Sprintf("%s (including %s)", locInfo, titleHint)
+		}
 	}
 
 	count := recommendationCount(v.SearchRadius, v.SearchRadiusUnit)
@@ -318,6 +332,7 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 		"Recommend anchorages, moorings, marinas, and fuel docks within %d %s of center coordinates (latitude: %.4f, longitude: %.4f, %s, %s; center reference point near %s). "+
 			"IMPORTANT: %q is only the nearest point to the circle center — the search circle spans %d %s in ALL directions (N, NE, E, SE, S, SW, W, NW) across multiple shores, harbors, and rivers. "+
 			"Your batch_google_search queries and recommendations MUST explicitly cover major harbors, rivers, and creeks on EVERY shore inside the boundary (including Western/NW/SW shores as well as Eastern/NE/SE shores), not just %s. "+
+			"Identify every commercial yacht charter embarkation base across ALL major yachting harbors inside the search circle (not just the center point) as voyage_role=\"start_end_base\" with stay_details.is_charter_base=true and stay_details.charter_companies populated. "+
 			"Return at least %d recommendations, and include EVERY qualifying marina, mooring field, fuel dock, yacht club, and anchorage you find with verified coordinates — there is no upper limit. "+
 			"Pass the exact center coordinates (latitude: %.4f, longitude: %.4f) and full radius (%d %s = %.0f meters) to facility_discovery with mode: \"area\" — do NOT shift the center to a single island or town. %s",
 		v.SearchRadius, v.SearchRadiusUnit, *v.Latitude, *v.Longitude, latStr, lngStr, locInfo,
@@ -422,6 +437,11 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 
 	recommendations := wrapper.Recommendations
 	recommendations = mergeVerifiedPlacesIntoRecommendations(recommendations, statePlacesRaw)
+	if h.DB != nil {
+		if guide, gErr := h.DB.GetVoyageGuide(ctx, v.ID); gErr == nil && guide != nil {
+			enrichRecommendationsFromGuide(recommendations, guide)
+		}
+	}
 	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 
 	var savedRecs []model.VoyageRecommendation
@@ -458,6 +478,59 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	h.syncStartEndBasesToGuide(ctx, v.ID, savedRecs)
 }
 
+func isCharterOperatorPlace(name string, types []string) bool {
+	for _, t := range types {
+		tl := strings.ToLower(strings.TrimSpace(t))
+		if tl == "yacht_charter" || tl == "boat_rental" {
+			return true
+		}
+	}
+	nl := strings.ToLower(name)
+	return strings.Contains(nl, "charter") ||
+		strings.Contains(nl, "boat rental") ||
+		strings.Contains(nl, "yacht rental") ||
+		strings.Contains(nl, "sailing school")
+}
+
+func addCharterCompanyToRecommendation(rec *model.VoyageRecommendation, companyName string) {
+	companyName = strings.TrimSpace(companyName)
+	var sd map[string]any
+	if len(rec.StayDetails) > 0 {
+		_ = json.Unmarshal(rec.StayDetails, &sd)
+	}
+	if sd == nil {
+		sd = make(map[string]any)
+	}
+	sd["is_charter_base"] = true
+	var companies []string
+	if rawList, ok := sd["charter_companies"].([]any); ok {
+		for _, item := range rawList {
+			if s, okStr := item.(string); okStr && strings.TrimSpace(s) != "" {
+				companies = append(companies, strings.TrimSpace(s))
+			}
+		}
+	} else if strList, ok := sd["charter_companies"].([]string); ok {
+		companies = append(companies, strList...)
+	}
+	if companyName != "" {
+		exists := false
+		for _, c := range companies {
+			if strings.EqualFold(c, companyName) {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			companies = append(companies, companyName)
+		}
+	}
+	sd["charter_companies"] = companies
+	if b, err := json.Marshal(sd); err == nil {
+		rec.StayDetails = model.RawJSON(b)
+	}
+	rec.VoyageRole = "start_end_base"
+}
+
 func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, rawPlaces json.RawMessage) []model.VoyageRecommendation {
 	if len(rawPlaces) == 0 {
 		return recs
@@ -487,12 +560,39 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 		if name == "" || (p.Latitude == 0 && p.Longitude == 0) {
 			continue
 		}
+		isCharterPlace := isCharterOperatorPlace(name, p.Types)
 		pt := strings.TrimSpace(p.Type)
+		if isCharterPlace && pt == "" {
+			pt = "Marina"
+		}
 		switch pt {
 		case "Marina", "Anchorage", "Mooring", "Fuel Station", "Yacht Club", "Boat Launch":
 		default:
 			continue
 		}
+
+		if isCharterPlace {
+			bestIdx := -1
+			bestDist := 2.0
+			for i := range recs {
+				rt := strings.ToLower(strings.TrimSpace(recs[i].Type))
+				if rt != "hub" && rt != "marina" {
+					continue
+				}
+				if recs[i].Latitude == 0 && recs[i].Longitude == 0 {
+					continue
+				}
+				d := haversine(recs[i].Latitude, recs[i].Longitude, p.Latitude, p.Longitude, "nm")
+				if d < bestDist {
+					bestDist = d
+					bestIdx = i
+				}
+			}
+			if bestIdx >= 0 {
+				addCharterCompanyToRecommendation(&recs[bestIdx], name)
+			}
+		}
+
 		lowerName := strings.ToLower(name)
 		if existingNames[lowerName] {
 			continue
@@ -523,6 +623,9 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 			}
 		}
 		desc := fmt.Sprintf("Verified %s discovered via regional nautical scan", strings.ToLower(pt))
+		if isCharterPlace {
+			desc = fmt.Sprintf("Verified yacht charter base and embarkation facility (%s)", pt)
+		}
 		if p.Address != "" {
 			desc = fmt.Sprintf("%s (%s)", desc, p.Address)
 		}
@@ -536,11 +639,84 @@ func mergeVerifiedPlacesIntoRecommendations(recs []model.VoyageRecommendation, r
 			Reasoning:   "Included from verified Google Places nautical infrastructure sweep within the cruising circle.",
 			References:  refs,
 		}
+		if isCharterPlace {
+			addCharterCompanyToRecommendation(&rec, name)
+		}
 		normalizeRecommendationRole(&rec)
 		recs = append(recs, rec)
 		existingNames[lowerName] = true
 	}
 	return recs
+}
+
+func enrichRecommendationsFromGuide(recs []model.VoyageRecommendation, guide *model.VoyageGuide) {
+	if len(recs) == 0 || guide == nil || len(guide.CharterInfo) == 0 {
+		return
+	}
+	var charter struct {
+		IsCharterDestination bool `json:"is_charter_destination"`
+		Companies            []struct {
+			Name       string `json:"name"`
+			BaseMarina string `json:"base_marina"`
+			Location   string `json:"location"`
+			URL        string `json:"url"`
+		} `json:"companies"`
+	}
+	if err := json.Unmarshal(guide.CharterInfo, &charter); err != nil {
+		return
+	}
+	if !charter.IsCharterDestination && len(charter.Companies) == 0 {
+		return
+	}
+
+	harborSynonyms := map[string][]string{
+		"dartmouth":    {"padanaram", "south wharf", "new bedford", "apponagansett"},
+		"padanaram":    {"dartmouth", "south wharf", "apponagansett"},
+		"cape yachts":  {"south wharf", "padanaram", "dartmouth"},
+		"nauti jane":   {"south wharf", "padanaram", "dartmouth"},
+		"swift yacht":  {"padanaram", "south wharf", "dartmouth", "newport"},
+		"buzzards bay": {"padanaram", "marion", "mattapoisett", "red brook", "kingman", "new bedford"},
+		"newport":      {"newport harbor", "goat island", "bowen", "bannister"},
+	}
+
+	for _, comp := range charter.Companies {
+		compName := strings.TrimSpace(comp.Name)
+		if compName == "" {
+			continue
+		}
+		haystack := strings.ToLower(comp.Name + " " + comp.BaseMarina + " " + comp.Location + " " + comp.URL)
+		var matchTokens []string
+		for _, field := range []string{comp.BaseMarina, comp.Location} {
+			f := strings.ToLower(strings.TrimSpace(field))
+			if len(f) >= 4 {
+				matchTokens = append(matchTokens, f)
+			}
+		}
+		for kw, syns := range harborSynonyms {
+			if strings.Contains(haystack, kw) {
+				matchTokens = append(matchTokens, kw)
+				matchTokens = append(matchTokens, syns...)
+			}
+		}
+
+		for i := range recs {
+			rt := strings.ToLower(strings.TrimSpace(recs[i].Type))
+			if rt != "hub" && rt != "marina" {
+				continue
+			}
+			recText := strings.ToLower(recs[i].Name + " " + recs[i].Description + " " + recs[i].Reasoning)
+			matched := false
+			for _, tok := range matchTokens {
+				if tok != "" && strings.Contains(recText, tok) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				addCharterCompanyToRecommendation(&recs[i], compName)
+			}
+		}
+	}
 }
 
 func (h *Handler) syncStartEndBasesToGuide(ctx context.Context, voyageID int64, recs []model.VoyageRecommendation) {
@@ -641,6 +817,17 @@ func normalizeRecommendationRole(rec *model.VoyageRecommendation) {
 	role := strings.ToLower(strings.TrimSpace(rec.VoyageRole))
 	if isVerifiedCharterEmbarkationBase(rec.Name, rec.Description, rec.Reasoning, role, string(rec.StayDetails)) {
 		rec.VoyageRole = "start_end_base"
+		var sd map[string]any
+		if len(rec.StayDetails) > 0 {
+			_ = json.Unmarshal(rec.StayDetails, &sd)
+		}
+		if sd == nil {
+			sd = make(map[string]any)
+		}
+		sd["is_charter_base"] = true
+		if b, err := json.Marshal(sd); err == nil {
+			rec.StayDetails = model.RawJSON(b)
+		}
 		return
 	}
 
@@ -686,11 +873,14 @@ func isVerifiedCharterEmbarkationBase(name, desc, reasoning, role, stayDetailsJS
 	charterEvidence := []string{
 		"charter base", "charter fleet", "bareboat charter", "yacht charter",
 		"charter company", "charter companies", "charter operator", "embarkation base",
-		"sailing capital", "starting point", "embarkation", "turnaround", "departure port",
+		"sailing capital", "yachting capital", "starting point", "embarkation", "turnaround", "departure port",
 		"the moorings", "sunsail", "dream yacht", "navigare", "marinemax",
 		"waypoints", "cruise annapolis", "annapolis bay charters", "haven charters",
 		"annapolis city marina", "annapolis harbor", "annapolis harbour", "port annapolis",
 		"eastport yacht", "bert jabin",
+		"newport harbor", "newport yachting center", "bowen's wharf", "bannister's wharf",
+		"bareboat sailing charters", "america's cup charters", "onwatch sailing",
+		"south wharf yacht", "cape yachts", "nauti jane", "swift yacht", "buzzards bay yacht",
 		"bahia mar", "las olas marina", "pier sixty-six", "pier 66", "15th street fisheries",
 		"lauderdale marine center", "dinner key", "bayside marketplace", "miami beach marina",
 		"crandon park marina", "sea isle marina", "mahi marina",

@@ -239,7 +239,9 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			bearings := []float64{0, 90, 180, 270}
 			sectorOffset := requestedRadius * 0.65
 			sectorBiasRadius := requestedRadius * 0.55
-			if len(sectorNearbyTypes) > 0 {
+			qLower := strings.ToLower(args.Query)
+			isCharterQuery := strings.Contains(qLower, "charter") || strings.Contains(qLower, "rental")
+			if len(sectorNearbyTypes) > 0 || isCharterQuery {
 				bearings = []float64{0, 45, 90, 135, 180, 225, 270, 315}
 				sectorOffset = requestedRadius * 0.65
 				sectorBiasRadius = requestedRadius * 0.55
@@ -341,6 +343,21 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 		}
 		seen[dedupKey] = true
 
+		placeTypes := pt.Types
+		qLower := strings.ToLower(args.Query)
+		if strings.Contains(qLower, "charter") || strings.Contains(qLower, "rental") {
+			hasTag := false
+			for _, t := range placeTypes {
+				if t == "yacht_charter" {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				placeTypes = append(append([]string(nil), placeTypes...), "yacht_charter")
+			}
+		}
+
 		results = append(results, PlaceResult{
 			Name:           name,
 			Type:           classifyPlace(args.Query, pt.Types),
@@ -349,7 +366,7 @@ func (p *PlacesProvider) FindPlaces(ctx agent.Context, args PlacesArgs) (PlacesR
 			Longitude:      lng,
 			DistanceMeters: dist,
 			BusinessStatus: pt.BusinessStatus.String(),
-			Types:          pt.Types,
+			Types:          placeTypes,
 			WebsiteURI:     pt.GoogleMapsUri,
 			Website:        pt.GoogleMapsUri,
 		})

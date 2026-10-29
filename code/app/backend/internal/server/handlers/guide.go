@@ -205,8 +205,16 @@ func (h *Handler) performGuideResearchLogic(voyage *model.Voyage, sessionID stri
 	h.broadcastProgress(sessionID, "agent", "Consulting the Pilot guide agent")
 
 	locName := "Unknown"
-	if voyage.LocationName != nil {
-		locName = *voyage.LocationName
+	if voyage.LocationName != nil && strings.TrimSpace(*voyage.LocationName) != "" {
+		locName = strings.TrimSpace(*voyage.LocationName)
+	}
+	titleHint := strings.TrimSpace(voyage.Title)
+	if titleHint != "" && !strings.Contains(strings.ToLower(locName), strings.ToLower(titleHint)) {
+		if locName == "Unknown" {
+			locName = titleHint
+		} else {
+			locName = fmt.Sprintf("%s (including %s)", locName, titleHint)
+		}
 	}
 
 	locDetail := locName
@@ -219,7 +227,7 @@ func (h *Handler) performGuideResearchLogic(voyage *model.Voyage, sessionID stri
 	if voyage.Latitude != nil && voyage.Longitude != nil && voyage.SearchRadius > 0 {
 		radiusNM := radiusToNM(voyage.SearchRadius, voyage.SearchRadiusUnit)
 		boundary := searchBoundaryHint(*voyage.Latitude, *voyage.Longitude, radiusNM)
-		scope = fmt.Sprintf(" Cover the entire cruising area within a %d %s (~%.0f nm) radius of this center point, not just the immediate vicinity of the named location. %s", voyage.SearchRadius, voyage.SearchRadiusUnit, radiusNM, boundary)
+		scope = fmt.Sprintf(" Cover the entire cruising area within a %d %s (~%.0f nm) radius of this center point, not just the immediate vicinity of the center location — explicitly include major yachting harbors and yacht charter companies across all sectors of the circle (including %s). %s", voyage.SearchRadius, voyage.SearchRadiusUnit, radiusNM, locName, boundary)
 	}
 
 	prompt := fmt.Sprintf("Research sailing guide for location: %s.%s Include summary, sailing_season, hazards, hubs, charter_info, airports, country_info (including language, timezone, emergency numbers), currencies, and points_of_interest.", locDetail, scope)
@@ -417,6 +425,13 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to list recommendations for public voyage", "voyage_id", voyage.ID, "error", err)
 		recs = []model.VoyageRecommendation{}
+	} else {
+		if guide != nil {
+			enrichRecommendationsFromGuide(recs, guide)
+		}
+		for i := range recs {
+			normalizeRecommendationRole(&recs[i])
+		}
 	}
 
 	var mapURL string

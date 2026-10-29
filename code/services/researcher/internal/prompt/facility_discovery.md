@@ -41,7 +41,7 @@ Gather all data in your FIRST turn. Execute these in PARALLEL — do not run seq
    - `query`: "hardware store"
    - `query`: "ATM bank"
 3.  **A single `BatchGoogleSearch` call** (`batch_google_search`) to find wild, natural, or unofficial anchorages, coves, and mooring fields within the focus radius that commercial POI databases miss, plus official harbor regulations and recent hazard/review notes.
-   - In `mode: "area"`, include queries for the major harbors and rivers on ALL sides of the circle (e.g., western shore, eastern shore, northern and southern tributaries), not just the town closest to the center point.
+   - In `mode: "area"`, include queries for the major harbors and rivers on ALL sides of the circle (e.g., western shore, eastern shore, northern and southern tributaries), not just the town closest to the center point, plus a dedicated query for yacht charter bases and operators across all major harbors in the circle.
    - Tune to the trip type:
      - overnight: "safe overnight anchorages coves sheltered bays [Location]", "secluded anchorages mooring fields [Location] cruising guide"
      - day_trip: "day anchorage lunch stop mooring [Location]", "day-use moorings easily reached anchorages [Location]"

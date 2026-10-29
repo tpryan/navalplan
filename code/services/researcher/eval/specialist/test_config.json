@@ -22,7 +22,7 @@
         {
           "rubric_id": "start_end_base_vs_overnight_stop_accuracy",
           "rubric_content": {
-            "text_property": "Only actual commercial yacht charter fleet embarkation bases (e.g. Tortola bases like Road Town, Nanny Cay, or Hodges Creek/Parham Town in the BVI; or Annapolis / Rock Hall in the Chesapeake) are classified with 'voyage_role': 'start_end_base' and 'stay_details.is_charter_base': true, while destination resort marinas, out-island stopovers (e.g. Scrub Island, Bitter End, Norman Island), and creek stopovers (e.g. St. Michaels, Oxford) are classified as 'overnight_stop'."
+            "text_property": "Only actual commercial yacht charter fleet embarkation bases across the entire search circle (including perimeter yachting capitals like Newport, RI in a Buzzards Bay/Dartmouth circle, Tortola bases like Road Town, Nanny Cay, or Hodges Creek/Parham Town in the BVI, or Annapolis / Rock Hall in the Chesapeake) are classified with 'voyage_role': 'start_end_base' and 'stay_details.is_charter_base': true with 'charter_companies' populated, while destination resort marinas, out-island stopovers (e.g. Scrub Island, Bitter End, Norman Island, Cuttyhunk, Block Island), and creek stopovers (e.g. St. Michaels, Oxford, Hadley Harbor) are classified as 'overnight_stop'."
           }
         },
         {

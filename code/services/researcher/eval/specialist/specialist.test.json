@@ -60,6 +60,21 @@
           }
         }
       ]
+    },
+    {
+      "eval_id": "buzzards_bay_newport_wide_circle_charter_bases",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Recommend anchorages, moorings, marinas, and fuel docks within 36 nm of center coordinates (latitude: 41.5294, longitude: -70.9597, 41.5294°N, 70.9597°W; center reference point near Dartmouth, Massachusetts, United States (including Newport)). IMPORTANT: \"Dartmouth, Massachusetts, United States (including Newport)\" is only the nearest point to the circle center — the search circle spans 36 nm in ALL directions (N, NE, E, SE, S, SW, W, NW) across multiple shores, harbors, and rivers. Identify every commercial yacht charter embarkation base across ALL major yachting harbors inside the search circle (including Newport, RI on the western side and Padanaram / South Dartmouth in Buzzards Bay) as voyage_role=\"start_end_base\" with stay_details.is_charter_base=true and stay_details.charter_companies populated, while natural island/harbor stopovers (such as Cuttyhunk, Hadley Harbor, Dutch Island, and Menemsha) are classified as 'overnight_stop'."
+              }
+            ],
+            "role": "user"
+          }
+        }
+      ]
     }
   ]
 }

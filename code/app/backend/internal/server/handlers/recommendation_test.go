@@ -218,6 +218,15 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			desc:            "Major Fort Lauderdale embarkation marina and charter base.",
 			wantRole:        "start_end_base",
 		},
+		{
+			name:            "New England Newport Harbor yachting capital promoted to start_end_base",
+			recName:         "Newport Harbor & Downtown Waterfront Hub",
+			recType:         "Hub",
+			rawRole:         "overnight_stop",
+			desc:            "The premier yachting capital of New England, offering extensive mooring fields, world-class marinas, and complete marine services.",
+			stayDetailsJSON: `{"is_charter_base":false,"charter_companies":[]}`,
+			wantRole:        "start_end_base",
+		},
 	}
 
 	for _, tc := range tests {
@@ -234,7 +243,56 @@ func TestNormalizeRecommendationRole_RegionAgnostic(t *testing.T) {
 			if rec.VoyageRole != tc.wantRole {
 				t.Errorf("normalizeRecommendationRole(%q) = %q, want %q", tc.recName, rec.VoyageRole, tc.wantRole)
 			}
+			if tc.wantRole == "start_end_base" {
+				var sd map[string]any
+				_ = json.Unmarshal(rec.StayDetails, &sd)
+				if isBase, _ := sd["is_charter_base"].(bool); !isBase {
+					t.Errorf("normalizeRecommendationRole(%q) expected stay_details.is_charter_base=true, got %v", tc.recName, sd)
+				}
+			}
 		})
+	}
+}
+
+func TestEnrichRecommendationsFromGuide_AttachesCharterCompanies(t *testing.T) {
+	recs := []model.VoyageRecommendation{
+		{
+			Name:        "Padanaram Harbor (Apponagansett Bay)",
+			Type:        "Hub",
+			VoyageRole:  "overnight_stop",
+			Description: "Quintessential New England harbor town on the western shore of Buzzards Bay.",
+			StayDetails: model.RawJSON(`{"is_charter_base":false,"charter_companies":[]}`),
+		},
+		{
+			Name:        "Newport Harbor & Downtown Waterfront Hub",
+			Type:        "Hub",
+			VoyageRole:  "overnight_stop",
+			Description: "Historic Narragansett Bay harbor.",
+			StayDetails: model.RawJSON(`{"is_charter_base":false,"charter_companies":[]}`),
+		},
+	}
+	guide := &model.VoyageGuide{
+		CharterInfo: model.RawJSON(`{
+			"is_charter_destination": true,
+			"companies": [
+				{"name": "Nauti Jane's Boat Rentals (Cape Yachts)", "url": "https://www.nautijanesboatrentals.com/"},
+				{"name": "Bareboat Sailing Charters", "base_marina": "Goat Island / Newport Harbor", "location": "Newport, RI", "url": "https://www.bareboatsailing.com/"}
+			]
+		}`),
+	}
+	enrichRecommendationsFromGuide(recs, guide)
+	for i, r := range recs {
+		if r.VoyageRole != "start_end_base" {
+			t.Errorf("recs[%d] (%s) VoyageRole = %q, want start_end_base", i, r.Name, r.VoyageRole)
+		}
+		var sd struct {
+			IsCharterBase    bool     `json:"is_charter_base"`
+			CharterCompanies []string `json:"charter_companies"`
+		}
+		_ = json.Unmarshal(r.StayDetails, &sd)
+		if !sd.IsCharterBase || len(sd.CharterCompanies) == 0 {
+			t.Errorf("recs[%d] (%s) expected is_charter_base=true and non-empty charter_companies, got %+v", i, r.Name, sd)
+		}
 	}
 }
 
@@ -251,18 +309,22 @@ func TestMergeVerifiedPlacesIntoRecommendations(t *testing.T) {
 	rawPlaces := json.RawMessage(`[
 		{"name":"Bahia Mar Yachting Center","type":"Marina","address":"801 Seabreeze Blvd, Fort Lauderdale, FL","latitude":26.1132,"longitude":-80.1062,"website_uri":"https://bahiamar.com"},
 		{"name":"Dinner Key Marina","type":"Marina","address":"3400 Pan American Dr, Miami, FL","latitude":25.7275,"longitude":-80.2341,"website_uri":"https://miami.gov"},
+		{"name":"Newport Yacht Charters","type":"Marina","address":"Bowen's Wharf, Newport, RI","latitude":41.4885,"longitude":-71.3150,"website_uri":"https://newportyachtcharters.com","types":["point_of_interest","yacht_charter"]},
 		{"name":"Bimini Blue Water Marina","type":"Marina","address":"Alice Town, Bimini","latitude":25.7265,"longitude":-79.2974},
 		{"name":"Random Restaurant","type":"Restaurant","address":"Miami, FL","latitude":25.7617,"longitude":-80.1918}
 	]`)
 
 	merged := mergeVerifiedPlacesIntoRecommendations(initial, rawPlaces)
-	if len(merged) != 3 {
-		t.Fatalf("expected 3 recommendations after merging verified places, got %d", len(merged))
+	if len(merged) != 4 {
+		t.Fatalf("expected 4 recommendations after merging verified places, got %d", len(merged))
 	}
 	if merged[1].Name != "Bahia Mar Yachting Center" || merged[1].VoyageRole != "start_end_base" {
 		t.Errorf("expected Bahia Mar Yachting Center as start_end_base, got name=%q role=%q", merged[1].Name, merged[1].VoyageRole)
 	}
 	if merged[2].Name != "Dinner Key Marina" || merged[2].VoyageRole != "start_end_base" {
 		t.Errorf("expected Dinner Key Marina as start_end_base, got name=%q role=%q", merged[2].Name, merged[2].VoyageRole)
+	}
+	if merged[3].Name != "Newport Yacht Charters" || merged[3].VoyageRole != "start_end_base" {
+		t.Errorf("expected Newport Yacht Charters as start_end_base, got name=%q role=%q", merged[3].Name, merged[3].VoyageRole)
 	}
 }
