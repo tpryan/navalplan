@@ -7679,6 +7679,13 @@ function generateGuideHTML(guide) {
             </div>`;
         });
         hubsSection += `</div></div>`;
+    } else if (typeof voyageRecommendations !== 'undefined' && Array.isArray(voyageRecommendations) && voyageRecommendations.length > 0) {
+        hubsSection += `<div class="np-report-item--non-sailing" data-report-cats="all guide" style="margin-bottom:20px">`;
+        hubsSection += sectionChip('Recommended Start & End Bases (Charter & Turnaround Hubs)', 'coral');
+        hubsSection += `<div class="np-hub-card" style="border-left:3px solid var(--coral);display:flex;align-items:flex-start;gap:8px">
+            <span class="material-symbols-outlined" style="font-size:18px;color:var(--coral);margin-top:1px">info</span>
+            <p class="np-hub-card__desc" style="margin:0"><strong>No charter start/stop bases found within this radius.</strong> Try expanding or moving the search circle to include a nearby charter hub.</p>
+        </div></div>`;
     }
 
     if (guide.hubs && guide.hubs.length > 0) {

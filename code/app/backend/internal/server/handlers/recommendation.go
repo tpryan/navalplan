@@ -436,13 +436,13 @@ func (h *Handler) performRecommendationGeneration(v *model.Voyage, sessionID, pr
 	}
 
 	recommendations := wrapper.Recommendations
+	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 	recommendations = mergeVerifiedPlacesIntoRecommendations(recommendations, statePlacesRaw)
 	if h.DB != nil {
 		if guide, gErr := h.DB.GetVoyageGuide(ctx, v.ID); gErr == nil && guide != nil {
 			enrichRecommendationsFromGuide(recommendations, guide)
 		}
 	}
-	refineRecommendationCoordinates(ctx, recommendations, locInfo, *v.Latitude, *v.Longitude, radiusNM)
 
 	var savedRecs []model.VoyageRecommendation
 	for _, rec := range recommendations {

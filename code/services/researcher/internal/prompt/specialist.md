@@ -32,7 +32,7 @@ To prevent timeouts, you MUST gather all data rapidly and finish in a MAXIMUM of
 ### VOYAGE ROLE CLASSIFICATION (`voyage_role`) — STRICT REGION-AGNOSTIC RULES
 Every recommendation MUST be assigned a `voyage_role` from `"start_end_base"`, `"overnight_stop"`, `"day_stop"`, or `"service_only"`:
 - **`"start_end_base"` (ONLY Verified Commercial Charter Fleet Embarkation Bases):**
-  - A `"start_end_base"` is a marina or harbor hub where commercial bareboat or crewed cruising yacht charter operators physically base their vessels for trip embarkation, provisioning, and turnaround.
+  - A `"start_end_base"` is a marina or harbor hub where commercial bareboat, crewed, skippered, or sailing-school yacht charter operators physically base their vessels for trip embarkation, provisioning, and turnaround.
   - **Search Every Harbor in the Circle:** When the search circle is centered in open water or near a smaller town, you MUST also check all major yachting ports inside the circle (including ports near the N/S/E/W perimeter) and classify their verified charter embarkation hubs/marinas as `"start_end_base"`.
   - **Two-Part Verification Requirement (Both Required):**
     1. **Verified Fleet Operator:** Only set `voyage_role: "start_end_base"` and `stay_details.is_charter_base: true` when your `batch_google_search` or `facility_discovery` results confirm at least one named cruising yacht charter operator physically based at that harbor/marina, and list the operator names in `stay_details.charter_companies`.

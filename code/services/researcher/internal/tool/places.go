@@ -530,7 +530,7 @@ func (p *PlacesProvider) SweepAreaInfrastructure(ctx agent.Context, lat, lng, ra
 	} else if radiusMeters < 100 {
 		radiusMeters = radiusMeters * 1852
 	}
-	queries := []string{"marina", "anchorage", "mooring", "yacht club", "fuel dock", "boat yard"}
+	queries := []string{"marina", "anchorage", "mooring", "yacht club", "fuel dock", "boat yard", "yacht charter boat rental"}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var firstErr error
@@ -567,6 +567,10 @@ func (p *PlacesProvider) SweepAreaInfrastructure(ctx agent.Context, lat, lng, ra
 		Places:          merged,
 		Digest:          digest,
 		SummaryDigest:   digest,
+		DebugDurationMS: time.Since(start).Milliseconds(),
+	}, nil
+}
+maryDigest:   digest,
 		DebugDurationMS: time.Since(start).Milliseconds(),
 	}, nil
 }

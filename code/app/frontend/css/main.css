@@ -394,6 +394,58 @@
 }
 
 /* --- Discovery (Commodore) Styles --- */
+.pilot-alert-banner {
+    position: absolute;
+    bottom: 78px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-left: 4px solid var(--coral, #ef4444);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 8px 12px 8px 14px;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(560px, calc(100vw - 32px));
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.pilot-alert-banner.hidden {
+    display: none !important;
+}
+
+.pilot-alert-icon {
+    font-size: 18px;
+    color: var(--coral, #ef4444);
+    flex-shrink: 0;
+}
+
+.pilot-alert-text {
+    flex: 1;
+}
+
+.pilot-alert-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+
+.pilot-alert-close:hover {
+    color: var(--ink);
+    background: var(--chip);
+}
+
 #facility-controls,
 #pilot-controls {
     position: absolute;

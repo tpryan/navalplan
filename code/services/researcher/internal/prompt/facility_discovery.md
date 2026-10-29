@@ -54,7 +54,7 @@ If the focus radius returns few or no results (an isolated or rural stop), progr
 - **Wild anchorage synthesis:** `FindPlacesNearby` frequently returns nothing for generic `"anchorage"` queries because natural coves, creeks, points, and bays are geographic features, not businesses. Extract every named anchorage, creek, cove, or mooring area inside the search circle from your web search results and include it with `is_wild: true`.
 - **Dedupe:** Merge duplicate entries for the same facility (same name/coordinates) into one, keeping the richest data.
 - **Keep shore amenities:** Include restaurants, bars, cafes, grocery/convenience stores, pharmacies, chandleries/hardware, and ATMs/banks found in the focus radius. Exclude only genuinely irrelevant POIs (e.g. a residential address, or something far outside the focus radius). Do not drop dining/provisioning just because it is not waterfront.
-- **Pass through tool fields:** Populate `website` (from `website_uri`) and `business_status` directly from `FindPlacesNearby` whenever the tool provides them; leave null otherwise.
+- **Pass through tool fields:** Populate `website` (from `website_uri`) and `business_status` directly from `FindPlacesNearby` whenever the tool provides them; leave null otherwise. For any result returned by the `"yacht charter boat rental"` query (or where `types` includes `"yacht_charter"`), explicitly mention `"yacht charter base"` in `description` so the parent agent can identify charter embarkation bases.
 
 ### OUTPUT
 Return ONLY this JSON object — no text outside the JSON block:
