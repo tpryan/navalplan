@@ -570,7 +570,3 @@ func (p *PlacesProvider) SweepAreaInfrastructure(ctx agent.Context, lat, lng, ra
 		DebugDurationMS: time.Since(start).Milliseconds(),
 	}, nil
 }
-maryDigest:   digest,
-		DebugDurationMS: time.Since(start).Milliseconds(),
-	}, nil
-}

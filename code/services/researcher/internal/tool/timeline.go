@@ -15,14 +15,14 @@ const StateKeyPassageTimeline = "passage_timeline"
 
 // TimelineRequest represents the parameters for the ComputePassageTimeline tool.
 type TimelineRequest struct {
-	FromLocation      string  `json:"from_location"`
-	FromLatitude      float64 `json:"from_latitude"`
-	FromLongitude     float64 `json:"from_longitude"`
-	ToLocation        string  `json:"to_location"`
-	ToLatitude        float64 `json:"to_latitude"`
-	ToLongitude       float64 `json:"to_longitude"`
-	Date              string  `json:"date"`
-	PlannedDistanceNM float64 `json:"planned_distance_nm,omitempty"`
+	FromLocation      string  `json:"from_location,omitempty" jsonschema:"Optional name of the departure stop."`
+	FromLatitude      float64 `json:"from_latitude" jsonschema:"Departure latitude in decimal degrees (required)."`
+	FromLongitude     float64 `json:"from_longitude" jsonschema:"Departure longitude in decimal degrees (required)."`
+	ToLocation        string  `json:"to_location,omitempty" jsonschema:"Optional name of the arrival destination stop."`
+	ToLatitude        float64 `json:"to_latitude" jsonschema:"Arrival latitude in decimal degrees (required)."`
+	ToLongitude       float64 `json:"to_longitude" jsonschema:"Arrival longitude in decimal degrees (required)."`
+	Date              string  `json:"date" jsonschema:"Target passage date in YYYY-MM-DD format (required)."`
+	PlannedDistanceNM float64 `json:"planned_distance_nm,omitempty" jsonschema:"Optional planned route distance in nautical miles."`
 }
 
 // DepartureWindowOption represents a single candidate departure time and its

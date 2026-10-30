@@ -55,13 +55,16 @@
     },
     {
       "name": "GetSafetyAlerts",
-      "description": "Extracts active global navigational warnings and localized security alerts.",
+      "description": "Extracts active navigational warnings and localized security alerts near a location.",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "region": {"type": "string"}
+          "region":    {"type": "string"},
+          "latitude":  {"type": "number"},
+          "longitude": {"type": "number"},
+          "radius_nm": {"type": "number"}
         },
-        "required": ["region"]
+        "required": ["latitude", "longitude"]
       }
     },
     {

@@ -23,10 +23,10 @@ type NauticalToolService struct {
 
 // TideRequest represents the input for the GetTides MCP tool.
 type TideRequest struct {
-	StationID string  `json:"station_id"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Date      string  `json:"date"`
+	StationID string  `json:"station_id,omitempty" jsonschema:"Optional tide station identifier."`
+	Latitude  float64 `json:"latitude" jsonschema:"Latitude in decimal degrees (required)."`
+	Longitude float64 `json:"longitude" jsonschema:"Longitude in decimal degrees (required)."`
+	Date      string  `json:"date" jsonschema:"Target date in YYYY-MM-DD format (required)."`
 }
 
 // McpTideEvent represents a single high or low tide event.
@@ -92,10 +92,10 @@ type SunriseResponse struct {
 
 // PlacesRequest represents the input for the FindPlacesNearby MCP tool.
 type PlacesRequest struct {
-	Query     string  `json:"query"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Radius    float64 `json:"radius"`
+	Query     string  `json:"query" jsonschema:"Text query (e.g. 'marinas', 'restaurants') (required)."`
+	Latitude  float64 `json:"latitude" jsonschema:"Latitude for location bias in decimal degrees (required)."`
+	Longitude float64 `json:"longitude" jsonschema:"Longitude for location bias in decimal degrees (required)."`
+	Radius    float64 `json:"radius,omitempty" jsonschema:"Optional search radius in meters (default 5000, max 50000)."`
 }
 
 // PlaceDetail represents a single place found by the search.
@@ -128,10 +128,10 @@ type McpPlacesResponse struct {
 
 // SafetyRequest represents the input for the GetSafetyAlerts MCP tool.
 type SafetyRequest struct {
-	Region    string  `json:"region"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	RadiusNM  float64 `json:"radius_nm"`
+	Region    string  `json:"region,omitempty" jsonschema:"Optional region or stop label."`
+	Latitude  float64 `json:"latitude" jsonschema:"Stop latitude in decimal degrees (required)."`
+	Longitude float64 `json:"longitude" jsonschema:"Stop longitude in decimal degrees (required)."`
+	RadiusNM  float64 `json:"radius_nm,omitempty" jsonschema:"Optional search radius in nautical miles (defaults to 300 NM)."`
 }
 
 // SafetyResponse represents the output for the GetSafetyAlerts MCP tool.
