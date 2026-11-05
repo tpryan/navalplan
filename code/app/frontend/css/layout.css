@@ -347,6 +347,14 @@
   border-radius: 20px;
 }
 
+#modal-share-dynamic {
+  z-index: 1601;
+}
+
+body:has(#modal-share-dynamic:not(.hidden)) #modal-overlay {
+  z-index: 1600;
+}
+
 #modal-notification {
   z-index: 2000 !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 0 100vmax rgba(0, 0, 0, 0.35);

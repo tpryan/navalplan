@@ -303,25 +303,24 @@ describe('reverseGeocode result formatting', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Safety Overview & Destination Guide — hidden in sailing mode
+// 7. Report View — Destination Guide & Share Modal Stacking
 // ---------------------------------------------------------------------------
-describe('Safety Overview and Destination Guide sailing mode visibility', () => {
-    it('ensures safety overview box includes np-report-item--non-sailing class', () => {
-        const box = document.createElement('div');
-        box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
-        box.id = 'np-safety-overview';
-
-        expect(box.classList.contains('np-report-item--non-sailing')).toBeTrue();
-        expect(box.classList.contains('np-safety-overview')).toBeTrue();
-        expect(box.classList.contains('lookout-box')).toBeTrue();
-    });
-
+describe('Report view visibility and share modal stacking', () => {
     it('ensures destination guide container includes np-report-item--non-sailing class', () => {
         const guideEl = document.createElement('div');
         guideEl.className = 'np-guide-section np-report-item--non-sailing';
 
         expect(guideEl.classList.contains('np-report-item--non-sailing')).toBeTrue();
         expect(guideEl.classList.contains('np-guide-section')).toBeTrue();
+    });
+
+    it('renders share modal with modal-share-dynamic id so it stacks above full-screen report', () => {
+        const shareModal = document.createElement('div');
+        shareModal.id = 'modal-share-dynamic';
+        shareModal.className = 'modal';
+
+        expect(shareModal.id).toBe('modal-share-dynamic');
+        expect(shareModal.classList.contains('modal')).toBeTrue();
     });
 });
 

@@ -8017,52 +8017,6 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 </div>`;
         });
         html += `</div>`;
-
-        // ── Safety Overview ───────────────────────────────────────────────────
-        const stopsWithAlerts = sortedStops
-            .map((stop, idx) => ({ stop, briefing: briefings.find(br => br && br.stop_id === stop.id), idx }))
-            .filter(({ briefing }) => briefing && Array.isArray(briefing.safety_alerts) && briefing.safety_alerts.length > 0);
-
-        if (stopsWithAlerts.length > 0) {
-            const severityOrder = { danger: 0, warning: 1, info: 2 };
-            const topSeverity = stopsWithAlerts.reduce((top, { briefing }) => {
-                const s = briefing.safety_alerts.reduce((t, a) =>
-                    (severityOrder[a.severity] ?? 2) < (severityOrder[t] ?? 2) ? a.severity : t, 'info');
-                return (severityOrder[s] ?? 2) < (severityOrder[top] ?? 2) ? s : top;
-            }, 'info');
-
-            html += `<div class="lookout-box np-safety-overview np-report-item--non-sailing" id="np-safety-overview" data-report-scope="overview" data-report-cats="all navigation weather">
-                <div class="lookout-header">
-                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-                    <h3>Safety Overview</h3>
-                </div>
-                <div class="lookout-alert-list">`;
-
-            stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
-                const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
-                const stopName = displayLocationName(stop.location_name).split(',')[0].trim();
-                html += `<div class="np-safety-overview__stop-header">
-                    <span class="np-safety-overview__day">Day ${idx + 1}</span>
-                    <span class="np-safety-overview__name">${esc(stopName)}</span>
-                    <span class="np-safety-overview__date">${dateStr}</span>
-                </div>`;
-                briefing.safety_alerts.forEach(a => { html += alertToHTML(a); });
-            });
-
-            const oldestAudit = stopsWithAlerts
-                .map(({ briefing }) => briefing.safety_alerts_updated_at)
-                .filter(Boolean)
-                .map(t => new Date(t))
-                .sort((a, b) => a - b)[0];
-            if (oldestAudit) {
-                html += `<p class="np-safety-overview__updated">
-                    <span class="material-symbols-outlined" aria-hidden="true">update</span>
-                    Audited ${oldestAudit.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                </p>`;
-            }
-
-            html += `</div></div>`;
-        }
     }
 
     // ── Full Destination Guide ────────────────────────────────────────────────
