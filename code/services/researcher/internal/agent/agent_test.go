@@ -69,8 +69,8 @@ func TestFacilityDiscoveryDelegation(t *testing.T) {
 
 // TestHydrographicPilotDelegation guards the M4 invariant: harbourmaster,
 // specialist, and lookout delegate hydrographic/RAG retrieval to the
-// hydrographic_pilot sub-agent and therefore must NOT hold QuerySailingDirections
-// or QueryCoastPilot directly; pilot keeps them directly and does not delegate.
+// hydrographic_pilot sub-agent and therefore must NOT hold QuerySailingDirections,
+// QueryCoastPilot, or QueryLocalNoticeToMariners directly; pilot keeps them directly and does not delegate.
 func TestHydrographicPilotDelegation(t *testing.T) {
 	byName := make(map[string]spec, len(specs))
 	for _, sp := range specs {
@@ -86,7 +86,7 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 			t.Errorf("%s: includeHydrographicPilot = false, want true", name)
 		}
 		for _, tn := range sp.toolNames {
-			if tn == toolQuerySailingDirections || tn == toolQueryCoastPilot {
+			if tn == toolQuerySailingDirections || tn == toolQueryCoastPilot || tn == toolQueryLocalNoticeToMariners {
 				t.Errorf("%s: still holds %q directly; it should delegate to hydrographic_pilot", name, tn)
 			}
 		}
@@ -98,7 +98,7 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 		if ag.includeHydrographicPilot {
 			t.Errorf("%s: includeHydrographicPilot = true, want false", directRAGAgent)
 		}
-		var hasSailing, hasCoastPilot bool
+		var hasSailing, hasCoastPilot, hasLNM bool
 		for _, tn := range ag.toolNames {
 			if tn == toolQuerySailingDirections {
 				hasSailing = true
@@ -106,9 +106,15 @@ func TestHydrographicPilotDelegation(t *testing.T) {
 			if tn == toolQueryCoastPilot {
 				hasCoastPilot = true
 			}
+			if tn == toolQueryLocalNoticeToMariners {
+				hasLNM = true
+			}
 		}
 		if !hasSailing || !hasCoastPilot {
 			t.Errorf("%s: expected direct RAG tools (%q=%v, %q=%v)", directRAGAgent, toolQuerySailingDirections, hasSailing, toolQueryCoastPilot, hasCoastPilot)
+		}
+		if directRAGAgent == Pilot && !hasLNM {
+			t.Errorf("pilot: expected %q to be attached", toolQueryLocalNoticeToMariners)
 		}
 	}
 }

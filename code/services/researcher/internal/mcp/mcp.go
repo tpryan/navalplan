@@ -185,6 +185,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					},
 				},
 				{
+					"name":        "QueryLocalNoticeToMariners",
+					"description": "Searches weekly US Coast Guard Local Notice to Mariners (LNM) publications for recent aid-to-navigation discrepancies (extinguished lights, off-station buoys), channel dredging/shoaling, temporary bridge restrictions, marine events, and safety zones.",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"query": map[string]string{"type": "string"},
+							"top_k": map[string]string{"type": "number"},
+						},
+						"required": []string{"query"},
+					},
+				},
+				{
 					"name":        "CalculateHeading",
 					"description": "Calculates the nautical heading (course/bearing in degrees), cardinal compass direction, distance in nautical miles, and reciprocal heading between two coordinates. Optionally analyzes wind conditions relative to the course to determine headwinds or adverse winds.",
 					"inputSchema": map[string]interface{}{
@@ -309,6 +321,12 @@ func (h *Handler) handleToolCall(ctx context.Context, params json.RawMessage) (i
 			return nil, err
 		}
 		return h.Nautical.FetchCoastPilot(agentCtx, req)
+	case "QueryLocalNoticeToMariners", "query_local_notice_to_mariners":
+		var req tool.LocalNoticeToMarinersRequest
+		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {
+			return nil, err
+		}
+		return h.Nautical.FetchLocalNoticeToMariners(agentCtx, req)
 	case "CalculateHeading", "calculate_heading":
 		var req tool.HeadingRequest
 		if err := json.Unmarshal(callReq.Arguments, &req); err != nil {

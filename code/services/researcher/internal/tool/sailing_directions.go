@@ -26,13 +26,19 @@ type HTTPDoer interface {
 // SailingDirectionsArgs defines input parameters for the query_sailing_directions tool.
 type SailingDirectionsArgs struct {
 	Query     string `json:"query" description:"Specific navigational question, channel depth, bridge clearance, harbor name, or passage leg."`
-	Territory string `json:"territory,omitempty" description:"Scope of pilot data: 'us' for NOAA Coast Pilot, 'international' for NGA Sailing Directions, 'all' for both (default)."`
+	Territory string `json:"territory,omitempty" description:"Scope of pilot data: 'us' for NOAA Coast Pilot, 'lnm' for USCG Local Notice to Mariners, 'international' for NGA Sailing Directions, 'all' for all available corpora (default)."`
 	TopK      int    `json:"top_k,omitempty" description:"Number of context chunks to retrieve (default: 5, max: 10)."`
 }
 
 // CoastPilotArgs defines input parameters for the query_coast_pilot tool.
 type CoastPilotArgs struct {
 	Query string `json:"query" description:"Specific question for US coastal waters, channels, or harbors."`
+	TopK  int    `json:"top_k,omitempty" description:"Number of context chunks to retrieve (default: 5, max: 10)."`
+}
+
+// LocalNoticeToMarinersArgs defines input parameters for the query_local_notice_to_mariners tool.
+type LocalNoticeToMarinersArgs struct {
+	Query string `json:"query" description:"Specific question or location for USCG Local Notice to Mariners (LNM) weekly updates: temporary buoy/light discrepancies, shoaling/dredging, bridge closures, or safety zones."`
 	TopK  int    `json:"top_k,omitempty" description:"Number of context chunks to retrieve (default: 5, max: 10)."`
 }
 
@@ -50,6 +56,7 @@ type SailingDirectionsProvider struct {
 	location         string
 	coastPilotCorpus string
 	ngaCorpus        string
+	lnmCorpus        string
 	client           HTTPDoer
 	mu               sync.RWMutex
 	resolvedCorpora  map[string]string
@@ -60,7 +67,7 @@ func (p *SailingDirectionsProvider) Close() error {
 }
 
 // NewSailingDirectionsTool creates the ADK function tool for query_sailing_directions.
-func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus string) (tool.Tool, *SailingDirectionsProvider, error) {
+func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus string, lnmCorpus ...string) (tool.Tool, *SailingDirectionsProvider, error) {
 	var client HTTPDoer = http.DefaultClient
 	if projectID != "" && projectID != "your-project-id" {
 		googleClient, err := google.DefaultClient(context.Background(), "https://www.googleapis.com/auth/cloud-platform")
@@ -71,11 +78,16 @@ func NewSailingDirectionsTool(projectID, location, coastPilotCorpus, ngaCorpus s
 	if location == "" {
 		location = "us-central1"
 	}
+	var lnm string
+	if len(lnmCorpus) > 0 {
+		lnm = lnmCorpus[0]
+	}
 	provider := &SailingDirectionsProvider{
 		projectID:        projectID,
 		location:         location,
 		coastPilotCorpus: coastPilotCorpus,
 		ngaCorpus:        ngaCorpus,
+		lnmCorpus:        lnm,
 		client:           client,
 		resolvedCorpora:  make(map[string]string),
 	}
@@ -92,6 +104,14 @@ func NewCoastPilotTool(provider *SailingDirectionsProvider) (tool.Tool, error) {
 		Name:        "query_coast_pilot",
 		Description: "Searches NOAA Coast Pilot (Volumes 1-10) for US coastal waters, channels, bridge clearances, anchorages, and hazards.",
 	}, provider.QueryCoastPilot)
+}
+
+// NewLocalNoticeToMarinersTool creates a dedicated ADK function tool for query_local_notice_to_mariners.
+func NewLocalNoticeToMarinersTool(provider *SailingDirectionsProvider) (tool.Tool, error) {
+	return functiontool.New(functiontool.Config{
+		Name:        "query_local_notice_to_mariners",
+		Description: "Searches weekly US Coast Guard Local Notice to Mariners (LNM) publications for recent aid-to-navigation discrepancies (extinguished lights, off-station buoys), channel dredging/shoaling, temporary bridge restrictions, marine events, and safety zones.",
+	}, provider.QueryLocalNoticeToMariners)
 }
 
 type ragResource struct {
@@ -131,6 +151,19 @@ func (p *SailingDirectionsProvider) QueryCoastPilot(ctx agent.Context, args Coas
 	return p.QuerySailingDirections(ctx, SailingDirectionsArgs{
 		Query:     args.Query,
 		Territory: "us",
+		TopK:      args.TopK,
+	})
+}
+
+func (p *SailingDirectionsProvider) QueryLocalNoticeToMariners(ctx agent.Context, args LocalNoticeToMarinersArgs) (SailingDirectionsResult, error) {
+	reqCtx := context.Background()
+	if ctx != nil {
+		reqCtx = ctx
+	}
+	slog.DebugContext(reqCtx, "QueryLocalNoticeToMariners delegated to QuerySailingDirections", "query", args.Query)
+	return p.QuerySailingDirections(ctx, SailingDirectionsArgs{
+		Query:     args.Query,
+		Territory: "lnm",
 		TopK:      args.TopK,
 	})
 }
@@ -185,9 +218,12 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 		addCorpus(p.ngaCorpus)
 	case "us":
 		addCorpus(p.coastPilotCorpus)
+	case "lnm":
+		addCorpus(p.lnmCorpus)
 	default:
 		addCorpus(p.coastPilotCorpus)
 		addCorpus(p.ngaCorpus)
+		addCorpus(p.lnmCorpus)
 	}
 
 	if len(resources) == 0 {

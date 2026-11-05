@@ -285,6 +285,7 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 		vars         map[string]string
 		wantCP       string
 		wantNGA      string
+		wantLNM      string
 		wantLocation string
 	}{
 		{
@@ -295,6 +296,7 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 			},
 			wantCP:       "coast-pilot-corpus",
 			wantNGA:      "nga-sailing-directions-corpus",
+			wantLNM:      "uscg-lnm-corpus",
 			wantLocation: "us-central1",
 		},
 		{
@@ -304,10 +306,12 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 				"GEMINI_API_KEY":                 "gemini-key",
 				"COAST_PILOT_CORPUS_ID":          "custom-cp-corpus",
 				"NGA_CORPUS_ID":                  "custom-nga-corpus",
+				"LNM_CORPUS_ID":                  "custom-lnm-corpus",
 				"VERTEX_LOCATION":                "europe-west1",
 			},
 			wantCP:       "custom-cp-corpus",
 			wantNGA:      "custom-nga-corpus",
+			wantLNM:      "custom-lnm-corpus",
 			wantLocation: "europe-west1",
 		},
 		{
@@ -316,9 +320,11 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 				"NAVALPLAN_BACKEND_MAPS_API_KEY": "maps-key",
 				"GEMINI_API_KEY":                 "gemini-key",
 				"GOOGLE_CLOUD_LOCATION":          "global",
+				"NAVALPLAN_LNM_CORPUS_ID":        "prefixed-lnm-corpus",
 			},
 			wantCP:       "coast-pilot-corpus",
 			wantNGA:      "nga-sailing-directions-corpus",
+			wantLNM:      "prefixed-lnm-corpus",
 			wantLocation: "us-central1",
 		},
 	}
@@ -334,6 +340,9 @@ func TestNew_RAGCorpusConfig(t *testing.T) {
 			}
 			if cfg.NGACorpusID != tt.wantNGA {
 				t.Errorf("NGACorpusID = %q, want %q", cfg.NGACorpusID, tt.wantNGA)
+			}
+			if cfg.LNMCorpusID != tt.wantLNM {
+				t.Errorf("LNMCorpusID = %q, want %q", cfg.LNMCorpusID, tt.wantLNM)
 			}
 			if cfg.VertexLocation != tt.wantLocation {
 				t.Errorf("VertexLocation = %q, want %q", cfg.VertexLocation, tt.wantLocation)

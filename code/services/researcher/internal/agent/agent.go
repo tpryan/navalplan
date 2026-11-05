@@ -55,6 +55,7 @@ const (
 	toolGetSafetyAlerts             = "GetSafetyAlerts"
 	toolQuerySailingDirections      = "QuerySailingDirections"
 	toolQueryCoastPilot             = "QueryCoastPilot"
+	toolQueryLocalNoticeToMariners  = "QueryLocalNoticeToMariners"
 	toolCalculateHeading            = "CalculateHeading"
 	toolComputePassageTimeline      = "ComputePassageTimeline"
 	toolGetCandidateRegionsForMonth = "GetCandidateRegionsForMonth"
@@ -73,6 +74,7 @@ var allNauticalTools = []string{
 	toolGetSafetyAlerts,
 	toolQuerySailingDirections,
 	toolQueryCoastPilot,
+	toolQueryLocalNoticeToMariners,
 }
 
 var Order = []string{Harbourmaster, Pilot, Debrief, Commodore, Specialist, Lookout}
@@ -372,13 +374,17 @@ func BuildHydrographicPilotAgent(ctx context.Context, cfg *config.Config, before
 	if err != nil {
 		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
 	}
+	lnmTool, err := toolByName(researcherTools, toolQueryLocalNoticeToMariners)
+	if err != nil {
+		return nil, fmt.Errorf("hydrographic_pilot: %w", err)
+	}
 
 	return createAgent(ctx, cfg, before, after, &agentConfig{
 		name:        HydrographicPilot,
 		modelName:   cfg.ModelForAgent(HydrographicPilot),
-		description: "Retrieves official hydrographic and pilotage intelligence (channel depths, bridge clearances, tidal rips, currents, anchorages, regulations, hazards) from NOAA Coast Pilot and NGA Sailing Directions, with consistent citations.",
+		description: "Retrieves official hydrographic and pilotage intelligence (channel depths, bridge clearances, tidal rips, currents, anchorages, regulations, hazards, and weekly Local Notice to Mariners updates) from NOAA Coast Pilot, USCG Local Notice to Mariners (LNM), and NGA Sailing Directions, with consistent citations.",
 		instruction: prompt.HydrographicPilot,
-		tools:       []adktool.Tool{sailingTool, coastPilotTool},
+		tools:       []adktool.Tool{sailingTool, coastPilotTool, lnmTool},
 		temperature: 0.1,
 	})
 }

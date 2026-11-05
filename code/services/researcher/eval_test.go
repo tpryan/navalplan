@@ -1695,6 +1695,7 @@ func TestEval(t *testing.T) {
 		cfg.VertexLocation,
 		cfg.CoastPilotCorpusID,
 		cfg.NGACorpusID,
+		cfg.LNMCorpusID,
 	)
 	if err != nil {
 		t.Fatalf("Failed to initialize nautical service: %v", err)

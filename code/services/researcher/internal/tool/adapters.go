@@ -324,6 +324,12 @@ type CoastPilotRequest struct {
 	TopK  int    `json:"top_k,omitempty"`
 }
 
+// LocalNoticeToMarinersRequest represents the input for the QueryLocalNoticeToMariners MCP tool.
+type LocalNoticeToMarinersRequest struct {
+	Query string `json:"query"`
+	TopK  int    `json:"top_k,omitempty"`
+}
+
 // SailingDirectionsResponse represents the output for the QuerySailingDirections MCP tool.
 type SailingDirectionsResponse struct {
 	Query           string `json:"query"`
@@ -362,6 +368,28 @@ func (s *NauticalToolService) FetchCoastPilot(ctx agent.Context, req CoastPilotR
 	}
 
 	result, err := s.SailingDirections.QueryCoastPilot(ctx, CoastPilotArgs{
+		Query: req.Query,
+		TopK:  req.TopK,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &SailingDirectionsResponse{
+		Query:           result.Query,
+		Territory:       result.Territory,
+		Contexts:        result.Contexts,
+		DebugDurationMS: result.DebugDurationMS,
+	}, nil
+}
+
+// FetchLocalNoticeToMariners queries weekly USCG Local Notice to Mariners publications.
+func (s *NauticalToolService) FetchLocalNoticeToMariners(ctx agent.Context, req LocalNoticeToMarinersRequest) (*SailingDirectionsResponse, error) {
+	if s.SailingDirections == nil {
+		return nil, fmt.Errorf("local notice to mariners service unavailable")
+	}
+
+	result, err := s.SailingDirections.QueryLocalNoticeToMariners(ctx, LocalNoticeToMarinersArgs{
 		Query: req.Query,
 		TopK:  req.TopK,
 	})

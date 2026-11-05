@@ -24,7 +24,7 @@ steps:
   - '${_REGION}'
   - '--project'
   - '${PROJECT_ID}'
-  - '--set-env-vars=NAVALPLAN_PUBLICATIONS_BUCKET=${PROJECT_ID}-nautical-publications,COAST_PILOT_CORPUS_ID=${_COAST_PILOT_CORPUS_ID},NGA_CORPUS_ID=${_NGA_CORPUS_ID},VERTEX_LOCATION=${_REGION},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SYNC_CONCURRENCY=4'
+  - '--set-env-vars=NAVALPLAN_PUBLICATIONS_BUCKET=${PROJECT_ID}-nautical-publications,COAST_PILOT_CORPUS_ID=${_COAST_PILOT_CORPUS_ID},NGA_CORPUS_ID=${_NGA_CORPUS_ID},LNM_CORPUS_ID=${_LNM_CORPUS_ID},VERTEX_LOCATION=${_REGION},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SYNC_CONCURRENCY=4'
   - '--memory'
   - '2Gi'
   - '--task-timeout'
@@ -33,14 +33,18 @@ steps:
   - '2'
   id: 'deploy-cloud-run-job'
 
-# 4. Optional: Execute job immediately
+# 4.Optional: Execute job immediately
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:
   - '-c'
   - |
     if [ "${_EXECUTE_SYNC}" = "true" ]; then
-      gcloud run jobs execute nautical-sync --region=${_REGION} --project=${PROJECT_ID} --wait
+      if [ -n "${_SYNC_TARGET}" ]; then
+        gcloud run jobs execute nautical-sync --region=${_REGION} --project=${PROJECT_ID} --update-env-vars=SYNC_TARGET=${_SYNC_TARGET} --wait
+      else
+        gcloud run jobs execute nautical-sync --region=${_REGION} --project=${PROJECT_ID} --wait
+      fi
     fi
   id: 'execute-sync-job'
 
@@ -53,6 +57,8 @@ substitutions:
   _REGION: "us-central1"
   _COAST_PILOT_CORPUS_ID: "coast-pilot-corpus"
   _NGA_CORPUS_ID: "nga-sailing-directions-corpus"
+  _LNM_CORPUS_ID: "uscg-lnm-corpus"
   _EXECUTE_SYNC: "false"
+  _SYNC_TARGET: "all"
 
 logsBucket: gs://navalplan-logging-bucket

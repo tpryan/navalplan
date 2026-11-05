@@ -17,7 +17,7 @@ type Provider interface {
 
 // NewNauticalService constructs a NauticalToolService along with the list of
 // underlying Providers that must be closed on shutdown.
-func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIKey, projectID, vertexLocation, coastPilotCorpus, ngaCorpus string) (*NauticalToolService, []Provider, error) {
+func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIKey, projectID, vertexLocation, coastPilotCorpus, ngaCorpus string, lnmCorpus ...string) (*NauticalToolService, []Provider, error) {
 	var providers []Provider
 
 	_, wp, err := NewWeatherTool()
@@ -44,7 +44,7 @@ func NewNauticalService(ctx context.Context, mapsAPIKey, ukTidalAPIKey, niwaAPIK
 	}
 	providers = append(providers, pp)
 
-	_, sdp, err := NewSailingDirectionsTool(projectID, vertexLocation, coastPilotCorpus, ngaCorpus)
+	_, sdp, err := NewSailingDirectionsTool(projectID, vertexLocation, coastPilotCorpus, ngaCorpus, lnmCorpus...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("sailing directions tool: %w", err)
 	}
@@ -136,6 +136,14 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		errs = append(errs, fmt.Errorf("QueryCoastPilot: %w", err))
 	}
 
+	lnmTool, err := functiontool.New(functiontool.Config{
+		Name:        "QueryLocalNoticeToMariners",
+		Description: "Searches weekly US Coast Guard Local Notice to Mariners (LNM) publications for recent aid-to-navigation discrepancies (extinguished lights, off-station buoys), channel dredging/shoaling, temporary bridge restrictions, marine events, and safety zones.",
+	}, s.FetchLocalNoticeToMariners)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("QueryLocalNoticeToMariners: %w", err))
+	}
+
 	headingTool, err := functiontool.New(functiontool.Config{
 		Name:        "CalculateHeading",
 		Description: "Calculates the nautical heading (course/bearing in degrees), cardinal compass direction, distance in nautical miles, and reciprocal heading between two coordinates. Optionally analyzes wind conditions relative to the course to determine headwinds or adverse winds.",
@@ -164,5 +172,5 @@ func (s *NauticalToolService) AsTools() ([]tool.Tool, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, headingTool, timelineTool, regionsTool}, nil
+	return []tool.Tool{tideTool, weatherTool, sunriseTool, placesTool, safetyTool, sailingTool, coastPilotTool, lnmTool, headingTool, timelineTool, regionsTool}, nil
 }

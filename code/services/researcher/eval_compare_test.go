@@ -460,6 +460,7 @@ func TestEval_ModelComparison(t *testing.T) {
 		baseCfg.VertexLocation,
 		baseCfg.CoastPilotCorpusID,
 		baseCfg.NGACorpusID,
+		baseCfg.LNMCorpusID,
 	)
 	if err != nil {
 		t.Fatalf("Failed to initialize nautical service: %v", err)

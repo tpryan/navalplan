@@ -22,7 +22,7 @@ func (m *mockHTTPDoer) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestNewSailingDirectionsTool(t *testing.T) {
-	tool, provider, err := NewSailingDirectionsTool("test-project", "us-central1", "cp-corpus", "nga-corpus")
+	tool, provider, err := NewSailingDirectionsTool("test-project", "us-central1", "cp-corpus", "nga-corpus", "lnm-corpus")
 	if err != nil {
 		t.Fatalf("NewSailingDirectionsTool() error = %v", err)
 	}
@@ -37,6 +37,14 @@ func TestNewSailingDirectionsTool(t *testing.T) {
 	}
 	if coastPilotTool.Name() != "query_coast_pilot" {
 		t.Errorf("coastPilotTool.Name() = %v, want query_coast_pilot", coastPilotTool.Name())
+	}
+
+	lnmTool, err := NewLocalNoticeToMarinersTool(provider)
+	if err != nil {
+		t.Fatalf("NewLocalNoticeToMarinersTool() error = %v", err)
+	}
+	if lnmTool.Name() != "query_local_notice_to_mariners" {
+		t.Errorf("lnmTool.Name() = %v, want query_local_notice_to_mariners", lnmTool.Name())
 	}
 }
 
@@ -215,6 +223,48 @@ func TestQueryCoastPilot(t *testing.T) {
 	}
 	if res.Territory != "us" {
 		t.Errorf("Expected Territory 'us', got %s", res.Territory)
+	}
+}
+
+func TestQueryLocalNoticeToMariners(t *testing.T) {
+	mockDoer := &mockHTTPDoer{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body: io.NopCloser(bytes.NewBufferString(`{
+					"contexts": {
+						"contexts": [
+							{
+								"sourceDisplayName": "lnm014226.pdf",
+								"text": "Buzzards Bay Lighted Bell Buoy 7 reported extinguished.",
+								"score": 0.94
+							}
+						]
+					}
+				}`)),
+			}, nil
+		},
+	}
+
+	provider := &SailingDirectionsProvider{
+		projectID: "test-proj",
+		location:  "us-central1",
+		lnmCorpus: "uscg-lnm-corpus",
+		client:    mockDoer,
+	}
+
+	res, err := provider.QueryLocalNoticeToMariners(newMockContext(), LocalNoticeToMarinersArgs{
+		Query: "Buzzards Bay buoy discrepancies",
+	})
+	if err != nil {
+		t.Fatalf("QueryLocalNoticeToMariners() error = %v", err)
+	}
+
+	if !strings.Contains(res.Contexts, "Lighted Bell Buoy 7") {
+		t.Errorf("Expected context to contain 'Lighted Bell Buoy 7', got %s", res.Contexts)
+	}
+	if res.Territory != "lnm" {
+		t.Errorf("Expected Territory 'lnm', got %s", res.Territory)
 	}
 }
 

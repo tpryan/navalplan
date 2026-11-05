@@ -74,7 +74,7 @@
         "type": "object",
         "properties": {
           "query": {"type": "string"},
-          "territory": {"type": "string", "enum": ["us", "international", "all"]},
+          "territory": {"type": "string", "enum": ["us", "lnm", "international", "all"]},
           "top_k": {"type": "number"}
         },
         "required": ["query"]
@@ -83,6 +83,18 @@
     {
       "name": "QueryCoastPilot",
       "description": "Searches NOAA Coast Pilot (Volumes 1-10) for US coastal waters, channels, bridge clearances, anchorages, and hazards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "top_k": {"type": "number"}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "QueryLocalNoticeToMariners",
+      "description": "Searches weekly US Coast Guard Local Notice to Mariners (LNM) publications for recent aid-to-navigation discrepancies (extinguished lights, off-station buoys), channel dredging/shoaling, temporary bridge restrictions, marine events, and safety zones.",
       "inputSchema": {
         "type": "object",
         "properties": {

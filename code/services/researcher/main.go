@@ -57,7 +57,7 @@ func main() {
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer initCancel()
 
-	nautical, providers, err := tool.NewNauticalService(initCtx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey, cfg.Project, cfg.VertexLocation, cfg.CoastPilotCorpusID, cfg.NGACorpusID)
+	nautical, providers, err := tool.NewNauticalService(initCtx, cfg.MapsAPIKey, cfg.UKTidalAPIKey, cfg.NIWAAPIKey, cfg.Project, cfg.VertexLocation, cfg.CoastPilotCorpusID, cfg.NGACorpusID, cfg.LNMCorpusID)
 	if err != nil {
 		slog.Error("Failed to set up nautical service", "error", err)
 		os.Exit(1)

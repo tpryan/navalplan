@@ -65,8 +65,9 @@ steps:
 
     create_corpus "${_COAST_PILOT_CORPUS_ID}" "NOAA Coast Pilot Volumes 1-10 Nautical Text RAG Store"
     create_corpus "${_NGA_CORPUS_ID}" "NGA Sailing Directions Enroute and Planning Guides RAG Store"
+    create_corpus "${_LNM_CORPUS_ID}" "USCG Local Notice to Mariners (LNM) Weekly Updates RAG Store"
 
-# 4. Create or update Cloud Scheduler Monthly Sync Job
+# 4. Create or update Cloud Scheduler Monthly & Weekly Sync Jobs
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'schedule-monthly-sync'
   entrypoint: 'bash'
@@ -74,7 +75,9 @@ steps:
   - '-c'
   - |
     JOB_NAME="nautical-sync-monthly"
+    WEEKLY_JOB_NAME="nautical-sync-lnm-weekly"
     SCHEDULER_SVC_ACCOUNT="${PROJECT_ID}@appspot.gserviceaccount.com"
+    RUN_URI="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/nautical-sync:run"
     
     if gcloud scheduler jobs describe "$${JOB_NAME}" --location="${_REGION}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
       echo "Updating Cloud Scheduler job $${JOB_NAME}..."
@@ -83,8 +86,10 @@ steps:
         --project="${PROJECT_ID}" \
         --schedule="0 0 1 * *" \
         --time-zone="Etc/UTC" \
-        --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/nautical-sync:run" \
+        --uri="$${RUN_URI}" \
         --http-method="POST" \
+        --update-headers="Content-Type=application/json" \
+        --message-body='{"overrides":{"containerOverrides":[{"env":[{"name":"SYNC_TARGET","value":"monthly"}]}]}}' \
         --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
     else
       echo "Creating Cloud Scheduler job $${JOB_NAME}..."
@@ -93,8 +98,36 @@ steps:
         --project="${PROJECT_ID}" \
         --schedule="0 0 1 * *" \
         --time-zone="Etc/UTC" \
-        --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/nautical-sync:run" \
+        --uri="$${RUN_URI}" \
         --http-method="POST" \
+        --headers="Content-Type=application/json" \
+        --message-body='{"overrides":{"containerOverrides":[{"env":[{"name":"SYNC_TARGET","value":"monthly"}]}]}}' \
+        --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
+    fi
+
+    if gcloud scheduler jobs describe "$${WEEKLY_JOB_NAME}" --location="${_REGION}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+      echo "Updating Cloud Scheduler job $${WEEKLY_JOB_NAME}..."
+      gcloud scheduler jobs update http "$${WEEKLY_JOB_NAME}" \
+        --location="${_REGION}" \
+        --project="${PROJECT_ID}" \
+        --schedule="0 6 * * 4" \
+        --time-zone="Etc/UTC" \
+        --uri="$${RUN_URI}" \
+        --http-method="POST" \
+        --update-headers="Content-Type=application/json" \
+        --message-body='{"overrides":{"containerOverrides":[{"env":[{"name":"SYNC_TARGET","value":"lnm"}]}]}}' \
+        --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
+    else
+      echo "Creating Cloud Scheduler job $${WEEKLY_JOB_NAME}..."
+      gcloud scheduler jobs create http "$${WEEKLY_JOB_NAME}" \
+        --location="${_REGION}" \
+        --project="${PROJECT_ID}" \
+        --schedule="0 6 * * 4" \
+        --time-zone="Etc/UTC" \
+        --uri="$${RUN_URI}" \
+        --http-method="POST" \
+        --headers="Content-Type=application/json" \
+        --message-body='{"overrides":{"containerOverrides":[{"env":[{"name":"SYNC_TARGET","value":"lnm"}]}]}}' \
         --oauth-service-account-email="$${SCHEDULER_SVC_ACCOUNT}"
     fi
 
@@ -102,5 +135,6 @@ substitutions:
   _REGION: "us-central1"
   _COAST_PILOT_CORPUS_ID: "coast-pilot-corpus"
   _NGA_CORPUS_ID: "nga-sailing-directions-corpus"
+  _LNM_CORPUS_ID: "uscg-lnm-corpus"
 
 logsBucket: gs://navalplan-logging-bucket

@@ -666,7 +666,7 @@ deploy-agent-runtime:
 		--deployment-target agent_runtime \
 		--service-name navalplan-researcher \
 		--secrets="NAVALPLAN_BACKEND_MAPS_API_KEY=NAVALPLAN_BACKEND_MAPS_API_KEY,GEMINI_API_KEY=NAVALPLAN_GEMINI_KEY,NAVALPLAN_TIDAL_UKTIDAL_API_KEY=NAVALPLAN_TIDAL_UKTIDAL_API_KEY,NAVALPLAN_TIDAL_NIWA_API_KEY=NAVALPLAN_TIDAL_NIWA_API_KEY" \
-		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,NAVALPLAN_COMMODORE_MODEL=gemini-4-argon,ENV=production,GOOGLE_CLOUD_PROJECT=$(PROJECT_ID),GCP_PROJECT=$(PROJECT_ID),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,VERTEX_LOCATION=us-central1" \
+		--update-env-vars="NAVALPLAN_AGENT_MODEL=gemini-3.5-flash-lite,NAVALPLAN_COMMODORE_MODEL=gemini-4-argon,ENV=production,GOOGLE_CLOUD_PROJECT=$(PROJECT_ID),GCP_PROJECT=$(PROJECT_ID),NAVALPLAN_DISABLE_TRACING=false,OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_and_event,NAVALPLAN_RESOURCE_ID=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_RESOURCE_ATTRIBUTES=cloud.resource_id=projects/$(PROJECT_ID)/locations/$(REGION)/reasoningEngines/1643463669536784384,OTEL_TRACES_EXPORTER=google_cloud_trace,COAST_PILOT_CORPUS_ID=coast-pilot-corpus,NGA_CORPUS_ID=nga-sailing-directions-corpus,LNM_CORPUS_ID=uscg-lnm-corpus,VERTEX_LOCATION=us-central1" \
 		--no-confirm-project
 
 deploy-backend:
@@ -869,3 +869,24 @@ setup-infra-rag:
 deploy-nautical-sync-job:
 	@echo "Building and deploying nautical-sync Cloud Run Job via Cloud Build..."
 	gcloud builds submit --config .cloudbuild/cloudbuild-nautical-sync.yaml .
+
+sync-lnm-weekly:
+	@echo "Staging latest USCG Weekly LNM PDFs to GCS and triggering uscg-lnm-corpus RAG import..."
+	@YEAR=$$(date -u +%G); \
+	WEEK=$$(date -u +%V); \
+	PREV_WEEK=$$(printf "%02d" $$((10#$$WEEK - 1))); \
+	PREV2_WEEK=$$(printf "%02d" $$((10#$$WEEK - 2))); \
+	for d in 01:d1 05:d5 07:d7 08g:d8g 08r:d8r 09:d9 11:d11 13:d13 14:d14 17:d17; do \
+		pfx="$${d%%:*}"; dist="$${d##*:}"; \
+		for w in $$WEEK $$PREV_WEEK $$PREV2_WEEK; do \
+			f="lnm$${pfx}$${w}$${YEAR}.pdf"; \
+			if curl --cacert /etc/ssl/cert.pem -sfL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" \
+				"https://navcen.uscg.gov/sites/default/files/pdf/lnms/$${f}" -o "/tmp/$${f}"; then \
+				echo "Uploaded $${f} -> gs://$(PROJECT_ID)-nautical-publications/uscg-lnm/latest/$${dist}/$${f}"; \
+				gcloud storage cp "/tmp/$${f}" "gs://$(PROJECT_ID)-nautical-publications/uscg-lnm/latest/$${dist}/$${f}"; \
+				rm -f "/tmp/$${f}"; \
+				break; \
+			fi; \
+		done; \
+	done
+	gcloud run jobs execute nautical-sync --region=$(REGION) --project=$(PROJECT_ID) --update-env-vars=SYNC_TARGET=lnm --wait

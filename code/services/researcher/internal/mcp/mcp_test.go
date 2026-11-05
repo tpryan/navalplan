@@ -46,8 +46,8 @@ func TestHandler_ServeHTTP_ListTools(t *testing.T) {
 		t.Fatalf("expected tools array, got %T", result["tools"])
 	}
 
-	if len(tools) != 10 {
-		t.Errorf("expected 10 tools, got %v", len(tools))
+	if len(tools) != 11 {
+		t.Errorf("expected 11 tools, got %v", len(tools))
 	}
 }
 

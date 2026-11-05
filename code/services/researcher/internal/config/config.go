@@ -43,9 +43,10 @@ type Config struct {
 	SearchTimeoutMs    int
 	CoastPilotCorpusID string
 	NGACorpusID        string
+	LNMCorpusID        string
 	// VertexLocation is the regional Vertex AI location used for RAG Engine corpora
-	// (Coast Pilot and NGA Sailing Directions), which must be a concrete GCP region
-	// such as "us-central1" rather than "global".
+	// (Coast Pilot, NGA Sailing Directions, and USCG Local Notice to Mariners),
+	// which must be a concrete GCP region such as "us-central1" rather than "global".
 	VertexLocation string
 	DisableTracing bool
 }
@@ -279,6 +280,14 @@ func New(getEnv func(string) string) (*Config, error) {
 		ngaCorpus = "nga-sailing-directions-corpus"
 	}
 
+	lnmCorpus := getEnv("LNM_CORPUS_ID")
+	if lnmCorpus == "" {
+		lnmCorpus = getEnv("NAVALPLAN_LNM_CORPUS_ID")
+	}
+	if lnmCorpus == "" {
+		lnmCorpus = "uscg-lnm-corpus"
+	}
+
 	vertexLocation := getEnv("VERTEX_LOCATION")
 	if vertexLocation == "" {
 		if loc := getEnv("GOOGLE_CLOUD_LOCATION"); loc != "global" {
@@ -317,6 +326,7 @@ func New(getEnv func(string) string) (*Config, error) {
 		SearchTimeoutMs:            searchTimeoutMs,
 		CoastPilotCorpusID:         coastPilotCorpus,
 		NGACorpusID:                ngaCorpus,
+		LNMCorpusID:                lnmCorpus,
 		VertexLocation:             vertexLocation,
 		DisableTracing:             getEnv("NAVALPLAN_DISABLE_TRACING") == "true",
 	}
