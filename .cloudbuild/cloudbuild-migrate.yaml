@@ -52,8 +52,15 @@ steps:
     # A version of 0 or an error here means this is a fresh database.
     echo ""
     echo "=== Schema version before migration ==="
-    migrate -path=code/app/db/migrations/ -database "$DB_URL" version 2>&1 \
-      || echo "(no migrations applied yet)"
+    VER_OUT=$(migrate -path=code/app/db/migrations/ -database "$DB_URL" version 2>&1 || true)
+    echo "$VER_OUT"
+
+    if echo "$VER_OUT" | grep -q "(dirty)"; then
+      DIRTY_VER=$(echo "$VER_OUT" | awk '{print $1}')
+      PREV_VER=$((DIRTY_VER - 1))
+      echo "Detected rolled-back dirty migration at version ${DIRTY_VER}; forcing back to ${PREV_VER}..."
+      migrate -path=code/app/db/migrations/ -database "$DB_URL" force "$PREV_VER"
+    fi
 
     # --- Apply all pending migrations ---
     echo ""

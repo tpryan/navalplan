@@ -211,7 +211,8 @@ DROP INDEX IF EXISTS idx_voyage_track_stop;
 ALTER TABLE voyage_track DROP COLUMN voyage_stop_id;
 CREATE INDEX idx_voyage_track_day ON voyage_track(voyage_day_id);
 
--- Drop stop and create voyage_day index
+-- Drop legacy stop_map table if present in prod and drop stop
+DROP TABLE IF EXISTS stop_map CASCADE;
 DROP INDEX IF EXISTS idx_stop_voyage_id;
-DROP TABLE stop;
+DROP TABLE stop CASCADE;
 CREATE INDEX idx_voyage_day_voyage_id ON voyage_day(voyage_id);
