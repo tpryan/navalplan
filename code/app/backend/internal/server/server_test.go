@@ -80,51 +80,59 @@ func (m *MockStore) UpdateVoyageConfig(ctx context.Context, id int64, radius int
 	return args.Error(0)
 }
 
-func (m *MockStore) ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]model.Stop, error) {
+func (m *MockStore) ListDays(ctx context.Context, voyageID int64, limit, offset int) ([]model.VoyageDay, error) {
 	args := m.Called(voyageID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) CreateStop(ctx context.Context, s *model.Stop) error {
-	args := m.Called(s)
+func (m *MockStore) CreateDay(ctx context.Context, d *model.VoyageDay) error {
+	args := m.Called(d)
 	return args.Error(0)
 }
 
-func (m *MockStore) GetStop(ctx context.Context, id int64) (*model.Stop, error) {
+func (m *MockStore) GetDay(ctx context.Context, id int64) (*model.VoyageDay, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*model.Stop), args.Error(1)
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) UpdateStop(ctx context.Context, s *model.Stop) error {
-	args := m.Called(s)
+func (m *MockStore) UpdateDay(ctx context.Context, d *model.VoyageDay) error {
+	args := m.Called(d)
 	return args.Error(0)
 }
 
-func (m *MockStore) DeleteStop(ctx context.Context, id int64) error {
+func (m *MockStore) DeleteDay(ctx context.Context, id int64) error {
 	args := m.Called(id)
 	return args.Error(0)
 }
 
-func (m *MockStore) ListLandfallStops(ctx context.Context, voyageID int64) ([]model.Stop, error) {
+func (m *MockStore) ListLandfallDays(ctx context.Context, voyageID int64) ([]model.VoyageDay, error) {
 	args := m.Called(voyageID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) GetStopByDate(ctx context.Context, voyageID int64, date time.Time) (*model.Stop, error) {
+func (m *MockStore) GetDayByDate(ctx context.Context, voyageID int64, date time.Time) (*model.VoyageDay, error) {
 	args := m.Called(voyageID, date)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*model.Stop), args.Error(1)
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
+}
+
+func (m *MockStore) GetPreviousDay(ctx context.Context, voyageID int64, beforeDate time.Time) (*model.VoyageDay, error) {
+	args := m.Called(voyageID, beforeDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
 }
 
 func (m *MockStore) DeletePassagePoints(ctx context.Context, voyageID int64) error {
@@ -132,8 +140,8 @@ func (m *MockStore) DeletePassagePoints(ctx context.Context, voyageID int64) err
 	return args.Error(0)
 }
 
-func (m *MockStore) GetBriefing(ctx context.Context, stopID int64) (*model.Briefing, error) {
-	args := m.Called(stopID)
+func (m *MockStore) GetBriefing(ctx context.Context, dayID int64) (*model.Briefing, error) {
+	args := m.Called(dayID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -324,29 +332,29 @@ func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month i
 	return args.Error(0)
 }
 
-func (m *MockStore) ListAllFutureStops(ctx context.Context) ([]model.Stop, error) {
+func (m *MockStore) ListAllFutureDays(ctx context.Context) ([]model.VoyageDay, error) {
 	args := m.Called()
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) ListStopsInWindow(ctx context.Context, days int) ([]model.Stop, error) {
+func (m *MockStore) ListDaysInWindow(ctx context.Context, days int) ([]model.VoyageDay, error) {
 	args := m.Called(days)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts model.RawJSON) error {
-	args := m.Called(stopID, alerts)
+func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, dayID int64, alerts model.RawJSON) error {
+	args := m.Called(dayID, alerts)
 	return args.Error(0)
 }
 
-func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather model.WeatherSummary) error {
-	args := m.Called(stopID, weather)
+func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, dayID int64, weather model.WeatherSummary) error {
+	args := m.Called(dayID, weather)
 	return args.Error(0)
 }
 
@@ -371,8 +379,8 @@ func (m *MockStore) ListVoyageTracks(ctx context.Context, voyageID int64) ([]mod
 	return args.Get(0).([]model.VoyageTrack), args.Error(1)
 }
 
-func (m *MockStore) ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error) {
-	args := m.Called(stopID)
+func (m *MockStore) ListDayTracks(ctx context.Context, dayID int64) ([]model.VoyageTrack, error) {
+	args := m.Called(dayID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

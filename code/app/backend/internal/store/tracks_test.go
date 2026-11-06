@@ -33,12 +33,12 @@ func TestCreateVoyageTrack_NamedQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			query := `
 				INSERT INTO voyage_track (
-					voyage_id, voyage_stop_id, kind, name, file_name,
+					voyage_id, voyage_day_id, kind, name, file_name,
 					start_time, end_time, distance_nm, duration_interval,
 					max_speed_kts, avg_speed_kts, geojson, simplified_geojson,
 					raw_gpx, debrief, created_at, updated_at
 				) VALUES (
-					:voyage_id, :voyage_stop_id, :kind, :name, :file_name,
+					:voyage_id, :voyage_day_id, :kind, :name, :file_name,
 					:start_time, :end_time, :distance_nm,
 					CAST(NULLIF(:duration_interval, '') AS interval),
 					:max_speed_kts, :avg_speed_kts, :geojson, :simplified_geojson,

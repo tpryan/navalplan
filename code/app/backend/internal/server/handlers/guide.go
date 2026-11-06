@@ -384,7 +384,7 @@ func (h *Handler) GetVoyageGuide(w http.ResponseWriter, r *http.Request) {
 type PublicVoyageReport struct {
 	Voyage          *model.Voyage                `json:"voyage"`
 	Guide           *model.VoyageGuide           `json:"guide"`
-	Stops           []model.Stop                 `json:"stops"`
+	Days            []model.VoyageDay            `json:"days"`
 	Briefings       []model.Briefing             `json:"briefings"`
 	Recommendations []model.VoyageRecommendation `json:"recommendations"`
 	MapURL          string                       `json:"map_url,omitempty"`
@@ -409,10 +409,10 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(r.Context(), "Failed to get voyage guide for public voyage", "voyage_id", voyage.ID, "error", err)
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), voyage.ID, 0, 0)
+	days, err := h.DB.ListDays(r.Context(), voyage.ID, 0, 0)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list stops for public voyage", "voyage_id", voyage.ID, "error", err)
-		stops = []model.Stop{}
+		slog.ErrorContext(r.Context(), "Failed to list days for public voyage", "voyage_id", voyage.ID, "error", err)
+		days = []model.VoyageDay{}
 	}
 
 	briefings, err := h.DB.ListVoyageBriefings(r.Context(), voyage.ID)
@@ -451,10 +451,10 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 					if d.TrackID == "" && t.ID != "" {
 						d.TrackID = t.ID
 					}
-					if d.VoyageStopID == nil && t.VoyageStopID != nil {
-						d.VoyageStopID = t.VoyageStopID
+					if d.VoyageDayID == nil && t.VoyageDayID != nil {
+						d.VoyageDayID = t.VoyageDayID
 					}
-					ResolveDebriefStartStop(&d, &t, stops)
+					ResolveDebriefDay(&d, &t, days)
 					debriefs = append(debriefs, &d)
 				}
 			}
@@ -470,7 +470,7 @@ func (h *Handler) GetPublicVoyageGuide(w http.ResponseWriter, r *http.Request) {
 	resp := PublicVoyageReport{
 		Voyage:          voyage,
 		Guide:           guide,
-		Stops:           stops,
+		Days:            days,
 		Briefings:       briefings,
 		Recommendations: recs,
 		MapURL:          mapURL,

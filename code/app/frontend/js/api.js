@@ -69,6 +69,28 @@ async function apiFetch(url, options = {}) {
   }
 }
 
+function normalizeDay(d) {
+  if (!d || typeof d !== "object") return d;
+  if (d.latitude == null && d.end_latitude != null) d.latitude = d.end_latitude;
+  if (d.longitude == null && d.end_longitude != null) d.longitude = d.end_longitude;
+  if (!d.location_name && (d.end_location_name || d.start_location_name)) {
+    d.location_name = d.end_location_name || d.start_location_name;
+  }
+  if (!d.precise_location && (d.end_precise_location || d.start_precise_location)) {
+    d.precise_location = d.end_precise_location || d.start_precise_location;
+  }
+  if (!d.stop_type && d.day_type) d.stop_type = d.day_type;
+  if (!d.day_type && d.stop_type) d.day_type = d.stop_type;
+  return d;
+}
+
+function normalizeBriefing(b) {
+  if (!b || typeof b !== "object") return b;
+  if (b.day_id == null && b.stop_id != null) b.day_id = b.stop_id;
+  if (b.stop_id == null && b.day_id != null) b.stop_id = b.day_id;
+  return b;
+}
+
 export const API = {
   async getPerson() {
     const res = await apiFetch(`${API_BASE}/person`);
@@ -155,9 +177,9 @@ export const API = {
     return res.json();
   },
 
-  async triggerResearch(stopId) {
-    const res = await apiFetch(`${API_BASE}/stops/${stopId}/research`, { method: 'POST' });
-    if (res.status === 409) { const e = new Error('Research already in progress for this stop'); e.conflict = true; throw e; }
+  async triggerResearch(dayId) {
+    const res = await apiFetch(`${API_BASE}/days/${dayId}/research`, { method: 'POST' });
+    if (res.status === 409) { const e = new Error('Research already in progress for this day'); e.conflict = true; throw e; }
     if (!res.ok) throw new Error('Failed to trigger research');
     return res.json();
   },
@@ -175,60 +197,88 @@ export const API = {
     return res.json();
   },
 
-  async triggerLookoutAudit(stopId) {
-    const res = await apiFetch(`${API_BASE}/stops/${stopId}/lookout`, { method: 'POST' });
+  async triggerLookoutAudit(dayId) {
+    const res = await apiFetch(`${API_BASE}/days/${dayId}/lookout`, { method: 'POST' });
     if (res.status === 404) { const e = new Error('No briefing found — run research first'); e.noBriefing = true; throw e; }
     if (res.status === 409) { const e = new Error('Safety audit already in progress'); e.conflict = true; throw e; }
     if (!res.ok) throw new Error('Failed to trigger safety audit');
     return res.json();
   },
 
-	async getBriefing(stopId) {
-		const res = await apiFetch(`${API_BASE}/stops/${stopId}/briefing`);
-		if (res.status === 404) return null;
-		if (!res.ok) throw new Error('Failed to get briefing');
-		return res.json();
-	},
+  async getBriefing(dayId) {
+    const res = await apiFetch(`${API_BASE}/days/${dayId}/briefing`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Failed to get briefing');
+    return normalizeBriefing(await res.json());
+  },
 
-	async getVoyageBriefings(voyageId) {
-		const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/briefings`);
-		if (!res.ok) throw new Error('Failed to get voyage briefings');
-		const data = await res.json();
-		return data || [];
-	},
+  async getVoyageBriefings(voyageId) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/briefings`);
+    if (!res.ok) throw new Error('Failed to get voyage briefings');
+    const data = await res.json();
+    return (data || []).map(normalizeBriefing);
+  },
 
-	  async getStops(voyageId, page = 1, limit = 50) {
-	    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops?page=${page}&limit=${limit}`);
-	    if (!res.ok) throw new Error('Failed to load stops');
-	    const data = await res.json();
-	    return data || [];
-	  },
-  async createStop(voyageId, stop) {
-    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops`, {
+  async getDays(voyageId, page = 1, limit = 50) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/days?page=${page}&limit=${limit}`);
+    if (!res.ok) throw new Error('Failed to load days');
+    const data = await res.json();
+    return (data || []).map(normalizeDay);
+  },
+
+  async createDay(voyageId, day) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/days`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(stop),
+      body: JSON.stringify(day),
     });
-    if (!res.ok) throw new Error('Failed to create stop');
+    if (!res.ok) throw new Error('Failed to create day');
+    return normalizeDay(await res.json());
+  },
+
+  async updateDay(dayId, day) {
+    const res = await apiFetch(`${API_BASE}/days/${dayId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(day),
+    });
+    if (!res.ok) throw new Error('Failed to update day');
+    return normalizeDay(await res.json());
+  },
+
+  async deleteDay(dayId) {
+    const res = await apiFetch(`${API_BASE}/days/${dayId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete day');
     return res.json();
+  },
+
+  async getPublicDays(token) {
+    const res = await apiFetch(`${API_BASE}/public/voyages/${token}/days`);
+    if (!res.ok) throw new Error('Failed to load public days');
+    const data = await res.json();
+    return (data || []).map(normalizeDay);
+  },
+
+  async getStops(voyageId, page = 1, limit = 50) {
+    return this.getDays(voyageId, page, limit);
+  },
+
+  async createStop(voyageId, stop) {
+    return this.createDay(voyageId, stop);
   },
 
   async updateStop(stopId, stop) {
-    const res = await apiFetch(`${API_BASE}/stops/${stopId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(stop),
-    });
-    if (!res.ok) throw new Error('Failed to update stop');
-    return res.json();
+    return this.updateDay(stopId, stop);
   },
 
   async deleteStop(stopId) {
-    const res = await apiFetch(`${API_BASE}/stops/${stopId}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error('Failed to delete stop');
-    return res.json();
+    return this.deleteDay(stopId);
+  },
+
+  async getPublicStops(token) {
+    return this.getPublicDays(token);
   },
 
   async triggerVoyageGuideResearch(voyageId) {
@@ -459,9 +509,10 @@ export const API = {
     return res.json();
   },
 
-  async uploadStopTrack(voyageId, stopId, fileOrFormData, kind = '') {
+  async uploadDayTrack(voyageId, dayId, fileOrFormData, kind = '') {
     let body;
     let headers = {};
+    const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     if (fileOrFormData instanceof FormData) {
       body = fileOrFormData;
     } else if (fileOrFormData instanceof File || fileOrFormData instanceof Blob) {
@@ -472,16 +523,20 @@ export const API = {
       body = fileOrFormData;
       headers['Content-Type'] = 'application/gpx+xml';
     }
-    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/stops/${stopId}/track`, {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/days/${dayId}/track${qs}`, {
       method: 'POST',
       headers,
       body,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to upload stop track');
+      throw new Error(err.error || 'Failed to upload day track');
     }
     return res.json();
+  },
+
+  async uploadStopTrack(voyageId, stopId, fileOrFormData, kind = '') {
+    return this.uploadDayTrack(voyageId, stopId, fileOrFormData, kind);
   },
 
   async deleteVoyageTrack(voyageId, trackId) {

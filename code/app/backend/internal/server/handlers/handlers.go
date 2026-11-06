@@ -32,25 +32,26 @@ type DBStore interface {
 	UpdateVoyageConfig(ctx context.Context, id int64, radius int, unit string) error
 	GetVoyageByToken(ctx context.Context, token string) (*model.Voyage, error)
 
-	// Stops
-	ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]model.Stop, error)
-	ListLandfallStops(ctx context.Context, voyageID int64) ([]model.Stop, error)
-	CreateStop(ctx context.Context, s *model.Stop) error
-	GetStop(ctx context.Context, id int64) (*model.Stop, error)
-	GetStopByDate(ctx context.Context, voyageID int64, date time.Time) (*model.Stop, error)
+	// Days
+	ListDays(ctx context.Context, voyageID int64, limit, offset int) ([]model.VoyageDay, error)
+	ListLandfallDays(ctx context.Context, voyageID int64) ([]model.VoyageDay, error)
+	CreateDay(ctx context.Context, d *model.VoyageDay) error
+	GetDay(ctx context.Context, id int64) (*model.VoyageDay, error)
+	GetDayByDate(ctx context.Context, voyageID int64, date time.Time) (*model.VoyageDay, error)
+	GetPreviousDay(ctx context.Context, voyageID int64, beforeDate time.Time) (*model.VoyageDay, error)
 	DeletePassagePoints(ctx context.Context, voyageID int64) error
-	UpdateStop(ctx context.Context, s *model.Stop) error
-	DeleteStop(ctx context.Context, id int64) error
-	ListAllFutureStops(ctx context.Context) ([]model.Stop, error)
-	ListStopsInWindow(ctx context.Context, days int) ([]model.Stop, error)
+	UpdateDay(ctx context.Context, d *model.VoyageDay) error
+	DeleteDay(ctx context.Context, id int64) error
+	ListAllFutureDays(ctx context.Context) ([]model.VoyageDay, error)
+	ListDaysInWindow(ctx context.Context, days int) ([]model.VoyageDay, error)
 
 	// Briefings
-	GetBriefing(ctx context.Context, stopID int64) (*model.Briefing, error)
+	GetBriefing(ctx context.Context, dayID int64) (*model.Briefing, error)
 	GetNearbyBriefing(ctx context.Context, lat, lng float64) (*model.Briefing, error)
 	ListVoyageBriefings(ctx context.Context, voyageID int64) ([]model.Briefing, error)
 	CreateBriefing(ctx context.Context, b *model.Briefing) error
-	UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts model.RawJSON) error
-	UpsertWeatherBriefing(ctx context.Context, stopID int64, weather model.WeatherSummary) error
+	UpsertSafetyAlerts(ctx context.Context, dayID int64, alerts model.RawJSON) error
+	UpsertWeatherBriefing(ctx context.Context, dayID int64, weather model.WeatherSummary) error
 
 	// Guides & Maps
 	GetVoyageGuide(ctx context.Context, voyageID int64) (*model.VoyageGuide, error)
@@ -94,7 +95,7 @@ type DBStore interface {
 	CreateVoyageTrack(ctx context.Context, t *model.VoyageTrack) error
 	GetVoyageTrack(ctx context.Context, id string) (*model.VoyageTrack, error)
 	ListVoyageTracks(ctx context.Context, voyageID int64) ([]model.VoyageTrack, error)
-	ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error)
+	ListDayTracks(ctx context.Context, dayID int64) ([]model.VoyageTrack, error)
 	DeleteVoyageTrack(ctx context.Context, id string) error
 	UpdateVoyageTrackDebrief(ctx context.Context, id string, debrief model.RawJSON) error
 }
@@ -127,7 +128,6 @@ type Handler struct {
 func New(db DBStore, contentDir string, agentURL string, resolver agent.Resolver) *Handler {
 	var client *http.Client
 	var err error
-
 	if agentURL != "" && strings.Contains(agentURL, "run.app") {
 		client, err = idtoken.NewClient(context.Background(), agentURL)
 		if err != nil {
@@ -152,20 +152,16 @@ func New(db DBStore, contentDir string, agentURL string, resolver agent.Resolver
 			},
 		}
 	}
-
 	if resolver == nil {
 		resolver = &agent.StaticResolver{BaseURL: agentURL}
 	}
-
 	agentRunner := &agent.AgentRunner{Client: client, Resolver: resolver}
-
 	reRunner, err := agent.NewReasoningEngineRunner(context.Background())
 	if err != nil {
 		slog.Warn("Failed to initialize Reasoning Engine runner", "error", err)
 	} else {
 		agentRunner.ReasoningEngine = reRunner
 	}
-
 	healthClient := &http.Client{
 		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
@@ -173,7 +169,6 @@ func New(db DBStore, contentDir string, agentURL string, resolver agent.Resolver
 			MaxIdleConnsPerHost: 5,
 		},
 	}
-
 	return &Handler{
 		DB:           db,
 		ContentDir:   contentDir,
@@ -209,11 +204,9 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 	if h.AgentURL == "" {
 		return nil
 	}
-
 	if strings.HasPrefix(h.AgentURL, "projects/") && strings.Contains(h.AgentURL, "/reasoningEngines/") {
 		return nil
 	}
-
 	h.muHealth.RLock()
 	if time.Since(h.lastHealthCheck) < 10*time.Second {
 		err := h.lastHealthErr
@@ -221,17 +214,13 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return err
 	}
 	h.muHealth.RUnlock()
-
 	h.muHealth.Lock()
 	defer h.muHealth.Unlock()
-
 	if time.Since(h.lastHealthCheck) < 10*time.Second {
 		return h.lastHealthErr
 	}
-
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-
 	url := h.AgentURL + "/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -239,12 +228,10 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		h.lastHealthErr = err
 		return err
 	}
-
 	client := h.HealthClient
 	if client == nil {
 		client = h.AgentClient
 	}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		h.lastHealthCheck = time.Now()
@@ -252,14 +239,12 @@ func (h *Handler) CheckAgentHealth(ctx context.Context) error {
 		return err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		err := fmt.Errorf("agent returned non-200 status: %d", resp.StatusCode)
 		h.lastHealthCheck = time.Now()
 		h.lastHealthErr = err
 		return err
 	}
-
 	h.lastHealthCheck = time.Now()
 	h.lastHealthErr = nil
 	return nil
@@ -277,56 +262,47 @@ func (h *Handler) authorizedVoyage(w http.ResponseWriter, r *http.Request) (*mod
 		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return nil, nil, false
 	}
-
 	voyageID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid Voyage ID")
 		return nil, nil, false
 	}
-
 	voyage, err := h.DB.GetVoyage(r.Context(), voyageID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Voyage not found")
 		return nil, nil, false
 	}
-
 	if voyage.PersonID != person.ID {
 		writeError(w, http.StatusForbidden, "Unauthorized")
 		return nil, nil, false
 	}
-
 	return voyage, person, true
 }
 
-func (h *Handler) authorizedStop(w http.ResponseWriter, r *http.Request) (*model.Stop, *model.Voyage, *model.Person, bool) {
+func (h *Handler) authorizedDay(w http.ResponseWriter, r *http.Request) (*model.VoyageDay, *model.Voyage, *model.Person, bool) {
 	person := GetPersonFromContext(r.Context())
 	if person == nil {
 		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return nil, nil, nil, false
 	}
-
-	stopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	dayID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		writeError(w, http.StatusBadRequest, "Invalid Day ID")
 		return nil, nil, nil, false
 	}
-
-	stop, err := h.DB.GetStop(r.Context(), stopID)
+	day, err := h.DB.GetDay(r.Context(), dayID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Stop not found")
+		writeError(w, http.StatusNotFound, "Day not found")
 		return nil, nil, nil, false
 	}
-
-	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), day.VoyageID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Voyage not found")
 		return nil, nil, nil, false
 	}
-
 	if voyage.PersonID != person.ID {
 		writeError(w, http.StatusForbidden, "Unauthorized")
 		return nil, nil, nil, false
 	}
-
-	return stop, voyage, person, true
+	return day, voyage, person, true
 }

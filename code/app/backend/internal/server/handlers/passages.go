@@ -25,57 +25,63 @@ func daysBetween(a, b time.Time) int {
 	return int(math.Round(truncateToDay(b).Sub(truncateToDay(a)).Hours() / 24))
 }
 
-func (h *Handler) InterpolatePassagePoints(ctx context.Context, voyageID int64) ([]model.Stop, error) {
-	landfalls, err := h.DB.ListLandfallStops(ctx, voyageID)
+func (h *Handler) InterpolatePassagePoints(ctx context.Context, voyageID int64) ([]model.VoyageDay, error) {
+	landfalls, err := h.DB.ListLandfallDays(ctx, voyageID)
 	if err != nil {
-		return nil, fmt.Errorf("list landfall stops: %w", err)
+		return nil, fmt.Errorf("list landfall days: %w", err)
 	}
-
 	if err := h.DB.DeletePassagePoints(ctx, voyageID); err != nil {
 		return nil, fmt.Errorf("clear passage points: %w", err)
 	}
-
 	if len(landfalls) < 2 {
 		return nil, nil
 	}
 
-	var created []model.Stop
-
+	var created []model.VoyageDay
 	for i := 0; i < len(landfalls)-1; i++ {
 		start := landfalls[i]
 		end := landfalls[i+1]
-
 		total := daysBetween(start.TargetDate, end.TargetDate)
 		if total <= 1 {
 			continue
 		}
+		prevLat := start.EndLatitude
+		prevLon := start.EndLongitude
+		prevName := start.EndLocationName
+		if prevName == "" {
+			prevName = passageLocationName
+		}
 
 		for k := 1; k < total; k++ {
 			frac := float64(k) / float64(total)
-			lat := start.Latitude + frac*(end.Latitude-start.Latitude)
-			lon := start.Longitude + frac*(end.Longitude-start.Longitude)
-
-			lat, lon = h.snapToWater(ctx, lat, lon, start.Latitude, start.Longitude, end.Latitude, end.Longitude)
-
+			lat := start.EndLatitude + frac*(end.StartLatitude-start.EndLatitude)
+			lon := start.EndLongitude + frac*(end.StartLongitude-start.EndLongitude)
+			lat, lon = h.snapToWater(ctx, lat, lon, start.EndLatitude, start.EndLongitude, end.StartLatitude, end.StartLongitude)
 			date := truncateToDay(start.TargetDate).AddDate(0, 0, k)
 
-			existing, err := h.DB.GetStopByDate(ctx, voyageID, date)
+			existing, err := h.DB.GetDayByDate(ctx, voyageID, date)
 			if err != nil {
-				return nil, fmt.Errorf("check stop on %s: %w", date.Format("2006-01-02"), err)
+				return nil, fmt.Errorf("check day on %s: %w", date.Format("2006-01-02"), err)
 			}
 			if existing != nil {
+				prevLat = existing.EndLatitude
+				prevLon = existing.EndLongitude
+				prevName = existing.EndLocationName
 				continue
 			}
 
-			point := &model.Stop{
-				VoyageID:         voyageID,
-				TargetDate:       date,
-				StopType:         model.StopTypePassagePoint,
-				LocationName:     passageLocationName,
-				Latitude:         lat,
-				Longitude:        lon,
-				SearchRadius:     start.SearchRadius,
-				SearchRadiusUnit: start.SearchRadiusUnit,
+			point := &model.VoyageDay{
+				VoyageID:          voyageID,
+				TargetDate:        date,
+				DayType:           model.DayTypePassagePoint,
+				StartLocationName: prevName,
+				StartLatitude:     prevLat,
+				StartLongitude:    prevLon,
+				EndLocationName:   passageLocationName,
+				EndLatitude:       lat,
+				EndLongitude:      lon,
+				SearchRadius:      start.SearchRadius,
+				SearchRadiusUnit:  start.SearchRadiusUnit,
 			}
 			if point.SearchRadius <= 0 {
 				point.SearchRadius = 60
@@ -83,11 +89,13 @@ func (h *Handler) InterpolatePassagePoints(ctx context.Context, voyageID int64) 
 			if point.SearchRadiusUnit == "" {
 				point.SearchRadiusUnit = "nm"
 			}
-
-			if err := h.DB.CreateStop(ctx, point); err != nil {
-				return nil, fmt.Errorf("create passage point on %s: %w", date.Format("2006-01-02"), err)
+			if err := h.DB.CreateDay(ctx, point); err != nil {
+				return nil, fmt.Errorf("create passage day on %s: %w", date.Format("2006-01-02"), err)
 			}
 			created = append(created, *point)
+			prevLat = lat
+			prevLon = lon
+			prevName = passageLocationName
 		}
 	}
 
@@ -95,16 +103,16 @@ func (h *Handler) InterpolatePassagePoints(ctx context.Context, voyageID int64) 
 	return created, nil
 }
 
-func (h *Handler) researchPassagePoints(points []model.Stop) {
+func (h *Handler) researchPassagePoints(points []model.VoyageDay) {
 	for _, p := range points {
-		stop := p
-		jobKey := fmt.Sprintf("stop:%d", stop.ID)
+		day := p
+		jobKey := fmt.Sprintf("day:%d", day.ID)
 		if !h.tryClaimJob(jobKey) {
 			continue
 		}
-		sessionID := fmt.Sprintf("passage_%d_%d", stop.ID, time.Now().Unix())
+		sessionID := fmt.Sprintf("passage_%d_%d", day.ID, time.Now().Unix())
 		h.ensureProgressChannel(sessionID, 25*time.Minute)
-		go h.performStopResearch(&stop, sessionID, jobKey)
+		go h.performDayResearch(&day, sessionID, jobKey)
 	}
 }
 

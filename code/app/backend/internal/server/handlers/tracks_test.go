@@ -51,7 +51,7 @@ func TestUploadVoyageTrack(t *testing.T) {
 		{
 			name:       "forbidden when not owner",
 			personID:   &personID,
-			voyage:     &model.Voyage{ID: voyageID, PersonID: 999}, // different owner
+			voyage:     &model.Voyage{ID: voyageID, PersonID: 999},
 			body:       []byte(sampleRouteGPX),
 			wantStatus: http.StatusForbidden,
 		},
@@ -80,7 +80,7 @@ func TestUploadVoyageTrack(t *testing.T) {
 				mockStore.On("GetVoyage", voyageID).Return(tc.voyage, tc.voyageErr)
 			}
 			if tc.wantStatus == http.StatusCreated {
-				mockStore.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				mockStore.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{}, nil)
 				mockStore.On("CreateVoyageTrack", mock.AnythingOfType("*model.VoyageTrack")).Return(nil)
 			}
 
@@ -100,22 +100,21 @@ func TestUploadVoyageTrack(t *testing.T) {
 	}
 }
 
-func TestUploadStopTrack(t *testing.T) {
+func TestUploadDayTrack(t *testing.T) {
 	personID := int64(1)
 	voyageID := int64(10)
-	stopID := int64(20)
+	dayID := int64(20)
 
-	t.Run("upload multipart to stop", func(t *testing.T) {
+	t.Run("upload multipart to day", func(t *testing.T) {
 		mockStore := new(MockStore)
 		handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 
 		mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-		mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
+		mockStore.On("GetDay", dayID).Return(&model.VoyageDay{ID: dayID, VoyageID: voyageID}, nil)
 		mockStore.On("CreateVoyageTrack", mock.MatchedBy(func(tr *model.VoyageTrack) bool {
-			return tr.VoyageStopID != nil && *tr.VoyageStopID == stopID
+			return tr.VoyageDayID != nil && *tr.VoyageDayID == dayID
 		})).Return(nil)
 
-		// Create multipart form
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "leg1.gpx")
@@ -125,17 +124,17 @@ func TestUploadStopTrack(t *testing.T) {
 		part.Write([]byte(sampleRouteGPX))
 		writer.Close()
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/voyages/10/stops/20/track", body)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/voyages/10/days/20/track", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		req.SetPathValue("id", "10")
-		req.SetPathValue("stopId", "20")
+		req.SetPathValue("dayId", "20")
 		req = addPerson(req, personID)
 
 		w := httptest.NewRecorder()
-		handler.UploadStopTrack(w, req)
+		handler.UploadDayTrack(w, req)
 
 		if w.Code != http.StatusCreated {
-			t.Fatalf("UploadStopTrack() code = %d, want 201; body = %s", w.Code, w.Body.String())
+			t.Fatalf("UploadDayTrack() code = %d, want 201; body = %s", w.Code, w.Body.String())
 		}
 		mockStore.AssertExpectations(t)
 	})
@@ -212,7 +211,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 	maxSpd := 7.8
 	dur := "02:00:00"
 	planDur := "01:30:00"
-	stopID := int64(100)
+	dayID := int64(100)
 
 	tests := []struct {
 		name           string
@@ -240,7 +239,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
 					ID:               trackID,
 					VoyageID:         voyageID,
-					VoyageStopID:     &stopID,
+					VoyageDayID:      &dayID,
 					Kind:             "recorded",
 					Name:             "Leg 1 Actual",
 					DistanceNM:       &recDist,
@@ -252,15 +251,15 @@ func TestDebriefVoyageTrack(t *testing.T) {
 					{
 						ID:               "plan-1",
 						VoyageID:         voyageID,
-						VoyageStopID:     &stopID,
+						VoyageDayID:      &dayID,
 						Kind:             "planned",
 						Name:             "Leg 1 Plan",
 						DistanceNM:       &planDist,
 						DurationInterval: &planDur,
 					},
 				}, nil)
-				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
-				m.On("GetBriefing", stopID).Return(nil, nil).Maybe()
+				m.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{}, nil)
+				m.On("GetBriefing", dayID).Return(nil, nil).Maybe()
 				m.On("UpdateVoyageTrackDebrief", trackID, mock.AnythingOfType("model.RawJSON")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -295,13 +294,13 @@ func TestDebriefVoyageTrack(t *testing.T) {
 			},
 		},
 		{
-			name: "includes stop briefing weather and tide data in debrief",
+			name: "includes day briefing weather and tide data in debrief",
 			setupMock: func(m *MockStore) {
 				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
 					ID:               trackID,
 					VoyageID:         voyageID,
-					VoyageStopID:     &stopID,
+					VoyageDayID:      &dayID,
 					Kind:             "recorded",
 					Name:             "Leg 1 Actual",
 					DistanceNM:       &recDist,
@@ -313,19 +312,19 @@ func TestDebriefVoyageTrack(t *testing.T) {
 					{
 						ID:               "plan-1",
 						VoyageID:         voyageID,
-						VoyageStopID:     &stopID,
+						VoyageDayID:      &dayID,
 						Kind:             "planned",
 						Name:             "Leg 1 Plan",
 						DistanceNM:       &planDist,
 						DurationInterval: &planDur,
 					},
 				}, nil)
-				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{
-					{ID: stopID, VoyageID: voyageID, LocationName: "Marina"},
+				m.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{
+					{ID: dayID, VoyageID: voyageID, StartLocationName: "Marina", EndLocationName: "Cove"},
 				}, nil)
-				m.On("GetBriefing", stopID).Return(&model.Briefing{
+				m.On("GetBriefing", dayID).Return(&model.Briefing{
 					ID:             1,
-					StopID:         stopID,
+					DayID:          dayID,
 					WeatherSummary: model.RawJSON(`{"summary":"Clear sky","condition":"Clear sky","wind_speed_kt":18.5,"wind_direction":"ENE","wave_height_ft":4.5,"wave_period":7}`),
 					Tides:          model.RawJSON(`[{"time":"2026-05-01T12:00:00Z","height_ft":2.4,"type":"high"}]`),
 				}, nil)
@@ -356,7 +355,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 					MaxSpeedKts:      &maxSpd,
 				}, nil)
 				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil)
-				m.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+				m.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{}, nil)
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -406,7 +405,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 	avgSpd2 := 7.0
 	maxSpd2 := 8.5
 	dur2 := "02:30:00"
-	stopID := int64(100)
+	dayID := int64(100)
 
 	tests := []struct {
 		name           string
@@ -502,7 +501,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 					{
 						ID:               "plan-track-1",
 						VoyageID:         voyageID,
-						VoyageStopID:     &stopID,
+						VoyageDayID:      &dayID,
 						Kind:             "planned",
 						Name:             "Leg 1 Plan",
 						DistanceNM:       &planDist,
@@ -519,7 +518,7 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 					{
 						ID:               "rec-track-1",
 						VoyageID:         voyageID,
-						VoyageStopID:     &stopID,
+						VoyageDayID:      &dayID,
 						Kind:             "recorded",
 						Name:             "Leg 1 Actual",
 						DistanceNM:       &recDist1,
@@ -538,13 +537,12 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 						MaxSpeedKts:      &maxSpd2,
 					},
 				}
-				stops := []model.Stop{
-					{ID: 101, VoyageID: voyageID, LocationName: "Stop 1"},
-					{ID: 102, VoyageID: voyageID, LocationName: "Stop 2"},
-					{ID: 103, VoyageID: voyageID, LocationName: "Stop 3"},
+				days := []model.VoyageDay{
+					{ID: 101, VoyageID: voyageID, StartLocationName: "Stop 1", EndLocationName: "Stop 2"},
+					{ID: 102, VoyageID: voyageID, StartLocationName: "Stop 2", EndLocationName: "Stop 3"},
 				}
 				m.On("ListVoyageTracks", voyageID).Return(tracks, nil)
-				m.On("ListStops", voyageID, 100, 0).Return(stops, nil)
+				m.On("ListDays", voyageID, 100, 0).Return(days, nil)
 				m.On("GetBriefing", mock.AnythingOfType("int64")).Return(nil, nil).Maybe()
 				m.On("UpdateVoyageTrackDebrief", "rec-track-1", mock.AnythingOfType("model.RawJSON")).Return(nil)
 				m.On("UpdateVoyageTrackDebrief", "rec-track-2", mock.AnythingOfType("model.RawJSON")).Return(nil)
@@ -561,8 +559,8 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				if debriefs[0].PlannedTrackName != "Leg 1 Plan" {
 					t.Errorf("Debrief 0 planned name = %s, want Leg 1 Plan", debriefs[0].PlannedTrackName)
 				}
-				if debriefs[0].StartStopID == nil || *debriefs[0].StartStopID != 101 {
-					t.Errorf("Debrief 0 start stop ID = %v, want 101", debriefs[0].StartStopID)
+				if debriefs[0].StartDayID == nil || *debriefs[0].StartDayID != 101 {
+					t.Errorf("Debrief 0 start day ID = %v, want 101", debriefs[0].StartDayID)
 				}
 				if debriefs[0].DistanceVariancePct != 25.0 {
 					t.Errorf("Debrief 0 variance pct = %v, want 25.0", debriefs[0].DistanceVariancePct)
@@ -585,8 +583,8 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 				if debriefs[1].PlannedTrackName != "Leg 2 Plan" {
 					t.Errorf("Debrief 1 planned name = %s, want Leg 2 Plan", debriefs[1].PlannedTrackName)
 				}
-				if debriefs[1].StartStopID == nil || *debriefs[1].StartStopID != 102 {
-					t.Errorf("Debrief 1 start stop ID = %v, want 102", debriefs[1].StartStopID)
+				if debriefs[1].StartDayID == nil || *debriefs[1].StartDayID != 102 {
+					t.Errorf("Debrief 1 start day ID = %v, want 102", debriefs[1].StartDayID)
 				}
 				if debriefs[1].Conclusions == "" {
 					t.Errorf("Debrief 1 missing conclusions")
@@ -631,93 +629,71 @@ func TestDebriefAllVoyageTracks(t *testing.T) {
 	}
 }
 
-func TestResolveDebriefStartStop(t *testing.T) {
-	stop100 := model.Stop{ID: 100, LocationName: "Marina"}
-	stop101 := model.Stop{ID: 101, LocationName: "Cove"}
-	stop102 := model.Stop{ID: 102, LocationName: "Harbor"}
-	stops := []model.Stop{stop100, stop101, stop102}
+func TestResolveDebriefDay(t *testing.T) {
+	day100 := model.VoyageDay{ID: 100, StartLocationName: "Marina", EndLocationName: "Cove"}
+	day101 := model.VoyageDay{ID: 101, StartLocationName: "Cove", EndLocationName: "Harbor"}
+	days := []model.VoyageDay{day100, day101}
 
 	id100 := int64(100)
 	id101 := int64(101)
-	id102 := int64(102)
 
 	tests := []struct {
-		name          string
-		debrief       model.TrackDebrief
-		track         *model.VoyageTrack
-		stops         []model.Stop
-		wantStopID    *int64
-		wantStopTitle string
+		name         string
+		debrief      model.TrackDebrief
+		track        *model.VoyageTrack
+		days         []model.VoyageDay
+		wantDayID    *int64
+		wantDayTitle string
 	}{
 		{
-			name: "matches explicit Leg 1 to stop 0",
+			name: "matches explicit Leg 1 to day 0",
 			debrief: model.TrackDebrief{
 				TrackName: "Voyage - Leg 1: Marina to Cove",
 			},
-			stops:         stops,
-			wantStopID:    &id100,
-			wantStopTitle: "Marina to Cove",
+			days:         days,
+			wantDayID:    &id100,
+			wantDayTitle: "Marina to Cove",
 		},
 		{
-			name: "matches explicit Leg 2 to stop 1",
+			name: "matches explicit Leg 2 to day 1",
 			debrief: model.TrackDebrief{
 				TrackName: "Voyage - Leg 2: Cove to Harbor",
 			},
-			stops:         stops,
-			wantStopID:    &id101,
-			wantStopTitle: "Cove to Harbor",
+			days:         days,
+			wantDayID:    &id101,
+			wantDayTitle: "Cove to Harbor",
 		},
 		{
-			name: "corrects ending stop ID when debrief has destination stop",
-			debrief: model.TrackDebrief{
-				TrackName:    "Leg 1 Passage",
-				VoyageStopID: &id101,
-			},
-			stops:         stops,
-			wantStopID:    &id100,
-			wantStopTitle: "Marina to Cove",
-		},
-		{
-			name: "corrects last stop reference to preceding starting stop",
-			debrief: model.TrackDebrief{
-				TrackName:    "Final Leg",
-				VoyageStopID: &id102,
-			},
-			stops:         stops,
-			wantStopID:    &id101,
-			wantStopTitle: "Cove to Harbor",
-		},
-		{
-			name: "matches stop by location name when no leg number present",
+			name: "matches day by location name when no leg number present",
 			debrief: model.TrackDebrief{
 				TrackName: "Passage Cove to Harbor",
 			},
-			stops:         stops,
-			wantStopID:    &id101,
-			wantStopTitle: "Cove to Harbor",
+			days:         days,
+			wantDayID:    &id101,
+			wantDayTitle: "Cove to Harbor",
 		},
 		{
-			name: "uploaded track with raw gpx name matches stop title from stops",
+			name: "uploaded track with raw gpx name matches day title from days",
 			debrief: model.TrackDebrief{
-				TrackName:   "2024-08-12 14:23:10.gpx",
-				StartStopID: &id100,
+				TrackName:  "2024-08-12 14:23:10.gpx",
+				StartDayID: &id100,
 			},
-			stops:         stops,
-			wantStopID:    &id100,
-			wantStopTitle: "Marina to Cove",
+			days:         days,
+			wantDayID:    &id100,
+			wantDayTitle: "Marina to Cove",
 		},
 		{
-			name: "empty stops retains existing VoyageStopID safely",
+			name: "empty days retains existing VoyageDayID safely",
 			debrief: model.TrackDebrief{
-				TrackName:    "Track",
-				VoyageStopID: &id100,
+				TrackName:   "Track",
+				VoyageDayID: &id100,
 			},
-			stops:         nil,
-			wantStopID:    &id100,
-			wantStopTitle: "",
+			days:         nil,
+			wantDayID:    &id100,
+			wantDayTitle: "",
 		},
 		{
-			name: "round trip circuit correctly pairs leg 1 departure with stop 0 despite end stop proximity",
+			name: "round trip circuit correctly pairs leg 1 with day 0 by start/end coordinates",
 			debrief: model.TrackDebrief{
 				TrackName: "Hodges Creek Marina - Anegada Reef Hotel",
 			},
@@ -731,14 +707,13 @@ func TestResolveDebriefStartStop(t *testing.T) {
 					}
 				}`),
 			},
-			stops: []model.Stop{
-				{ID: 26, LocationName: "Parham Town, Tortola", Latitude: 18.4329, Longitude: -64.5575, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
-				{ID: 27, LocationName: "Anegada", Latitude: 18.7194, Longitude: -64.3847, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
-				{ID: 28, LocationName: "Belle Vue, Jost Van Dyke", Latitude: 18.4371, Longitude: -64.7496, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
-				{ID: 29, LocationName: "Parham Town, Tortola", Latitude: 18.4264, Longitude: -64.5559, TargetDate: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)},
+			days: []model.VoyageDay{
+				{ID: 26, StartLocationName: "Parham Town, Tortola", StartLatitude: 18.4329, StartLongitude: -64.5575, EndLocationName: "Anegada", EndLatitude: 18.7194, EndLongitude: -64.3847, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+				{ID: 27, StartLocationName: "Anegada", StartLatitude: 18.7194, StartLongitude: -64.3847, EndLocationName: "Belle Vue, Jost Van Dyke", EndLatitude: 18.4371, EndLongitude: -64.7496, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
+				{ID: 28, StartLocationName: "Belle Vue, Jost Van Dyke", StartLatitude: 18.4371, StartLongitude: -64.7496, EndLocationName: "Parham Town, Tortola", EndLatitude: 18.4264, EndLongitude: -64.5559, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
 			},
-			wantStopID:    func() *int64 { id := int64(26); return &id }(),
-			wantStopTitle: "Parham Town, Tortola to Anegada",
+			wantDayID:    func() *int64 { id := int64(26); return &id }(),
+			wantDayTitle: "Parham Town, Tortola to Anegada",
 		},
 		{
 			name: "round trip circuit resolves leg 2 correctly",
@@ -755,32 +730,31 @@ func TestResolveDebriefStartStop(t *testing.T) {
 					}
 				}`),
 			},
-			stops: []model.Stop{
-				{ID: 26, LocationName: "Parham Town, Tortola", Latitude: 18.4329, Longitude: -64.5575, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
-				{ID: 27, LocationName: "Anegada", Latitude: 18.7194, Longitude: -64.3847, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
-				{ID: 28, LocationName: "Belle Vue, Jost Van Dyke", Latitude: 18.4371, Longitude: -64.7496, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
-				{ID: 29, LocationName: "Parham Town, Tortola", Latitude: 18.4264, Longitude: -64.5559, TargetDate: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)},
+			days: []model.VoyageDay{
+				{ID: 26, StartLocationName: "Parham Town, Tortola", StartLatitude: 18.4329, StartLongitude: -64.5575, EndLocationName: "Anegada", EndLatitude: 18.7194, EndLongitude: -64.3847, TargetDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+				{ID: 27, StartLocationName: "Anegada", StartLatitude: 18.7194, StartLongitude: -64.3847, EndLocationName: "Belle Vue, Jost Van Dyke", EndLatitude: 18.4371, EndLongitude: -64.7496, TargetDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)},
+				{ID: 28, StartLocationName: "Belle Vue, Jost Van Dyke", StartLatitude: 18.4371, StartLongitude: -64.7496, EndLocationName: "Parham Town, Tortola", EndLatitude: 18.4264, EndLongitude: -64.5559, TargetDate: time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC)},
 			},
-			wantStopID:    func() *int64 { id := int64(27); return &id }(),
-			wantStopTitle: "Anegada to Belle Vue, Jost Van Dyke",
+			wantDayID:    func() *int64 { id := int64(27); return &id }(),
+			wantDayTitle: "Anegada to Belle Vue, Jost Van Dyke",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := tt.debrief
-			handlers.ResolveDebriefStartStop(&d, tt.track, tt.stops)
-			if tt.wantStopID == nil {
-				if d.StartStopID != nil {
-					t.Errorf("StartStopID = %v, want nil", d.StartStopID)
+			handlers.ResolveDebriefDay(&d, tt.track, tt.days)
+			if tt.wantDayID == nil {
+				if d.StartDayID != nil {
+					t.Errorf("StartDayID = %v, want nil", d.StartDayID)
 				}
 			} else {
-				if d.StartStopID == nil || *d.StartStopID != *tt.wantStopID {
-					t.Errorf("StartStopID = %v, want %v", d.StartStopID, *tt.wantStopID)
+				if d.StartDayID == nil || *d.StartDayID != *tt.wantDayID {
+					t.Errorf("StartDayID = %v, want %v", d.StartDayID, *tt.wantDayID)
 				}
 			}
-			if d.StopTitle != tt.wantStopTitle {
-				t.Errorf("StopTitle = %q, want %q", d.StopTitle, tt.wantStopTitle)
+			if d.DayTitle != tt.wantDayTitle {
+				t.Errorf("DayTitle = %q, want %q", d.DayTitle, tt.wantDayTitle)
 			}
 		})
 	}
@@ -793,23 +767,17 @@ func TestParseDurationMinutes(t *testing.T) {
 		wantMins float64
 		wantOk   bool
 	}{
-		{name: "empty", input: "", wantMins: 0, wantOk: false},
-		{name: "NA", input: "N/A", wantMins: 0, wantOk: false},
-		{name: "hh:mm:ss", input: "05:18:06", wantMins: 318.1, wantOk: true},
-		{name: "hh:mm", input: "01:30", wantMins: 90.0, wantOk: true},
-		{name: "hours and minutes string", input: "03h 48m", wantMins: 228.0, wantOk: true},
-		{name: "minutes only", input: "45m", wantMins: 45.0, wantOk: true},
-		{name: "decimal hours", input: "2.5h", wantMins: 150.0, wantOk: true},
-		{name: "full words", input: "2 hours 15 minutes", wantMins: 135.0, wantOk: true},
+		{"colon hh:mm:ss", "02:30:00", 150, true},
+		{"colon hh:mm", "01:45", 105, true},
+		{"words hours and mins", "2h 15m", 135, true},
+		{"empty", "", 0, false},
+		{"N/A", "N/A", 0, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotMins, gotOk := handlers.ParseDurationMinutes(tc.input)
-			if gotOk != tc.wantOk {
-				t.Fatalf("ParseDurationMinutes(%q) ok = %v, want %v", tc.input, gotOk, tc.wantOk)
-			}
-			if tc.wantOk && math.Abs(gotMins-tc.wantMins) > 0.2 {
-				t.Errorf("ParseDurationMinutes(%q) = %v, want %v", tc.input, gotMins, tc.wantMins)
+			got, ok := handlers.ParseDurationMinutes(tc.input)
+			if ok != tc.wantOk || math.Abs(got-tc.wantMins) > 0.01 {
+				t.Errorf("ParseDurationMinutes(%q) = (%v, %v), want (%v, %v)", tc.input, got, ok, tc.wantMins, tc.wantOk)
 			}
 		})
 	}

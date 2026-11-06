@@ -82,11 +82,11 @@ func TestInterpolatePassagePoints_DayTripIsNoOp(t *testing.T) {
 
 	voyageID := int64(42)
 	tripDate := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)
-	landfalls := []model.Stop{
-		{ID: 1, VoyageID: voyageID, TargetDate: tripDate, StopType: model.StopTypeLandfall, LocationName: "Home Marina"},
+	landfalls := []model.VoyageDay{
+		{ID: 1, VoyageID: voyageID, TargetDate: tripDate, DayType: model.DayTypeLandfall, StartLocationName: "Home Marina", EndLocationName: "Home Marina"},
 	}
 
-	mockStore.On("ListLandfallStops", voyageID).Return(landfalls, nil)
+	mockStore.On("ListLandfallDays", voyageID).Return(landfalls, nil)
 	mockStore.On("DeletePassagePoints", voyageID).Return(nil)
 
 	created, err := handler.InterpolatePassagePoints(context.Background(), voyageID)
@@ -94,5 +94,5 @@ func TestInterpolatePassagePoints_DayTripIsNoOp(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, created)
 	mockStore.AssertExpectations(t)
-	mockStore.AssertNotCalled(t, "CreateStop", mock.Anything)
+	mockStore.AssertNotCalled(t, "CreateDay", mock.Anything)
 }

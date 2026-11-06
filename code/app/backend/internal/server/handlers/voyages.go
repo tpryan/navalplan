@@ -96,7 +96,7 @@ func (h *Handler) GetPublicVoyage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetPublicDays(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	v, err := h.DB.GetVoyageByToken(r.Context(), token)
 	if err != nil {
@@ -104,15 +104,15 @@ func (h *Handler) GetPublicStops(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stops, err := h.DB.ListStops(r.Context(), v.ID, 0, 0)
+	days, err := h.DB.ListDays(r.Context(), v.ID, 0, 0)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to list public stops", "voyage_id", v.ID, "error", err)
+		slog.ErrorContext(r.Context(), "Failed to list public days", "voyage_id", v.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stops)
+	json.NewEncoder(w).Encode(days)
 }
 
 func (h *Handler) ListVoyages(w http.ResponseWriter, r *http.Request) {
@@ -473,7 +473,7 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 
 	var debriefs []*model.TrackDebrief
 	if tracks, err := h.DB.ListVoyageTracks(r.Context(), id); err == nil {
-		stops, _ := h.DB.ListStops(r.Context(), id, 100, 0)
+		days, _ := h.DB.ListDays(r.Context(), id, 100, 0)
 		for _, t := range tracks {
 			if len(t.Debrief) > 0 && string(t.Debrief) != "null" {
 				var d model.TrackDebrief
@@ -484,10 +484,10 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 					if d.TrackID == "" && t.ID != "" {
 						d.TrackID = t.ID
 					}
-					if d.VoyageStopID == nil && t.VoyageStopID != nil {
-						d.VoyageStopID = t.VoyageStopID
+					if d.VoyageDayID == nil && t.VoyageDayID != nil {
+						d.VoyageDayID = t.VoyageDayID
 					}
-					ResolveDebriefStartStop(&d, &t, stops)
+					ResolveDebriefDay(&d, &t, days)
 					debriefs = append(debriefs, &d)
 				}
 			}

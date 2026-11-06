@@ -137,88 +137,94 @@ func TestHasValidFacilities(t *testing.T) {
 
 type mockResearchAndLookoutStore struct {
 	sessionTrackingStore
-	stops        []model.Stop
+	days         []model.VoyageDay
 	voyageTracks []model.VoyageTrack
-	stopTracks   map[int64][]model.VoyageTrack
+	dayTracks    map[int64][]model.VoyageTrack
 	firstBrief   *model.Briefing
 	savedAlerts  map[int64]model.RawJSON
 }
 
-func (m *mockResearchAndLookoutStore) ListStops(_ context.Context, _ int64, _, _ int) ([]model.Stop, error) {
-	return m.stops, nil
+func (m *mockResearchAndLookoutStore) ListDays(_ context.Context, _ int64, _, _ int) ([]model.VoyageDay, error) {
+	return m.days, nil
 }
 
 func (m *mockResearchAndLookoutStore) ListVoyageTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
 	return m.voyageTracks, nil
 }
 
-func (m *mockResearchAndLookoutStore) ListStopTracks(_ context.Context, stopID int64) ([]model.VoyageTrack, error) {
-	if m.stopTracks != nil {
-		return m.stopTracks[stopID], nil
+func (m *mockResearchAndLookoutStore) ListDayTracks(_ context.Context, dayID int64) ([]model.VoyageTrack, error) {
+	if m.dayTracks != nil {
+		return m.dayTracks[dayID], nil
 	}
 	return nil, nil
 }
 
-func (m *mockResearchAndLookoutStore) GetBriefing(_ context.Context, stopID int64) (*model.Briefing, error) {
-	if m.firstBrief != nil && stopID == m.firstBrief.StopID {
+func (m *mockResearchAndLookoutStore) GetBriefing(_ context.Context, dayID int64) (*model.Briefing, error) {
+	if m.firstBrief != nil && dayID == m.firstBrief.DayID {
 		return m.firstBrief, nil
 	}
 	return nil, nil
 }
 
-func (m *mockResearchAndLookoutStore) UpsertSafetyAlerts(_ context.Context, stopID int64, alerts model.RawJSON) error {
+func (m *mockResearchAndLookoutStore) UpsertSafetyAlerts(_ context.Context, dayID int64, alerts model.RawJSON) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.savedAlerts == nil {
 		m.savedAlerts = make(map[int64]model.RawJSON)
 	}
-	m.savedAlerts[stopID] = alerts
+	m.savedAlerts[dayID] = alerts
 	return nil
 }
 
-func TestPerformStopResearch_TriggersLookout(t *testing.T) {
+func TestPerformDayResearch_TriggersLookout(t *testing.T) {
 	tests := []struct {
 		name              string
-		stop              *model.Stop
-		allStops          []model.Stop
+		day               *model.VoyageDay
+		allDays           []model.VoyageDay
 		firstBriefing     *model.Briefing
 		wantBriefingCount int
-		wantAlertStopID   int64
+		wantAlertDayID    int64
 	}{
 		{
-			name: "standard stop research creates briefing and triggers lookout",
-			stop: &model.Stop{
-				ID:           101,
-				VoyageID:     1,
-				LocationName: "English Harbour",
-				Latitude:     17.0,
-				Longitude:    -61.76,
-				TargetDate:   time.Now(),
+			name: "standard day research creates briefing and triggers lookout",
+			day: &model.VoyageDay{
+				ID:                101,
+				VoyageID:          1,
+				StartLocationName: "English Harbour",
+				StartLatitude:     17.0,
+				StartLongitude:    -61.76,
+				EndLocationName:   "Falmouth",
+				EndLatitude:       17.01,
+				EndLongitude:      -61.78,
+				TargetDate:        time.Now(),
 			},
-			allStops: []model.Stop{
-				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Now()},
-				{ID: 102, VoyageID: 1, LocationName: "Falmouth", Latitude: 17.01, Longitude: -61.78, TargetDate: time.Now().Add(24 * time.Hour)},
+			allDays: []model.VoyageDay{
+				{ID: 101, VoyageID: 1, StartLocationName: "English Harbour", StartLatitude: 17.0, StartLongitude: -61.76, EndLocationName: "Falmouth", EndLatitude: 17.01, EndLongitude: -61.78, TargetDate: time.Now()},
+				{ID: 102, VoyageID: 1, StartLocationName: "Falmouth", StartLatitude: 17.01, StartLongitude: -61.78, EndLocationName: "Jolly Harbour", EndLatitude: 17.06, EndLongitude: -61.88, TargetDate: time.Now().Add(24 * time.Hour)},
 			},
 			wantBriefingCount: 1,
-			wantAlertStopID:   101,
+			wantAlertDayID:    101,
 		},
 		{
-			name: "second stop within 2 NM on same date clones briefing and triggers lookout without agent call",
-			stop: &model.Stop{
-				ID:           102,
-				VoyageID:     1,
-				LocationName: "Falmouth Harbour",
-				Latitude:     17.015, // ~0.9 NM from 17.00, -61.76
-				Longitude:    -61.76,
-				TargetDate:   time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC),
+			name: "second day within 2 NM on same date clones briefing and triggers lookout without agent call",
+			day: &model.VoyageDay{
+				ID:                102,
+				VoyageID:          1,
+				StartLocationName: "English Harbour",
+				StartLatitude:     17.0,
+				StartLongitude:    -61.76,
+				EndLocationName:   "Falmouth Harbour",
+				EndLatitude:       17.015, // ~0.9 NM from 17.00, -61.76
+				EndLongitude:      -61.76,
+				TargetDate:        time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC),
 			},
-			allStops: []model.Stop{
-				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 5, 1, 8, 0, 0, 0, time.UTC)},
-				{ID: 102, VoyageID: 1, LocationName: "Falmouth Harbour", Latitude: 17.015, Longitude: -61.76, TargetDate: time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC)},
-				{ID: 103, VoyageID: 1, LocationName: "Jolly Harbour", Latitude: 17.066, Longitude: -61.886, TargetDate: time.Date(2027, 5, 2, 12, 0, 0, 0, time.UTC)},
+			allDays: []model.VoyageDay{
+				{ID: 101, VoyageID: 1, StartLocationName: "English Harbour", StartLatitude: 17.0, StartLongitude: -61.76, EndLocationName: "English Harbour", EndLatitude: 17.0, EndLongitude: -61.76, TargetDate: time.Date(2027, 5, 1, 8, 0, 0, 0, time.UTC)},
+				{ID: 102, VoyageID: 1, StartLocationName: "English Harbour", StartLatitude: 17.0, StartLongitude: -61.76, EndLocationName: "Falmouth Harbour", EndLatitude: 17.015, EndLongitude: -61.76, TargetDate: time.Date(2027, 5, 1, 12, 0, 0, 0, time.UTC)},
+				{ID: 103, VoyageID: 1, StartLocationName: "Falmouth Harbour", StartLatitude: 17.015, StartLongitude: -61.76, EndLocationName: "Jolly Harbour", EndLatitude: 17.066, EndLongitude: -61.886, TargetDate: time.Date(2027, 5, 2, 12, 0, 0, 0, time.UTC)},
 			},
 			firstBriefing: &model.Briefing{
-				StopID:         101,
+				DayID:          101,
 				WeatherSummary: model.RawJSON([]byte(`{"summary":"Clear"}`)),
 				SunPhase:       model.RawJSON([]byte(`{"sunrise":"06:00"}`)),
 				Tides:          model.RawJSON([]byte(`{"high":"12:00"}`)),
@@ -226,24 +232,27 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 				PilotNotes:     model.RawJSON([]byte(`{"overview":"Deep sheltered bay"}`)),
 			},
 			wantBriefingCount: 1,
-			wantAlertStopID:   102,
+			wantAlertDayID:    102,
 		},
 		{
-			name: "return stop within 2 NM on different date reuses facilities and fetches fresh weather/tides",
-			stop: &model.Stop{
-				ID:           102,
-				VoyageID:     1,
-				LocationName: "English Harbour Return",
-				Latitude:     17.0,
-				Longitude:    -61.76,
-				TargetDate:   time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC),
+			name: "return day within 2 NM on different date reuses facilities and fetches fresh weather/tides",
+			day: &model.VoyageDay{
+				ID:                102,
+				VoyageID:          1,
+				StartLocationName: "Jolly Harbour",
+				StartLatitude:     17.066,
+				StartLongitude:    -61.886,
+				EndLocationName:   "English Harbour Return",
+				EndLatitude:       17.0,
+				EndLongitude:      -61.76,
+				TargetDate:        time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC),
 			},
-			allStops: []model.Stop{
-				{ID: 101, VoyageID: 1, LocationName: "English Harbour", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 4, 30, 12, 0, 0, 0, time.UTC)},
-				{ID: 102, VoyageID: 1, LocationName: "English Harbour Return", Latitude: 17.0, Longitude: -61.76, TargetDate: time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC)},
+			allDays: []model.VoyageDay{
+				{ID: 101, VoyageID: 1, StartLocationName: "English Harbour", StartLatitude: 17.0, StartLongitude: -61.76, EndLocationName: "English Harbour", EndLatitude: 17.0, EndLongitude: -61.76, TargetDate: time.Date(2027, 4, 30, 12, 0, 0, 0, time.UTC)},
+				{ID: 102, VoyageID: 1, StartLocationName: "Jolly Harbour", StartLatitude: 17.066, StartLongitude: -61.886, EndLocationName: "English Harbour Return", EndLatitude: 17.0, EndLongitude: -61.76, TargetDate: time.Date(2027, 5, 3, 12, 0, 0, 0, time.UTC)},
 			},
 			firstBriefing: &model.Briefing{
-				StopID:         101,
+				DayID:          101,
 				WeatherSummary: model.RawJSON([]byte(`{"summary":"Clear"}`)),
 				SunPhase:       model.RawJSON([]byte(`{"sunrise":"06:00"}`)),
 				Tides:          model.RawJSON([]byte(`{"high":"12:00"}`)),
@@ -251,7 +260,7 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 				PilotNotes:     model.RawJSON([]byte(`{"overview":"Deep sheltered bay"}`)),
 			},
 			wantBriefingCount: 1,
-			wantAlertStopID:   102,
+			wantAlertDayID:    102,
 		},
 	}
 
@@ -285,7 +294,7 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 			defer srv.Close()
 
 			store := &mockResearchAndLookoutStore{
-				stops:       tt.allStops,
+				days:        tt.allDays,
 				firstBrief:  tt.firstBriefing,
 				savedAlerts: make(map[int64]model.RawJSON),
 			}
@@ -298,7 +307,7 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 				ResearchSem: make(chan struct{}, 10),
 			}
 
-			h.performStopResearchLogic(tt.stop, "")
+			h.performDayResearchLogic(tt.day, "")
 
 			store.mu.Lock()
 			defer store.mu.Unlock()
@@ -306,11 +315,11 @@ func TestPerformStopResearch_TriggersLookout(t *testing.T) {
 			if len(store.briefings) != tt.wantBriefingCount {
 				t.Fatalf("expected %d briefing saved, got %d", tt.wantBriefingCount, len(store.briefings))
 			}
-			if store.briefings[0].StopID != tt.stop.ID {
-				t.Errorf("briefing StopID = %d, want %d", store.briefings[0].StopID, tt.stop.ID)
+			if store.briefings[0].DayID != tt.day.ID {
+				t.Errorf("briefing DayID = %d, want %d", store.briefings[0].DayID, tt.day.ID)
 			}
-			if _, ok := store.savedAlerts[tt.wantAlertStopID]; !ok {
-				t.Errorf("expected safety alerts for stop ID %d to be upserted, but found none", tt.wantAlertStopID)
+			if _, ok := store.savedAlerts[tt.wantAlertDayID]; !ok {
+				t.Errorf("expected safety alerts for day ID %d to be upserted, but found none", tt.wantAlertDayID)
 			}
 		})
 	}
@@ -322,27 +331,20 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
-func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
-	stop1ID := int64(201)
-	stop1 := &model.Stop{
-		ID:               stop1ID,
-		VoyageID:         10,
-		LocationName:     "Annapolis",
-		Latitude:         38.9784,
-		Longitude:        -76.4922,
-		SearchRadius:     5,
-		SearchRadiusUnit: "nm",
-		TargetDate:       time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
-	}
-	stop2 := model.Stop{
-		ID:               202,
-		VoyageID:         10,
-		LocationName:     "St. Michaels",
-		Latitude:         38.7854,
-		Longitude:        -76.2233,
-		SearchRadius:     5,
-		SearchRadiusUnit: "nm",
-		TargetDate:       time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
+func TestPerformDayResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
+	day1ID := int64(201)
+	day1 := &model.VoyageDay{
+		ID:                day1ID,
+		VoyageID:          10,
+		StartLocationName: "Annapolis",
+		StartLatitude:     38.9784,
+		StartLongitude:    -76.4922,
+		EndLocationName:   "St. Michaels",
+		EndLatitude:       38.7854,
+		EndLongitude:      -76.2233,
+		SearchRadius:      5,
+		SearchRadiusUnit:  "nm",
+		TargetDate:        time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 	}
 	plannedGeoJSON := `{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-76.4922,38.9784],[-76.3800,38.8900],[-76.2233,38.7854]]},"properties":{}}]}`
 	var capturedHarbourPrompt string
@@ -375,15 +377,15 @@ func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
 		}
 	})
 	store := &mockResearchAndLookoutStore{
-		stops: []model.Stop{*stop1, stop2},
+		days: []model.VoyageDay{*day1},
 		voyageTracks: []model.VoyageTrack{
 			{
-				ID:           "track-plan-1",
-				VoyageID:     10,
-				VoyageStopID: &stop1ID,
-				Name:         "Leg 1 - Annapolis to St. Michaels",
-				Kind:         "planned",
-				GeoJSON:      model.RawJSON(plannedGeoJSON),
+				ID:          "track-plan-1",
+				VoyageID:    10,
+				VoyageDayID: &day1ID,
+				Name:        "Leg 1 - Annapolis to St. Michaels",
+				Kind:        "planned",
+				GeoJSON:     model.RawJSON(plannedGeoJSON),
 			},
 		},
 		savedAlerts: make(map[int64]model.RawJSON),
@@ -403,7 +405,7 @@ func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
 		Agent:       &agent.AgentRunner{Client: client, Resolver: &agent.StaticResolver{BaseURL: "http://agent.local"}},
 		ResearchSem: make(chan struct{}, 10),
 	}
-	h.performStopResearchLogic(stop1, "")
+	h.performDayResearchLogic(day1, "")
 	if !strings.Contains(capturedHarbourPrompt, "Planned Track for this leg:") {
 		t.Errorf("expected harbourmaster prompt to include planned track header, got: %s", capturedHarbourPrompt)
 	}
@@ -418,16 +420,19 @@ func TestPerformStopResearch_IncludesPlannedTrackInPilotPrompt(t *testing.T) {
 	}
 }
 
-func TestPerformStopResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
-	stop1 := &model.Stop{
-		ID:               1,
-		VoyageID:         10,
-		LocationName:     "Annapolis, MD",
-		Latitude:         38.9784,
-		Longitude:        -76.4922,
-		SearchRadius:     5,
-		SearchRadiusUnit: "NM",
-		TargetDate:       time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+func TestPerformDayResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
+	day1 := &model.VoyageDay{
+		ID:                1,
+		VoyageID:          10,
+		StartLocationName: "Annapolis, MD",
+		StartLatitude:     38.9784,
+		StartLongitude:    -76.4922,
+		EndLocationName:   "Annapolis, MD",
+		EndLatitude:       38.9784,
+		EndLongitude:      -76.4922,
+		SearchRadius:      5,
+		SearchRadiusUnit:  "NM",
+		TargetDate:        time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -441,8 +446,6 @@ func TestPerformStopResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
 			}
 			json.NewDecoder(r.Body).Decode(&req)
 			if req.AppName == "harbourmaster" {
-				// Emit tool call event with stateDelta (using raw tool struct field names)
-				// followed by a truncated/invalid JSON final response to verify salvage.
 				events := `[
 					{
 						"content": {
@@ -476,7 +479,7 @@ func TestPerformStopResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
 	})
 
 	store := &mockResearchAndLookoutStore{
-		stops:       []model.Stop{*stop1},
+		days:        []model.VoyageDay{*day1},
 		savedAlerts: make(map[int64]model.RawJSON),
 	}
 	client := &http.Client{
@@ -495,7 +498,7 @@ func TestPerformStopResearchLogic_StateNormalizationAndSalvage(t *testing.T) {
 		ResearchSem: make(chan struct{}, 10),
 	}
 
-	h.performStopResearchLogic(stop1, "")
+	h.performDayResearchLogic(day1, "")
 
 	if len(store.briefings) != 1 {
 		t.Fatalf("expected 1 salvaged briefing to be saved, got %d", len(store.briefings))

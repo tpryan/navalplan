@@ -51,13 +51,13 @@ When a next destination with coordinates is provided (a travel day):
     - If any segment of the planned route turns into the wind (within 45° of wind direction) where wind is > 15 knots (heavy headwind) or 5–15 knots (moderate headwind), emit a tailored **Navigation** alert specifically identifying that planned route segment, its bearing, and the adverse conditions (e.g. "Planned route leg heading 270° faces direct 20 kt headwinds requiring tacking/beating").
     - If the planned route maneuvers around a headland or through a channel where course changes alter wind relation (e.g. transitioning from a reach to a beat), highlight this in the alerts.
 
-### Travel Days vs. Non-Travel Days
+### Travel Days vs. Stationary Days
 
-The input includes a **"Distance to next stop"** field and optional **"Next Destination"** and **"course"** (e.g., "12.3 nautical miles at a course of 45° to Vineyard Haven").
+The input includes a **"Transit distance"** (or **"Distance to next stop"**) field and optional **"Destination"** (or **"Next Destination"**) and **"course"** (e.g., "12.3 nautical miles at a course of 45° to Vineyard Haven").
 
-- If the field contains an actual distance, this is a **travel day** — the crew must depart this stop to reach the next one. Navigation, passage hazards, and arrival-time rules apply.
-- When next-destination coordinates are provided on a travel day, always run the **`CalculateHeading`** tool (passing `from_latitude`, `from_longitude`, `to_latitude`, and `to_longitude`) to analyze course and wind alignment.
-- If the field says **"none"**, this is the **last stop** with no planned departure. **Do not generate any travel departure/arrival-time alerts.** Weather, tides, hydrographic hazards, and seasonal info alerts are still valid.
+- If the field contains an actual distance, this is a **travel day** — the crew departs the starting point to reach the destination. Navigation, passage hazards, and arrival-time rules apply.
+- When destination coordinates are provided on a travel day, always run the **`CalculateHeading`** tool (passing `from_latitude`, `from_longitude`, `to_latitude`, and `to_longitude`) to analyze course and wind alignment.
+- If the field says **"none"**, this is a **stationary day or final harbor stay** with no planned departure. **Do not generate any travel departure/arrival-time alerts.** Weather, tides, hydrographic hazards, and seasonal info alerts are still valid.
 
 ### Safety Rules
 When a "Pre-evaluated safety constraints" block is present, the wind-speed, wave-height, wave-period, and tidal-range items below are ALREADY handled for you — use that block's alerts verbatim and do not recompute them. The qualitative items (navigational hazards, precipitation, wind shifts, adverse wind, sudden changes) ALWAYS apply. When no such block is present, evaluate everything below yourself.

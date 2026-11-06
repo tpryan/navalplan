@@ -7,7 +7,7 @@ import (
 	"app/internal/model"
 )
 
-func TestSplitTrackByStops(t *testing.T) {
+func TestSplitTrackByDays(t *testing.T) {
 	now := time.Now()
 	t1 := now
 	t2 := now.Add(1 * time.Hour)
@@ -25,37 +25,36 @@ func TestSplitTrackByStops(t *testing.T) {
 		},
 	}
 
-	stops := []model.Stop{
-		{ID: 10, LocationName: "Cowes", Latitude: 50.76, Longitude: -1.30},
-		{ID: 11, LocationName: "Newtown", Latitude: 50.73, Longitude: -1.40},
-		{ID: 12, LocationName: "Yarmouth", Latitude: 50.71, Longitude: -1.50},
+	days := []model.VoyageDay{
+		{ID: 10, StartLocationName: "Cowes", StartLatitude: 50.76, StartLongitude: -1.30, EndLocationName: "Newtown", EndLatitude: 50.73, EndLongitude: -1.40},
+		{ID: 11, StartLocationName: "Newtown", StartLatitude: 50.73, StartLongitude: -1.40, EndLocationName: "Yarmouth", EndLatitude: 50.71, EndLongitude: -1.50},
 	}
 
 	tests := []struct {
 		name      string
 		track     ParsedTrack
-		stops     []model.Stop
+		days      []model.VoyageDay
 		wantLegs  int
 		checkDest bool
 	}{
 		{
-			name:      "split into 2 discrete legs matching 3 stops",
+			name:      "split into 2 discrete legs matching 2 days",
 			track:     master,
-			stops:     stops,
+			days:      days,
 			wantLegs:  2,
 			checkDest: true,
 		},
 		{
-			name:      "single stop returns master unsplit",
+			name:      "no days returns master unsplit",
 			track:     master,
-			stops:     stops[:1],
+			days:      nil,
 			wantLegs:  1,
 			checkDest: false,
 		},
 		{
 			name:      "no matching coordinates returns master",
 			track:     master,
-			stops:     []model.Stop{{ID: 99, Latitude: 10.0, Longitude: 10.0}, {ID: 100, Latitude: 12.0, Longitude: 12.0}},
+			days:      []model.VoyageDay{{ID: 99, StartLatitude: 10.0, StartLongitude: 10.0, EndLatitude: 12.0, EndLongitude: 12.0}},
 			wantLegs:  1,
 			checkDest: false,
 		},
@@ -63,16 +62,16 @@ func TestSplitTrackByStops(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			legs := SplitTrackByStops(tc.track, tc.stops)
+			legs := SplitTrackByDays(tc.track, tc.days)
 			if len(legs) != tc.wantLegs {
-				t.Fatalf("SplitTrackByStops() got %d legs, want %d", len(legs), tc.wantLegs)
+				t.Fatalf("SplitTrackByDays() got %d legs, want %d", len(legs), tc.wantLegs)
 			}
 			if tc.checkDest && len(legs) == 2 {
-				if legs[0].StopID == nil || *legs[0].StopID != 10 {
-					t.Errorf("Leg 1 StopID = %v, want 10", legs[0].StopID)
+				if legs[0].DayID == nil || *legs[0].DayID != 10 {
+					t.Errorf("Leg 1 DayID = %v, want 10", legs[0].DayID)
 				}
-				if legs[1].StopID == nil || *legs[1].StopID != 11 {
-					t.Errorf("Leg 2 StopID = %v, want 11", legs[1].StopID)
+				if legs[1].DayID == nil || *legs[1].DayID != 11 {
+					t.Errorf("Leg 2 DayID = %v, want 11", legs[1].DayID)
 				}
 			}
 		})

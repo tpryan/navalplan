@@ -10,6 +10,10 @@ import (
 // session. agenttool copies parent state into sub-agent sessions, so they are
 // visible to facility_discovery's tool calls too.
 const (
+	stateDayEndLatitude     = "day_end_latitude"
+	stateDayEndLongitude    = "day_end_longitude"
+	stateDayLatitude        = "day_latitude"
+	stateDayLongitude       = "day_longitude"
 	stateStopLatitude       = "stop_latitude"
 	stateStopLongitude      = "stop_longitude"
 	stateAreaRadiusMeters   = "area_radius_meters"
@@ -107,8 +111,16 @@ func stopAnchor(ctx agent.Context) (lat, lng float64, ok bool) {
 	if st == nil {
 		return 0, 0, false
 	}
-	rawLat, errLat := st.Get(stateStopLatitude)
-	rawLng, errLng := st.Get(stateStopLongitude)
+	rawLat, errLat := st.Get(stateDayEndLatitude)
+	rawLng, errLng := st.Get(stateDayEndLongitude)
+	if errLat != nil || errLng != nil || rawLat == nil || rawLng == nil {
+		rawLat, errLat = st.Get(stateDayLatitude)
+		rawLng, errLng = st.Get(stateDayLongitude)
+	}
+	if errLat != nil || errLng != nil || rawLat == nil || rawLng == nil {
+		rawLat, errLat = st.Get(stateStopLatitude)
+		rawLng, errLng = st.Get(stateStopLongitude)
+	}
 	if errLat != nil || errLng != nil {
 		return 0, 0, false
 	}

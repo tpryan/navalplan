@@ -41,23 +41,10 @@ type Facility struct {
 	References      []string        `json:"references"`
 }
 
-// facilityRingsNM is the escalating "search area" ladder in nautical miles.
-// Facilities display within the tightest ring holding at least
-// minRingFacilities of them, so the walkable cluster around the stop wins over
-// a denser one farther away. Starts at 1.0 NM (~1852 m) so a stop anchored or
-// moored in a harbor (e.g. Annapolis) keeps the full walkable waterfront and
-// downtown cluster rather than clipping at 0.5 NM. The radius never widens past
-// the top rung (20 nm) or the stop's configured radius, whichever is smaller.
 var facilityRingsNM = []float64{1, 2.5, 5, 10, 20}
 
-// minRingFacilities is how many facilities a ring needs before it is used, so
-// a single nearby place does not hide everything else.
 const minRingFacilities = 8
 
-// nearbyFacilities keeps only the facilities within the tightest non-empty ring
-// of facilityRingsNM around (lat,lng), capped at maxNM. Facilities without
-// coordinates are always retained (they cannot be distance-tested). The result
-// is never nil.
 func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
 	coordless := []Facility{}
 	withCoords := []Facility{}
@@ -92,7 +79,6 @@ func nearbyFacilities(facs []Facility, lat, lng, maxNM float64) []Facility {
 		}
 		widest = kept
 	}
-	// No ring reached the minimum: show everything within the widest ring.
 	return append(widest, coordless...)
 }
 
@@ -153,19 +139,19 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := r.PathValue("id")
-	stopID, err := strconv.ParseInt(idStr, 10, 64)
+	dayID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		writeError(w, http.StatusBadRequest, "Invalid Day ID")
 		return
 	}
 
-	stop, err := h.DB.GetStop(r.Context(), stopID)
+	day, err := h.DB.GetDay(r.Context(), dayID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Stop not found")
+		writeError(w, http.StatusNotFound, "Day not found")
 		return
 	}
 
-	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), day.VoyageID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
@@ -175,27 +161,27 @@ func (h *Handler) TriggerResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobKey := fmt.Sprintf("stop:%d", stop.ID)
+	jobKey := fmt.Sprintf("day:%d", day.ID)
 	if !h.tryClaimJob(jobKey) {
-		writeError(w, http.StatusConflict, "Research is already in progress for this stop")
+		writeError(w, http.StatusConflict, "Research is already in progress for this day")
 		return
 	}
 
-	sessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
+	sessionID := fmt.Sprintf("day_%d_%d", day.ID, time.Now().Unix())
 
 	h.ensureProgressChannel(sessionID, 25*time.Minute)
 
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "stop_id": idStr, "session_id": sessionID})
+	json.NewEncoder(w).Encode(map[string]string{"msg": "Research started", "day_id": idStr, "stop_id": idStr, "session_id": sessionID})
 
-	go h.performStopResearch(stop, sessionID, jobKey)
+	go h.performDayResearch(day, sessionID, jobKey)
 }
 
-func (h *Handler) performStopResearch(stop *model.Stop, sessionID, jobKey string) {
+func (h *Handler) performDayResearch(day *model.VoyageDay, sessionID, jobKey string) {
 	defer h.releaseJob(jobKey)
 	h.ResearchSem <- struct{}{}
 	defer func() { <-h.ResearchSem }()
-	h.performStopResearchLogic(stop, sessionID)
+	h.performDayResearchLogic(day, sessionID)
 }
 
 func hasValidFacilities(raw model.RawJSON) bool {
@@ -220,16 +206,13 @@ func hasReusableFacilities(raw model.RawJSON) bool {
 	return len(facs) >= minRingFacilities
 }
 
-// nearbyStopRadiusNM is the distance threshold (in nautical miles) within which
-// two stops share a single search.
-const nearbyStopRadiusNM = 2.0
+const nearbyDayRadiusNM = 2.0
 
-// stopsWithin2NM reports whether two stops have valid coordinates within 2.0 NM of each other.
-func stopsWithin2NM(a, b model.Stop) bool {
-	if (a.Latitude == 0 && a.Longitude == 0) || (b.Latitude == 0 && b.Longitude == 0) {
+func daysWithin2NM(a, b model.VoyageDay) bool {
+	if (a.EndLatitude == 0 && a.EndLongitude == 0) || (b.EndLatitude == 0 && b.EndLongitude == 0) {
 		return false
 	}
-	return haversine(a.Latitude, a.Longitude, b.Latitude, b.Longitude, "nm") <= nearbyStopRadiusNM
+	return haversine(a.EndLatitude, a.EndLongitude, b.EndLatitude, b.EndLongitude, "nm") <= nearbyDayRadiusNM
 }
 
 func sameCalendarDay(a, b time.Time) bool {
@@ -242,75 +225,68 @@ func sameCalendarDay(a, b time.Time) bool {
 	return a.UTC().Format("2006-01-02") == b.UTC().Format("2006-01-02")
 }
 
-func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
+func (h *Handler) performDayResearchLogic(day *model.VoyageDay, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for stop %d", stop.ID))
-	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Starting research for %s", stop.LocationName))
+	destName := day.PrimaryLocationName()
+	destLat := day.EndLatitude
+	destLng := day.EndLongitude
+	if destLat == 0 && destLng == 0 {
+		destLat = day.StartLatitude
+		destLng = day.StartLongitude
+	}
 
-	isPassage := stop.StopType == model.StopTypePassagePoint
+	slog.InfoContext(ctx, fmt.Sprintf("[researcher-agent] Starting research for day %d", day.ID))
+	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Starting research for %s", destName))
+
+	isPassage := day.DayType == model.DayTypePassagePoint
 
 	var earlierNearbyBriefing *model.Briefing
-	stops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
-	allStops := make([]model.Stop, len(stops))
-	copy(allStops, stops)
-	sort.Slice(allStops, func(i, j int) bool {
-		return allStops[i].TargetDate.Before(allStops[j].TargetDate)
+	days, err := h.DB.ListDays(ctx, day.VoyageID, 0, 0)
+	allDays := make([]model.VoyageDay, len(days))
+	copy(allDays, days)
+	sort.Slice(allDays, func(i, j int) bool {
+		return allDays[i].TargetDate.Before(allDays[j].TargetDate)
 	})
-	var next *model.Stop
-	stopPosition := 1
-	for i, s := range allStops {
-		if s.ID == stop.ID {
-			stopPosition = i + 1
-			if i+1 < len(allStops) {
-				next = &allStops[i+1]
-			}
+	dayPosition := 1
+	for i, d := range allDays {
+		if d.ID == day.ID {
+			dayPosition = i + 1
 			break
 		}
 	}
+
 	var distNM, course float64
 	var hasCourse bool
-	if next != nil && (stop.Latitude != 0 || stop.Longitude != 0) && (next.Latitude != 0 || next.Longitude != 0) {
-		distNM = lookoutHaversineNM(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
-		course = calculateBearing(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
-		hasCourse = true
-	}
-	var matchedPlannedTrack *model.VoyageTrack
-	if next != nil || len(allStops) <= 1 {
-		matchedPlannedTrack = h.findPlannedTrackForLeg(ctx, stop, next, stopPosition)
-	} else if stopTracks, err := h.DB.ListStopTracks(ctx, stop.ID); err == nil {
-		for i := range stopTracks {
-			if stopTracks[i].Kind == "planned" {
-				matchedPlannedTrack = &stopTracks[i]
-				break
-			}
+	if (day.StartLatitude != 0 || day.StartLongitude != 0) && (day.EndLatitude != 0 || day.EndLongitude != 0) {
+		distNM = lookoutHaversineNM(day.StartLatitude, day.StartLongitude, day.EndLatitude, day.EndLongitude)
+		if distNM > 0.1 {
+			course = calculateBearing(day.StartLatitude, day.StartLongitude, day.EndLatitude, day.EndLongitude)
+			hasCourse = true
 		}
 	}
+	matchedPlannedTrack := h.findPlannedTrackForDay(ctx, day, dayPosition)
 	var plannedRouteInfo string
 	if matchedPlannedTrack != nil {
 		plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
 	}
-	if err == nil && len(stops) > 1 && !isPassage {
-		// Check if any earlier stop in the voyage is within 2 NM (e.g. Stop 1 and
-		// Stop 2 in the same harbor, or the final return stop returning to the
-		// departure harbor). If on the same date, clone the full briefing; if on a
-		// different date, reuse its facilities while still fetching date-specific
-		// weather, tides, and sun phase.
-		for _, earlier := range stops {
-			if earlier.ID == stop.ID {
+
+	if err == nil && len(days) > 1 && !isPassage {
+		for _, earlier := range days {
+			if earlier.ID == day.ID {
 				break
 			}
-			if earlier.StopType == model.StopTypePassagePoint {
+			if earlier.DayType == model.DayTypePassagePoint {
 				continue
 			}
-			if stopsWithin2NM(earlier, *stop) {
+			if daysWithin2NM(earlier, *day) {
 				earlierBriefing, err := h.DB.GetBriefing(ctx, earlier.ID)
 				if err == nil && earlierBriefing != nil && hasValidFacilities(earlierBriefing.Facilities) {
-					if sameCalendarDay(earlier.TargetDate, stop.TargetDate) && matchedPlannedTrack == nil {
-						slog.InfoContext(ctx, "Stop within 2 NM on same date detected, cloning briefing", "stop_id", stop.ID, "earlier_stop_id", earlier.ID)
-						h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from earlier stop for %s", stop.LocationName))
+					if sameCalendarDay(earlier.TargetDate, day.TargetDate) && matchedPlannedTrack == nil {
+						slog.InfoContext(ctx, "Day within 2 NM on same date detected, cloning briefing", "day_id", day.ID, "earlier_day_id", earlier.ID)
+						h.broadcastProgress(sessionID, "clone", fmt.Sprintf("Cloning research from earlier day for %s", destName))
 						newBriefing := &model.Briefing{
-							StopID:         stop.ID,
+							DayID:          day.ID,
 							WeatherSummary: earlierBriefing.WeatherSummary,
 							SunPhase:       earlierBriefing.SunPhase,
 							Tides:          earlierBriefing.Tides,
@@ -318,8 +294,8 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 							PilotNotes:     earlierBriefing.PilotNotes,
 						}
 						if err := h.DB.CreateBriefing(ctx, newBriefing); err == nil {
-							h.performLookoutAuditLogic(stop, newBriefing, allStops, sessionID)
-							h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", stop.LocationName))
+							h.performLookoutAuditLogic(day, newBriefing, allDays, sessionID)
+							h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete (reused) for %s", destName))
 							return
 						}
 					} else if earlierNearbyBriefing == nil {
@@ -332,7 +308,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 
 	const appName = "harbourmaster"
 	const userID = "system"
-	agentSessionID := fmt.Sprintf("stop_%d_%d", stop.ID, time.Now().Unix())
+	agentSessionID := fmt.Sprintf("day_%d_%d", day.ID, time.Now().Unix())
 
 	var nearbyBriefing *model.Briefing
 	var nearbyErr error
@@ -341,61 +317,60 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		if earlierNearbyBriefing != nil {
 			nearbyBriefing = earlierNearbyBriefing
 		} else {
-			nearbyBriefing, nearbyErr = h.DB.GetNearbyBriefing(ctx, stop.Latitude, stop.Longitude)
+			nearbyBriefing, nearbyErr = h.DB.GetNearbyBriefing(ctx, destLat, destLng)
 		}
 	}
 
-	// Stop coordinates in session state let the researcher's place search
-	// anchor on the stop instead of trusting coordinates relayed by the LLM
-	// (which tends to substitute the named city's centre).
 	sessionState := map[string]any{
-		"stop_latitude":  stop.Latitude,
-		"stop_longitude": stop.Longitude,
+		"stop_latitude":     destLat,
+		"stop_longitude":    destLng,
+		"day_end_latitude":  destLat,
+		"day_end_longitude": destLng,
 	}
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, sessionState); err != nil {
 		slog.ErrorContext(ctx, "Failed to create agent session", "error", err)
-		h.saveEmptyBriefing(ctx, stop)
+		h.saveEmptyBriefing(ctx, day)
 		return
 	}
 
-	h.broadcastProgress(sessionID, "agent", fmt.Sprintf("Consulting the Harbourmaster for %s", stop.LocationName))
+	h.broadcastProgress(sessionID, "agent", fmt.Sprintf("Consulting the Harbourmaster for %s", destName))
 
 	var prompt string
 	latDir := "N"
-	absLat := stop.Latitude
+	absLat := destLat
 	if absLat < 0 {
 		latDir = "S"
 		absLat = -absLat
 	}
 	lngDir := "E"
-	absLng := stop.Longitude
+	absLng := destLng
 	if absLng < 0 {
 		lngDir = "W"
 		absLng = -absLng
 	}
-	coordStr := fmt.Sprintf("%.4f %s, %.4f %s (Lat: %f, Lng: %f)", absLat, latDir, absLng, lngDir, stop.Latitude, stop.Longitude)
+	coordStr := fmt.Sprintf("%.4f %s, %.4f %s (Lat: %f, Lng: %f)", absLat, latDir, absLng, lngDir, destLat, destLng)
 
 	if isPassage {
 		prompt = fmt.Sprintf("This is an open-ocean passage position with no landfall. Do NOT research anchorages, marinas, moorings, or any shore facilities. "+
 			"Report the underway conditions for %s on %s: weather (wind speed and direction, wave height, swell period), "+
 			"tides and tidal currents, sun phase (sunrise/sunset), and any safety or navigational alerts. "+
 			"Populate weather_summary, tides, and sun_phase, and return an empty array for facilities.",
-			coordStr, stop.TargetDate.Format("January 2, 2006"))
+			coordStr, day.TargetDate.Format("January 2, 2006"))
 	} else {
-		locInfo := fmt.Sprintf("%s (%s)", stop.LocationName, coordStr)
+		locInfo := fmt.Sprintf("%s (%s)", destName, coordStr)
 		prompt = fmt.Sprintf("Research anchorages and weather for %s for %s. Radius %d %s.",
-			locInfo, stop.TargetDate.Format("January 2, 2006"), stop.SearchRadius, stop.SearchRadiusUnit)
+			locInfo, day.TargetDate.Format("January 2, 2006"), day.SearchRadius, day.SearchRadiusUnit)
 		if earlierNearbyBriefing != nil && hasValidFacilities(earlierNearbyBriefing.Facilities) {
-			slog.InfoContext(ctx, "Reusing facilities from earlier voyage stop within 2 NM", "stop_id", stop.ID, "earlier_briefing_id", earlierNearbyBriefing.ID)
+			slog.InfoContext(ctx, "Reusing facilities from earlier voyage day within 2 NM", "day_id", day.ID, "earlier_briefing_id", earlierNearbyBriefing.ID)
 			reusableFacilities = json.RawMessage(earlierNearbyBriefing.Facilities)
 			prompt += " Do not research facilities; I will provide those separately."
-		} else if nearbyErr == nil && nearbyBriefing != nil && nearbyBriefing.StopID != stop.ID && hasReusableFacilities(nearbyBriefing.Facilities) {
+		} else if nearbyErr == nil && nearbyBriefing != nil && nearbyBriefing.DayID != day.ID && hasReusableFacilities(nearbyBriefing.Facilities) {
 			slog.InfoContext(ctx, fmt.Sprintf("Found nearby existing briefing %d, reusing facilities", nearbyBriefing.ID))
 			reusableFacilities = json.RawMessage(nearbyBriefing.Facilities)
 			prompt += " Do not research facilities; I will provide those separately."
 		}
 	}
-	if transitAndTrackPrompt := buildStopTransitAndTrackPrompt(next, distNM, course, hasCourse, plannedRouteInfo); transitAndTrackPrompt != "" {
+	if transitAndTrackPrompt := buildDayTransitAndTrackPrompt(day, distNM, course, hasCourse, plannedRouteInfo); transitAndTrackPrompt != "" {
 		prompt += "\n\n" + transitAndTrackPrompt
 	}
 
@@ -403,25 +378,25 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	onEvent := func(evt agent.AgentEvent) {
 		for _, p := range evt.Content.Parts {
 			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
-				h.broadcastProgress(sessionID, "tool", toolProgressMessage(p.FunctionCall.Name, stop.LocationName))
+				h.broadcastProgress(sessionID, "tool", toolProgressMessage(p.FunctionCall.Name, destName))
 			}
 		}
 		if len(evt.Actions.StateDelta) > 0 {
 			if wRaw, ok := evt.Actions.StateDelta["briefing_weather"]; ok && len(wRaw) > 0 {
 				stateWeather = normalizeStateWeather(wRaw)
-				h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast ready for %s", stop.LocationName), stateWeather)
+				h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast ready for %s", destName), stateWeather)
 			}
 			if tRaw, ok := evt.Actions.StateDelta["briefing_tides"]; ok && len(tRaw) > 0 {
 				stateTides = normalizeStateTides(tRaw)
-				h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide chart ready for %s", stop.LocationName), stateTides)
+				h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide chart ready for %s", destName), stateTides)
 			}
 			if sRaw, ok := evt.Actions.StateDelta["briefing_sun"]; ok && len(sRaw) > 0 {
 				stateSun = normalizeStateSun(sRaw)
-				h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Daylight window ready for %s", stop.LocationName), stateSun)
+				h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Daylight window ready for %s", destName), stateSun)
 			}
 			if pRaw, ok := evt.Actions.StateDelta["verified_places"]; ok && len(pRaw) > 0 {
 				statePlaces = normalizeStatePlaces(pRaw)
-				h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Verified facilities ready for %s", stop.LocationName), statePlaces)
+				h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Verified facilities ready for %s", destName), statePlaces)
 			}
 		}
 	}
@@ -431,10 +406,10 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		t := time.NewTicker(8 * time.Second)
 		defer t.Stop()
 		messages := []string{
-			fmt.Sprintf("Fetching weather & marine forecast for %s", stop.LocationName),
-			fmt.Sprintf("Checking NOAA tide tables & currents for %s", stop.LocationName),
-			fmt.Sprintf("Discovering anchorages, marinas, and shore facilities for %s", stop.LocationName),
-			fmt.Sprintf("Compiling pilot notes & navigational briefing for %s", stop.LocationName),
+			fmt.Sprintf("Fetching weather & marine forecast for %s", destName),
+			fmt.Sprintf("Checking NOAA tide tables & currents for %s", destName),
+			fmt.Sprintf("Discovering anchorages, marinas, and shore facilities for %s", destName),
+			fmt.Sprintf("Compiling pilot notes & navigational briefing for %s", destName),
 		}
 		msgIdx := 0
 		for {
@@ -457,22 +432,22 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			h.broadcastProgress(sessionID, "error_503", "Model is busy due to high demand. Please try again in a few minutes.")
 		}
 		if !hasStateFallback {
-			h.saveEmptyBriefing(ctx, stop)
+			h.saveEmptyBriefing(ctx, day)
 			return
 		}
-		slog.WarnContext(ctx, "Salvaging stop briefing from session state after agent error", "stop_id", stop.ID)
+		slog.WarnContext(ctx, "Salvaging day briefing from session state after agent error", "day_id", day.ID)
 	}
 
 	var output AgentOutput
 	if responseText == "" {
 		if !hasStateFallback {
 			slog.ErrorContext(ctx, "No response from agent")
-			h.saveEmptyBriefing(ctx, stop)
+			h.saveEmptyBriefing(ctx, day)
 			return
 		}
-		slog.WarnContext(ctx, "No text response from agent; salvaging stop briefing from session state", "stop_id", stop.ID)
+		slog.WarnContext(ctx, "No text response from agent; salvaging day briefing from session state", "day_id", day.ID)
 	} else {
-		h.broadcastProgress(sessionID, "parsing", fmt.Sprintf("Mapping facilities & saving briefing for %s", stop.LocationName))
+		h.broadcastProgress(sessionID, "parsing", fmt.Sprintf("Mapping facilities & saving briefing for %s", destName))
 		cleaned := repairMathInJSON(cleanJSON(responseText))
 		if unmarshalErr := json.Unmarshal([]byte(cleaned), &output); unmarshalErr != nil {
 			if lastObj := extractLastJSONObject(responseText); lastObj != "" {
@@ -481,14 +456,14 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			if unmarshalErr != nil {
 				if !strings.HasSuffix(strings.TrimSpace(cleaned), "}") {
 					slog.ErrorContext(ctx, "Agent JSON output is incomplete; likely truncated at the model output token limit",
-						"stop_id", stop.ID, "location", stop.LocationName, "response_chars", len(responseText))
+						"day_id", day.ID, "location", destName, "response_chars", len(responseText))
 				}
 				slog.ErrorContext(ctx, "Failed to unmarshal agent JSON output", "error", unmarshalErr, "raw", cleaned)
 				if !hasStateFallback {
-					h.saveEmptyBriefing(ctx, stop)
+					h.saveEmptyBriefing(ctx, day)
 					return
 				}
-				slog.WarnContext(ctx, "Salvaging stop briefing from session state after JSON parse error", "stop_id", stop.ID)
+				slog.WarnContext(ctx, "Salvaging day briefing from session state after JSON parse error", "day_id", day.ID)
 			}
 		}
 	}
@@ -517,7 +492,6 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	var facilities []Facility
 	if err := json.Unmarshal(output.Facilities, &facilities); err == nil && !isPassage {
 		var wg sync.WaitGroup
-
 		for i := range facilities {
 			if facilities[i].Latitude != 0 && facilities[i].Longitude != 0 {
 				continue
@@ -526,8 +500,8 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 			go func(i int) {
 				defer wg.Done()
 				f := facilities[i]
-				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility missing coordinates: %s near %s", f.Name, stop.LocationName))
-				lat, lng, err := geocodeFacility(ctx, f.Name, stop.LocationName, stop.Latitude, stop.Longitude)
+				slog.InfoContext(ctx, fmt.Sprintf("Geocoding facility missing coordinates: %s near %s", f.Name, destName))
+				lat, lng, err := geocodeFacility(ctx, f.Name, destName, destLat, destLng)
 				if err == nil {
 					facilities[i].Latitude = lat
 					facilities[i].Longitude = lng
@@ -538,7 +512,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		}
 		wg.Wait()
 
-		facilities = nearbyFacilities(facilities, stop.Latitude, stop.Longitude, radiusToNM(stop.SearchRadius, stop.SearchRadiusUnit))
+		facilities = nearbyFacilities(facilities, destLat, destLng, radiusToNM(day.SearchRadius, day.SearchRadiusUnit))
 
 		sort.Slice(facilities, func(i, j int) bool {
 			if facilities[i].Type != facilities[j].Type {
@@ -552,7 +526,7 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 	}
 
 	briefing := &model.Briefing{
-		StopID:         stop.ID,
+		DayID:          day.ID,
 		WeatherSummary: model.RawJSON(output.WeatherSummary),
 		SunPhase:       model.RawJSON(output.SunPhase),
 		Tides:          model.RawJSON(output.Tides),
@@ -560,23 +534,23 @@ func (h *Handler) performStopResearchLogic(stop *model.Stop, sessionID string) {
 		PilotNotes:     model.RawJSON(output.PilotNotes),
 	}
 
-	h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast saved for %s", stop.LocationName), output.WeatherSummary)
-	h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide predictions saved for %s", stop.LocationName), output.Tides)
-	h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Sun phase saved for %s", stop.LocationName), output.SunPhase)
-	h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Facilities mapped for %s", stop.LocationName), output.Facilities)
-	h.broadcastProgressSection(sessionID, "pilot_notes", fmt.Sprintf("Pilot notes compiled for %s", stop.LocationName), output.PilotNotes)
+	h.broadcastProgressSection(sessionID, "weather", fmt.Sprintf("Weather forecast saved for %s", destName), output.WeatherSummary)
+	h.broadcastProgressSection(sessionID, "tides", fmt.Sprintf("Tide predictions saved for %s", destName), output.Tides)
+	h.broadcastProgressSection(sessionID, "sun", fmt.Sprintf("Sun phase saved for %s", destName), output.SunPhase)
+	h.broadcastProgressSection(sessionID, "facilities", fmt.Sprintf("Facilities mapped for %s", destName), output.Facilities)
+	h.broadcastProgressSection(sessionID, "pilot_notes", fmt.Sprintf("Pilot notes compiled for %s", destName), output.PilotNotes)
 
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
 		slog.ErrorContext(ctx, "Failed to save briefing", "error", err)
 	} else {
-		allStops, err := h.DB.ListStops(ctx, stop.VoyageID, 0, 0)
-		if err == nil && len(allStops) > 0 {
-			sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
-			h.performLookoutAuditLogic(stop, briefing, allStops, sessionID)
+		allDays, err := h.DB.ListDays(ctx, day.VoyageID, 0, 0)
+		if err == nil && len(allDays) > 0 {
+			sort.Slice(allDays, func(i, j int) bool { return allDays[i].TargetDate.Before(allDays[j].TargetDate) })
+			h.performLookoutAuditLogic(day, briefing, allDays, sessionID)
 		}
 	}
-	slog.InfoContext(ctx, "Briefing saved for stop", "stop_id", stop.ID)
-	h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete for %s", stop.LocationName))
+	slog.InfoContext(ctx, "Briefing saved for day", "day_id", day.ID)
+	h.broadcastProgress(sessionID, "done", fmt.Sprintf("Research complete for %s", destName))
 }
 
 func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
@@ -587,24 +561,24 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := r.PathValue("id")
-	stopID, err := strconv.ParseInt(idStr, 10, 64)
+	dayID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		writeError(w, http.StatusBadRequest, "Invalid Day ID")
 		return
 	}
 
-	briefing, err := h.DB.GetBriefing(r.Context(), stopID)
+	briefing, err := h.DB.GetBriefing(r.Context(), dayID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Briefing not found")
 		return
 	}
 
-	stop, err := h.DB.GetStop(r.Context(), briefing.StopID)
+	day, err := h.DB.GetDay(r.Context(), briefing.DayID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Stop not found")
+		writeError(w, http.StatusInternalServerError, "Day not found")
 		return
 	}
-	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), day.VoyageID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Voyage not found")
 		return
@@ -614,12 +588,17 @@ func (h *Handler) GetBriefing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clip facilities to the stop's search area on the way out, so existing
-	// briefings honor the current radius without needing to be re-researched.
+	destLat := day.EndLatitude
+	destLng := day.EndLongitude
+	if destLat == 0 && destLng == 0 {
+		destLat = day.StartLatitude
+		destLng = day.StartLongitude
+	}
+
 	if len(briefing.Facilities) > 0 {
 		var facs []Facility
 		if err := json.Unmarshal(briefing.Facilities, &facs); err == nil {
-			facs = nearbyFacilities(facs, stop.Latitude, stop.Longitude, radiusToNM(stop.SearchRadius, stop.SearchRadiusUnit))
+			facs = nearbyFacilities(facs, destLat, destLng, radiusToNM(day.SearchRadius, day.SearchRadiusUnit))
 			if b, err := json.Marshal(facs); err == nil {
 				briefing.Facilities = model.RawJSON(b)
 			}
@@ -637,9 +616,9 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	}
 	voyageID := voyage.ID
 
-	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
+	days, err := h.DB.ListDays(r.Context(), voyageID, 0, 0)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list stops")
+		writeError(w, http.StatusInternalServerError, "Failed to list days")
 		return
 	}
 
@@ -657,7 +636,8 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]any{
 		"msg":        "Full research started",
 		"voyage_id":  voyageID,
-		"stop_count": len(stops),
+		"day_count":  len(days),
+		"stop_count": len(days),
 		"session_id": sessionID,
 	})
 
@@ -677,56 +657,51 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 			h.performGuideResearchLogic(voyage, sessionID)
 		}()
 
-		// Check proximity BEFORE making any agent/Places calls:
-		// Any stop within 2 NM of an earlier non-passage stop in the voyage
-		// (e.g. Stop 1 and Stop 2 in the same harbor, or the final return stop)
-		// is held back until the primary stops complete, then clones the primary
-		// stop's briefing so only 1 search is performed.
-		type redundantStopPair struct {
-			stop          model.Stop
-			primaryStopID int64
+		type redundantDayPair struct {
+			day          model.VoyageDay
+			primaryDayID int64
 		}
-		var primaryStops []model.Stop
-		var redundantStops []redundantStopPair
-		for _, stop := range stops {
+		var primaryDays []model.VoyageDay
+		var redundantDays []redundantDayPair
+		for _, day := range days {
 			var matchedPrimaryID int64
-			if stop.StopType != model.StopTypePassagePoint {
-				for _, p := range primaryStops {
-					if p.StopType != model.StopTypePassagePoint && stopsWithin2NM(p, stop) {
+			if day.DayType != model.DayTypePassagePoint {
+				for _, p := range primaryDays {
+					if p.DayType != model.DayTypePassagePoint && daysWithin2NM(p, day) {
 						matchedPrimaryID = p.ID
 						break
 					}
 				}
 			}
 			if matchedPrimaryID != 0 {
-				redundantStops = append(redundantStops, redundantStopPair{stop: stop, primaryStopID: matchedPrimaryID})
+				redundantDays = append(redundantDays, redundantDayPair{day: day, primaryDayID: matchedPrimaryID})
 			} else {
-				primaryStops = append(primaryStops, stop)
+				primaryDays = append(primaryDays, day)
 			}
 		}
 
-		for _, stop := range primaryStops {
+		for _, day := range primaryDays {
 			wg.Add(1)
 			h.ResearchSem <- struct{}{}
-			go func(s model.Stop) {
+			go func(d model.VoyageDay) {
 				defer wg.Done()
 				defer func() { <-h.ResearchSem }()
-				slog.InfoContext(ctx, "Starting stop research for stop", "stop_id", s.ID)
-				h.performStopResearchLogic(&s, sessionID)
-			}(stop)
+				slog.InfoContext(ctx, "Starting day research for day", "day_id", d.ID)
+				h.performDayResearchLogic(&d, sessionID)
+			}(day)
 		}
 
 		wg.Wait()
 
-		for _, pair := range redundantStops {
+		for _, pair := range redundantDays {
 			wg.Add(1)
 			h.ResearchSem <- struct{}{}
-			go func(rStop model.Stop, primaryStopID int64) {
+			go func(rDay model.VoyageDay, primaryDayID int64) {
 				defer wg.Done()
 				defer func() { <-h.ResearchSem }()
-				slog.InfoContext(ctx, "Running nearby stop research after primary stop completed", "voyage_id", voyageID, "stop_id", rStop.ID, "primary_stop_id", primaryStopID)
-				h.performStopResearchLogic(&rStop, sessionID)
-			}(pair.stop, pair.primaryStopID)
+				slog.InfoContext(ctx, "Running nearby day research after primary day completed", "voyage_id", voyageID, "day_id", rDay.ID, "primary_day_id", primaryDayID)
+				h.performDayResearchLogic(&rDay, sessionID)
+			}(pair.day, pair.primaryDayID)
 		}
 
 		wg.Wait()
@@ -735,9 +710,9 @@ func (h *Handler) TriggerFullVoyageResearch(w http.ResponseWriter, r *http.Reque
 	}()
 }
 
-func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
+func (h *Handler) saveEmptyBriefing(ctx context.Context, day *model.VoyageDay) {
 	briefing := &model.Briefing{
-		StopID:         stop.ID,
+		DayID:          day.ID,
 		WeatherSummary: model.RawJSON([]byte(`{"summary":"Error: Agent failed to respond"}`)),
 		SunPhase:       model.RawJSON([]byte(`{}`)),
 		Tides:          model.RawJSON([]byte(`{}`)),
@@ -745,7 +720,7 @@ func (h *Handler) saveEmptyBriefing(ctx context.Context, stop *model.Stop) {
 		PilotNotes:     model.RawJSON([]byte(`{}`)),
 	}
 	if err := h.DB.CreateBriefing(ctx, briefing); err != nil {
-		slog.ErrorContext(ctx, "Failed to save empty briefing", "stop_id", stop.ID, "error", err)
+		slog.ErrorContext(ctx, "Failed to save empty briefing", "day_id", day.ID, "error", err)
 	}
 }
 
@@ -754,9 +729,6 @@ func isEmptyOrNullJSON(raw json.RawMessage) bool {
 	return s == "" || s == "null" || s == "{}" || s == "[]"
 }
 
-// extractLastJSONObject scans backwards from the last '}' in s to find the matching
-// top-level '{', handling cases where earlier model turns emitted braces before the
-// final JSON briefing object.
 func extractLastJSONObject(s string) string {
 	end := strings.LastIndex(s, "}")
 	if end < 0 {
@@ -881,25 +853,32 @@ func normalizeStatePlaces(raw json.RawMessage) json.RawMessage {
 	return b
 }
 
-func buildStopTransitAndTrackPrompt(next *model.Stop, distNM, course float64, hasCourse bool, plannedRouteInfo string) string {
+func buildDayTransitAndTrackPrompt(day *model.VoyageDay, distNM, course float64, hasCourse bool, plannedRouteInfo string) string {
 	var b strings.Builder
-	if next != nil {
+	if day != nil && hasCourse && distNM > 0.1 {
 		dateStr := ""
-		if !next.TargetDate.IsZero() {
-			dateStr = fmt.Sprintf(" on %s", next.TargetDate.Format("January 2, 2006"))
+		if !day.TargetDate.IsZero() {
+			dateStr = fmt.Sprintf(" on %s", day.TargetDate.Format("January 2, 2006"))
 		}
-		fmt.Fprintf(&b, "Next destination: %s (%.4f, %.4f)%s.", next.LocationName, next.Latitude, next.Longitude, dateStr)
-		if hasCourse && distNM > 0 {
-			fmt.Fprintf(&b, " Straight-line transit distance: %.1f NM on course %.0f° (%s).", distNM, course, bearingToCardinal(course))
+		startLoc := day.StartLocationName
+		if startLoc == "" {
+			startLoc = fmt.Sprintf("%.4f, %.4f", day.StartLatitude, day.StartLongitude)
 		}
-		b.WriteString(" Call ComputePassageTimeline (passing both departure and arrival coordinates) and hydrographic_pilot for BOTH this departure harbor and the next destination to evaluate departure tide gates, arrival daylight margins, and night-entry hazards.")
+		endLoc := day.EndLocationName
+		if endLoc == "" {
+			endLoc = fmt.Sprintf("%.4f, %.4f", day.EndLatitude, day.EndLongitude)
+		}
+		fmt.Fprintf(&b, "Day passage from %s (%.4f, %.4f) to destination %s (%.4f, %.4f)%s.",
+			startLoc, day.StartLatitude, day.StartLongitude, endLoc, day.EndLatitude, day.EndLongitude, dateStr)
+		fmt.Fprintf(&b, " Straight-line transit distance: %.1f NM on course %.0f° (%s).", distNM, course, bearingToCardinal(course))
+		b.WriteString(" Call ComputePassageTimeline (passing both departure and arrival coordinates) and hydrographic_pilot for BOTH the departure harbor and the destination to evaluate departure tide gates, arrival daylight margins, and night-entry hazards.")
 	}
 	if plannedRouteInfo != "" {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
 		fmt.Fprintf(&b, "Planned Track for this leg:\n%s\n", strings.TrimSpace(plannedRouteInfo))
-		b.WriteString("Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track (rather than only a straight-line course between stops), and pass the planned route details to hydrographic_pilot.")
+		b.WriteString("Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track (rather than only a straight-line course between start and end), and pass the planned route details to hydrographic_pilot.")
 	}
 	return b.String()
 }

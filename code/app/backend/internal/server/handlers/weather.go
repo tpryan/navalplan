@@ -23,14 +23,22 @@ func degreesToCompass(deg float64) string {
 	return dirs[idx]
 }
 
-func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSummary, error) {
+func fetchWeatherForDay(ctx context.Context, day model.VoyageDay) (model.WeatherSummary, error) {
 	start := time.Now()
-	date := stop.TargetDate.Format("2006-01-02")
-	daysOut := int(math.Round(time.Until(stop.TargetDate).Hours() / 24))
+	date := day.TargetDate.Format("2006-01-02")
+	daysOut := int(math.Round(time.Until(day.TargetDate).Hours() / 24))
 
-	slog.InfoContext(ctx, "[weather] Fetching weather for stop",
-		"stop_id", stop.ID,
-		"location", stop.LocationName,
+	lat := day.EndLatitude
+	lng := day.EndLongitude
+	if lat == 0 && lng == 0 {
+		lat = day.StartLatitude
+		lng = day.StartLongitude
+	}
+	locName := day.PrimaryLocationName()
+
+	slog.InfoContext(ctx, "[weather] Fetching weather for day",
+		"day_id", day.ID,
+		"location", locName,
 		"target_date", date,
 		"days_from_now", daysOut,
 	)
@@ -40,12 +48,12 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 	var source string
 
 	if daysOut <= forecastWindowDays {
-		slog.InfoContext(ctx, "[weather] Date within forecast window, using live forecast", "stop_id", stop.ID, "days_out", daysOut)
+		slog.InfoContext(ctx, "[weather] Date within forecast window, using live forecast", "day_id", day.ID, "days_out", daysOut)
 		opts := openmeteogo.NewOptionsBuilder().
-			Latitude(stop.Latitude).
-			Longitude(stop.Longitude).
-			Start(stop.TargetDate).
-			End(stop.TargetDate.AddDate(0, 0, 1)).
+			Latitude(lat).
+			Longitude(lng).
+			Start(day.TargetDate).
+			End(day.TargetDate.AddDate(0, 0, 1)).
 			DailyMetrics(openmeteogo.Metrics{
 				openmeteogo.WeatherCode,
 				openmeteogo.Temperature2mMax,
@@ -71,9 +79,9 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 		var err error
 		weather, err = client.Get(opts)
 		if err != nil {
-			slog.WarnContext(ctx, "[weather] Forecast API failed, falling back to historical", "stop_id", stop.ID, "error", err)
+			slog.WarnContext(ctx, "[weather] Forecast API failed, falling back to historical", "day_id", day.ID, "error", err)
 		} else if len(weather.Daily.WeatherCode) == 0 {
-			slog.WarnContext(ctx, "[weather] Forecast returned empty data, falling back to historical", "stop_id", stop.ID, "date", date)
+			slog.WarnContext(ctx, "[weather] Forecast returned empty data, falling back to historical", "day_id", day.ID, "date", date)
 			weather = nil
 		} else {
 			source = "forecast"
@@ -81,12 +89,12 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 	}
 
 	if weather == nil {
-		historicalDate := stop.TargetDate.AddDate(-1, 0, 0)
-		slog.InfoContext(ctx, "[weather] Fetching historical data", "stop_id", stop.ID, "historical_date", historicalDate.Format("2006-01-02"))
+		historicalDate := day.TargetDate.AddDate(-1, 0, 0)
+		slog.InfoContext(ctx, "[weather] Fetching historical data", "day_id", day.ID, "historical_date", historicalDate.Format("2006-01-02"))
 
 		opts := openmeteogo.NewOptionsBuilder().
-			Latitude(stop.Latitude).
-			Longitude(stop.Longitude).
+			Latitude(lat).
+			Longitude(lng).
 			Start(historicalDate).
 			End(historicalDate.AddDate(0, 0, 1)).
 			DailyMetrics(openmeteogo.Metrics{
@@ -114,13 +122,13 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 		var err error
 		weather, err = client.Get(opts)
 		if err != nil {
-			return model.WeatherSummary{}, fmt.Errorf("historical fetch for stop %d (%s): %w", stop.ID, date, err)
+			return model.WeatherSummary{}, fmt.Errorf("historical fetch for day %d (%s): %w", day.ID, date, err)
 		}
 		if len(weather.Daily.WeatherCode) == 0 {
-			return model.WeatherSummary{}, fmt.Errorf("historical data empty for stop %d on %s", stop.ID, historicalDate.Format("2006-01-02"))
+			return model.WeatherSummary{}, fmt.Errorf("historical data empty for day %d on %s", day.ID, historicalDate.Format("2006-01-02"))
 		}
 		source = "historical"
-		slog.InfoContext(ctx, "[weather] Using historical data as fallback", "stop_id", stop.ID, "historical_date", historicalDate.Format("2006-01-02"))
+		slog.InfoContext(ctx, "[weather] Using historical data as fallback", "day_id", day.ID, "historical_date", historicalDate.Format("2006-01-02"))
 	}
 
 	condition := openmeteogo.DescribeCode(int(weather.Daily.WeatherCode[0]))
@@ -156,17 +164,16 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 	if len(weather.Daily.WindDirection10mDominant) > 0 {
 		ws.WindDirection = degreesToCompass(float64(weather.Daily.WindDirection10mDominant[0]))
 	}
-
 	for i, deg := range weather.Hourly.WindDirection10m {
 		ws.HourlyWindDir[i] = degreesToCompass(float64(deg))
 	}
 
 	marineOpts := openmeteogo.NewOptionsBuilder().
 		Marine(true).
-		Latitude(stop.Latitude).
-		Longitude(stop.Longitude).
-		Start(stop.TargetDate).
-		End(stop.TargetDate.AddDate(0, 0, 1)).
+		Latitude(lat).
+		Longitude(lng).
+		Start(day.TargetDate).
+		End(day.TargetDate.AddDate(0, 0, 1)).
 		DailyMetrics(openmeteogo.Metrics{
 			openmeteogo.WaveHeightMax,
 			openmeteogo.WaveDirectionDominant,
@@ -181,7 +188,7 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 
 	marine, err := client.Get(marineOpts)
 	if err != nil {
-		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "stop_id", stop.ID, "error", err)
+		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "day_id", day.ID, "error", err)
 	} else if len(marine.Daily.WaveHeightMax) > 0 {
 		ws.WaveHeightFt = marine.Daily.WaveHeightMax[0] * metersToFeet
 		if len(marine.Daily.WaveDirectionDominant) > 0 {
@@ -190,7 +197,6 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 		if len(marine.Daily.WavePeriodMax) > 0 {
 			ws.WavePeriod = marine.Daily.WavePeriodMax[0]
 		}
-
 		if len(marine.Hourly.WaveHeight) > 0 {
 			ws.HourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))
 			for i, h := range marine.Hourly.WaveHeight {
@@ -199,11 +205,11 @@ func fetchWeatherForStop(ctx context.Context, stop model.Stop) (model.WeatherSum
 		}
 		ws.HourlyWavePeriod = marine.Hourly.WavePeriod
 		ws.HourlyWaveDir = marine.Hourly.WaveDirection
-		slog.DebugContext(ctx, "[weather] Wave data fetched", "stop_id", stop.ID, "wave_height_ft", ws.WaveHeightFt)
+		slog.DebugContext(ctx, "[weather] Wave data fetched", "day_id", day.ID, "wave_height_ft", ws.WaveHeightFt)
 	}
 
 	ws.DebugDurationMs = time.Since(start).Milliseconds()
-	slog.InfoContext(ctx, "[weather] Stop weather complete", "stop_id", stop.ID, "source", source, "duration_ms", ws.DebugDurationMs)
+	slog.InfoContext(ctx, "[weather] Day weather complete", "day_id", day.ID, "source", source, "duration_ms", ws.DebugDurationMs)
 	return ws, nil
 }
 
@@ -215,24 +221,24 @@ func (h *Handler) UpdateVoyageWeather(w http.ResponseWriter, r *http.Request) {
 	voyageID := voyage.ID
 
 	ctx := r.Context()
-	stops, err := h.DB.ListStops(ctx, voyageID, 0, 0)
+	days, err := h.DB.ListDays(ctx, voyageID, 0, 0)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list stops")
+		writeError(w, http.StatusInternalServerError, "Failed to list days")
 		return
 	}
 
-	slog.InfoContext(ctx, "[weather] UpdateVoyageWeather started", "voyage_id", voyageID, "stop_count", len(stops))
+	slog.InfoContext(ctx, "[weather] UpdateVoyageWeather started", "voyage_id", voyageID, "day_count", len(days))
 
 	updated, failed := 0, 0
-	for _, stop := range stops {
-		weather, err := fetchWeatherForStop(ctx, stop)
+	for _, day := range days {
+		weather, err := fetchWeatherForDay(ctx, day)
 		if err != nil {
-			slog.ErrorContext(ctx, "[weather] Failed to fetch weather", "stop_id", stop.ID, "error", err)
+			slog.ErrorContext(ctx, "[weather] Failed to fetch weather", "day_id", day.ID, "error", err)
 			failed++
 			continue
 		}
-		if err := h.DB.UpsertWeatherBriefing(ctx, stop.ID, weather); err != nil {
-			slog.ErrorContext(ctx, "[weather] Failed to save weather", "stop_id", stop.ID, "error", err)
+		if err := h.DB.UpsertWeatherBriefing(ctx, day.ID, weather); err != nil {
+			slog.ErrorContext(ctx, "[weather] Failed to save weather", "day_id", day.ID, "error", err)
 			failed++
 			continue
 		}
@@ -243,7 +249,7 @@ func (h *Handler) UpdateVoyageWeather(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"total":   len(stops),
+		"total":   len(days),
 		"updated": updated,
 		"failed":  failed,
 	})
@@ -253,37 +259,37 @@ func (h *Handler) UpdateAllFutureWeather(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	slog.InfoContext(ctx, "[weather] UpdateAllFutureWeather started")
 
-	stops, err := h.DB.ListAllFutureStops(ctx)
+	days, err := h.DB.ListAllFutureDays(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "[weather] Failed to list future stops", "error", err)
+		slog.ErrorContext(ctx, "[weather] Failed to list future days", "error", err)
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
-	slog.InfoContext(ctx, "[weather] Future stops found", "count", len(stops))
+	slog.InfoContext(ctx, "[weather] Future days found", "count", len(days))
 
 	updated := 0
 	failed := 0
-	for _, stop := range stops {
-		weather, err := fetchWeatherForStop(ctx, stop)
+	for _, day := range days {
+		weather, err := fetchWeatherForDay(ctx, day)
 		if err != nil {
-			slog.ErrorContext(ctx, "[weather] Failed to fetch weather for stop", "stop_id", stop.ID, "location", stop.LocationName, "error", err)
+			slog.ErrorContext(ctx, "[weather] Failed to fetch weather for day", "day_id", day.ID, "location", day.PrimaryLocationName(), "error", err)
 			failed++
 			continue
 		}
-		if err := h.DB.UpsertWeatherBriefing(ctx, stop.ID, weather); err != nil {
-			slog.ErrorContext(ctx, "[weather] Failed to save weather briefing", "stop_id", stop.ID, "error", err)
+		if err := h.DB.UpsertWeatherBriefing(ctx, day.ID, weather); err != nil {
+			slog.ErrorContext(ctx, "[weather] Failed to save weather briefing", "day_id", day.ID, "error", err)
 			failed++
 			continue
 		}
 		updated++
 	}
 
-	slog.InfoContext(ctx, "[weather] UpdateAllFutureWeather complete", "total", len(stops), "updated", updated, "failed", failed)
+	slog.InfoContext(ctx, "[weather] UpdateAllFutureWeather complete", "total", len(days), "updated", updated, "failed", failed)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"total":   len(stops),
+		"total":   len(days),
 		"updated": updated,
 		"failed":  failed,
 	})

@@ -62,19 +62,18 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
+	days, _ := h.DB.ListDays(r.Context(), voyageID, 100, 0)
 	rawGPXStr := string(data)
 
 	var savedTracks []model.VoyageTrack
 
 	for _, pt := range parsedTracks {
 		var legsToSave []gpx.LegResult
-		if autoSplit && len(stops) >= 2 {
-			legsToSave = gpx.SplitTrackByStops(pt, stops)
+		if autoSplit && len(days) >= 1 {
+			legsToSave = gpx.SplitTrackByDays(pt, days)
 		}
 
 		if len(legsToSave) > 1 {
-			// Save the master track as well
 			masterTrack := buildModelTrack(voyageID, nil, fileName, rawGPXStr, pt)
 			if err := h.DB.CreateVoyageTrack(r.Context(), &masterTrack); err != nil {
 				slog.ErrorContext(r.Context(), "Failed to save master track",
@@ -88,9 +87,8 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 				savedTracks = append(savedTracks, masterTrack)
 			}
 
-			// Save individual legs
 			for _, leg := range legsToSave {
-				mTrack := buildModelTrack(voyageID, leg.StopID, fileName, "", leg.Track)
+				mTrack := buildModelTrack(voyageID, leg.DayID, fileName, "", leg.Track)
 				if err := h.DB.CreateVoyageTrack(r.Context(), &mTrack); err != nil {
 					slog.ErrorContext(r.Context(), "Failed to save leg track",
 						"error", err,
@@ -104,7 +102,11 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 				savedTracks = append(savedTracks, mTrack)
 			}
 		} else {
-			mTrack := buildModelTrack(voyageID, nil, fileName, rawGPXStr, pt)
+			var assignedDayID *int64
+			if len(legsToSave) == 1 && legsToSave[0].DayID != nil {
+				assignedDayID = legsToSave[0].DayID
+			}
+			mTrack := buildModelTrack(voyageID, assignedDayID, fileName, rawGPXStr, pt)
 			if err := h.DB.CreateVoyageTrack(r.Context(), &mTrack); err != nil {
 				slog.ErrorContext(r.Context(), "Failed to save track",
 					"error", err,
@@ -126,8 +128,8 @@ func (h *Handler) UploadVoyageTrack(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(savedTracks)
 }
 
-// UploadStopTrack handles uploading and parsing a GPX file for a specific stop/leg.
-func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
+// UploadDayTrack handles uploading and parsing a GPX file for a specific voyage day.
+func (h *Handler) UploadDayTrack(w http.ResponseWriter, r *http.Request) {
 	person := GetPersonFromContext(r.Context())
 	if person == nil {
 		writeError(w, http.StatusUnauthorized, "Unauthorized")
@@ -140,9 +142,13 @@ func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stopID, err := strconv.ParseInt(r.PathValue("stopId"), 10, 64)
+	dayIDStr := r.PathValue("dayId")
+	if dayIDStr == "" {
+		dayIDStr = r.PathValue("stopId")
+	}
+	dayID, err := strconv.ParseInt(dayIDStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		writeError(w, http.StatusBadRequest, "Invalid Day ID")
 		return
 	}
 
@@ -156,9 +162,9 @@ func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stop, err := h.DB.GetStop(r.Context(), stopID)
-	if err != nil || stop.VoyageID != voyageID {
-		writeError(w, http.StatusNotFound, "Stop not found for this voyage")
+	day, err := h.DB.GetDay(r.Context(), dayID)
+	if err != nil || day.VoyageID != voyageID {
+		writeError(w, http.StatusNotFound, "Day not found for this voyage")
 		return
 	}
 
@@ -169,9 +175,9 @@ func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cleanData, glitches, err := gpx.FilterGPX(data); err == nil && glitches > 0 {
-		slog.InfoContext(r.Context(), "Filtered GPS glitches from uploaded stop GPX",
+		slog.InfoContext(r.Context(), "Filtered GPS glitches from uploaded day GPX",
 			"voyage_id", voyageID,
-			"stop_id", stopID,
+			"day_id", dayID,
 			"glitches_removed", glitches,
 		)
 		data = cleanData
@@ -187,10 +193,10 @@ func (h *Handler) UploadStopTrack(w http.ResponseWriter, r *http.Request) {
 	var savedTracks []model.VoyageTrack
 
 	for _, pt := range parsedTracks {
-		mTrack := buildModelTrack(voyageID, &stopID, fileName, rawGPXStr, pt)
+		mTrack := buildModelTrack(voyageID, &dayID, fileName, rawGPXStr, pt)
 		if err := h.DB.CreateVoyageTrack(r.Context(), &mTrack); err != nil {
-			slog.ErrorContext(r.Context(), "Failed to save stop track", "error", err)
-			writeError(w, http.StatusInternalServerError, "Failed to save stop track")
+			slog.ErrorContext(r.Context(), "Failed to save day track", "error", err)
+			writeError(w, http.StatusInternalServerError, "Failed to save day track")
 			return
 		}
 		savedTracks = append(savedTracks, mTrack)
@@ -356,8 +362,8 @@ func (h *Handler) DebriefVoyageTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	allTracks, _ := h.DB.ListVoyageTracks(r.Context(), voyageID)
-	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
-	debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
+	days, _ := h.DB.ListDays(r.Context(), voyageID, 100, 0)
+	debrief := h.generateTrackDebrief(r.Context(), track, allTracks, days)
 	if debrief == nil {
 		writeError(w, http.StatusBadRequest, "Debrief requires both a planned route and an actual recorded track.")
 		return
@@ -398,14 +404,14 @@ func (h *Handler) DebriefAllVoyageTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stops, _ := h.DB.ListStops(r.Context(), voyageID, 100, 0)
+	days, _ := h.DB.ListDays(r.Context(), voyageID, 100, 0)
 	debriefs := make([]*model.TrackDebrief, 0, len(allTracks))
 	for i := range allTracks {
 		track := &allTracks[i]
 		if track.Kind == string(model.TrackKindPlanned) {
 			continue
 		}
-		debrief := h.generateTrackDebrief(r.Context(), track, allTracks, stops)
+		debrief := h.generateTrackDebrief(r.Context(), track, allTracks, days)
 		if debrief == nil {
 			continue
 		}
@@ -436,8 +442,8 @@ type plannedRouteMatch struct {
 	plannedDist      float64
 	plannedDuration  string
 	plannedGeoJSON   model.RawJSON
-	voyageStopID     *int64
-	startStopID      *int64
+	voyageDayID      *int64
+	startDayID       *int64
 }
 
 func extractTrackEndpoints(t *model.VoyageTrack) (startLat, startLng, endLat, endLng float64, ok bool) {
@@ -477,13 +483,13 @@ func extractLegNumber(name string) int {
 	return 0
 }
 
-func findClosestStop(lat, lon float64, stops []model.Stop, maxDistNM float64) int {
+func findClosestDayStart(lat, lon float64, days []model.VoyageDay, maxDistNM float64) int {
 	bestIdx := -1
 	minDist := maxDistNM
-	for i, s := range stops {
-		d := gpx.CalculateHaversineNM(lat, lon, s.Latitude, s.Longitude)
-		if d < minDist {
-			minDist = d
+	for i, d := range days {
+		dist := gpx.CalculateHaversineNM(lat, lon, d.StartLatitude, d.StartLongitude)
+		if dist < minDist {
+			minDist = dist
 			bestIdx = i
 		}
 	}
@@ -501,9 +507,6 @@ func formatHMS(totalMins float64) string {
 
 var durDaysRegex = regexp.MustCompile(`(?i)^(\d+)\s*days?\s+`)
 
-// normalizeDuration converts a duration string (Postgres interval such as
-// "02:46:58" or "1 day 02:00:00", or "2h 46m") to "8h 8m 8s". Unparseable
-// values are returned unchanged.
 func normalizeDuration(s string) string {
 	s = strings.TrimSpace(s)
 	days := 0.0
@@ -563,38 +566,34 @@ func ParseDurationMinutes(s string) (float64, bool) {
 }
 
 const (
-	// legEndpointMatchNM is the maximum distance (NM) between a track endpoint and
-	// a voyage stop for GPS leg-pair matching.
-	legEndpointMatchNM = 15.0
-	// sameDayDepartureBonusNM is the score bonus (NM) subtracted when a track's
-	// start date matches the candidate departure stop's target date.
-	sameDayDepartureBonusNM = 5.0
-	// singleStopFallbackNM is the maximum distance (NM) for matching a track start
-	// point to the closest single stop when leg-pair matching fails.
-	singleStopFallbackNM = 10.0
-	// circuitLoopRadiusNM is the distance tolerance (NM) for treating the first and
-	// last stops of a voyage as a round-trip loop.
-	circuitLoopRadiusNM = 2.0
-	// plannedRouteEndpointMatchNM is the maximum distance (NM) between recorded and
-	// planned track endpoints when pairing an actual track with a planned route.
+	legEndpointMatchNM          = 15.0
+	sameDayDepartureBonusNM     = 5.0
+	singleDayFallbackNM         = 10.0
+	circuitLoopRadiusNM         = 2.0
 	plannedRouteEndpointMatchNM = 8.0
-	// defaultPlanningSpeedKts is the fallback cruising speed (kts) used to estimate
-	// planned passage duration when a planned route has no duration interval.
-	defaultPlanningSpeedKts = 5.5
-	// maxDBDistanceColumnNM and maxDBSpeedColumnKts match the NUMERIC(8,2) and
-	// NUMERIC(5,2) column limits on voyage_tracks.
-	maxDBDistanceColumnNM = 999999.99
-	maxDBSpeedColumnKts   = 999.99
+	defaultPlanningSpeedKts     = 5.5
+	maxDBDistanceColumnNM       = 999999.99
+	maxDBSpeedColumnKts         = 999.99
 )
 
-// ResolveDebriefStartStop ensures that a debrief's StartStopID points to the starting stop of its passage leg,
-// never the arrival/ending stop, and populates StopTitle matching the voyage stops.
-func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops []model.Stop) {
-	if len(stops) == 0 {
-		if d.StartStopID == nil && d.VoyageStopID != nil {
-			d.StartStopID = d.VoyageStopID
-		} else if d.StartStopID == nil && t != nil && t.VoyageStopID != nil {
-			d.StartStopID = t.VoyageStopID
+func formatDayLegTitle(d model.VoyageDay) string {
+	if d.StartLocationName != "" && d.EndLocationName != "" && d.StartLocationName != d.EndLocationName {
+		return fmt.Sprintf("%s to %s", d.StartLocationName, d.EndLocationName)
+	}
+	if d.EndLocationName != "" {
+		return d.EndLocationName
+	}
+	return d.StartLocationName
+}
+
+// ResolveDebriefDay resolves the VoyageDayID/StartDayID and DayTitle for a track debrief.
+func ResolveDebriefDay(d *model.TrackDebrief, t *model.VoyageTrack, days []model.VoyageDay) {
+	if len(days) == 0 {
+		if d.StartDayID == nil && d.VoyageDayID != nil {
+			d.StartDayID = d.VoyageDayID
+		} else if d.StartDayID == nil && t != nil && t.VoyageDayID != nil {
+			d.StartDayID = t.VoyageDayID
+			d.VoyageDayID = t.VoyageDayID
 		}
 		return
 	}
@@ -603,28 +602,31 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 		trackName = t.Name
 	}
 	plannedName := d.PlannedTrackName
-	foundStop := false
-	// 1. Check for explicit leg number (e.g., "Leg 1", "Leg 2")
+	foundDay := false
+
+	// 1. Check explicit leg number
 	legNum := extractLegNumber(trackName)
 	if legNum == 0 && plannedName != "" {
 		legNum = extractLegNumber(plannedName)
 	}
-	if legNum >= 1 && legNum <= len(stops)-1 {
-		d.StartStopID = &stops[legNum-1].ID
-		foundStop = true
+	if legNum >= 1 && legNum <= len(days) {
+		d.StartDayID = &days[legNum-1].ID
+		d.VoyageDayID = &days[legNum-1].ID
+		foundDay = true
 	}
-	// 2. Check track endpoints if track coordinates exist (GPS leg pair matching)
-	if !foundStop && t != nil {
+
+	// 2. Check track endpoints against each day's Start -> End coordinates
+	if !foundDay && t != nil {
 		if startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(t); ok {
 			bestLeg := -1
 			bestScore := 1e9
-			for i := 0; i < len(stops)-1; i++ {
-				dStart := gpx.CalculateHaversineNM(startLat, startLng, stops[i].Latitude, stops[i].Longitude)
-				dEnd := gpx.CalculateHaversineNM(endLat, endLng, stops[i+1].Latitude, stops[i+1].Longitude)
+			for i := 0; i < len(days); i++ {
+				dStart := gpx.CalculateHaversineNM(startLat, startLng, days[i].StartLatitude, days[i].StartLongitude)
+				dEnd := gpx.CalculateHaversineNM(endLat, endLng, days[i].EndLatitude, days[i].EndLongitude)
 				if dStart <= legEndpointMatchNM && dEnd <= legEndpointMatchNM {
 					score := dStart + dEnd
-					if t.StartTime != nil && !stops[i].TargetDate.IsZero() {
-						if stops[i].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
+					if t.StartTime != nil && !days[i].TargetDate.IsZero() {
+						if days[i].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
 							score -= sameDayDepartureBonusNM
 						}
 					}
@@ -635,13 +637,15 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 				}
 			}
 			if bestLeg >= 0 {
-				d.StartStopID = &stops[bestLeg].ID
-				foundStop = true
+				d.StartDayID = &days[bestLeg].ID
+				d.VoyageDayID = &days[bestLeg].ID
+				foundDay = true
 			}
 		}
 	}
-	// 3. Check if track name mentions starting stop location name (e.g. "Cowes to Newtown")
-	if !foundStop {
+
+	// 3. Check if track name mentions starting location name
+	if !foundDay {
 		nameForLocationMatch := trackName
 		if plannedName != "" {
 			nameForLocationMatch = trackName + " " + plannedName
@@ -652,96 +656,71 @@ func ResolveDebriefStartStop(d *model.TrackDebrief, t *model.VoyageTrack, stops 
 		} else if parts := strings.Split(nameForLocationMatch, " - "); len(parts) > 1 {
 			depPart = parts[0]
 		}
-		for i := 0; i < len(stops)-1; i++ {
-			loc := stops[i].LocationName
+		for i := 0; i < len(days); i++ {
+			loc := days[i].StartLocationName
 			if loc != "" {
 				if strings.Contains(depPart, loc) || (depPart == nameForLocationMatch && strings.Contains(nameForLocationMatch, loc)) {
-					d.StartStopID = &stops[i].ID
-					foundStop = true
+					d.StartDayID = &days[i].ID
+					d.VoyageDayID = &days[i].ID
+					foundDay = true
 					break
 				}
 			}
 		}
 	}
-	// 4. Fallback to closest single stop by coordinates
-	if !foundStop && t != nil {
+
+	// 4. Fallback to closest day start by coordinates
+	if !foundDay && t != nil {
 		if startLat, startLng, _, _, ok := extractTrackEndpoints(t); ok {
-			sIdx := findClosestStop(startLat, startLng, stops, singleStopFallbackNM)
-			if sIdx >= 0 {
-				if sIdx == len(stops)-1 && len(stops) >= 2 {
-					dFirst := gpx.CalculateHaversineNM(startLat, startLng, stops[0].Latitude, stops[0].Longitude)
-					dLast := gpx.CalculateHaversineNM(startLat, startLng, stops[len(stops)-1].Latitude, stops[len(stops)-1].Longitude)
-					if math.Abs(dFirst-dLast) < circuitLoopRadiusNM {
-						if t.StartTime != nil && !stops[0].TargetDate.IsZero() && stops[0].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
-							sIdx = 0
-						} else {
-							sIdx = len(stops) - 2
-						}
-					} else {
-						sIdx = len(stops) - 2
-					}
-				}
-				d.StartStopID = &stops[sIdx].ID
-				foundStop = true
+			dIdx := findClosestDayStart(startLat, startLng, days, singleDayFallbackNM)
+			if dIdx >= 0 {
+				d.StartDayID = &days[dIdx].ID
+				d.VoyageDayID = &days[dIdx].ID
+				foundDay = true
 			}
 		}
 	}
-	// 4. Check existing StartStopID or VoyageStopID reference
-	if !foundStop {
-		refID := d.StartStopID
+
+	// 5. Check existing StartDayID or VoyageDayID reference
+	if !foundDay {
+		refID := d.StartDayID
 		if refID == nil {
-			refID = d.VoyageStopID
+			refID = d.VoyageDayID
 		}
 		if refID == nil && t != nil {
-			refID = t.VoyageStopID
+			refID = t.VoyageDayID
 		}
 		if refID != nil {
-			for i, s := range stops {
-				if s.ID == *refID {
-					// If associated with the final stop, it was associated with arrival/destination; map to preceding starting stop
-					// unless start time matches the first stop in a circuit
-					if i == len(stops)-1 && i > 0 {
-						if t != nil && t.StartTime != nil && !stops[0].TargetDate.IsZero() && stops[0].TargetDate.Format("2006-01-02") == t.StartTime.Format("2006-01-02") {
-							d.StartStopID = &stops[0].ID
-						} else {
-							d.StartStopID = &stops[i-1].ID
-						}
-					} else {
-						d.StartStopID = &stops[i].ID
-					}
-					foundStop = true
+			for i, dy := range days {
+				if dy.ID == *refID {
+					d.StartDayID = &days[i].ID
+					d.VoyageDayID = &days[i].ID
+					foundDay = true
 					break
 				}
 			}
 		}
 	}
-	// 5. Default to the first stop
-	if !foundStop && d.StartStopID == nil {
-		d.StartStopID = &stops[0].ID
+
+	if !foundDay && d.StartDayID == nil {
+		d.StartDayID = &days[0].ID
+		d.VoyageDayID = &days[0].ID
 	}
-	// Populate StopTitle based on resolved StartStopID
-	if d.StartStopID != nil {
-		for i, s := range stops {
-			if s.ID == *d.StartStopID {
-				if i < len(stops)-1 {
-					d.StopTitle = fmt.Sprintf("%s to %s", s.LocationName, stops[i+1].LocationName)
-				} else {
-					d.StopTitle = s.LocationName
-				}
+
+	if d.StartDayID != nil {
+		for _, dy := range days {
+			if dy.ID == *d.StartDayID {
+				d.DayTitle = formatDayLegTitle(dy)
 				break
 			}
 		}
 	}
-	if d.StopTitle == "" {
-		if len(stops) >= 2 {
-			d.StopTitle = fmt.Sprintf("%s to %s", stops[0].LocationName, stops[1].LocationName)
-		} else {
-			d.StopTitle = stops[0].LocationName
-		}
+	if d.DayTitle == "" && len(days) > 0 {
+		d.DayTitle = formatDayLegTitle(days[0])
 	}
 }
 
-func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) plannedRouteMatch {
+func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTrack, days []model.VoyageDay) plannedRouteMatch {
 	var plannedTracks []*model.VoyageTrack
 	for i := range allTracks {
 		if allTracks[i].Kind == string(model.TrackKindPlanned) {
@@ -751,10 +730,10 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 
 	var matched *model.VoyageTrack
 
-	// Strategy A: Match by VoyageStopID
-	if actual.VoyageStopID != nil {
+	// Strategy A: Match by VoyageDayID
+	if actual.VoyageDayID != nil {
 		for _, p := range plannedTracks {
-			if p.VoyageStopID != nil && *p.VoyageStopID == *actual.VoyageStopID {
+			if p.VoyageDayID != nil && *p.VoyageDayID == *actual.VoyageDayID {
 				matched = p
 				break
 			}
@@ -825,15 +804,14 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		return plannedRouteMatch{}
 	}
 
-	// Determine starting stop ID for this leg
 	tempDebrief := model.TrackDebrief{
 		TrackName:        actual.Name,
 		PlannedTrackName: matched.Name,
-		VoyageStopID:     actual.VoyageStopID,
+		VoyageDayID:      actual.VoyageDayID,
 	}
-	ResolveDebriefStartStop(&tempDebrief, actual, stops)
-	startStopID := tempDebrief.StartStopID
-	if startStopID == nil && len(stops) >= 2 {
+	ResolveDebriefDay(&tempDebrief, actual, days)
+	startDayID := tempDebrief.StartDayID
+	if startDayID == nil && len(days) > 0 {
 		var actualTracks []*model.VoyageTrack
 		for i := range allTracks {
 			if allTracks[i].Kind != string(model.TrackKindPlanned) {
@@ -847,12 +825,12 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 				break
 			}
 		}
-		if actIdx >= 0 && actIdx < len(stops)-1 {
-			startStopID = &stops[actIdx].ID
+		if actIdx >= 0 && actIdx < len(days) {
+			startDayID = &days[actIdx].ID
 		}
 	}
-	if startStopID == nil && len(stops) > 0 {
-		startStopID = &stops[0].ID
+	if startDayID == nil && len(days) > 0 {
+		startDayID = &days[0].ID
 	}
 
 	dist := 0.0
@@ -869,13 +847,13 @@ func pairActualWithPlanned(actual *model.VoyageTrack, allTracks []model.VoyageTr
 		plannedDist:      dist,
 		plannedDuration:  dur,
 		plannedGeoJSON:   matched.GeoJSON,
-		voyageStopID:     startStopID,
-		startStopID:      startStopID,
+		voyageDayID:      startDayID,
+		startDayID:       startDayID,
 	}
 }
 
-func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack, stops []model.Stop) *model.TrackDebrief {
-	match := pairActualWithPlanned(track, allTracks, stops)
+func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageTrack, allTracks []model.VoyageTrack, days []model.VoyageDay) *model.TrackDebrief {
+	match := pairActualWithPlanned(track, allTracks, days)
 	if match.plannedTrackID == nil {
 		return nil
 	}
@@ -913,23 +891,17 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 		maxSpd = *track.MaxSpeedKts
 	}
 
-	var stopTitle string
-	if match.startStopID != nil && len(stops) > 0 {
-		for i, s := range stops {
-			if s.ID == *match.startStopID {
-				if i < len(stops)-1 {
-					stopTitle = fmt.Sprintf("%s to %s", s.LocationName, stops[i+1].LocationName)
-				} else {
-					stopTitle = s.LocationName
-				}
+	var dayTitle string
+	if match.startDayID != nil && len(days) > 0 {
+		for _, dy := range days {
+			if dy.ID == *match.startDayID {
+				dayTitle = formatDayLegTitle(dy)
 				break
 			}
 		}
 	}
-	if stopTitle == "" && len(stops) >= 2 {
-		stopTitle = fmt.Sprintf("%s to %s", stops[0].LocationName, stops[1].LocationName)
-	} else if stopTitle == "" && len(stops) == 1 {
-		stopTitle = stops[0].LocationName
+	if dayTitle == "" && len(days) > 0 {
+		dayTitle = formatDayLegTitle(days[0])
 	}
 
 	var durVarPct *float64
@@ -962,11 +934,11 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	debrief := model.TrackDebrief{
 		TrackID:             track.ID,
 		TrackName:           track.Name,
-		StopTitle:           stopTitle,
+		DayTitle:            dayTitle,
 		PlannedTrackID:      match.plannedTrackID,
 		PlannedTrackName:    match.plannedTrackName,
-		VoyageStopID:        match.startStopID,
-		StartStopID:         match.startStopID,
+		VoyageDayID:         match.startDayID,
+		StartDayID:          match.startDayID,
 		RecordedDistanceNM:  recDist,
 		PlannedDistanceNM:   plannedDist,
 		DistanceDeltaNM:     distDelta,
@@ -985,8 +957,8 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 	}
 
 	var briefing *model.Briefing
-	if h.DB != nil && match.startStopID != nil {
-		b, err := h.DB.GetBriefing(ctx, *match.startStopID)
+	if h.DB != nil && match.startDayID != nil {
+		b, err := h.DB.GetBriefing(ctx, *match.startDayID)
 		if err == nil {
 			briefing = b
 		}
@@ -995,7 +967,6 @@ func (h *Handler) generateTrackDebrief(ctx context.Context, track *model.VoyageT
 
 	telemetry := gpx.AnalyzeGPXTelemetry(match.plannedGeoJSON, track.GeoJSON, track.RawGPX, avgSpd)
 
-	// Generate tactical insights using Pilot agent or rule-based fallback
 	prompt := fmt.Sprintf(
 		"Perform a post-voyage tactical pilot debrief comparing the ACTUAL recorded passage against the PLANNED route:\n"+
 			"- Actual Track: '%s'\n"+
@@ -1207,7 +1178,7 @@ func extractGPXPayload(r *http.Request) ([]byte, string, string, bool, error) {
 	return data, fileName, kindOverride, autoSplit, nil
 }
 
-func buildModelTrack(voyageID int64, stopID *int64, fileName, rawGPX string, pt gpx.ParsedTrack) model.VoyageTrack {
+func buildModelTrack(voyageID int64, dayID *int64, fileName, rawGPX string, pt gpx.ParsedTrack) model.VoyageTrack {
 	var fn *string
 	if fileName != "" {
 		fn = &fileName
@@ -1244,7 +1215,7 @@ func buildModelTrack(voyageID int64, stopID *int64, fileName, rawGPX string, pt 
 
 	return model.VoyageTrack{
 		VoyageID:          voyageID,
-		VoyageStopID:      stopID,
+		VoyageDayID:       dayID,
 		Kind:              pt.Kind,
 		Name:              pt.Name,
 		FileName:          fn,

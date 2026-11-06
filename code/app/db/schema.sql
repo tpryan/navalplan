@@ -4,13 +4,16 @@ DROP TABLE IF EXISTS commodore_discovery;
 DROP TABLE IF EXISTS voyage_recommendation;
 DROP TABLE IF EXISTS invitation;
 DROP TABLE IF EXISTS voyage_map;
+DROP TABLE IF EXISTS voyage_track;
 DROP TABLE IF EXISTS briefing;
 DROP TABLE IF EXISTS voyage_guide;
 DROP TABLE IF EXISTS facility;
+DROP TABLE IF EXISTS voyage_day;
 DROP TABLE IF EXISTS stop;
 DROP TABLE IF EXISTS voyage;
 DROP TABLE IF EXISTS session;
 DROP TABLE IF EXISTS person;
+DROP TYPE IF EXISTS track_kind;
 
 CREATE TABLE person (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -19,6 +22,7 @@ CREATE TABLE person (
     name VARCHAR(255),
     picture_url TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
+    expires_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -53,15 +57,19 @@ CREATE TABLE voyage (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE stop (
+CREATE TABLE voyage_day (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     voyage_id INTEGER REFERENCES voyage(id) ON DELETE CASCADE,
     target_date DATE NOT NULL,
-    stop_type VARCHAR(30) DEFAULT 'landfall' NOT NULL,  -- 'landfall' (anchorage/marina/dock) or 'passage_point' (at-sea tracking position)
-    location_name VARCHAR(255),
-    precise_location TEXT,
-    latitude FLOAT NOT NULL,
-    longitude FLOAT NOT NULL,
+    day_type VARCHAR(30) DEFAULT 'landfall' NOT NULL,  -- 'landfall', 'passage_point', 'lay_day', or 'day_trip'
+    start_location_name VARCHAR(255),
+    start_precise_location TEXT,
+    start_latitude FLOAT NOT NULL,
+    start_longitude FLOAT NOT NULL,
+    end_location_name VARCHAR(255),
+    end_precise_location TEXT,
+    end_latitude FLOAT NOT NULL,
+    end_longitude FLOAT NOT NULL,
     search_radius INTEGER DEFAULT 5,             -- Default Deep Search (e.g. 5nm)
     search_radius_unit VARCHAR(10) DEFAULT 'nm',
     notes TEXT,
@@ -71,7 +79,7 @@ CREATE TABLE stop (
 
 CREATE TABLE briefing (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    stop_id INTEGER REFERENCES stop(id) ON DELETE CASCADE UNIQUE,
+    day_id INTEGER REFERENCES voyage_day(id) ON DELETE CASCADE UNIQUE,
     weather_summary JSONB,
     sun_phase JSONB,
     tides JSONB,
@@ -81,6 +89,29 @@ CREATE TABLE briefing (
     safety_alerts_updated_at TIMESTAMPTZ,
     weather_last_updated TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TYPE track_kind AS ENUM ('planned', 'recorded');
+
+CREATE TABLE voyage_track (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    voyage_id INTEGER NOT NULL REFERENCES voyage(id) ON DELETE CASCADE,
+    voyage_day_id INTEGER REFERENCES voyage_day(id) ON DELETE SET NULL,
+    kind track_kind NOT NULL DEFAULT 'planned',
+    name VARCHAR(255) NOT NULL,
+    file_name VARCHAR(255),
+    start_time TIMESTAMPTZ,
+    end_time TIMESTAMPTZ,
+    distance_nm NUMERIC(12,2),
+    duration_interval INTERVAL,
+    max_speed_kts NUMERIC(8,2),
+    avg_speed_kts NUMERIC(8,2),
+    geojson JSONB NOT NULL,
+    simplified_geojson JSONB NOT NULL,
+    raw_gpx TEXT,
+    debrief JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE voyage_guide (
@@ -112,6 +143,7 @@ CREATE TABLE invitation (
     created_by INTEGER REFERENCES person(id) ON DELETE SET NULL,
     claimed_by INTEGER REFERENCES person(id) ON DELETE SET NULL,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     claimed_at TIMESTAMPTZ
 );
@@ -150,6 +182,8 @@ CREATE TABLE commodore_discovery (
 CREATE INDEX idx_voyage_guide_voyage_id ON voyage_guide(voyage_id);
 CREATE INDEX idx_session_expires_at ON session(expires_at);
 CREATE INDEX idx_voyage_person_id ON voyage(person_id);
-CREATE INDEX idx_stop_voyage_id ON stop(voyage_id);
+CREATE INDEX idx_voyage_day_voyage_id ON voyage_day(voyage_id);
+CREATE INDEX idx_voyage_track_voyage ON voyage_track(voyage_id, kind);
+CREATE INDEX idx_voyage_track_day ON voyage_track(voyage_day_id);
 CREATE INDEX idx_voyage_recommendation_voyage_id ON voyage_recommendation(voyage_id);
 CREATE INDEX idx_commodore_discovery_tier ON commodore_discovery(tier);

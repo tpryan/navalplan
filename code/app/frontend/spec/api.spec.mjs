@@ -72,8 +72,8 @@ describe('API Service', () => {
       expect(res).toEqual(mockTrack);
     });
 
-    it('uploadStopTrack should post stop-level track data', async () => {
-      const mockTrack = { id: 'track-789', kind: 'planned', voyage_stop_id: 5 };
+    it('uploadDayTrack should post day-level track data', async () => {
+      const mockTrack = { id: 'track-789', kind: 'planned', voyage_day_id: 5 };
       window.fetch.and.resolveTo({
         ok: true,
         status: 200,
@@ -81,10 +81,10 @@ describe('API Service', () => {
       });
 
       const blob = new Blob(['<gpx></gpx>'], { type: 'application/gpx+xml' });
-      const res = await API.uploadStopTrack(101, 5, blob, 'planned');
+      const res = await API.uploadDayTrack(101, 5, blob, 'planned');
 
       expect(window.fetch).toHaveBeenCalledWith(
-        '/api/v1/voyages/101/stops/5/track',
+        '/api/v1/voyages/101/days/5/track?kind=planned',
         jasmine.objectContaining({
           method: 'POST',
           body: jasmine.any(FormData)

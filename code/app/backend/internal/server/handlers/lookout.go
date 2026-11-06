@@ -25,19 +25,19 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := r.PathValue("id")
-	stopID, err := strconv.ParseInt(idStr, 10, 64)
+	dayID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid Stop ID")
+		writeError(w, http.StatusBadRequest, "Invalid Day ID")
 		return
 	}
 
-	stop, err := h.DB.GetStop(r.Context(), stopID)
+	day, err := h.DB.GetDay(r.Context(), dayID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Stop not found")
+		writeError(w, http.StatusNotFound, "Day not found")
 		return
 	}
 
-	voyage, err := h.DB.GetVoyage(r.Context(), stop.VoyageID)
+	voyage, err := h.DB.GetVoyage(r.Context(), day.VoyageID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Voyage not found")
 		return
@@ -47,24 +47,25 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	briefing, err := h.DB.GetBriefing(r.Context(), stopID)
+	briefing, err := h.DB.GetBriefing(r.Context(), dayID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "No briefing found for this stop — run research first")
+		writeError(w, http.StatusNotFound, "No briefing found for this day — run research first")
 		return
 	}
 
-	jobKey := fmt.Sprintf("lookout:%d", stop.ID)
+	jobKey := fmt.Sprintf("lookout:%d", day.ID)
 	if !h.tryClaimJob(jobKey) {
-		writeError(w, http.StatusConflict, "Safety audit already in progress for this stop")
+		writeError(w, http.StatusConflict, "Safety audit already in progress for this day")
 		return
 	}
 
-	sessionID := fmt.Sprintf("lookout_%d_%d", stop.ID, time.Now().Unix())
+	sessionID := fmt.Sprintf("lookout_%d_%d", day.ID, time.Now().Unix())
 	h.ensureProgressChannel(sessionID, 10*time.Minute)
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
 		"msg":        "Safety audit started",
+		"day_id":     idStr,
 		"stop_id":    idStr,
 		"session_id": sessionID,
 	})
@@ -74,9 +75,9 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 		h.ResearchSem <- struct{}{}
 		defer func() { <-h.ResearchSem }()
 
-		allStops, _ := h.DB.ListStops(context.Background(), stop.VoyageID, 0, 0)
-		sort.Slice(allStops, func(i, j int) bool { return allStops[i].TargetDate.Before(allStops[j].TargetDate) })
-		h.performLookoutAuditLogic(stop, briefing, allStops, sessionID)
+		allDays, _ := h.DB.ListDays(context.Background(), day.VoyageID, 0, 0)
+		sort.Slice(allDays, func(i, j int) bool { return allDays[i].TargetDate.Before(allDays[j].TargetDate) })
+		h.performLookoutAuditLogic(day, briefing, allDays, sessionID)
 	}()
 }
 
@@ -87,9 +88,9 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 	}
 	voyageID := voyage.ID
 
-	stops, err := h.DB.ListStops(r.Context(), voyageID, 0, 0)
+	days, err := h.DB.ListDays(r.Context(), voyageID, 0, 0)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list stops")
+		writeError(w, http.StatusInternalServerError, "Failed to list days")
 		return
 	}
 
@@ -106,7 +107,8 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"msg":        "Voyage safety audit started",
 		"voyage_id":  voyageID,
-		"stop_count": len(stops),
+		"day_count":  len(days),
+		"stop_count": len(days),
 		"session_id": sessionID,
 	})
 
@@ -114,26 +116,26 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 		defer h.releaseJob(jobKey)
 		ctx := context.Background()
 
-		sort.Slice(stops, func(i, j int) bool { return stops[i].TargetDate.Before(stops[j].TargetDate) })
+		sort.Slice(days, func(i, j int) bool { return days[i].TargetDate.Before(days[j].TargetDate) })
 
 		var wg sync.WaitGroup
-		for _, s := range stops {
-			briefing, err := h.DB.GetBriefing(ctx, s.ID)
+		for _, d := range days {
+			briefing, err := h.DB.GetBriefing(ctx, d.ID)
 			if err != nil || briefing == nil {
 				continue
 			}
-			stopJobKey := fmt.Sprintf("lookout:%d", s.ID)
-			if !h.tryClaimJob(stopJobKey) {
+			dayJobKey := fmt.Sprintf("lookout:%d", d.ID)
+			if !h.tryClaimJob(dayJobKey) {
 				continue
 			}
 			wg.Add(1)
-			go func(st model.Stop, b *model.Briefing, jk string) {
+			go func(dy model.VoyageDay, b *model.Briefing, jk string) {
 				defer wg.Done()
 				defer h.releaseJob(jk)
 				h.ResearchSem <- struct{}{}
 				defer func() { <-h.ResearchSem }()
-				h.performLookoutAuditLogic(&st, b, stops, sessionID)
-			}(s, briefing, stopJobKey)
+				h.performLookoutAuditLogic(&dy, b, days, sessionID)
+			}(d, briefing, dayJobKey)
 		}
 		wg.Wait()
 		h.broadcastProgress(sessionID, "done", "Voyage safety audit complete")
@@ -156,91 +158,95 @@ func (h *Handler) RunLookoutAuditEndpoint(w http.ResponseWriter, r *http.Request
 
 		slog.InfoContext(ctx, "[lookout:bulk] Starting bulk safety audit")
 
-		stops, err := h.DB.ListAllFutureStops(ctx)
+		days, err := h.DB.ListAllFutureDays(ctx)
 		if err != nil {
-			slog.ErrorContext(ctx, "[lookout:bulk] Failed to list future stops", "error", err)
+			slog.ErrorContext(ctx, "[lookout:bulk] Failed to list future days", "error", err)
 			return
 		}
 
-		slog.InfoContext(ctx, "[lookout:bulk] Future stops found", "count", len(stops))
+		slog.InfoContext(ctx, "[lookout:bulk] Future days found", "count", len(days))
 
-		voyageStops := make(map[int64][]model.Stop)
-		for _, s := range stops {
-			voyageStops[s.VoyageID] = append(voyageStops[s.VoyageID], s)
+		voyageDays := make(map[int64][]model.VoyageDay)
+		for _, d := range days {
+			voyageDays[d.VoyageID] = append(voyageDays[d.VoyageID], d)
 		}
-		for vid, vs := range voyageStops {
-			sort.Slice(vs, func(i, j int) bool { return vs[i].TargetDate.Before(vs[j].TargetDate) })
-			voyageStops[vid] = vs
+		for vid, vd := range voyageDays {
+			sort.Slice(vd, func(i, j int) bool { return vd[i].TargetDate.Before(vd[j].TargetDate) })
+			voyageDays[vid] = vd
 		}
 
-		slog.InfoContext(ctx, "[lookout:bulk] Voyages to audit", "voyage_count", len(voyageStops))
+		slog.InfoContext(ctx, "[lookout:bulk] Voyages to audit", "voyage_count", len(voyageDays))
 
-		sort.Slice(stops, func(i, j int) bool { return stops[i].TargetDate.Before(stops[j].TargetDate) })
+		sort.Slice(days, func(i, j int) bool { return days[i].TargetDate.Before(days[j].TargetDate) })
 
 		processed, skipped := 0, 0
-		for _, s := range stops {
-			briefing, err := h.DB.GetBriefing(ctx, s.ID)
+		for _, d := range days {
+			briefing, err := h.DB.GetBriefing(ctx, d.ID)
 			if err != nil || briefing == nil {
-				slog.InfoContext(ctx, "[lookout:bulk] Skipping stop — no briefing", "stop_id", s.ID, "location", s.LocationName)
+				slog.InfoContext(ctx, "[lookout:bulk] Skipping day — no briefing", "day_id", d.ID, "location", d.PrimaryLocationName())
 				skipped++
 				continue
 			}
-			sessionID := fmt.Sprintf("lookout_%d_%d", s.ID, time.Now().Unix())
-			stopJobKey := fmt.Sprintf("lookout:%d", s.ID)
-			if !h.tryClaimJob(stopJobKey) {
-				slog.InfoContext(ctx, "[lookout:bulk] Skipping stop — audit already in progress", "stop_id", s.ID, "location", s.LocationName)
+			sessionID := fmt.Sprintf("lookout_%d_%d", d.ID, time.Now().Unix())
+			dayJobKey := fmt.Sprintf("lookout:%d", d.ID)
+			if !h.tryClaimJob(dayJobKey) {
+				slog.InfoContext(ctx, "[lookout:bulk] Skipping day — audit already in progress", "day_id", d.ID, "location", d.PrimaryLocationName())
 				skipped++
 				continue
 			}
-			slog.InfoContext(ctx, "[lookout:bulk] Auditing stop", "stop_id", s.ID, "location", s.LocationName, "date", s.TargetDate.Format("2006-01-02"))
+			slog.InfoContext(ctx, "[lookout:bulk] Auditing day", "day_id", d.ID, "location", d.PrimaryLocationName(), "date", d.TargetDate.Format("2006-01-02"))
 			h.ResearchSem <- struct{}{}
-			h.performLookoutAuditLogic(&s, briefing, voyageStops[s.VoyageID], sessionID)
+			h.performLookoutAuditLogic(&d, briefing, voyageDays[d.VoyageID], sessionID)
 			<-h.ResearchSem
-			h.releaseJob(stopJobKey)
+			h.releaseJob(dayJobKey)
 			processed++
 		}
-		slog.InfoContext(ctx, "[lookout:bulk] Bulk safety audit complete", "processed", processed, "skipped", skipped, "total", len(stops))
+		slog.InfoContext(ctx, "[lookout:bulk] Bulk safety audit complete", "processed", processed, "skipped", skipped, "total", len(days))
 	}()
 }
 
-func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Briefing, allStops []model.Stop, sessionID string) {
+func (h *Handler) performLookoutAuditLogic(day *model.VoyageDay, briefing *model.Briefing, allDays []model.VoyageDay, sessionID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Auditing %s", stop.LocationName))
+	destName := day.PrimaryLocationName()
+	h.broadcastProgress(sessionID, "start", fmt.Sprintf("Auditing %s", destName))
 
 	var distNM float64
 	var course float64
 	var hasCourse bool
-	var next *model.Stop
-	stopPosition, totalStops := 1, len(allStops)
-	for i, s := range allStops {
-		if s.ID == stop.ID {
-			stopPosition = i + 1
-			if i < totalStops-1 {
-				next = &allStops[i+1]
-				distNM = lookoutHaversineNM(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
-				course = calculateBearing(stop.Latitude, stop.Longitude, next.Latitude, next.Longitude)
-				hasCourse = true
-			}
+	dayPosition, totalDays := 1, len(allDays)
+	if totalDays == 0 {
+		totalDays = 1
+	}
+	for i, d := range allDays {
+		if d.ID == day.ID {
+			dayPosition = i + 1
 			break
 		}
 	}
 
-	var plannedRouteInfo string
-	var matchedPlannedTrack *model.VoyageTrack
-	if next != nil {
-		matchedPlannedTrack = h.findPlannedTrackForLeg(ctx, stop, next, stopPosition)
-		if matchedPlannedTrack != nil {
-			plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
+	if (day.StartLatitude != 0 || day.StartLongitude != 0) && (day.EndLatitude != 0 || day.EndLongitude != 0) {
+		distNM = lookoutHaversineNM(day.StartLatitude, day.StartLongitude, day.EndLatitude, day.EndLongitude)
+		if distNM > 0.1 {
+			course = calculateBearing(day.StartLatitude, day.StartLongitude, day.EndLatitude, day.EndLongitude)
+			hasCourse = true
+		} else {
+			distNM = 0
 		}
 	}
 
-	prompt := buildLookoutPrompt(stop, next, briefing, distNM, course, hasCourse, stopPosition, totalStops, plannedRouteInfo)
+	var plannedRouteInfo string
+	matchedPlannedTrack := h.findPlannedTrackForDay(ctx, day, dayPosition)
+	if matchedPlannedTrack != nil {
+		plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
+	}
+
+	prompt := buildLookoutPrompt(day, briefing, distNM, course, hasCourse, dayPosition, totalDays, plannedRouteInfo)
 
 	const appName = "lookout"
 	const userID = "system"
-	agentSessionID := fmt.Sprintf("lookout_%d_%d", stop.ID, time.Now().Unix())
+	agentSessionID := fmt.Sprintf("lookout_%d_%d", day.ID, time.Now().Unix())
 
 	if err := h.Agent.CreateSession(ctx, appName, userID, agentSessionID, nil); err != nil {
 		slog.WarnContext(ctx, "[lookout] CreateSession warning, proceeding with RunSync", "error", err)
@@ -273,11 +279,11 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 		}
 	}
 
-	if distNM > 0 && next != nil {
+	if distNM > 0 {
 		rows := buildTravelTable(distNM, briefing.SunPhase)
-		planMsg := fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, next.LocationName)
+		planMsg := fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, destName)
 		if matchedPlannedTrack != nil && matchedPlannedTrack.Name != "" {
-			planMsg = fmt.Sprintf("Travel Plan: %.1f NM via %s to %s", distNM, matchedPlannedTrack.Name, next.LocationName)
+			planMsg = fmt.Sprintf("Travel Plan: %.1f NM via %s to %s", distNM, matchedPlannedTrack.Name, destName)
 		}
 		alerts = append(alerts, map[string]any{
 			"severity":     "info",
@@ -289,13 +295,13 @@ func (h *Handler) performLookoutAuditLogic(stop *model.Stop, briefing *model.Bri
 	}
 
 	alertsJSON, _ := json.Marshal(alerts)
-	if err := h.DB.UpsertSafetyAlerts(ctx, stop.ID, model.RawJSON(alertsJSON)); err != nil {
+	if err := h.DB.UpsertSafetyAlerts(ctx, day.ID, model.RawJSON(alertsJSON)); err != nil {
 		slog.ErrorContext(ctx, "[lookout] Failed to save safety alerts", "error", err)
 		return
 	}
 
-	h.broadcastProgressSection(sessionID, "alerts", fmt.Sprintf("Safety lookout alerts ready for %s", stop.LocationName), alertsJSON)
-	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", stop.LocationName))
+	h.broadcastProgressSection(sessionID, "alerts", fmt.Sprintf("Safety lookout alerts ready for %s", destName), alertsJSON)
+	h.broadcastProgress(sessionID, "progress", fmt.Sprintf("Safety audit complete for %s", destName))
 }
 
 func extractCoordinates(raw model.RawJSON) [][]float64 {
@@ -350,13 +356,13 @@ func bearingToCardinal(deg float64) string {
 	return dirs[idx]
 }
 
-func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, next *model.Stop, stopPosition int) *model.VoyageTrack {
-	if stop == nil {
+func (h *Handler) findPlannedTrackForDay(ctx context.Context, day *model.VoyageDay, dayPosition int) *model.VoyageTrack {
+	if day == nil {
 		return nil
 	}
-	tracks, err := h.DB.ListVoyageTracks(ctx, stop.VoyageID)
+	tracks, err := h.DB.ListVoyageTracks(ctx, day.VoyageID)
 	if err != nil {
-		slog.WarnContext(ctx, "[lookout] Failed to list voyage tracks", "voyage_id", stop.VoyageID, "stop_id", stop.ID, "error", err)
+		slog.WarnContext(ctx, "[lookout] Failed to list voyage tracks", "voyage_id", day.VoyageID, "day_id", day.ID, "error", err)
 		tracks = nil
 	}
 
@@ -368,19 +374,10 @@ func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, 
 	}
 
 	if len(plannedTracks) == 0 {
-		if stopTracks, err := h.DB.ListStopTracks(ctx, stop.ID); err == nil {
-			for _, tr := range stopTracks {
+		if dayTracks, err := h.DB.ListDayTracks(ctx, day.ID); err == nil {
+			for _, tr := range dayTracks {
 				if tr.Kind == string(model.TrackKindPlanned) {
 					plannedTracks = append(plannedTracks, tr)
-				}
-			}
-		}
-		if next != nil {
-			if nextTracks, err := h.DB.ListStopTracks(ctx, next.ID); err == nil {
-				for _, tr := range nextTracks {
-					if tr.Kind == string(model.TrackKindPlanned) {
-						plannedTracks = append(plannedTracks, tr)
-					}
 				}
 			}
 		}
@@ -390,36 +387,27 @@ func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, 
 		return nil
 	}
 
-	// 1. Direct match on departing stop ID
+	// 1. Direct match on day ID
 	for i := range plannedTracks {
-		if plannedTracks[i].VoyageStopID != nil && *plannedTracks[i].VoyageStopID == stop.ID {
+		if plannedTracks[i].VoyageDayID != nil && *plannedTracks[i].VoyageDayID == day.ID {
 			return &plannedTracks[i]
 		}
 	}
 
-	// 2. Match on destination stop ID
-	if next != nil {
-		for i := range plannedTracks {
-			if plannedTracks[i].VoyageStopID != nil && *plannedTracks[i].VoyageStopID == next.ID {
-				return &plannedTracks[i]
-			}
-		}
-	}
-
-	// 3. Match on Leg number in track name (e.g. "Leg 1")
+	// 2. Match on Leg number in track name (e.g. "Leg 1")
 	for i := range plannedTracks {
-		if legNum := extractLegNumber(plannedTracks[i].Name); legNum == stopPosition {
+		if legNum := extractLegNumber(plannedTracks[i].Name); legNum == dayPosition {
 			return &plannedTracks[i]
 		}
 	}
 
-	// 4. Match on start & end endpoint proximity (within 3 NM)
-	if next != nil && (stop.Latitude != 0 || stop.Longitude != 0) && (next.Latitude != 0 || next.Longitude != 0) {
+	// 3. Match on start & end endpoint proximity (within 3 NM)
+	if (day.StartLatitude != 0 || day.StartLongitude != 0) && (day.EndLatitude != 0 || day.EndLongitude != 0) {
 		for i := range plannedTracks {
 			startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(&plannedTracks[i])
 			if ok {
-				dStart := lookoutHaversineNM(startLat, startLng, stop.Latitude, stop.Longitude)
-				dEnd := lookoutHaversineNM(endLat, endLng, next.Latitude, next.Longitude)
+				dStart := lookoutHaversineNM(startLat, startLng, day.StartLatitude, day.StartLongitude)
+				dEnd := lookoutHaversineNM(endLat, endLng, day.EndLatitude, day.EndLongitude)
 				if dStart <= 3.0 && dEnd <= 3.0 {
 					return &plannedTracks[i]
 				}
@@ -427,13 +415,13 @@ func (h *Handler) findPlannedTrackForLeg(ctx context.Context, stop *model.Stop, 
 		}
 	}
 
-	// 5. If exactly 1 planned track and 1 transit leg
-	if len(plannedTracks) == 1 && stopPosition == 1 {
+	// 4. If exactly 1 planned track and Day 1
+	if len(plannedTracks) == 1 && dayPosition == 1 {
 		return &plannedTracks[0]
 	}
 
-	// 6. Sequential index fallback
-	legIdx := stopPosition - 1
+	// 5. Sequential index fallback
+	legIdx := dayPosition - 1
 	if legIdx >= 0 && legIdx < len(plannedTracks) {
 		return &plannedTracks[legIdx]
 	}
@@ -545,23 +533,32 @@ func extractWaypointsSummary(geoJSON model.RawJSON) string {
 	return strings.Join(pts, " -> ")
 }
 
-func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Briefing, distNM, course float64, hasCourse bool, stopPosition, totalStops int, routeWaypoints ...string) string {
-	distInfo := "none — this is the last stop, no departure planned (do not generate navigation or arrival-time alerts)"
+func buildLookoutPrompt(day *model.VoyageDay, briefing *model.Briefing, distNM, course float64, hasCourse bool, dayPosition, totalDays int, routeWaypoints ...string) string {
+	distInfo := "none — stationary day or final harbor stay, no transit leg planned (do not generate navigation or arrival-time alerts)"
 	var travelTableInfo string
 	var nextStopInfo string
+
+	startLoc := day.StartLocationName
+	if startLoc == "" {
+		startLoc = day.EndLocationName
+	}
+	endLoc := day.EndLocationName
+	if endLoc == "" {
+		endLoc = startLoc
+	}
 
 	if distNM > 0 {
 		courseInfo := ""
 		if hasCourse {
 			courseInfo = fmt.Sprintf(" at a course of %.0f°", course)
 		}
-		if next != nil {
-			nextLoc := next.LocationName
-			if next.Latitude != 0 || next.Longitude != 0 {
-				nextLoc = fmt.Sprintf("%s (%.4f, %.4f)", next.LocationName, next.Latitude, next.Longitude)
+		if endLoc != "" {
+			destFmt := endLoc
+			if day.EndLatitude != 0 || day.EndLongitude != 0 {
+				destFmt = fmt.Sprintf("%s (%.4f, %.4f)", endLoc, day.EndLatitude, day.EndLongitude)
 			}
-			nextStopInfo = fmt.Sprintf("\nNext Destination: %s", nextLoc)
-			distInfo = fmt.Sprintf("%.1f nautical miles%s to %s", distNM, courseInfo, next.LocationName)
+			nextStopInfo = fmt.Sprintf("\nDestination: %s", destFmt)
+			distInfo = fmt.Sprintf("%.1f nautical miles%s to %s", distNM, courseInfo, endLoc)
 		} else {
 			distInfo = fmt.Sprintf("%.1f nautical miles%s", distNM, courseInfo)
 		}
@@ -591,14 +588,13 @@ func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Brie
 		tidesJSON = string(briefing.Tides)
 	}
 
-	// Deterministic numeric threshold checks (wind/wave/wave-period/tide) are
-	// computed in Go and injected as pre-evaluated constraints so the LLM does
-	// not have to redo the arithmetic and can focus on qualitative hazards.
 	constraintsBlock := formatSafetyConstraints(safety.Evaluate(briefing.WeatherSummary, briefing.Tides))
 
-	locationInfo := stop.LocationName
-	if stop.Latitude != 0 || stop.Longitude != 0 {
-		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", stop.LocationName, stop.Latitude, stop.Longitude)
+	locationInfo := startLoc
+	if day.StartLatitude != 0 || day.StartLongitude != 0 {
+		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", startLoc, day.StartLatitude, day.StartLongitude)
+	} else if day.EndLatitude != 0 || day.EndLongitude != 0 {
+		locationInfo = fmt.Sprintf("%s (%.4f, %.4f)", endLoc, day.EndLatitude, day.EndLongitude)
 	}
 
 	var routeWaypointsInfo string
@@ -606,12 +602,12 @@ func buildLookoutPrompt(stop *model.Stop, next *model.Stop, briefing *model.Brie
 		routeWaypointsInfo = fmt.Sprintf("\n%s\n", strings.TrimSpace(routeWaypoints[0]))
 	}
 
-	return fmt.Sprintf(`Analyze the following stop data, planned passage route (if provided), and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. When an intended planned route is provided, evaluate safety, tidal streams, and adverse weather against the route's specific headings and waypoints. Return a JSON array of alerts.
+	return fmt.Sprintf(`Analyze the following voyage day data, planned passage route (if provided), and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. When an intended planned route is provided, evaluate safety, tidal streams, and adverse weather against the route's specific headings and waypoints. Return a JSON array of alerts.
 
-Location: %s
+Departure Location: %s
 Date: %s (Note: Weather and Tide data covers 48 hours starting from this date)
-Stop position: %d of %d%s
-Distance to next stop: %s%s%s
+Day position: %d of %d%s
+Transit distance: %s%s%s
 
 Weather (48h hourly forecast):
 %s
@@ -626,9 +622,9 @@ Tides (48h hourly forecast):
 
 Return ONLY the JSON array of alerts. If no concerns or significant trends, return [].`,
 		locationInfo,
-		stop.TargetDate.Format("January 2, 2006"),
-		stopPosition,
-		totalStops,
+		day.TargetDate.Format("January 2, 2006"),
+		dayPosition,
+		totalDays,
 		nextStopInfo,
 		distInfo,
 		travelTableInfo,
@@ -640,10 +636,6 @@ Return ONLY the JSON array of alerts. If no concerns or significant trends, retu
 	)
 }
 
-// formatSafetyConstraints renders the deterministic safety alerts as a prompt
-// block the lookout agent treats as authoritative pre-evaluated constraints. It
-// always states that the numeric thresholds were checked, so the LLM does not
-// recompute them even when nothing triggered.
 func formatSafetyConstraints(alerts []safety.Alert) string {
 	const header = "Pre-evaluated safety constraints (computed deterministically from the forecast above — treat as AUTHORITATIVE: include each of these alerts in your output as-is, and do NOT recompute wind, wave, wave-period, or tidal-range numeric thresholds yourself):"
 	if len(alerts) == 0 {

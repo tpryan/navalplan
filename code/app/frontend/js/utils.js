@@ -56,6 +56,58 @@ export function isDayTrip(voyage) {
     return voyage.start_date.split('T')[0] === voyage.end_date.split('T')[0];
 }
 
+export function getDayStartCoords(day) {
+    if (!day) return null;
+    const lat = day.start_latitude ?? day.latitude;
+    const lng = day.start_longitude ?? day.longitude;
+    return (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0))
+        ? { lat, lng }
+        : null;
+}
+
+export function getDayEndCoords(day) {
+    if (!day) return null;
+    const lat = day.end_latitude ?? day.latitude;
+    const lng = day.end_longitude ?? day.longitude;
+    return (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0))
+        ? { lat, lng }
+        : null;
+}
+
+export function isDayStartOnly(day) {
+    if (!day) return false;
+    const type = day.day_type || day.stop_type || 'landfall';
+    if (type !== 'landfall') return false;
+    const hasStart = Boolean(day.start_location_name && String(day.start_location_name).trim());
+    const hasEnd = Boolean(day.end_location_name && String(day.end_location_name).trim());
+    return hasStart && !hasEnd;
+}
+
+export function getDayStartName(day) {
+    if (!day) return '';
+    const raw = day.start_location_name !== undefined ? day.start_location_name : (day.location_name || day.name || '');
+    return displayLocationName(raw || '');
+}
+
+export function getDayEndName(day) {
+    if (!day) return '';
+    if (isDayStartOnly(day)) return '';
+    const raw = day.end_location_name !== undefined ? day.end_location_name : (day.location_name || day.name || '');
+    return displayLocationName(raw || '');
+}
+
+export function isSameStartAndEnd(day, thresholdNM = 0.25) {
+    if (!day) return false;
+    if (isDayStartOnly(day)) return false;
+    const type = day.day_type || day.stop_type;
+    if (type === 'day_trip' || type === 'lay_day') return true;
+    const start = getDayStartCoords(day);
+    const end = getDayEndCoords(day);
+    if (!start || !end) return false;
+    const dist = nmBetween(start, end);
+    return dist != null && dist <= thresholdNM;
+}
+
 /**
  * Formats a voyage's start/end dates for display, collapsing to a single
  * date when the voyage is a day trip instead of showing a "Jul 16 – Jul 16"
@@ -95,7 +147,10 @@ export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext 
     }
     if (!parsed || typeof parsed !== 'object') return '';
 
-    // 1. Explicit stop_title or leg_title on debrief object
+    // 1. Explicit day_title, stop_title, or leg_title on debrief object
+    if (parsed.day_title && typeof parsed.day_title === 'string' && parsed.day_title.trim()) {
+        return parsed.day_title.trim();
+    }
     if (parsed.stop_title && typeof parsed.stop_title === 'string' && parsed.stop_title.trim()) {
         return parsed.stop_title.trim();
     }
@@ -119,24 +174,27 @@ export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext 
 
     let stopIdx = -1;
 
-    // 2. Match by start_stop_id or voyage_stop_id
-    const targetStopId = parsed.start_stop_id != null ? parsed.start_stop_id : parsed.voyage_stop_id;
+    // 2. Match by start_day_id / voyage_day_id (or legacy start_stop_id / voyage_stop_id)
+    const targetStopId = parsed.start_day_id ?? parsed.voyage_day_id ?? parsed.start_stop_id ?? parsed.voyage_stop_id;
     if (targetStopId != null) {
         stopIdx = sorted.findIndex(s => String(s.id) === String(targetStopId));
-        if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+        const matched = sorted[stopIdx];
+        if (matched && !matched.start_location_name && stopIdx === sorted.length - 1 && sorted.length >= 2) {
             stopIdx = sorted.length - 2;
         }
     }
 
-    // 3. Match by track's voyage_stop_id
+    // 3. Match by track's voyage_day_id (or legacy voyage_stop_id)
     if (stopIdx === -1 && parsed.track_id) {
         const tracksList = Array.isArray(tracksContext) && tracksContext.length > 0
             ? tracksContext
             : (typeof currentTracks !== 'undefined' && Array.isArray(currentTracks) ? currentTracks : []);
         const tr = tracksList.find(t => t.id === parsed.track_id);
-        if (tr && tr.voyage_stop_id != null) {
-            stopIdx = sorted.findIndex(s => String(s.id) === String(tr.voyage_stop_id));
-            if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+        const trackDayId = tr ? (tr.voyage_day_id ?? tr.voyage_stop_id) : null;
+        if (trackDayId != null) {
+            stopIdx = sorted.findIndex(s => String(s.id) === String(trackDayId));
+            const matched = sorted[stopIdx];
+            if (matched && !matched.start_location_name && stopIdx === sorted.length - 1 && sorted.length >= 2) {
                 stopIdx = sorted.length - 2;
             }
         }
@@ -150,7 +208,8 @@ export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext 
             const legNum = parseInt(legMatch[1], 10);
             if (legNum >= 1 && legNum <= sorted.length) {
                 stopIdx = legNum - 1;
-                if (stopIdx === sorted.length - 1 && sorted.length >= 2) {
+                const matched = sorted[stopIdx];
+                if (matched && !matched.start_location_name && stopIdx === sorted.length - 1 && sorted.length >= 2) {
                     stopIdx = sorted.length - 2;
                 }
             }
@@ -160,9 +219,10 @@ export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext 
     // 5. Match by stop location names mentioned in track names
     if (stopIdx === -1) {
         const names = `${parsed.planned_track_name || ''} ${parsed.track_name || ''}`.toLowerCase();
-        for (let i = 0; i < sorted.length - 1; i++) {
-            const loc = displayLocationName(sorted[i].location_name || sorted[i].name || '').toLowerCase();
-            if (loc && names.includes(loc)) {
+        for (let i = 0; i < sorted.length; i++) {
+            const startLoc = getDayStartName(sorted[i]).toLowerCase();
+            const endLoc = getDayEndName(sorted[i]).toLowerCase();
+            if ((startLoc && names.includes(startLoc)) || (endLoc && names.includes(endLoc))) {
                 stopIdx = i;
                 break;
             }
@@ -175,11 +235,19 @@ export function getDebriefStopTitle(debrief, stopsContext = null, tracksContext 
     }
 
     if (stopIdx >= 0 && stopIdx < sorted.length) {
-        const startStop = sorted[stopIdx];
-        const startName = displayLocationName(startStop.location_name || startStop.name || '');
+        const day = sorted[stopIdx];
+        if (day.start_location_name || day.end_location_name) {
+            const sName = getDayStartName(day);
+            const eName = getDayEndName(day);
+            if (sName && eName && sName !== eName && !isSameStartAndEnd(day)) {
+                return `${sName} to ${eName}`;
+            }
+            return eName || sName;
+        }
+        const startName = getDayEndName(day);
         if (stopIdx < sorted.length - 1) {
             const nextStop = sorted[stopIdx + 1];
-            const nextName = displayLocationName(nextStop.location_name || nextStop.name || '');
+            const nextName = getDayEndName(nextStop);
             if (startName && nextName) {
                 return `${startName} to ${nextName}`;
             }
@@ -739,15 +807,19 @@ export function groupColocatedStops(sortedStops, accents = ['coral', 'teal', 'vi
 
     let landfallIndex = 0;
     for (const stop of sortedStops) {
-        if (!stop || !stop.latitude || !stop.longitude) continue;
-        if (stop.stop_type === 'passage_point') continue;
+        if (!stop) continue;
+        const dayType = stop.day_type || stop.stop_type;
+        if (dayType === 'passage_point') continue;
 
         const stopNumber = ++landfallIndex;
+        if (isDayStartOnly(stop)) continue;
+        const endCoords = getDayEndCoords(stop);
+        if (!endCoords) continue;
         const accent = accents[(stopNumber - 1) % accents.length] || 'coral';
 
         let matchedGroup = null;
         for (const g of groups) {
-            const dNM = nmBetween(g.position, stop);
+            const dNM = nmBetween(g.position, endCoords);
             if (dNM != null && dNM <= thresholdNM) {
                 matchedGroup = g;
                 break;
@@ -760,7 +832,7 @@ export function groupColocatedStops(sortedStops, accents = ['coral', 'teal', 'vi
                 stopPositionMap.set(stop.id, matchedGroup.position);
             }
         } else {
-            const position = { lat: stop.latitude, lng: stop.longitude };
+            const position = { lat: endCoords.lat, lng: endCoords.lng };
             const newGroup = {
                 position,
                 primaryStop: stop,
@@ -776,19 +848,6 @@ export function groupColocatedStops(sortedStops, accents = ['coral', 'teal', 'vi
     return { groups, stopPositionMap };
 }
 
-/**
- * findNearbyJoinTargetStop — checks whether a map click at (`clickedLat`, `clickedLng`)
- * for `selectedDate` is within `thresholdNM` of an existing landfall stop on a
- * different date (prioritizing Stop 1, the start stop), so the UI can ask the user
- * if they want to join the start and stop at the exact same coordinates.
- *
- * @param {Array<Object>} stops
- * @param {number} clickedLat
- * @param {number} clickedLng
- * @param {string} selectedDate - "YYYY-MM-DD"
- * @param {number} [thresholdNM=2.0]
- * @returns {{ targetStop: Object, stopNumber: number, isStartStop: boolean, distanceNM: number } | null}
- */
 export function findNearbyJoinTargetStop(stops, clickedLat, clickedLng, selectedDate, thresholdNM = 2.0) {
     if (!Array.isArray(stops) || stops.length === 0 || typeof clickedLat !== 'number' || typeof clickedLng !== 'number') {
         return null;
@@ -798,15 +857,28 @@ export function findNearbyJoinTargetStop(stops, clickedLat, clickedLng, selected
     let landfallIndex = 0;
 
     for (const s of sorted) {
-        if (!s || !s.latitude || !s.longitude || s.stop_type === 'passage_point') continue;
+        if (!s) continue;
+        const dayType = s.day_type || s.stop_type;
+        if (dayType === 'passage_point') continue;
+        const endCoords = getDayEndCoords(s);
+        if (!endCoords) continue;
         const stopNumber = ++landfallIndex;
         const stopDate = String(s.target_date || '').split('T')[0];
         if (selectedDate && stopDate === selectedDate) continue;
 
-        const dNM = nmBetween(s, { lat: clickedLat, lng: clickedLng });
+        const startCoords = stopNumber === 1 ? getDayStartCoords(s) : null;
+        const dEndNM = nmBetween(endCoords, { lat: clickedLat, lng: clickedLng });
+        const dStartNM = startCoords ? nmBetween(startCoords, { lat: clickedLat, lng: clickedLng }) : null;
+        const useStartPoint = dStartNM != null && dStartNM <= thresholdNM && (dEndNM == null || dStartNM <= dEndNM);
+        const dNM = useStartPoint ? dStartNM : dEndNM;
+
         if (dNM != null && dNM <= thresholdNM) {
             candidates.push({
                 targetStop: s,
+                targetLat: useStartPoint ? startCoords.lat : endCoords.lat,
+                targetLng: useStartPoint ? startCoords.lng : endCoords.lng,
+                targetLocationName: useStartPoint ? (s.start_location_name || s.end_location_name || s.location_name) : (s.end_location_name || s.location_name),
+                targetPreciseLocation: useStartPoint ? (s.start_precise_location || s.end_precise_location || s.precise_location) : (s.end_precise_location || s.precise_location),
                 stopNumber,
                 isStartStop: stopNumber === 1,
                 distanceNM: dNM,
@@ -815,7 +887,6 @@ export function findNearbyJoinTargetStop(stops, clickedLat, clickedLng, selected
     }
 
     if (candidates.length === 0) return null;
-    // Prefer joining with Stop 1 (Start) when within threshold, otherwise closest stop
     const startMatch = candidates.find(c => c.isStartStop);
     if (startMatch) return startMatch;
     candidates.sort((a, b) => a.distanceNM - b.distanceNM);

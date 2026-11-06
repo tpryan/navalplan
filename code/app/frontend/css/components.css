@@ -1816,7 +1816,16 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
+}
+
+.np-stop-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 22px;
 }
 
 .np-stop-card__date {
@@ -1827,7 +1836,7 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
     text-transform: uppercase;
     color: var(--accent, var(--sky));
     line-height: 1;
-    margin: 1px 0;
+    margin: 0;
 }
 
 .np-stop-card__loc {
@@ -1837,6 +1846,7 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    width: 100%;
 }
 
 .np-stop-card__loc--empty {
@@ -1870,8 +1880,53 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
 
 .np-stop-card__actions {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 2px;
     flex-shrink: 0;
+    margin-left: auto;
+}
+
+.np-stop-card__actions .btn-icon {
+    min-height: 24px;
+    min-width: 24px;
+    width: 24px;
+    height: 24px;
+    padding: 2px;
+}
+
+.np-stop-card__actions .btn-icon .material-symbols-outlined {
+    font-size: 17px;
+}
+
+.np-stop-card__endpoints {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    margin-top: 2px;
+}
+
+.np-stop-card__endpoint-btn {
+    min-height: 26px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: left;
+}
+
+.np-stop-card__endpoint-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .np-stop-card__chips {

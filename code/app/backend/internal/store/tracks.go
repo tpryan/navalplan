@@ -7,7 +7,7 @@ import (
 )
 
 const trackColumns = `
-	id, voyage_id, voyage_stop_id, kind, name, file_name,
+	id, voyage_id, voyage_day_id, kind, name, file_name,
 	start_time, end_time, distance_nm,
 	CAST(duration_interval AS text) AS duration_interval,
 	max_speed_kts, avg_speed_kts,
@@ -19,25 +19,23 @@ const trackColumns = `
 func (db *DB) CreateVoyageTrack(ctx context.Context, t *model.VoyageTrack) error {
 	query := `
 		INSERT INTO voyage_track (
-			voyage_id, voyage_stop_id, kind, name, file_name,
+			voyage_id, voyage_day_id, kind, name, file_name,
 			start_time, end_time, distance_nm, duration_interval,
 			max_speed_kts, avg_speed_kts, geojson, simplified_geojson,
 			raw_gpx, debrief, created_at, updated_at
 		) VALUES (
-			:voyage_id, :voyage_stop_id, :kind, :name, :file_name,
+			:voyage_id, :voyage_day_id, :kind, :name, :file_name,
 			:start_time, :end_time, :distance_nm,
 			CAST(NULLIF(:duration_interval, '') AS interval),
 			:max_speed_kts, :avg_speed_kts, :geojson, :simplified_geojson,
 			:raw_gpx, :debrief, NOW(), NOW()
 		)
 		RETURNING id, created_at, updated_at`
-
 	rows, err := db.NamedQueryContext(ctx, query, t)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-
 	if rows.Next() {
 		return rows.Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	}
@@ -64,11 +62,11 @@ func (db *DB) ListVoyageTracks(ctx context.Context, voyageID int64) ([]model.Voy
 	return tracks, nil
 }
 
-// ListStopTracks retrieves all tracks associated with a specific stop.
-func (db *DB) ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error) {
+// ListDayTracks retrieves all tracks associated with a specific voyage day.
+func (db *DB) ListDayTracks(ctx context.Context, dayID int64) ([]model.VoyageTrack, error) {
 	var tracks []model.VoyageTrack
-	query := `SELECT ` + trackColumns + ` FROM voyage_track WHERE voyage_stop_id = $1 ORDER BY created_at ASC`
-	if err := db.SelectContext(ctx, &tracks, query, stopID); err != nil {
+	query := `SELECT ` + trackColumns + ` FROM voyage_track WHERE voyage_day_id = $1 ORDER BY created_at ASC`
+	if err := db.SelectContext(ctx, &tracks, query, dayID); err != nil {
 		return nil, err
 	}
 	return tracks, nil

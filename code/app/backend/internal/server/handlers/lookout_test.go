@@ -68,80 +68,73 @@ func TestBuildLookoutPrompt(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		stop           *model.Stop
-		next           *model.Stop
+		day            *model.VoyageDay
 		distNM         float64
 		course         float64
 		hasCourse      bool
-		stopPos        int
-		totalStops     int
+		dayPos         int
+		totalDays      int
 		routeWaypoints []string
 		wantSubstr     string
 	}{
 		{
-			name: "Includes Course and Next Stop",
-			stop: &model.Stop{
-				LocationName: "Test Port",
-			},
-			next: &model.Stop{
-				LocationName: "Destination Port",
-				Latitude:     41.6000,
-				Longitude:    -70.5000,
+			name: "Includes Course and Destination",
+			day: &model.VoyageDay{
+				StartLocationName: "Test Port",
+				EndLocationName:   "Destination Port",
+				EndLatitude:       41.6000,
+				EndLongitude:      -70.5000,
 			},
 			distNM:     10.0,
 			course:     45.0,
 			hasCourse:  true,
-			stopPos:    1,
-			totalStops: 2,
+			dayPos:     1,
+			totalDays:  2,
 			wantSubstr: "10.0 nautical miles at a course of 45° to Destination Port",
 		},
 		{
-			name: "No Course Last Stop",
-			stop: &model.Stop{
-				LocationName: "Test Port",
+			name: "No Course Stationary Day",
+			day: &model.VoyageDay{
+				StartLocationName: "Test Port",
+				EndLocationName:   "Test Port",
 			},
-			next:       nil,
 			distNM:     0,
 			course:     0,
 			hasCourse:  false,
-			stopPos:    2,
-			totalStops: 2,
-			wantSubstr: "none — this is the last stop",
+			dayPos:     2,
+			totalDays:  2,
+			wantSubstr: "none — stationary day",
 		},
 		{
 			name: "Includes Coordinates",
-			stop: &model.Stop{
-				LocationName: "Test Port",
-				Latitude:     41.5000,
-				Longitude:    -70.6000,
-			},
-			next: &model.Stop{
-				LocationName: "Next Bay",
+			day: &model.VoyageDay{
+				StartLocationName: "Test Port",
+				StartLatitude:     41.5000,
+				StartLongitude:    -70.6000,
+				EndLocationName:   "Next Bay",
 			},
 			distNM:     5.0,
 			course:     90.0,
 			hasCourse:  true,
-			stopPos:    1,
-			totalStops: 2,
-			wantSubstr: "Location: Test Port (41.5000, -70.6000)",
+			dayPos:     1,
+			totalDays:  2,
+			wantSubstr: "Departure Location: Test Port (41.5000, -70.6000)",
 		},
 		{
 			name: "Includes Planned Route",
-			stop: &model.Stop{
-				LocationName: "Cowes",
-				Latitude:     50.7620,
-				Longitude:    -1.2980,
-			},
-			next: &model.Stop{
-				LocationName: "Yarmouth",
-				Latitude:     50.7050,
-				Longitude:    -1.5000,
+			day: &model.VoyageDay{
+				StartLocationName: "Cowes",
+				StartLatitude:     50.7620,
+				StartLongitude:    -1.2980,
+				EndLocationName:   "Yarmouth",
+				EndLatitude:       50.7050,
+				EndLongitude:      -1.5000,
 			},
 			distNM:         10.5,
 			course:         245.0,
 			hasCourse:      true,
-			stopPos:        1,
-			totalStops:     2,
+			dayPos:         1,
+			totalDays:      2,
 			routeWaypoints: []string{"Intended Planned Route: \"Solent Western Passage\" (Total Distance: 10.5 NM)"},
 			wantSubstr:     "Solent Western Passage",
 		},
@@ -149,7 +142,7 @@ func TestBuildLookoutPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := buildLookoutPrompt(tt.stop, tt.next, briefing, tt.distNM, tt.course, tt.hasCourse, tt.stopPos, tt.totalStops, tt.routeWaypoints...)
+			prompt := buildLookoutPrompt(tt.day, briefing, tt.distNM, tt.course, tt.hasCourse, tt.dayPos, tt.totalDays, tt.routeWaypoints...)
 			if !contains(prompt, tt.wantSubstr) {
 				t.Errorf("Prompt did not contain expected substring %q. Got:\n%s", tt.wantSubstr, prompt)
 			}
@@ -310,63 +303,45 @@ func TestFormatPlannedRouteForLookout(t *testing.T) {
 type testPlannedTrackStore struct {
 	DBStore
 	voyageTracks []model.VoyageTrack
-	stopTracks   map[int64][]model.VoyageTrack
+	dayTracks    map[int64][]model.VoyageTrack
 }
 
 func (s *testPlannedTrackStore) ListVoyageTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
 	return s.voyageTracks, nil
 }
 
-func (s *testPlannedTrackStore) ListStopTracks(_ context.Context, stopID int64) ([]model.VoyageTrack, error) {
-	if s.stopTracks != nil {
-		return s.stopTracks[stopID], nil
+func (s *testPlannedTrackStore) ListDayTracks(_ context.Context, dayID int64) ([]model.VoyageTrack, error) {
+	if s.dayTracks != nil {
+		return s.dayTracks[dayID], nil
 	}
 	return nil, nil
 }
 
-func TestFindPlannedTrackForLeg(t *testing.T) {
-	stopID1 := int64(10)
-	stopID2 := int64(20)
+func TestFindPlannedTrackForDay(t *testing.T) {
+	dayID1 := int64(10)
 	dist1 := 15.0
 
 	tests := []struct {
 		name         string
 		voyageTracks []model.VoyageTrack
-		stopTracks   map[int64][]model.VoyageTrack
-		stop         *model.Stop
-		next         *model.Stop
-		stopPos      int
+		dayTracks    map[int64][]model.VoyageTrack
+		day          *model.VoyageDay
+		dayPos       int
 		wantName     string
 	}{
 		{
-			name: "Direct match on departure stop ID",
+			name: "Direct match on day ID",
 			voyageTracks: []model.VoyageTrack{
 				{
-					Name:         "Leg 1 Track",
-					Kind:         string(model.TrackKindPlanned),
-					VoyageStopID: &stopID1,
-					DistanceNM:   &dist1,
+					Name:        "Leg 1 Track",
+					Kind:        string(model.TrackKindPlanned),
+					VoyageDayID: &dayID1,
+					DistanceNM:  &dist1,
 				},
 			},
-			stop:     &model.Stop{ID: 10, VoyageID: 1},
-			next:     &model.Stop{ID: 20, VoyageID: 1},
-			stopPos:  1,
+			day:      &model.VoyageDay{ID: 10, VoyageID: 1},
+			dayPos:   1,
 			wantName: "Leg 1 Track",
-		},
-		{
-			name: "Match on destination stop ID",
-			voyageTracks: []model.VoyageTrack{
-				{
-					Name:         "Leg 2 Track",
-					Kind:         string(model.TrackKindPlanned),
-					VoyageStopID: &stopID2,
-					DistanceNM:   &dist1,
-				},
-			},
-			stop:     &model.Stop{ID: 10, VoyageID: 1},
-			next:     &model.Stop{ID: 20, VoyageID: 1},
-			stopPos:  1,
-			wantName: "Leg 2 Track",
 		},
 		{
 			name: "Match on Leg number in track name",
@@ -377,9 +352,8 @@ func TestFindPlannedTrackForLeg(t *testing.T) {
 					DistanceNM: &dist1,
 				},
 			},
-			stop:     &model.Stop{ID: 15, VoyageID: 1},
-			next:     &model.Stop{ID: 25, VoyageID: 1},
-			stopPos:  2,
+			day:      &model.VoyageDay{ID: 15, VoyageID: 1},
+			dayPos:   2,
 			wantName: "Passage Leg 2",
 		},
 		{
@@ -391,9 +365,8 @@ func TestFindPlannedTrackForLeg(t *testing.T) {
 					DistanceNM: &dist1,
 				},
 			},
-			stop:     &model.Stop{ID: 10, VoyageID: 1},
-			next:     &model.Stop{ID: 20, VoyageID: 1},
-			stopPos:  1,
+			day:      &model.VoyageDay{ID: 10, VoyageID: 1},
+			dayPos:   1,
 			wantName: "Sole Passage",
 		},
 	}
@@ -402,15 +375,15 @@ func TestFindPlannedTrackForLeg(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStore := &testPlannedTrackStore{
 				voyageTracks: tt.voyageTracks,
-				stopTracks:   tt.stopTracks,
+				dayTracks:    tt.dayTracks,
 			}
 			h := &Handler{DB: mockStore}
-			matched := h.findPlannedTrackForLeg(context.Background(), tt.stop, tt.next, tt.stopPos)
+			matched := h.findPlannedTrackForDay(context.Background(), tt.day, tt.dayPos)
 			if matched == nil {
-				t.Fatalf("findPlannedTrackForLeg returned nil, want track %q", tt.wantName)
+				t.Fatalf("findPlannedTrackForDay returned nil, want track %q", tt.wantName)
 			}
 			if matched.Name != tt.wantName {
-				t.Errorf("findPlannedTrackForLeg() = %q, want %q", matched.Name, tt.wantName)
+				t.Errorf("findPlannedTrackForDay() = %q, want %q", matched.Name, tt.wantName)
 			}
 		})
 	}

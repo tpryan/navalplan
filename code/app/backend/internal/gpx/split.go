@@ -7,83 +7,91 @@ import (
 	"app/internal/model"
 )
 
-// LegResult represents a track segment associated with a specific voyage stop.
+// LegResult represents a track segment associated with a specific voyage day.
 type LegResult struct {
-	StopID *int64
-	Track  ParsedTrack
+	DayID *int64
+	Track ParsedTrack
 }
 
-// SplitTrackByStops splits a master track into discrete legs based on stop locations or stationary periods.
-func SplitTrackByStops(master ParsedTrack, stops []model.Stop) []LegResult {
-	if len(stops) < 2 || len(master.Points) < 4 {
+// SplitTrackByDays splits a master track into discrete legs based on voyage day start/end locations or stationary periods.
+func SplitTrackByDays(master ParsedTrack, days []model.VoyageDay) []LegResult {
+	if len(days) == 0 || len(master.Points) < 4 {
 		return []LegResult{{Track: master}}
 	}
 
-	// Find the closest point index in the track for each stop
-	type stopMatch struct {
-		stopIndex  int
-		pointIndex int
+	type dayMatch struct {
+		dayIndex int
+		startIdx int
+		endIdx   int
 	}
 
-	var matches []stopMatch
+	var matches []dayMatch
 	lastPointIdx := 0
 
-	for sIdx, stop := range stops {
-		if stop.Latitude == 0 && stop.Longitude == 0 {
+	for dIdx, day := range days {
+		if (day.StartLatitude == 0 && day.StartLongitude == 0) || (day.EndLatitude == 0 && day.EndLongitude == 0) {
 			continue
 		}
-		bestIdx := -1
-		minDist := 1e9
-
-		// Search forward from lastPointIdx to preserve chronological progression
+		startBest := -1
+		startMinDist := 1e9
 		for pIdx := lastPointIdx; pIdx < len(master.Points); pIdx++ {
-			d := CalculateHaversineNM(stop.Latitude, stop.Longitude, master.Points[pIdx].Lat, master.Points[pIdx].Lng)
-			if d < minDist {
-				minDist = d
-				bestIdx = pIdx
+			d := CalculateHaversineNM(day.StartLatitude, day.StartLongitude, master.Points[pIdx].Lat, master.Points[pIdx].Lng)
+			if d < startMinDist {
+				startMinDist = d
+				startBest = pIdx
 			}
 		}
+		if startBest == -1 || startMinDist > 5.0 {
+			continue
+		}
 
-		// Consider a match if within 5.0 NM of the stop or closest approach
-		if bestIdx != -1 && minDist <= 5.0 {
-			matches = append(matches, stopMatch{
-				stopIndex:  sIdx,
-				pointIndex: bestIdx,
+		endBest := -1
+		endMinDist := 1e9
+		for pIdx := startBest + 1; pIdx < len(master.Points); pIdx++ {
+			d := CalculateHaversineNM(day.EndLatitude, day.EndLongitude, master.Points[pIdx].Lat, master.Points[pIdx].Lng)
+			if d < endMinDist {
+				endMinDist = d
+				endBest = pIdx
+			}
+		}
+		if endBest != -1 && endMinDist <= 5.0 && endBest > startBest {
+			matches = append(matches, dayMatch{
+				dayIndex: dIdx,
+				startIdx: startBest,
+				endIdx:   endBest,
 			})
-			lastPointIdx = bestIdx
+			lastPointIdx = endBest
 		}
 	}
 
-	// If we couldn't match at least 2 distinct stop locations with forward progress, check for stationary periods
-	if len(matches) < 2 {
+	if len(matches) == 0 {
 		return splitByStationaryPeriods(master)
 	}
 
 	var legs []LegResult
-	for i := 0; i < len(matches)-1; i++ {
-		startPt := matches[i].pointIndex
-		endPt := matches[i+1].pointIndex
-		if endPt <= startPt {
-			continue
+	for i, m := range matches {
+		legPoints := master.Points[m.startIdx : m.endIdx+1]
+		day := days[m.dayIndex]
+		fromName := day.StartLocationName
+		toName := day.EndLocationName
+		if fromName == "" {
+			fromName = "Start"
 		}
-
-		legPoints := master.Points[startPt : endPt+1]
-		fromName := stops[matches[i].stopIndex].LocationName
-		toName := stops[matches[i+1].stopIndex].LocationName
-		startStopID := stops[matches[i].stopIndex].ID
-
+		if toName == "" {
+			toName = "End"
+		}
+		dayID := day.ID
 		legName := fmt.Sprintf("%s - Leg %d: %s to %s", master.Name, i+1, fromName, toName)
 		legTrack := buildParsedTrack(legName, master.Kind, legPoints)
 		legs = append(legs, LegResult{
-			StopID: &startStopID,
-			Track:  legTrack,
+			DayID: &dayID,
+			Track: legTrack,
 		})
 	}
 
 	if len(legs) == 0 {
 		return []LegResult{{Track: master}}
 	}
-
 	return legs
 }
 
@@ -97,7 +105,6 @@ func splitByStationaryPeriods(master ParsedTrack) []LegResult {
 		if t1 != nil && t2 != nil {
 			gap := t2.Sub(*t1)
 			dist := CalculateHaversineNM(master.Points[i-1].Lat, master.Points[i-1].Lng, master.Points[i].Lat, master.Points[i].Lng)
-			// Stationary break: time gap > 2 hours and negligible movement (< 0.5 NM), or gap > 6 hours (e.g., GPS powered down overnight)
 			if (gap >= minStopGap && dist < 0.5) || gap >= 6*time.Hour {
 				splitIndices = append(splitIndices, i)
 			}
@@ -131,6 +138,5 @@ func splitByStationaryPeriods(master ParsedTrack) []LegResult {
 	if len(legs) == 0 {
 		return []LegResult{{Track: master}}
 	}
-
 	return legs
 }

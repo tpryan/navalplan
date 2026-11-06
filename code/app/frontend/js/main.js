@@ -10,7 +10,7 @@ import { ScoreRing } from './ui/ScoreRing.js';
 import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM, groupColocatedStops, findNearbyJoinTargetStop } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM, groupColocatedStops, findNearbyJoinTargetStop, getDayStartCoords, getDayEndCoords, getDayStartName, getDayEndName, isSameStartAndEnd, isDayStartOnly } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -37,9 +37,11 @@ let voyages = [];
 let currentVoyage = null;
 let currentStops = [];
 let selectedDate = null;
+let selectedDayEndpoint = 'start'; // 'start' | 'end'
 // 'multiday' | 'daytrip' — which mode the New/Edit Voyage modal is currently in.
 let voyageModalMode = 'multiday';
 let map = null;
+let mapInitPromise = null;
 let currentMapTypeId = 'roadmap';
 let voyagePreviewCircle = null;
 let voyagePreviewMarker = null;
@@ -127,7 +129,7 @@ async function startStopSweepSequence(stops) {
     // Launch one continuous sweep per stop simultaneously
     const Cls = await getRadarSweepClass();
     for (const stop of stopSweepQueue) {
-        const inst = new Cls(map, { lat: stop.latitude, lng: stop.longitude }, STOP_SWEEP_RADIUS_M);
+        const endPos = getDayEndCoords(stop); if (!endPos) continue; const inst = new Cls(map, endPos, STOP_SWEEP_RADIUS_M);
         stopSweepInstances.set(stop.id, inst);
     }
 
@@ -315,7 +317,7 @@ function initApp() {
   }
 
   checkSession();
-  initMap();
+  mapInitPromise = initMap();
   initUI();
   initAdminUI();
   initOnboarding();
@@ -1357,19 +1359,55 @@ function initVoyageModalListeners() {
         if (locationDirty || (!inputLat.value && locInput && locInput.value.trim())) {
             await geocodeLocationInput();
         }
+        if (!inputLat.value || !inputLng.value) {
+            const fallbackCenter = voyagePreviewCircle?.getCenter() || (map ? map.getCenter() : null);
+            const cLat = fallbackCenter ? (typeof fallbackCenter.lat === 'function' ? fallbackCenter.lat() : fallbackCenter.lat) : null;
+            const cLng = fallbackCenter ? (typeof fallbackCenter.lng === 'function' ? fallbackCenter.lng() : fallbackCenter.lng) : null;
+            const isDefaultSahara = Number.isFinite(cLat) && Number.isFinite(cLng) && Math.abs(cLat - 20) < 1e-4 && Math.abs(cLng - 0) < 1e-4;
+            const titleVal = document.getElementById('voyage-title')?.value?.trim();
+
+            if (isDefaultSahara && titleVal && (!locInput || !locInput.value.trim())) {
+                try {
+                    const { Geocoder } = await importLibrary('geocoding');
+                    const geocoder = new Geocoder();
+                    const res = await geocoder.geocode({ address: titleVal });
+                    if (res.results && res.results.length > 0) {
+                        const loc = res.results[0].geometry.location;
+                        inputLat.value = loc.lat();
+                        inputLng.value = loc.lng();
+                        if (locInput) locInput.value = titleVal;
+                    }
+                } catch (_) {}
+            }
+
+            if ((!inputLat.value || !inputLng.value) && Number.isFinite(cLat) && Number.isFinite(cLng)) {
+                inputLat.value = cLat;
+                inputLng.value = cLng;
+                if (locInput && !locInput.value.trim()) {
+                    try {
+                        const { locationName, preciseLocation } = await reverseGeocode({ lat: cLat, lng: cLng });
+                        if (locationName) locInput.value = locationName;
+                        const preciseInput = document.getElementById('voyage-precise-location');
+                        if (preciseInput && preciseLocation) preciseInput.value = preciseLocation;
+                    } catch (_) {}
+                }
+            }
+        }
         const formData = new FormData(formNewVoyage);
         const start = formData.get('start_date');
         // In Day Trip mode the End Date field is hidden — always force it to
         // match the trip date, regardless of what's left in the input.
         const end = voyageModalMode === 'daytrip' ? start : formData.get('end_date');
+        const parsedLat = parseFloat(formData.get('latitude'));
+        const parsedLng = parseFloat(formData.get('longitude'));
         const voyageData = {
             title: formData.get('title'),
             start_date: start ? start + 'T00:00:00Z' : null,
             end_date: end ? end + 'T00:00:00Z' : null,
             location_name: formData.get('location_name'),
             precise_location: formData.get('precise_location'),
-            latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
-            longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null,
+            latitude: Number.isFinite(parsedLat) ? parsedLat : null,
+            longitude: Number.isFinite(parsedLng) ? parsedLng : null,
             search_radius: parseInt(formData.get('search_radius')) || 20,
             search_radius_unit: 'nm'
         };
@@ -2152,7 +2190,7 @@ async function renderVoyageOverviewMarkers(retryCount = 0) {
       let coords = getVoyageCoordinates(voyage);
       if (!coords && voyage.id && !Array.isArray(voyage.stops)) {
         try {
-          const stops = await API.getStops(voyage.id);
+          const stops = await API.getDays(voyage.id);
           if (Array.isArray(stops) && stops.length > 0) {
             voyage.stops = stops;
             coords = getVoyageCoordinates(voyage);
@@ -2494,19 +2532,110 @@ async function selectVoyage(voyage, doPushState = true) {
 
 // ─── Stop & Itinerary Management ──────────────────────────────────────────────
 
+function resolveDefaultDayStart(dateStr, fallbackEnd = null) {
+    const sorted = [...currentStops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+    const priorDays = sorted.filter(d => String(d.target_date || "").split("T")[0] < dateStr);
+
+    if (priorDays.length > 0) {
+        const prevDay = priorDays[priorDays.length - 1];
+        const prevEnd = !isDayStartOnly(prevDay) ? getDayEndCoords(prevDay) : getDayStartCoords(prevDay);
+        const prevName = !isDayStartOnly(prevDay)
+            ? (prevDay.end_location_name || prevDay.location_name || "")
+            : (prevDay.start_location_name || "");
+        const prevPrecise = !isDayStartOnly(prevDay)
+            ? (prevDay.end_precise_location || prevDay.precise_location || "")
+            : (prevDay.start_precise_location || "");
+        if (prevEnd && prevName) {
+            return {
+                start_location_name: prevName,
+                start_precise_location: prevPrecise,
+                start_latitude: prevEnd.lat,
+                start_longitude: prevEnd.lng,
+            };
+        }
+    }
+
+    if (fallbackEnd) {
+        return {
+            start_location_name: fallbackEnd.location_name || "",
+            start_precise_location: fallbackEnd.precise_location || "",
+            start_latitude: fallbackEnd.latitude,
+            start_longitude: fallbackEnd.longitude,
+        };
+    }
+
+    return null;
+}
+
+function getDefaultEndpointForDate(dateStr) {
+    if (!dateStr) return 'start';
+    const stop = currentStops.find(s => s.target_date && s.target_date.startsWith(dateStr));
+    if (stop) {
+        return 'end';
+    }
+    const chainedStart = resolveDefaultDayStart(dateStr);
+    return chainedStart ? 'end' : 'start';
+}
+
+function resolveActiveTargetDateAndEndpoint() {
+    if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
+        return { targetDate: null, dayNum: 1, endpoint: 'start' };
+    }
+    const start = new Date(currentVoyage.start_date);
+    const end = new Date(currentVoyage.end_date);
+    const dates = [];
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        dates.push(d.toISOString().split('T')[0]);
+    }
+    if (selectedDate && dates.includes(selectedDate)) {
+        return {
+            targetDate: selectedDate,
+            dayNum: dates.indexOf(selectedDate) + 1,
+            endpoint: selectedDayEndpoint || getDefaultEndpointForDate(selectedDate)
+        };
+    }
+    for (let i = 0; i < dates.length; i++) {
+        const dateStr = dates[i];
+        const stop = currentStops.find(s => s.target_date && s.target_date.startsWith(dateStr));
+        if (!stop) {
+            return {
+                targetDate: dateStr,
+                dayNum: i + 1,
+                endpoint: getDefaultEndpointForDate(dateStr)
+            };
+        }
+        if (isDayStartOnly(stop)) {
+            return {
+                targetDate: dateStr,
+                dayNum: i + 1,
+                endpoint: 'end'
+            };
+        }
+    }
+    const fallbackDate = dates[dates.length - 1] || null;
+    return {
+        targetDate: fallbackDate,
+        dayNum: dates.length || 1,
+        endpoint: 'end'
+    };
+}
+
 async function loadStops() {
     const list = document.getElementById('itinerary-list');
     list.innerHTML = '<div class="loading-state"><p>Loading stops...</p></div>';
 
     try {
         if (currentVoyage.start_date && currentVoyage.end_date) {
-            currentStops = await API.getStops(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
+            currentStops = await API.getDays(currentVoyage.id, currentStopPage, STOP_PAGE_LIMIT);
         } else {
             currentStops = [];
         }
         
         renderItinerary();
-        renderMapStops();
+        if (!map && mapInitPromise) {
+            try { await mapInitPromise; } catch (_) {}
+        }
+        await renderMapStops();
 
         if (currentVoyage && currentVoyage.id) {
             await loadAndRenderTracks(currentVoyage.id);
@@ -2528,7 +2657,7 @@ async function loadStops() {
         try {
             const res = await API.getRecommendations(currentVoyage.id);
             voyageRecommendations = ensureRecommendationsArray(res);
-            renderRecommendations();
+            await renderRecommendations();
             
             // Re-render itinerary now that we have recommendations (to hide the prompt in Discovery Mode)
             renderItinerary();
@@ -2558,10 +2687,15 @@ async function loadStops() {
             const bounds = new LatLngBounds();
 
             if (currentStops.length > 0) {
-                currentStops.forEach(stop => bounds.extend({ lat: stop.latitude, lng: stop.longitude }));
+                currentStops.forEach(day => {
+                    const sPos = getDayStartCoords(day);
+                    const ePos = getDayEndCoords(day);
+                    if (sPos) bounds.extend(sPos);
+                    if (ePos) bounds.extend(ePos);
+                });
             }
             
-            if (currentVoyage.latitude != null && currentVoyage.longitude != null) {
+            if (Number.isFinite(currentVoyage.latitude) && Number.isFinite(currentVoyage.longitude)) {
                 bounds.extend({ lat: currentVoyage.latitude, lng: currentVoyage.longitude });
                 
                 // If we have no stops yet, zoom to the search radius
@@ -2572,13 +2706,15 @@ async function loadStops() {
                         center: { lat: currentVoyage.latitude, lng: currentVoyage.longitude },
                         radius: radiusMeters
                     });
-                    bounds.union(tempCircle.getBounds());
+                    const tempBounds = tempCircle.getBounds?.();
+                    if (tempBounds) bounds.union(tempBounds);
                 }
             }
 
             // Include Pilot Circle in bounds if it exists
             if (pilotCircle) {
-                bounds.union(pilotCircle.getBounds());
+                const pilotBounds = pilotCircle.getBounds?.();
+                if (pilotBounds) bounds.union(pilotBounds);
             }
 
             // Include Track points in bounds if they exist
@@ -2636,7 +2772,7 @@ async function executeResearchAll() {
             
             const existingBriefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
             existingBriefings.forEach(b => {
-                if (b) initialTimestamps['stop_' + b.stop_id] = new Date(b.created_at).getTime();
+                const bDayId = b && (b.day_id ?? b.stop_id); if (bDayId) initialTimestamps['stop_' + bDayId] = new Date(b.created_at).getTime();
             });
         } catch (e) { console.warn("Failed to snapshot timestamps", e); }
 
@@ -2717,7 +2853,7 @@ async function executeResearchAll() {
 
                     for (let i = pendingStops.length - 1; i >= 0; i--) {
                         const stop = pendingStops[i];
-                        const b = (briefings || []).find(br => br.stop_id === stop.id);
+                        const b = (briefings || []).find(br => (br.day_id ?? br.stop_id) === stop.id);
 
                         if (b && isNewData(b, 'stop', stop.id)) {
                             pendingStops.splice(i, 1);
@@ -2843,8 +2979,9 @@ async function checkItineraryFullness(isManualAction = false) {
 
     try {
         // Fetch ALL stops for this voyage to be sure (bypass pagination)
-        const allStops = (await API.getStops(currentVoyage.id, 1, 1000)) || [];
-        isFull = allStops.length >= diffDays;
+        const allStops = (await API.getDays(currentVoyage.id, 1, 1000)) || [];
+        const completeStops = allStops.filter(s => !isDayStartOnly(s));
+        isFull = completeStops.length >= diffDays;
 
         const briefings = (await API.getVoyageBriefings(currentVoyage.id)) || [];
         const guide = await API.getVoyageGuide(currentVoyage.id);
@@ -3304,10 +3441,22 @@ async function showRecommendationInfoWindow(rec, anchor, style) {
     }
 
     const hasDates = currentVoyage && currentVoyage.start_date && currentVoyage.end_date;
-    const addButton = hasDates ? `
-        <button class="btn primary w-full p-sm" onclick="addRecommendationToItinerary('${rec.id}')" style="width:100%;margin-top:8px">
-            Add to Itinerary
-        </button>` : '';
+    let addButton = '';
+    if (hasDates) {
+        const { dayNum, endpoint: activeEndpoint } = resolveActiveTargetDateAndEndpoint();
+        const dayPrefix = isDayTrip(currentVoyage) ? '' : `Day ${dayNum} `;
+        const startBtnClass = activeEndpoint === 'start' ? 'btn primary' : 'btn secondary';
+        const endBtnClass = activeEndpoint === 'end' ? 'btn primary' : 'btn secondary';
+        addButton = `
+            <div style="display:flex;gap:6px;margin-top:8px">
+                <button class="${startBtnClass} p-sm" onclick="addRecommendationToItinerary('${rec.id}', 'start')" style="flex:1;font-size:12px">
+                    Set ${dayPrefix}Start
+                </button>
+                <button class="${endBtnClass} p-sm" onclick="addRecommendationToItinerary('${rec.id}', 'end')" style="flex:1;font-size:12px">
+                    Set ${dayPrefix}End
+                </button>
+            </div>`;
+    }
 
     let stayDetails = {};
     if (rec.stay_details) {
@@ -3443,6 +3592,45 @@ async function renderPilotCircle() {
     if (pilotCenterMarker) pilotCenterMarker.map = null;
     if (pilotRadiusMarker) pilotRadiusMarker.map = null;
 
+    const isDefaultSahara = Number.isFinite(currentVoyage.latitude) && Number.isFinite(currentVoyage.longitude) &&
+        Math.abs(currentVoyage.latitude - 20) < 1e-4 && Math.abs(currentVoyage.longitude - 0) < 1e-4;
+
+    if (!Number.isFinite(currentVoyage.latitude) || !Number.isFinite(currentVoyage.longitude) || isDefaultSahara) {
+        const geocodeQuery = (currentVoyage.location_name || currentVoyage.title || '').trim();
+        if (geocodeQuery) {
+            try {
+                const { Geocoder } = await importLibrary("geocoding");
+                const geocoder = new Geocoder();
+                const res = await geocoder.geocode({ address: geocodeQuery });
+                if (res.results && res.results.length > 0) {
+                    const loc = res.results[0].geometry.location;
+                    currentVoyage.latitude = loc.lat();
+                    currentVoyage.longitude = loc.lng();
+                    if (!currentVoyage.location_name) {
+                        currentVoyage.location_name = geocodeQuery;
+                    }
+                    syncToBackend();
+                }
+            } catch (e) {
+                console.warn("Failed to geocode voyage location/title for pilot circle", e);
+            }
+        }
+        if (!Number.isFinite(currentVoyage.latitude) || !Number.isFinite(currentVoyage.longitude)) {
+            const fallbackCenter = map.getCenter ? map.getCenter() : null;
+            if (fallbackCenter) {
+                const cLat = typeof fallbackCenter.lat === 'function' ? fallbackCenter.lat() : fallbackCenter.lat;
+                const cLng = typeof fallbackCenter.lng === 'function' ? fallbackCenter.lng() : fallbackCenter.lng;
+                if (Number.isFinite(cLat) && Number.isFinite(cLng)) {
+                    currentVoyage.latitude = cLat;
+                    currentVoyage.longitude = cLng;
+                }
+            }
+        }
+        if (!Number.isFinite(currentVoyage.latitude) || !Number.isFinite(currentVoyage.longitude)) {
+            return;
+        }
+    }
+
     const { Circle } = await importLibrary("maps");
     const { AdvancedMarkerElement, PinElement } = await importLibrary("marker");
     const { spherical } = await importLibrary("geometry");
@@ -3536,62 +3724,130 @@ async function renderPilotCircle() {
     updateRadiusDisplay();
 }
 
-window.addRecommendationToItinerary = async function(recId) {
-    const rec = voyageRecommendations.find(r => r.id === recId);
+window.addRecommendationToItinerary = async function(recId, endpoint = null) {
+    const rec = voyageRecommendations.find(r => String(r.id) === String(recId));
     if (!rec) return;
 
     if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
         showNotification('Planning Mode Required', 'Please set voyage dates before adding specific spots to your daily itinerary.');
         return;
     }
-        // Find first empty date
-        const start = new Date(currentVoyage.start_date);
-        const end = new Date(currentVoyage.end_date);
-        let targetDate = null;
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            if (!currentStops.some(s => s.target_date.startsWith(dateStr))) {
-                targetDate = dateStr;
-                break;
-            }
-        }
+    const { targetDate, dayNum, endpoint: autoEndpoint } = resolveActiveTargetDateAndEndpoint();
+    if (!targetDate) {
+        showNotification('Notice', "No dates available in your voyage!");
+        return;
+    }
 
-        if (!targetDate) {
-            showNotification('Notice', "No empty dates left in your voyage!");
-            return;
-        }
+    const mode = endpoint || autoEndpoint;
+    const existingStop = currentStops.find(s => s.target_date && s.target_date.startsWith(targetDate));
+    const recPrecise = `${rec.name}, ${rec.type || 'Spot'}`;
+    let stopData;
 
-        const stopData = {
+    if (mode === 'start') {
+        const hasRealEnd = Boolean(existingStop && !isDayStartOnly(existingStop) && getDayEndCoords(existingStop));
+        const endCoords = hasRealEnd ? getDayEndCoords(existingStop) : { lat: rec.latitude, lng: rec.longitude };
+        const endName = hasRealEnd ? (existingStop.end_location_name || existingStop.location_name || '') : '';
+        const endPrecise = hasRealEnd ? (existingStop.end_precise_location || existingStop.precise_location || '') : '';
+        stopData = {
             target_date: targetDate + 'T00:00:00Z',
+            day_type: existingStop?.day_type || 'landfall',
+            start_location_name: rec.name,
+            start_precise_location: recPrecise,
+            start_latitude: rec.latitude,
+            start_longitude: rec.longitude,
+            end_location_name: endName,
+            end_precise_location: endPrecise,
+            end_latitude: endCoords.lat,
+            end_longitude: endCoords.lng,
+            location_name: endName || rec.name,
+            precise_location: endPrecise || recPrecise,
+            latitude: endCoords.lat,
+            longitude: endCoords.lng,
+            search_radius: existingStop?.search_radius || 5,
+            search_radius_unit: existingStop?.search_radius_unit || 'nm',
+            notes: existingStop?.notes || rec.description || ''
+        };
+    } else {
+        const existingStartCoords = existingStop ? getDayStartCoords(existingStop) : null;
+        const chainedStart = !existingStartCoords ? resolveDefaultDayStart(targetDate) : null;
+        const startName = existingStartCoords
+            ? (existingStop.start_location_name || existingStop.location_name || rec.name)
+            : (chainedStart ? chainedStart.start_location_name : rec.name);
+        const startPrecise = existingStartCoords
+            ? (existingStop.start_precise_location || existingStop.precise_location || recPrecise)
+            : (chainedStart ? chainedStart.start_precise_location : recPrecise);
+        const startLat = existingStartCoords
+            ? existingStartCoords.lat
+            : (chainedStart ? chainedStart.start_latitude : rec.latitude);
+        const startLng = existingStartCoords
+            ? existingStartCoords.lng
+            : (chainedStart ? chainedStart.start_longitude : rec.longitude);
+
+        stopData = {
+            target_date: targetDate + 'T00:00:00Z',
+            day_type: existingStop?.day_type || 'landfall',
+            start_location_name: startName,
+            start_precise_location: startPrecise,
+            start_latitude: startLat,
+            start_longitude: startLng,
+            end_location_name: rec.name,
+            end_precise_location: recPrecise,
+            end_latitude: rec.latitude,
+            end_longitude: rec.longitude,
             location_name: rec.name,
-            precise_location: `${rec.name}, ${rec.type}`,
+            precise_location: recPrecise,
             latitude: rec.latitude,
             longitude: rec.longitude,
-            search_radius: 5,
-            search_radius_unit: 'nm',
-            notes: rec.description
+            search_radius: existingStop?.search_radius || 5,
+            search_radius_unit: existingStop?.search_radius_unit || 'nm',
+            notes: existingStop?.notes || rec.description || ''
         };
+    }
 
-        try {
-            const created = await API.createStop(currentVoyage.id, stopData);
+    try {
+        if (existingStop) {
+            const updated = await API.updateDay(existingStop.id, stopData);
+            const idx = currentStops.findIndex(s => s.id === existingStop.id);
+            if (idx !== -1) currentStops[idx] = updated;
+        } else {
+            const created = await API.createDay(currentVoyage.id, stopData);
             currentStops.push(created);
-            
-            if (activeInfoWindow) {
-                activeInfoWindow.close();
-                activeInfoWindow = null;
-            }
-
-            renderItinerary();
-            renderMapStops();
-            await checkItineraryFullness(true);
-            showNotification('Success', `Added ${rec.name} to your itinerary for ${new Date(targetDate).toLocaleDateString()}.`);
-
-        } catch (err) {
-            console.error(err);
-            showNotification('Error', 'Failed to add recommendation to itinerary');
         }
-}
+
+        if (activeInfoWindow) {
+            activeInfoWindow.close();
+            activeInfoWindow = null;
+        }
+
+        const dayLabel = isDayTrip(currentVoyage) ? 'Trip' : `Day ${dayNum}`;
+        if (mode === 'start' && isDayStartOnly(stopData)) {
+            selectedDate = targetDate;
+            selectedDayEndpoint = 'end';
+            showNotification(`${dayLabel} Start Set`, `Departure set to ${rec.name}. Now select ${dayLabel}'s End destination.`);
+        } else {
+            const nextDate = new Date(targetDate + 'T00:00:00Z');
+            nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+            const nextStr = nextDate.toISOString().split('T')[0];
+            const endStr = new Date(currentVoyage.end_date).toISOString().split('T')[0];
+            if (nextStr <= endStr) {
+                selectedDate = nextStr;
+                selectedDayEndpoint = 'end';
+            } else {
+                selectedDate = targetDate;
+                selectedDayEndpoint = 'end';
+            }
+            showNotification('Success', `Set ${dayLabel} ${mode === 'start' ? 'Start' : 'End'} to ${rec.name}.`);
+        }
+
+        renderItinerary();
+        await renderMapStops();
+        await checkItineraryFullness(true);
+    } catch (err) {
+        console.error(err);
+        showNotification('Error', 'Failed to add recommendation to itinerary');
+    }
+};
 
 function renderItinerary() {
     const list = document.getElementById('itinerary-list');
@@ -3772,7 +4028,8 @@ function renderItinerary() {
 
         // Passage points are at-sea transit days with no landfall — render them as a
         // continuous dotted leg with a transit indicator rather than a harbour card.
-        const isPassage = stop && stop.stop_type === 'passage_point';
+        const dayType = stop ? (stop.day_type || stop.stop_type || 'landfall') : 'landfall';
+        const isPassage = Boolean(stop && dayType === 'passage_point');
         // A day trip has exactly one stop and no "Day N of M" concept — its
         // one card gets a simpler treatment (no day number, no repeated date
         // chip since the trip date is already shown in the itinerary header).
@@ -3802,84 +4059,151 @@ function renderItinerary() {
         }
         el.appendChild(num);
 
-        // Middle: date chip (skipped for day trips — already shown in the
-        // itinerary header) + location
+        // Middle: header row (date chip on left + action icons on right), full-width title, and uniform S/E chips
         const mid = document.createElement('div');
         mid.className = 'np-stop-card__info';
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'np-stop-card__header';
 
         if (!isDayTripCard) {
             const dateChip = document.createElement('span');
             dateChip.className = 'np-stop-card__date';
             dateChip.textContent = dateLabel;
-            mid.appendChild(dateChip);
-        }
-
-        const loc = document.createElement('span');
-        loc.className = ['np-stop-card__loc', !stop && 'np-stop-card__loc--empty', isPassage && 'np-stop-card__loc--passage'].filter(Boolean).join(' ');
-        if (isPassage) {
-            loc.textContent = 'At-sea passage';
+            headerRow.appendChild(dateChip);
         } else {
-            loc.textContent = stop ? displayLocationName(stop.location_name).split(',')[0].trim() : 'No destination';
+            const spacer = document.createElement('span');
+            headerRow.appendChild(spacer);
         }
-        mid.appendChild(loc);
-        el.appendChild(mid);
 
-        if (stop) {
+        if (stop || !isPassage) {
             const actions = document.createElement('div');
             actions.className = 'np-stop-card__actions';
 
-            // Briefing button — for passages this views the at-sea weather & tide report
-            // (or generates it on demand); for landfalls it's the usual stop research.
-            const btnResearch = document.createElement('button');
-            btnResearch.className = 'btn-icon research';
-            btnResearch.title = isPassage ? 'Passage weather & tides' : 'Research';
-            btnResearch.dataset.stopId = stop.id;
-            btnResearch.innerHTML = `<span class="material-symbols-outlined">${isPassage ? 'partly_cloudy_day' : 'science'}</span>`;
-            btnResearch.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleResearchClick(stop, btnResearch);
-            });
-            actions.appendChild(btnResearch);
-
-            // Delete only for landfall stops — passage points are auto-generated from the
-            // surrounding landfalls, so they aren't independently editable.
             if (!isPassage) {
-            const btnDelete = document.createElement('button');
-            btnDelete.className = 'btn-icon delete-stop';
-            btnDelete.title = 'Delete Stop';
-            btnDelete.innerHTML = '<span class="material-symbols-outlined">delete</span>';
-            btnDelete.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                showNotification('Delete Stop', `Remove stop at ${displayLocationName(stop.location_name)}?`, [
-                    {
-                        label: 'Remove',
-                        type: 'danger',
-                        hideClose: true,
-                        callback: async () => {
-                            try {
-                                await API.deleteStop(stop.id);
-                                currentStops = currentStops.filter(s => s.id !== stop.id);
-                                briefingCache.delete(stop.id);
-                                renderItinerary();
-                                renderMapStops();
-                                await checkItineraryFullness(true);
-                            } catch (err) {
-                                console.error(err);
-                                showNotification('Error', 'Failed to delete stop');
-                            }
-                        }
-                    },
-                    {
-                        label: 'Cancel',
-                        type: 'secondary'
-                    }
-                ]);
-            });
-
-            actions.appendChild(btnDelete);
+                const btnEditDay = document.createElement('button');
+                btnEditDay.className = 'btn-icon edit-stop';
+                btnEditDay.title = 'Edit Start & End Locations';
+                btnEditDay.innerHTML = '<span class="material-symbols-outlined">edit</span>';
+                btnEditDay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openVoyageDayModal(stop, dateStr, dayNum);
+                });
+                actions.appendChild(btnEditDay);
             }
 
-            el.appendChild(actions);
+            if (stop) {
+                const btnResearch = document.createElement('button');
+                btnResearch.className = 'btn-icon research';
+                btnResearch.title = isPassage ? 'Passage weather & tides' : 'Research';
+                btnResearch.dataset.stopId = stop.id;
+                btnResearch.innerHTML = `<span class="material-symbols-outlined">${isPassage ? 'partly_cloudy_day' : 'science'}</span>`;
+                btnResearch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleResearchClick(stop, btnResearch);
+                });
+                actions.appendChild(btnResearch);
+
+                if (!isPassage) {
+                    const btnDelete = document.createElement('button');
+                    btnDelete.className = 'btn-icon delete-stop';
+                    btnDelete.title = 'Delete Stop';
+                    btnDelete.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+                    btnDelete.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        showNotification('Delete Day', `Remove day ending at ${getDayEndName(stop) || getDayStartName(stop)}?`, [
+                            {
+                                label: 'Remove',
+                                type: 'danger',
+                                hideClose: true,
+                                callback: async () => {
+                                    try {
+                                        await API.deleteDay(stop.id);
+                                        currentStops = currentStops.filter(s => s.id !== stop.id);
+                                        briefingCache.delete(stop.id);
+                                        renderItinerary();
+                                        renderMapStops();
+                                        await checkItineraryFullness(true);
+                                    } catch (err) {
+                                        console.error(err);
+                                        showNotification('Error', 'Failed to delete stop');
+                                    }
+                                }
+                            },
+                            {
+                                label: 'Cancel',
+                                type: 'secondary'
+                            }
+                        ]);
+                    });
+                    actions.appendChild(btnDelete);
+                }
+            }
+
+            headerRow.appendChild(actions);
+        }
+
+        mid.appendChild(headerRow);
+
+        const loc = document.createElement('span');
+        loc.className = ['np-stop-card__loc', (!stop || isDayStartOnly(stop)) && 'np-stop-card__loc--empty', isPassage && 'np-stop-card__loc--passage'].filter(Boolean).join(' ');
+        if (isPassage) {
+            loc.textContent = 'At-sea passage';
+            mid.appendChild(loc);
+        } else {
+            const chainedStart = !stop ? resolveDefaultDayStart(dateStr) : null;
+            const rawStart = stop ? getDayStartName(stop) : (chainedStart ? displayLocationName(chainedStart.start_location_name) : '');
+            const rawEnd = stop ? getDayEndName(stop) : '';
+            const startName = rawStart ? rawStart.split(',')[0].trim() : '';
+            const endName = rawEnd ? rawEnd.split(',')[0].trim() : '';
+
+            if (startName && endName) {
+                loc.textContent = (startName !== endName && !isSameStartAndEnd(stop))
+                    ? `${startName} → ${endName}`
+                    : endName;
+            } else if (startName) {
+                loc.textContent = `${startName} → Select destination…`;
+            } else if (endName) {
+                loc.textContent = endName;
+            } else {
+                loc.textContent = 'Select start & end…';
+            }
+            mid.appendChild(loc);
+
+            const endpointsWrap = document.createElement('div');
+            endpointsWrap.className = 'np-stop-card__endpoints';
+
+            const activeEndpointForCard = isSelected ? selectedDayEndpoint : null;
+            const makeEndpointBtn = (role, labelText, hasValue) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'np-stop-card__endpoint-btn';
+                const isRoleActive = activeEndpointForCard === role;
+                btn.style.background = isRoleActive ? 'var(--sky)' : 'var(--surface-2, rgba(128,128,128,0.12))';
+                btn.style.color = isRoleActive ? '#fff' : (hasValue ? 'var(--ink)' : 'var(--muted)');
+                btn.style.border = '1px solid ' + (isRoleActive ? 'var(--sky)' : 'rgba(128,128,128,0.25)');
+                btn.title = `Click to select ${role === 'start' ? 'Start' : 'End'} point on map or from recommendations`;
+                const badge = document.createElement('strong');
+                badge.textContent = role === 'start' ? 'S:' : 'E:';
+                const txt = document.createElement('span');
+                txt.textContent = labelText;
+                btn.appendChild(badge);
+                btn.appendChild(txt);
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectDate(dateStr, role);
+                });
+                return btn;
+            };
+
+            endpointsWrap.appendChild(makeEndpointBtn('start', startName || 'Select start…', Boolean(startName)));
+            endpointsWrap.appendChild(makeEndpointBtn('end', endName || 'Select end…', Boolean(endName)));
+            mid.appendChild(endpointsWrap);
+        }
+        el.appendChild(mid);
+
+        if (stop) {
+            {
 
             // Weather + tide chips if briefing is cached (shown for passages too —
             // offshore wind/conditions are exactly what a transit day needs).
@@ -3915,6 +4239,7 @@ function renderItinerary() {
                 if (chips.children.length > 0) {
                     mid.appendChild(chips);
                 }
+            }
             }
         }
 
@@ -4060,7 +4385,7 @@ async function handleResearchClick(stop, button) {
         loadCard.appendChild(loadTop);
 
         const stopSteps = [
-            { label: `Starting research for ${stop.location_name || 'stop'}…`, state: 'active' }
+            { label: `Starting research for ${getDayEndName(stop) || 'day'}…`, state: 'active' }
         ];
         loadCard.appendChild(Stepper({ steps: stopSteps }));
         content.appendChild(loadCard);
@@ -4076,7 +4401,7 @@ async function handleResearchClick(stop, button) {
         // Start radar sweep on this stop's position
         if (map) startStopSweepSequence([stop]);
 
-        let partialBriefing = { stop_id: stop.id };
+        let partialBriefing = { day_id: stop.id, stop_id: stop.id };
         // Stream progress updates
         if (resRes.session_id) {
             _stopProgressES = API.streamProgress(resRes.session_id, (evt) => {
@@ -4400,10 +4725,11 @@ function renderHourlyTimeline(weather, sun = {}) {
 async function showBriefing(briefing, doPushState = true, options = {}) {
     const { isPartial = false, progressCard = null } = options || {};
     // Cache only complete briefings so itinerary cards and re-clicks don't get stuck with partial data
-    if (!isPartial && briefing && briefing.stop_id) briefingCache.set(briefing.stop_id, briefing);
+    const bDayId = briefing && (briefing.day_id ?? briefing.stop_id);
+    if (!isPartial && bDayId) briefingCache.set(bDayId, briefing);
 
-    if (!isPartial && doPushState && currentVoyage) {
-        window.history.pushState({}, '', `/voyages/${currentVoyage.id}/stops/${briefing.stop_id}`);
+    if (!isPartial && doPushState && currentVoyage && bDayId) {
+        window.history.pushState({}, '', `/voyages/${currentVoyage.id}/days/${bDayId}`);
     }
     const modal = document.getElementById('modal-briefing');
     const content = document.getElementById('briefing-content');
@@ -4435,7 +4761,7 @@ async function showBriefing(briefing, doPushState = true, options = {}) {
     };
 
     // Determine Target Date for Filtering & Charting
-    const stop = currentStops.find(s => s.id === briefing.stop_id);
+    const stop = currentStops.find(s => s.id === (briefing.day_id ?? briefing.stop_id));
     const targetDateFull = stop ? stop.target_date : new Date().toISOString();
     const targetDateYMD = targetDateFull.split('T')[0]; // "YYYY-MM-DD"
 
@@ -4824,9 +5150,10 @@ async function redoBriefing(oldBriefing, btn) {
     btn.disabled = true;
 
     try {
-        const redoRes = await API.triggerResearch(oldBriefing.stop_id);
+        const bDayId = oldBriefing.day_id ?? oldBriefing.stop_id;
+        const redoRes = await API.triggerResearch(bDayId);
 
-        let partialBriefing = { stop_id: oldBriefing.stop_id };
+        let partialBriefing = { day_id: bDayId, stop_id: bDayId };
         let redoProgressES = null;
         if (redoRes && redoRes.session_id) {
             redoProgressES = API.streamProgress(redoRes.session_id, (evt) => {
@@ -4869,7 +5196,7 @@ async function redoBriefing(oldBriefing, btn) {
             }
 
             try {
-                const b = await API.getBriefing(oldBriefing.stop_id);
+                const b = await API.getBriefing(oldBriefing.day_id ?? oldBriefing.stop_id);
                 if (b) {
                     const newTime = new Date(b.created_at).getTime();
                     // Wait for newer timestamp
@@ -4967,7 +5294,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
     if (existing) existing.remove();
 
     const stopsWithAlerts = sortedStops
-        .map((stop, idx) => ({ stop, briefing: briefings.find(br => br && br.stop_id === stop.id), idx }))
+        .map((stop, idx) => ({ stop, briefing: briefings.find(br => br && (br.day_id ?? br.stop_id) === stop.id), idx }))
         .filter(({ briefing }) => briefing && Array.isArray(briefing.safety_alerts) && briefing.safety_alerts.length > 0);
 
     if (stopsWithAlerts.length === 0) {
@@ -4991,7 +5318,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
 
     stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
         const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
-        const stopName = displayLocationName(stop.location_name).split(',')[0].trim();
+        const stopName = getDayEndName(stop).split(',')[0].trim();
 
         const stopHeader = document.createElement('div');
         stopHeader.className = 'np-safety-overview__stop-header';
@@ -5068,7 +5395,7 @@ async function runLookoutAudit(oldBriefing, btn) {
     btn.innerHTML = '<span class="material-symbols-outlined icon-lg icon-align spin" aria-hidden="true">visibility</span> Auditing…';
 
     try {
-        const res = await API.triggerLookoutAudit(oldBriefing.stop_id);
+        const res = await API.triggerLookoutAudit(oldBriefing.day_id ?? oldBriefing.stop_id);
         const startTime = Date.now();
         const TIMEOUT_MS = 120000;
 
@@ -5081,12 +5408,12 @@ async function runLookoutAudit(oldBriefing, btn) {
                 return;
             }
             try {
-                const b = await API.getBriefing(oldBriefing.stop_id);
+                const b = await API.getBriefing(oldBriefing.day_id ?? oldBriefing.stop_id);
                 if (b && b.safety_alerts !== null && b.safety_alerts !== undefined) {
                     clearInterval(poll);
                     btn.disabled = false;
                     btn.innerHTML = originalLabel;
-                    briefingCache.set(b.stop_id, b);
+                    briefingCache.set(b.day_id ?? b.stop_id, b);
                     showBriefing(b, false);
                 }
             } catch (ignore) { }
@@ -5104,16 +5431,20 @@ async function runLookoutAudit(oldBriefing, btn) {
     }
 }
 
-function selectDate(dateStr) {
+function selectDate(dateStr, endpoint = null) {
     if (!currentVoyage || !currentVoyage.start_date || !currentVoyage.end_date) {
         showNotification('Planning Mode Required', 'Please set voyage dates to begin building your daily itinerary.');
         return;
     }
 
-    if (selectedDate === dateStr) {
+    if (endpoint) {
+        selectedDate = dateStr;
+        selectedDayEndpoint = endpoint;
+    } else if (selectedDate === dateStr) {
         selectedDate = null; // Toggle off
     } else {
         selectedDate = dateStr; // Select new
+        selectedDayEndpoint = getDefaultEndpointForDate(dateStr);
     }
     
     renderItinerary(); // Re-render to show selection highlight
@@ -5124,11 +5455,200 @@ function selectDate(dateStr) {
     // Zoom to existing stop if present (only if selected)
     if (selectedDate) {
         const stop = currentStops.find(s => s.target_date.startsWith(selectedDate));
-        if (stop && map) {
-            map.panTo({ lat: stop.latitude, lng: stop.longitude });
+        const pos = selectedDayEndpoint === 'start'
+            ? (getDayStartCoords(stop) || getDayEndCoords(stop))
+            : (getDayEndCoords(stop) || getDayStartCoords(stop));
+        if (pos && map) {
+            map.panTo(pos);
             map.setZoom(14);
         }
     }
+}
+
+function openVoyageDayModal(stop, dateStr, dayNum = 1) {
+    const modal = document.getElementById('modal-voyage-day');
+    const form = document.getElementById('form-voyage-day');
+    if (!modal || !form) return;
+
+    const pill = document.getElementById('modal-voyage-day-pill');
+    const title = document.getElementById('modal-voyage-day-title');
+    const dateLabel = dateStr
+        ? new Date(dateStr + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+        : '';
+    if (pill) pill.textContent = `DAY ${dayNum}`;
+    if (title) title.textContent = dateLabel ? `Edit Day ${dayNum} (${dateLabel})` : `Edit Day ${dayNum}`;
+
+    document.getElementById('voyage-day-id').value = stop?.id || '';
+    document.getElementById('voyage-day-date').value = dateStr || (stop?.target_date ? stop.target_date.split('T')[0] : '');
+
+    const typeSelect = document.getElementById('voyage-day-type');
+    if (typeSelect) {
+        typeSelect.value = stop?.day_type || stop?.stop_type || (isDayTrip(currentVoyage) ? 'day_trip' : 'landfall');
+    }
+
+    const chainedStart = !stop ? resolveDefaultDayStart(dateStr) : null;
+    const sCoords = stop ? getDayStartCoords(stop) : (chainedStart ? { lat: chainedStart.start_latitude, lng: chainedStart.start_longitude } : null);
+    const eCoords = (stop && !isDayStartOnly(stop)) ? getDayEndCoords(stop) : null;
+
+    document.getElementById('voyage-day-start-name').value = stop ? (stop.start_location_name || '') : (chainedStart?.start_location_name || '');
+    document.getElementById('voyage-day-start-precise').value = stop ? (stop.start_precise_location || '') : (chainedStart?.start_precise_location || '');
+    document.getElementById('voyage-day-start-lat').value = sCoords ? sCoords.lat : '';
+    document.getElementById('voyage-day-start-lng').value = sCoords ? sCoords.lng : '';
+
+    document.getElementById('voyage-day-end-name').value = (stop && !isDayStartOnly(stop)) ? (stop.end_location_name || '') : '';
+    document.getElementById('voyage-day-end-precise').value = (stop && !isDayStartOnly(stop)) ? (stop.end_precise_location || '') : '';
+    document.getElementById('voyage-day-end-lat').value = eCoords ? eCoords.lat : '';
+    document.getElementById('voyage-day-end-lng').value = eCoords ? eCoords.lng : '';
+
+    document.getElementById('voyage-day-notes').value = stop?.notes || '';
+
+    const endGroup = document.getElementById('voyage-day-end-group');
+    const syncEndGroupVisibility = () => {
+        const isSameLocType = typeSelect && (typeSelect.value === 'day_trip' || typeSelect.value === 'lay_day');
+        if (endGroup) endGroup.classList.toggle('hidden', Boolean(isSameLocType));
+        const endNameInput = document.getElementById('voyage-day-end-name');
+        const endLatInput = document.getElementById('voyage-day-end-lat');
+        const endLngInput = document.getElementById('voyage-day-end-lng');
+        if (endNameInput) endNameInput.required = !isSameLocType;
+        if (endLatInput) endLatInput.required = !isSameLocType;
+        if (endLngInput) endLngInput.required = !isSameLocType;
+    };
+    syncEndGroupVisibility();
+    if (typeSelect) {
+        typeSelect.onchange = syncEndGroupVisibility;
+    }
+
+    const btnCancel = document.getElementById('btn-cancel-voyage-day');
+    if (btnCancel) {
+        btnCancel.onclick = () => modal.classList.add('hidden');
+    }
+
+    const btnCopyPrev = document.getElementById('btn-day-copy-prev');
+    if (btnCopyPrev) {
+        btnCopyPrev.onclick = () => {
+            const prev = resolveDefaultDayStart(dateStr);
+            if (!prev) {
+                showNotification('No Prior Day', 'There is no previous day with an end location to copy.');
+                return;
+            }
+            document.getElementById('voyage-day-start-name').value = prev.start_location_name || '';
+            document.getElementById('voyage-day-start-precise').value = prev.start_precise_location || '';
+            document.getElementById('voyage-day-start-lat').value = prev.start_latitude ?? '';
+            document.getElementById('voyage-day-start-lng').value = prev.start_longitude ?? '';
+        };
+    }
+
+    const btnSwap = document.getElementById('btn-day-swap-locs');
+    if (btnSwap) {
+        btnSwap.onclick = () => {
+            const sN = document.getElementById('voyage-day-start-name');
+            const sP = document.getElementById('voyage-day-start-precise');
+            const sLat = document.getElementById('voyage-day-start-lat');
+            const sLng = document.getElementById('voyage-day-start-lng');
+            const eN = document.getElementById('voyage-day-end-name');
+            const eP = document.getElementById('voyage-day-end-precise');
+            const eLat = document.getElementById('voyage-day-end-lat');
+            const eLng = document.getElementById('voyage-day-end-lng');
+            [sN.value, eN.value] = [eN.value, sN.value];
+            [sP.value, eP.value] = [eP.value, sP.value];
+            [sLat.value, eLat.value] = [eLat.value, sLat.value];
+            [sLng.value, eLng.value] = [eLng.value, sLng.value];
+        };
+    }
+
+    const geocodeFieldIfNeeded = async (nameId, latId, lngId, preciseId) => {
+        const nameEl = document.getElementById(nameId);
+        const latEl = document.getElementById(latId);
+        const lngEl = document.getElementById(lngId);
+        const preciseEl = document.getElementById(preciseId);
+        const addr = nameEl?.value?.trim();
+        if (!addr) return;
+        try {
+            const { Geocoder } = await importLibrary('geocoding');
+            const geocoder = new Geocoder();
+            const res = await geocoder.geocode({ address: addr });
+            if (res.results && res.results.length > 0) {
+                const loc = res.results[0].geometry.location;
+                if (latEl) latEl.value = loc.lat();
+                if (lngEl) lngEl.value = loc.lng();
+                if (preciseEl) preciseEl.value = res.results[0].formatted_address || addr;
+            }
+        } catch (_) {}
+    };
+
+    const startNameEl = document.getElementById('voyage-day-start-name');
+    const endNameEl = document.getElementById('voyage-day-end-name');
+    if (startNameEl) {
+        startNameEl.onchange = () => geocodeFieldIfNeeded('voyage-day-start-name', 'voyage-day-start-lat', 'voyage-day-start-lng', 'voyage-day-start-precise');
+    }
+    if (endNameEl) {
+        endNameEl.onchange = () => geocodeFieldIfNeeded('voyage-day-end-name', 'voyage-day-end-lat', 'voyage-day-end-lng', 'voyage-day-end-precise');
+    }
+
+    form.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const sLatEl = document.getElementById('voyage-day-start-lat');
+        const sLngEl = document.getElementById('voyage-day-start-lng');
+        const eLatEl = document.getElementById('voyage-day-end-lat');
+        const eLngEl = document.getElementById('voyage-day-end-lng');
+        if (!sLatEl.value || !sLngEl.value) {
+            await geocodeFieldIfNeeded('voyage-day-start-name', 'voyage-day-start-lat', 'voyage-day-start-lng', 'voyage-day-start-precise');
+        }
+        const dayTypeVal = typeSelect ? typeSelect.value : 'landfall';
+        const isSameLoc = dayTypeVal === 'day_trip' || dayTypeVal === 'lay_day';
+        if (!isSameLoc && (!eLatEl.value || !eLngEl.value) && document.getElementById('voyage-day-end-name').value.trim()) {
+            await geocodeFieldIfNeeded('voyage-day-end-name', 'voyage-day-end-lat', 'voyage-day-end-lng', 'voyage-day-end-precise');
+        }
+        const sLat = parseFloat(sLatEl.value);
+        const sLng = parseFloat(sLngEl.value);
+        const eLat = isSameLoc ? sLat : (parseFloat(eLatEl.value) || sLat);
+        const eLng = isSameLoc ? sLng : (parseFloat(eLngEl.value) || sLng);
+        const sName = document.getElementById('voyage-day-start-name').value.trim();
+        const sPrecise = document.getElementById('voyage-day-start-precise').value.trim() || sName;
+        const eName = isSameLoc ? sName : document.getElementById('voyage-day-end-name').value.trim();
+        const ePrecise = isSameLoc ? sPrecise : (document.getElementById('voyage-day-end-precise').value.trim() || eName);
+
+        const payload = {
+            target_date: (document.getElementById('voyage-day-date').value || dateStr) + 'T00:00:00Z',
+            day_type: dayTypeVal,
+            start_location_name: sName,
+            start_precise_location: sPrecise,
+            start_latitude: sLat,
+            start_longitude: sLng,
+            end_location_name: eName,
+            end_precise_location: ePrecise,
+            end_latitude: eLat,
+            end_longitude: eLng,
+            location_name: eName || sName,
+            precise_location: ePrecise || sPrecise,
+            latitude: eLat,
+            longitude: eLng,
+            search_radius: stop?.search_radius || 5,
+            search_radius_unit: stop?.search_radius_unit || 'nm',
+            notes: document.getElementById('voyage-day-notes').value || ''
+        };
+
+        try {
+            const existingId = document.getElementById('voyage-day-id').value;
+            if (existingId) {
+                const updated = await API.updateDay(Number(existingId), payload);
+                const idx = currentStops.findIndex(s => String(s.id) === String(existingId));
+                if (idx !== -1) currentStops[idx] = updated;
+            } else {
+                const created = await API.createDay(currentVoyage.id, payload);
+                currentStops.push(created);
+            }
+            modal.classList.add('hidden');
+            renderItinerary();
+            await renderMapStops();
+            await checkItineraryFullness(true);
+        } catch (err) {
+            console.error(err);
+            showNotification('Error', 'Failed to save voyage day');
+        }
+    };
+
+    modal.classList.remove('hidden');
 }
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
@@ -5290,53 +5810,110 @@ async function initMap() {
           console.error("Geocoding failed: " + err);
       }
   
-      // Create or Update
-      const stopData = {
-          target_date: selectedDate + 'T00:00:00Z',
+      const clickedPoint = {
           location_name: locationName,
           precise_location: preciseLocation,
           latitude: lat,
           longitude: lng,
-          search_radius: 5,
-          search_radius_unit: 'nm',
-          notes: ''
       };
+      const mode = selectedDayEndpoint || getDefaultEndpointForDate(selectedDate);
+      let awaitingDayEnd = false;
+      let stopData;
+
+      if (mode === 'start') {
+          const hasRealEnd = Boolean(stop && !isDayStartOnly(stop) && getDayEndCoords(stop));
+          const endCoords = hasRealEnd ? getDayEndCoords(stop) : { lat, lng };
+          const endName = hasRealEnd ? (stop.end_location_name || stop.location_name || '') : '';
+          const endPrecise = hasRealEnd ? (stop.end_precise_location || stop.precise_location || '') : '';
+          awaitingDayEnd = !hasRealEnd;
+          stopData = {
+              target_date: selectedDate + 'T00:00:00Z',
+              day_type: stop?.day_type || 'landfall',
+              start_location_name: locationName,
+              start_precise_location: preciseLocation,
+              start_latitude: lat,
+              start_longitude: lng,
+              end_location_name: endName,
+              end_precise_location: endPrecise,
+              end_latitude: endCoords.lat,
+              end_longitude: endCoords.lng,
+              location_name: endName || locationName,
+              precise_location: endPrecise || preciseLocation,
+              latitude: endCoords.lat,
+              longitude: endCoords.lng,
+              search_radius: stop?.search_radius || 5,
+              search_radius_unit: stop?.search_radius_unit || 'nm',
+              notes: stop?.notes || ''
+          };
+      } else {
+          const existingStartCoords = stop ? getDayStartCoords(stop) : null;
+          const chainedStart = !existingStartCoords ? resolveDefaultDayStart(selectedDate) : null;
+          const startFields = existingStartCoords
+              ? {
+                  start_location_name: stop.start_location_name || stop.location_name || locationName,
+                  start_precise_location: stop.start_precise_location || stop.precise_location || preciseLocation,
+                  start_latitude: existingStartCoords.lat,
+                  start_longitude: existingStartCoords.lng,
+              }
+              : (chainedStart || {
+                  start_location_name: clickedPoint.location_name,
+                  start_precise_location: clickedPoint.precise_location,
+                  start_latitude: clickedPoint.latitude,
+                  start_longitude: clickedPoint.longitude,
+              });
+          stopData = {
+              target_date: selectedDate + 'T00:00:00Z',
+              day_type: stop?.day_type || 'landfall',
+              ...startFields,
+              end_location_name: locationName,
+              end_precise_location: preciseLocation,
+              end_latitude: lat,
+              end_longitude: lng,
+              location_name: locationName,
+              precise_location: preciseLocation,
+              latitude: lat,
+              longitude: lng,
+              search_radius: stop?.search_radius || 5,
+              search_radius_unit: stop?.search_radius_unit || 'nm',
+              notes: stop?.notes || ''
+          };
+      }
   
       const doSave = async () => {
           try {
               if (stop) {
-                  const updated = await API.updateStop(stop.id, stopData);
+                  const updated = await API.updateDay(stop.id, stopData);
                   const idx = currentStops.findIndex(s => s.id === stop.id);
                   currentStops[idx] = updated;
               } else {
-                  const created = await API.createStop(currentVoyage.id, stopData);
+                  const created = await API.createDay(currentVoyage.id, stopData);
                   currentStops.push(created);
               }
-              renderItinerary();
-              renderMapStops();
-              await checkItineraryFullness(true);
 
-          // Auto-advance to next empty date
+              if (awaitingDayEnd) {
+                  selectedDayEndpoint = 'end';
+                  showNotification('Start Point Set', `Departure set to ${displayLocationName(locationName)}. Click the map or a recommendation to set the End destination.`);
+              } else if (currentVoyage && selectedDate) {
+                  const current = new Date(selectedDate + 'T00:00:00Z');
+                  const next = new Date(current);
+                  next.setUTCDate(next.getUTCDate() + 1);
+                  
+                  const nextStr = next.toISOString().split('T')[0];
+                  const endStr = new Date(currentVoyage.end_date).toISOString().split('T')[0];
 
-          if (currentVoyage && selectedDate) {
-              const current = new Date(selectedDate);
-              const next = new Date(current);
-              next.setDate(next.getDate() + 1);
-              
-              // Helper to format YYYY-MM-DD
-              const nextStr = next.toISOString().split('T')[0];
-              const endStr = new Date(currentVoyage.end_date).toISOString().split('T')[0];
-
-              if (nextStr <= endStr) {
-                  const nextStop = currentStops.find(s => s.target_date.startsWith(nextStr));
-                  if (!nextStop) {
-                      selectDate(nextStr);
+                  if (nextStr <= endStr) {
+                      const nextStop = currentStops.find(s => s.target_date.startsWith(nextStr));
+                      if (!nextStop || isDayStartOnly(nextStop)) {
+                          selectDate(nextStr, 'end');
+                      }
                   }
               }
-          }
+              renderItinerary();
+              await renderMapStops();
+              await checkItineraryFullness(true);
       } catch (err) {
           console.error(err);
-          showNotification('Error', 'Failed to save stop');
+          showNotification('Error', 'Failed to save day');
       }
       };
 
@@ -5344,7 +5921,7 @@ async function initMap() {
           const joinCandidate = findNearbyJoinTargetStop(currentStops, lat, lng, selectedDate, 2.0);
           if (joinCandidate && joinCandidate.targetStop) {
               const tStop = joinCandidate.targetStop;
-              const tName = displayLocationName(tStop.location_name);
+              const tName = displayLocationName(joinCandidate.targetLocationName || getDayEndName(tStop));
               const title = joinCandidate.isStartStop ? 'Join with Start Stop?' : `Join with Stop ${joinCandidate.stopNumber}?`;
               const msg = joinCandidate.isStartStop
                   ? `This point is near Stop 1 (${tName}). Join the start and finish so they share a single map marker and combined facility badge?`
@@ -5358,10 +5935,18 @@ async function initMap() {
                           type: 'primary',
                           hideClose: true,
                           callback: () => {
-                              stopData.latitude = tStop.latitude;
-                              stopData.longitude = tStop.longitude;
-                              stopData.location_name = tStop.location_name;
-                              stopData.precise_location = tStop.precise_location || preciseLocation;
+                              const joinedLat = joinCandidate.targetLat ?? (tStop.end_latitude ?? tStop.latitude);
+                              const joinedLng = joinCandidate.targetLng ?? (tStop.end_longitude ?? tStop.longitude);
+                              const joinedName = joinCandidate.targetLocationName || tStop.end_location_name || tStop.location_name;
+                              const joinedPrecise = joinCandidate.targetPreciseLocation || tStop.end_precise_location || tStop.precise_location || preciseLocation;
+                              stopData.end_latitude = joinedLat;
+                              stopData.end_longitude = joinedLng;
+                              stopData.end_location_name = joinedName;
+                              stopData.end_precise_location = joinedPrecise;
+                              stopData.latitude = joinedLat;
+                              stopData.longitude = joinedLng;
+                              stopData.location_name = joinedName;
+                              stopData.precise_location = joinedPrecise;
                               doSave();
                           }
                       },
@@ -5374,8 +5959,9 @@ async function initMap() {
           }
       };
 
-      if (stop && stop.location_name) {
-          const existing = displayLocationName(stop.location_name);
+      const existingEndName = stop ? getDayEndName(stop) : '';
+      if (stop && existingEndName && !isSameStartAndEnd(stop)) {
+          const existing = existingEndName;
           showNotification(
               'Change Location?',
               `This date is already set to "${existing}". Replace it with the new location?`,
@@ -5453,8 +6039,9 @@ async function initMap() {
 
         // Add passage point markers first
         sortedStops.forEach((stop) => {
-            if (!stop.latitude || !stop.longitude) return;
-            if (stop.stop_type !== 'passage_point') return;
+            const endCoords = getDayEndCoords(stop);
+            if (!endCoords) return;
+            if ((stop.day_type || stop.stop_type) !== 'passage_point') return;
 
             const dot = accentDot('muted', 20);
             const icon = document.createElement('span');
@@ -5465,7 +6052,7 @@ async function initMap() {
 
             const pMarker = new AdvancedMarkerElement({
                 map: map,
-                position: { lat: stop.latitude, lng: stop.longitude },
+                position: endCoords,
                 content: dot,
                 title: 'At-sea passage (extrapolated position)',
                 zIndex: 50
@@ -5487,10 +6074,40 @@ async function initMap() {
 
         // Group co-located landfall stops (e.g. Start & Finish at the same harbor) into a single pin
         const { groups: stopGroups } = groupColocatedStops(sortedStops, VOYAGE_ACCENTS, 2.0);
+        sortedStops.forEach((day, idx) => {
+            const startPos = getDayStartCoords(day);
+            if (!startPos) return;
+            const prevDay = idx > 0 ? sortedStops[idx - 1] : null;
+            const prevEnd = (prevDay && !isDayStartOnly(prevDay)) ? getDayEndCoords(prevDay) : null;
+            const chainedToPrev = prevEnd && (nmBetween(prevEnd, startPos) ?? 999) <= 0.25;
+            if (chainedToPrev) return;
+            if (!isDayStartOnly(day) && isSameStartAndEnd(day)) return;
+
+            const colocatedWithEndGroup = stopGroups.some(g => {
+                const d = nmBetween(g.position, startPos);
+                return d != null && d <= 2.0;
+            });
+            if (!colocatedWithEndGroup) {
+                const startLabel = getDayStartName(day) || 'Departure';
+                const startPinEl = MapPin({
+                    n: 'S',
+                    accent: 'teal',
+                    label: `Departure: ${startLabel}`
+                });
+                const startMarker = new AdvancedMarkerElement({
+                    map: map,
+                    position: startPos,
+                    content: startPinEl,
+                    title: `Departure: ${startLabel}`,
+                    zIndex: 95
+                });
+                markers.push(startMarker);
+            }
+        });
         stopGroups.forEach((group) => {
             const items = group.items;
             const primaryStop = group.primaryStop;
-            const locLabel = displayLocationName(primaryStop.location_name);
+            const locLabel = getDayEndName(primaryStop);
             const nums = items.map(it => it.stopNumber);
             const accents = items.map(it => it.accent);
             const isCombined = items.length > 1;
@@ -5597,7 +6214,7 @@ async function initMap() {
 
                 if (combinedTotalCount > 0) {
                     const pos = group.position;
-                    const locLabel = displayLocationName(group.primaryStop.location_name);
+                    const locLabel = getDayEndName(group.primaryStop);
                     const stopNums = group.items.map(it => it.stopNumber);
                     const titleSuffix = stopNums.length > 1 ? ` (Stops ${stopNums.join(' & ')})` : '';
                     const clusterMarker = new AdvancedMarkerElement({
@@ -5730,15 +6347,15 @@ function voyageHasOverallPlannedRoute(tracks, stops) {
     const plannedTracks = tracks.filter(t => t && t.kind === 'planned');
     if (plannedTracks.length === 0) return false;
 
-    // If 2 or fewer stops, any planned track covers the route
-    if (!stops || stops.length <= 2) {
+    if (!stops || stops.length <= 1) {
         return plannedTracks.length > 0;
     }
 
-    // Check if there is a voyage-level planned track (not assigned to a single stop)
+    // Check if there is a voyage-level planned track (not assigned to a single day)
     // or a planned track whose endpoints span the entire itinerary
     for (const t of plannedTracks) {
-        if (!t.voyage_stop_id) {
+        const trackDayId = t.voyage_day_id ?? t.voyage_stop_id;
+        if (!trackDayId) {
             return true;
         }
 
@@ -5750,27 +6367,27 @@ function voyageHasOverallPlannedRoute(tracks, stops) {
         }
         const coords = geoData?.geometry?.coordinates;
         if (coords && Array.isArray(coords) && coords.length >= 2) {
-            const firstStop = stops[0];
-            const lastStop = stops[stops.length - 1];
+            const firstPos = getDayStartCoords(stops[0]) || getDayEndCoords(stops[0]);
+            const lastPos = getDayEndCoords(stops[stops.length - 1]);
             const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
             const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
-            const dStart = nmBetween(firstStop, startPt);
-            const dEnd = nmBetween(lastStop, endPt);
-            if (dStart !== null && dStart < 15 && dEnd !== null && dEnd < 15) {
+            const dStart = firstPos ? nmBetween(firstPos, startPt) : null;
+            const dEnd = lastPos ? nmBetween(lastPos, endPt) : null;
+            if (dStart !== null && dStart < 15 && dEnd !== null && dEnd < 15 && (nmBetween(firstPos, lastPos) ?? 999) >= 2) {
                 return true;
             }
         }
     }
 
-    // Check if every leg has a matching planned track
-    const totalLegs = stops.length - 1;
+    // Check if every day leg has a matching planned track
+    const totalLegs = stops.length;
     let legsWithPlanned = 0;
     for (let i = 0; i < totalLegs; i++) {
-        if (hasPlannedRouteForLeg(stops[i], stops[i + 1], i, stops, tracks, true)) {
+        if (hasPlannedRouteForLeg(stops[i], stops[i], i, stops, tracks, true)) {
             legsWithPlanned++;
         }
     }
-    return legsWithPlanned === totalLegs;
+    return totalLegs > 0 && legsWithPlanned === totalLegs;
 }
 
 function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOverallCheck = false) {
@@ -5782,11 +6399,15 @@ function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOver
         return true;
     }
 
+    const day = (stops && stops[legIdx]) ? stops[legIdx] : toStop;
     const legNum = legIdx + 1;
+    const fromCoords = getDayStartCoords(day) || getDayEndCoords(fromStop);
+    const toCoords = getDayEndCoords(day);
 
     for (const t of plannedTracks) {
-        // 1. Explicit stop ID match
-        if (t.voyage_stop_id != null && (t.voyage_stop_id === fromStop.id || t.voyage_stop_id === toStop.id)) {
+        // 1. Explicit day ID match
+        const trackDayId = t.voyage_day_id ?? t.voyage_stop_id;
+        if (trackDayId != null && day && trackDayId === day.id) {
             return true;
         }
 
@@ -5795,9 +6416,9 @@ function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOver
             return true;
         }
 
-        // 3. Proximity: starts near fromStop (< 10 NM) and ends near toStop (< 10 NM)
+        // 3. Proximity: starts near day start (< 10 NM) and ends near day end (< 10 NM)
         const rawGeo = t.simplified_geojson || t.geojson;
-        if (rawGeo) {
+        if (rawGeo && fromCoords && toCoords) {
             let geoData = rawGeo;
             if (typeof rawGeo === 'string') {
                 try { geoData = JSON.parse(rawGeo); } catch (e) { continue; }
@@ -5806,8 +6427,8 @@ function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOver
             if (coords && Array.isArray(coords) && coords.length >= 2) {
                 const startPt = { latitude: coords[0][1], longitude: coords[0][0] };
                 const endPt = { latitude: coords[coords.length - 1][1], longitude: coords[coords.length - 1][0] };
-                const dStart = nmBetween(fromStop, startPt);
-                const dEnd = nmBetween(toStop, endPt);
+                const dStart = nmBetween(fromCoords, startPt);
+                const dEnd = nmBetween(toCoords, endPt);
                 if (dStart !== null && dStart < 10 && dEnd !== null && dEnd < 10) {
                     return true;
                 }
@@ -5815,8 +6436,8 @@ function hasPlannedRouteForLeg(fromStop, toStop, legIdx, stops, tracks, skipOver
         }
     }
 
-    // 4. Sequential fallback: if number of planned tracks matches number of legs
-    if (stops && plannedTracks.length === stops.length - 1 && plannedTracks[legIdx]) {
+    // 4. Sequential fallback: if number of planned tracks matches number of days
+    if (stops && plannedTracks.length === stops.length && plannedTracks[legIdx]) {
         return true;
     }
 
@@ -5830,12 +6451,11 @@ async function updateRoutePolylines() {
     routePolylines = [];
     routePolyline = null;
 
-    if (!map || !currentStops || currentStops.length < 2) return;
+    if (!map || !currentStops || currentStops.length === 0) return;
 
     const sortedStops = [...currentStops].sort((a, b) =>
         new Date(a.target_date) - new Date(b.target_date)
     );
-    if (sortedStops.length < 2) return;
 
     // If an overall planned route covers the voyage, suppress all direct lines between stops
     if (voyageHasOverallPlannedRoute(currentTracks, sortedStops)) {
@@ -5844,38 +6464,56 @@ async function updateRoutePolylines() {
 
     const { Polyline } = await importLibrary("maps");
     const routeLineColor = tokenColor('ink') || '#0B1220';
-    const { stopPositionMap } = groupColocatedStops(sortedStops, VOYAGE_ACCENTS, 2.0);
+    const { groups: stopGroups, stopPositionMap } = groupColocatedStops(sortedStops, VOYAGE_ACCENTS, 2.0);
 
-    for (let i = 0; i < sortedStops.length - 1; i++) {
-        const fromStop = sortedStops[i];
-        const toStop = sortedStops[i + 1];
+    const snapToPinGroup = (pt) => {
+        if (!pt) return null;
+        for (const g of stopGroups) {
+            const d = nmBetween(g.position, pt);
+            if (d != null && d <= 2.0) return g.position;
+        }
+        return pt;
+    };
+
+    for (let i = 0; i < sortedStops.length; i++) {
+        const day = sortedStops[i];
+        if (isDayStartOnly(day) || isSameStartAndEnd(day)) continue;
+
+        const prevDay = i > 0 ? sortedStops[i - 1] : null;
+        const rawStart = getDayStartCoords(day) || (prevDay ? getDayEndCoords(prevDay) : null);
+        const rawEnd = getDayEndCoords(day);
+        if (!rawStart || !rawEnd) continue;
 
         // Do not draw direct line for legs that have a planned route
-        if (hasPlannedRouteForLeg(fromStop, toStop, i, sortedStops, currentTracks)) {
+        if (hasPlannedRouteForLeg(prevDay || day, day, i, sortedStops, currentTracks)) {
             continue;
         }
 
-        const fromPos = stopPositionMap.get(fromStop.id) || { lat: fromStop.latitude, lng: fromStop.longitude };
-        const toPos = stopPositionMap.get(toStop.id) || { lat: toStop.latitude, lng: toStop.longitude };
+        const fromPos = (prevDay && stopPositionMap.get(prevDay.id)) || snapToPinGroup(rawStart);
+        const toPos = stopPositionMap.get(day.id) || snapToPinGroup(rawEnd);
         const legCoords = [fromPos, toPos];
-
-        const poly = new Polyline({
+        const line = new Polyline({
             path: legCoords,
             geodesic: true,
             strokeColor: routeLineColor,
             strokeOpacity: 0,
             icons: [{
-                icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, scale: 3 },
+                icon: {
+                    path: 'M 0,-1 0,1',
+                    strokeOpacity: 0.7,
+                    strokeColor: routeLineColor,
+                    scale: 2.5
+                },
                 offset: '0',
-                repeat: '14px'
+                repeat: '12px'
             }],
             map: map
         });
-
-        routePolylines.push(poly);
+        routePolylines.push(line);
     }
-
-    routePolyline = routePolylines[0] || null;
+    if (routePolylines.length > 0) {
+        routePolyline = routePolylines[0];
+    }
 }
 
 async function loadAndRenderTracks(voyageId) {
@@ -6437,29 +7075,30 @@ async function captureAndUploadMap(voyageId) {
 
     if (sortedStops.length > 0) {
         const stopsToDraw = sortedStops.slice(0, 15); // Limit to avoid URL overflow
+        const firstStart = getDayStartCoords(stopsToDraw[0]) || getDayEndCoords(stopsToDraw[0]);
         
         // Add Check-in marker if it exists and is within the live tracking window
-        if (currentVoyage && isWithinTrackingWindow(currentVoyage) && currentVoyage.checkin_latitude && currentVoyage.checkin_longitude) {
-            // Always show check-in if it exists? Or only if near?
-            // User said "properly handle things when I am not geographically in the area"
-            // For static map, if it's far, it will zoom out too much.
-            // Let's only show it if it's within, say, 500 miles of the first stop.
-            const first = stopsToDraw[0];
-            const dist = nmBetween(first, { latitude: currentVoyage.checkin_latitude, longitude: currentVoyage.checkin_longitude });
+        if (currentVoyage && isWithinTrackingWindow(currentVoyage) && currentVoyage.checkin_latitude && currentVoyage.checkin_longitude && firstStart) {
+            const dist = nmBetween(firstStart, { latitude: currentVoyage.checkin_latitude, longitude: currentVoyage.checkin_longitude });
             if (dist !== null && dist < 500) {
                 markersParam += `&markers=color:orange%7Clabel:X%7C${currentVoyage.checkin_latitude},${currentVoyage.checkin_longitude}`;
             }
         }
 
-        // Draw path first so stop markers render on top, omitting direct lines for legs with planned routes
+        // Draw each day's Start -> End leg first so stop markers render on top,
+        // omitting direct lines for legs that have a planned GPX route.
         pathParam = "";
         const hasOverallPlanned = voyageHasOverallPlannedRoute(currentTracks, sortedStops);
         if (!hasOverallPlanned) {
-            for (let i = 0; i < stopsToDraw.length - 1; i++) {
-                const from = stopsToDraw[i];
-                const to = stopsToDraw[i + 1];
-                if (!hasPlannedRouteForLeg(from, to, i, sortedStops, currentTracks)) {
-                    pathParam += `&path=color:0x999999ff|weight:1|${from.latitude},${from.longitude}|${to.latitude},${to.longitude}`;
+            for (let i = 0; i < stopsToDraw.length; i++) {
+                const day = stopsToDraw[i];
+                if (isDayStartOnly(day) || isSameStartAndEnd(day)) continue;
+                const prevDay = i > 0 ? stopsToDraw[i - 1] : null;
+                const fromPos = getDayStartCoords(day) || (prevDay ? getDayEndCoords(prevDay) : null);
+                const toPos = getDayEndCoords(day);
+                if (!fromPos || !toPos) continue;
+                if (!hasPlannedRouteForLeg(prevDay || day, day, i, sortedStops, currentTracks)) {
+                    pathParam += `&path=color:0x999999ff|weight:1|${fromPos.lat},${fromPos.lng}|${toPos.lat},${toPos.lng}`;
                 }
             }
         }
@@ -6467,22 +7106,23 @@ async function captureAndUploadMap(voyageId) {
         // Draw planned and recorded GPX track polylines on the static map
         pathParam += buildStaticMapTrackPathsParam(currentTracks);
 
-        // If the last stop is very close to the first, omit it to avoid overlap
-        const first = stopsToDraw[0];
-        const last = stopsToDraw[stopsToDraw.length - 1];
-        const dlat = Math.abs(last.latitude - first.latitude);
-        const dlng = Math.abs(last.longitude - first.longitude);
-        const lastIsNearFirst = stopsToDraw.length > 1 && dlat < 0.05 && dlng < 0.05;
+        const completeDays = stopsToDraw.filter(s => !isDayStartOnly(s) && getDayEndCoords(s));
+        const lastEnd = completeDays.length > 0 ? getDayEndCoords(completeDays[completeDays.length - 1]) : null;
+        const lastIsNearFirst = Boolean(firstStart && lastEnd && (nmBetween(firstStart, lastEnd) ?? 999) <= 2.0);
 
-        // Add stops 2..N first, then green (stop 1) last so it renders on top
-        // First stop = green, last stop = red (if not near first), others = blue
-        for (let i = 1; i < stopsToDraw.length; i++) {
-            if (i === stopsToDraw.length - 1 && lastIsNearFirst) continue;
-            const s = stopsToDraw[i];
-            const color = i === stopsToDraw.length - 1 ? 'red' : 'blue';
-            markersParam += `&markers=size:small%7Ccolor:${color}%7C${s.latitude},${s.longitude}`;
+        // Add each day's End stop marker first (omitting any that coincide with firstStart so green stays on top),
+        // then render the green departure marker at firstStart last so it renders on top.
+        for (let i = 0; i < completeDays.length; i++) {
+            const endPos = getDayEndCoords(completeDays[i]);
+            if (!endPos) continue;
+            if (firstStart && (nmBetween(firstStart, endPos) ?? 999) <= 2.0) continue;
+            const isFinalNonLoopStop = (i === completeDays.length - 1) && !lastIsNearFirst;
+            const color = isFinalNonLoopStop ? 'red' : 'blue';
+            markersParam += `&markers=size:small%7Ccolor:${color}%7C${endPos.lat},${endPos.lng}`;
         }
-        markersParam += `&markers=size:small%7Ccolor:green%7C${first.latitude},${first.longitude}`;
+        if (firstStart) {
+            markersParam += `&markers=size:small%7Ccolor:green%7C${firstStart.lat},${firstStart.lng}`;
+        }
     } else if (currentVoyage.latitude && currentVoyage.longitude) {
         // No stops yet — show the voyage hub fitted to the search radius
         markersParam += `&markers=color:blue%7C${currentVoyage.latitude},${currentVoyage.longitude}`;
@@ -6527,7 +7167,7 @@ function populateReportDayPills(sortedStops = [], activeDay = 'all', rootEl = do
     let optionsHtml = `<option value="all">All Days</option>`;
     sortedStops.forEach((stop, idx) => {
         const dayStr = String(idx + 1);
-        const shortLoc = displayLocationName(stop.location_name || stop.name || `Stop ${dayStr}`).split(',')[0].trim();
+        const shortLoc = (getDayEndName(stop) || `Day ${dayStr}`).split(',')[0].trim();
         const isSel = normActive === dayStr;
         pillsHtml += `<button type="button" class="np-report-day-pill ${isSel ? 'active' : ''}" role="tab" aria-selected="${isSel ? 'true' : 'false'}" data-day="${dayStr}">Day ${dayStr}: ${esc(shortLoc)}</button>`;
         optionsHtml += `<option value="${dayStr}">Day ${dayStr}: ${esc(shortLoc)}</option>`;
@@ -6703,16 +7343,11 @@ function buildReportFilterBarHTML() {
             const recommendations = pilotReport.recommendations;
             const debriefs = pilotReport.debriefs || [];
 
-            // 2. Check/Capture Map (refresh when tracks are present so planned/actual polylines are included)
-            if (!mapURL || (currentTracks && currentTracks.length > 0)) {
+            // 2. Check/Capture Map (refresh when stops or tracks are present so current Start/End legs and polylines are rendered)
+            if (!mapURL || (currentStops && currentStops.length > 0) || (currentTracks && currentTracks.length > 0)) {
                  const captured = await captureAndUploadMap(currentVoyage.id);
                  if (captured) {
-                     // Check again to get the fresh URL
-                     const resp = await API.getVoyageGuide(currentVoyage.id).catch(() => null);
-                     if (resp) {
-                         guide = resp.guide;
-                         mapURL = resp.map_url;
-                     }
+                     mapURL = `/api/v1/voyages/${currentVoyage.id}/map_image?t=${Date.now()}`;
                  }
             }
 
@@ -7985,7 +8620,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         html += `<span class="np-section-label np-day-grid-label" data-report-scope="overview" data-report-cats="all weather">Day by Day</span>`;
         html += `<div class="${dayGridClass}" data-report-scope="overview" data-report-cats="all weather" style="--day-count:${sortedStops.length}">`;
         sortedStops.forEach((stop, idx) => {
-            const briefing = briefings.find(br => br && br.stop_id === stop.id) || {};
+            const briefing = briefings.find(br => br && (br.day_id ?? br.stop_id) === stop.id) || {};
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
             const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
             const w = briefing.weather_summary || {};
@@ -7999,7 +8634,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             html += `
                 <div class="np-day-tile" data-day="${idx + 1}" style="--accent:var(--${accent})">
                     <div class="np-day-tile__label">Day ${idx+1} · ${dateStr}</div>
-                    <div class="np-day-tile__name">${DOMPurify.sanitize(displayLocationName(stop.location_name).split(',')[0].trim())}</div>
+                    <div class="np-day-tile__name">${DOMPurify.sanitize(getDayEndName(stop).split(',')[0].trim())}</div>
                     ${w.condition ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">${getIconForWeather(w.condition)}</span>${w.condition}</div>` : ''}
                     ${temp ? `<div class="np-day-tile__meta"><span class="material-symbols-outlined np-day-tile__icon">thermometer</span>${temp}</div>` : ''}
                     ${w.wind_speed_kt ? `<div class="np-day-tile__meta"><span style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:4px">${getWindArrowSVG(directionToDegrees(w.wind_direction), getWindScale(w.wind_speed_kt) * 0.7)}</span>${w.wind_speed_kt} kt ${w.wind_direction || ''}</div>` : ''}
@@ -8091,8 +8726,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         allDebriefs.forEach(d => {
             if (assignedDebriefs.has(d)) return;
             const nameToTest = `${d.track_name || ''} ${d.planned_track_name || ''}`.toLowerCase();
-            for (let i = 0; i < sortedStops.length - 1; i++) {
-                const locName = (sortedStops[i].location_name || sortedStops[i].name || '').toLowerCase();
+            for (let i = 0; i < sortedStops.length; i++) {
+                const locName = getDayStartName(sortedStops[i]).toLowerCase();
                 if (locName && nameToTest.includes(locName)) {
                     if (!stopDebriefsMap.has(i)) stopDebriefsMap.set(i, []);
                     stopDebriefsMap.get(i).push(d);
@@ -8102,13 +8737,13 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             }
         });
 
-        // Pass 3: Explicit match by start_stop_id
+        // Pass 3: Explicit match by start_day_id / start_stop_id
         allDebriefs.forEach(d => {
-            if (assignedDebriefs.has(d) || d.start_stop_id == null) return;
-            let sIdx = sortedStops.findIndex(s => String(s.id) === String(d.start_stop_id));
+            const sId = d.start_day_id ?? d.start_stop_id;
+            if (assignedDebriefs.has(d) || sId == null) return;
+            let sIdx = sortedStops.findIndex(s => String(s.id) === String(sId));
             if (sIdx >= 0) {
-                // If start_stop_id pointed to the final arrival stop, place with the preceding starting stop
-                if (sIdx === sortedStops.length - 1 && sortedStops.length > 1) {
+                if (!sortedStops[sIdx].start_location_name && sIdx === sortedStops.length - 1 && sortedStops.length > 1) {
                     sIdx = sIdx - 1;
                 }
                 if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
@@ -8117,11 +8752,12 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             }
         });
 
-        // Pass 4: voyage_stop_id if set
+        // Pass 4: voyage_day_id / voyage_stop_id if set
         allDebriefs.forEach(d => {
-            if (assignedDebriefs.has(d) || d.voyage_stop_id == null) return;
-            let sIdx = sortedStops.findIndex(s => String(s.id) === String(d.voyage_stop_id));
-            if (sIdx > 0 && (sIdx === sortedStops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
+            const vId = d.voyage_day_id ?? d.voyage_stop_id;
+            if (assignedDebriefs.has(d) || vId == null) return;
+            let sIdx = sortedStops.findIndex(s => String(s.id) === String(vId));
+            if (sIdx > 0 && !sortedStops[sIdx].start_location_name && (sIdx === sortedStops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
                 sIdx = sIdx - 1;
             }
             if (sIdx >= 0 && sIdx < sortedStops.length) {
@@ -8146,7 +8782,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
         });
 
         sortedStops.forEach((stop, idx) => {
-            const b = (briefings && briefings.find(br => br && (br.stop_id === stop.id || br.id === stop.id))) || {};
+            const b = (briefings && briefings.find(br => br && ((br.day_id ?? br.stop_id) === stop.id || br.id === stop.id))) || {};
             const accent = VOYAGE_ACCENTS[idx % VOYAGE_ACCENTS.length];
             const dateStr = stop.target_date
                 ? new Date(stop.target_date).toLocaleDateString(undefined, {timeZone:'UTC', weekday:'long', month:'long', day:'numeric'})
@@ -8158,15 +8794,19 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const sun = b.sun_phase || {};
             const legNum = idx + 1;
             const stopDebriefs = stopDebriefsMap.get(idx) || [];
-            const curShortName = displayLocationName(stop.location_name || stop.name || '').split(',')[0].trim();
-            const nextStop = sortedStops[idx + 1];
-            const nextShortName = nextStop ? displayLocationName(nextStop.location_name || nextStop.name || '').split(',')[0].trim() : '';
-            const distNm = nextStop ? nmBetween(stop, nextStop) : null;
-            const legSummary = nextStop
-                ? `${esc(curShortName)} → ${esc(nextShortName)}${distNm !== null ? ` (${distNm.toFixed(1)} NM)` : ''}`
-                : esc(curShortName);
+            const startShortName = getDayStartName(stop).split(',')[0].trim();
+            const endShortName = getDayEndName(stop).split(',')[0].trim();
+            const startCoords = getDayStartCoords(stop);
+            const endCoords = getDayEndCoords(stop);
+            const distNm = (startCoords && endCoords && !isSameStartAndEnd(stop)) ? nmBetween(startCoords, endCoords) : null;
+            const legSummary = (startShortName && endShortName && startShortName !== endShortName && !isSameStartAndEnd(stop))
+                ? `${esc(startShortName)} → ${esc(endShortName)}${distNm !== null ? ` (${distNm.toFixed(1)} NM)` : ''}`
+                : esc(endShortName || startShortName);
             const hasPrev = idx > 0;
             const hasNext = idx < sortedStops.length - 1;
+            const dayHeaderTitle = (startShortName && endShortName && startShortName !== endShortName && !isSameStartAndEnd(stop))
+                ? `${getDayStartName(stop)} → ${getDayEndName(stop)}`
+                : (getDayEndName(stop) || getDayStartName(stop));
 
             html += `
                 <div class="np-report-stop" data-stop-day="${idx + 1}" style="--accent:var(--${accent})">
@@ -8182,7 +8822,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                     <div class="np-report-stop__header" data-report-cats="all navigation weather amenities">
                         <div class="np-report-stop__number">${idx+1}</div>
                         <div>
-                            <div class="np-report-stop__title">${DOMPurify.sanitize(displayLocationName(stop.location_name))}</div>
+                            <div class="np-report-stop__title">${DOMPurify.sanitize(dayHeaderTitle)}</div>
                             ${dateStr ? `<div class="np-report-stop__date">${dateStr}</div>` : ''}
                         </div>
                     </div>
@@ -8286,15 +8926,14 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             if (stopDebriefs.length > 0) {
                 stopDebriefs.forEach(d => {
-                    if (d && typeof d === 'object' && d.start_stop_id == null && stop.id != null) {
+                    if (d && typeof d === 'object' && d.start_day_id == null && d.start_stop_id == null && stop.id != null) {
+                        d.start_day_id = stop.id;
                         d.start_stop_id = stop.id;
                     }
                 });
                 const stopDebriefHtml = generateDebriefsHTML(stopDebriefs, sortedStops);
                 if (stopDebriefHtml) {
-                    const debriefTitle = (idx < sortedStops.length - 1)
-                        ? `Passage Tactical Debrief — Leg ${legNum}`
-                        : `Passage Tactical Debrief`;
+                    const debriefTitle = `Passage Tactical Debrief — Leg ${legNum}`;
                     html += `
                         <div class="np-report-stop-debrief" data-report-cats="all navigation weather">
                             <span class="np-facilities-header">${debriefTitle}</span>
@@ -8315,7 +8954,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 function renderSharedReport(data, container, sailing = false, token = '') {
     const guide = data.guide || {};
     const voyage = data.voyage || {};
-    const stops = data.stops || [];
+    const stops = data.days || data.stops || [];
     const briefings = data.briefings || [];
     const recommendations = data.recommendations || [];
     const debriefs = data.debriefs || [];
@@ -8358,7 +8997,7 @@ function renderSharedReport(data, container, sailing = false, token = '') {
     // ... (Chart rendering logic preserved below) ...
     setTimeout(() => {
         sortedStops.forEach((stop, idx) => {
-            const b = briefings.find(br => br.stop_id === stop.id) || {};
+            const b = briefings.find(br => (br.day_id ?? br.stop_id) === stop.id) || {};
             // Main Chart
             if (b.tides && b.tides.events) {
                 renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
@@ -8391,7 +9030,7 @@ async function initPrintMode(voyageId) {
     try {
         const [pilotReport, stops] = await Promise.all([
             API.getPilotReport(voyageId),
-            API.getStops(voyageId),
+            API.getDays(voyageId),
         ]);
         const sortedStops = [...stops].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
         const briefings = await Promise.all(sortedStops.map(s => API.getBriefing(s.id).catch(() => null)));
@@ -8465,7 +9104,7 @@ function renderPrintReport(data, container) {
 
     setTimeout(() => {
         sortedStops.forEach((stop, idx) => {
-            const b = briefings.find(br => br && br.stop_id === stop.id) || {};
+            const b = briefings.find(br => br && (br.day_id ?? br.stop_id) === stop.id) || {};
             if (b.tides && b.tides.events) {
                 renderTideChart(`reportTideChart_${idx}`, b.tides, stop.target_date);
                 renderMiniTideChart(`reportMiniTideChart_${idx}`, b.tides, stop.target_date);

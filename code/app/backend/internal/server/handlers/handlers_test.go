@@ -77,35 +77,43 @@ func (m *MockStore) DeleteVoyage(ctx context.Context, id int64) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) ListStops(ctx context.Context, voyageID int64, limit, offset int) ([]model.Stop, error) {
+func (m *MockStore) ListDays(ctx context.Context, voyageID int64, limit, offset int) ([]model.VoyageDay, error) {
 	args := m.Called(voyageID, limit, offset)
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) ListLandfallStops(ctx context.Context, voyageID int64) ([]model.Stop, error) {
+func (m *MockStore) ListLandfallDays(ctx context.Context, voyageID int64) ([]model.VoyageDay, error) {
 	args := m.Called(voyageID)
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) CreateStop(ctx context.Context, s *model.Stop) error {
-	args := m.Called(s)
+func (m *MockStore) CreateDay(ctx context.Context, d *model.VoyageDay) error {
+	args := m.Called(d)
 	return args.Error(0)
 }
 
-func (m *MockStore) GetStop(ctx context.Context, id int64) (*model.Stop, error) {
+func (m *MockStore) GetDay(ctx context.Context, id int64) (*model.VoyageDay, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*model.Stop), args.Error(1)
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) GetStopByDate(ctx context.Context, voyageID int64, date time.Time) (*model.Stop, error) {
+func (m *MockStore) GetDayByDate(ctx context.Context, voyageID int64, date time.Time) (*model.VoyageDay, error) {
 	args := m.Called(voyageID, date)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*model.Stop), args.Error(1)
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
+}
+
+func (m *MockStore) GetPreviousDay(ctx context.Context, voyageID int64, beforeDate time.Time) (*model.VoyageDay, error) {
+	args := m.Called(voyageID, beforeDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.VoyageDay), args.Error(1)
 }
 
 func (m *MockStore) DeletePassagePoints(ctx context.Context, voyageID int64) error {
@@ -113,18 +121,18 @@ func (m *MockStore) DeletePassagePoints(ctx context.Context, voyageID int64) err
 	return args.Error(0)
 }
 
-func (m *MockStore) UpdateStop(ctx context.Context, s *model.Stop) error {
-	args := m.Called(s)
+func (m *MockStore) UpdateDay(ctx context.Context, d *model.VoyageDay) error {
+	args := m.Called(d)
 	return args.Error(0)
 }
 
-func (m *MockStore) DeleteStop(ctx context.Context, id int64) error {
+func (m *MockStore) DeleteDay(ctx context.Context, id int64) error {
 	args := m.Called(id)
 	return args.Error(0)
 }
 
-func (m *MockStore) GetBriefing(ctx context.Context, stopID int64) (*model.Briefing, error) {
-	args := m.Called(stopID)
+func (m *MockStore) GetBriefing(ctx context.Context, dayID int64) (*model.Briefing, error) {
+	args := m.Called(dayID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -318,29 +326,29 @@ func (m *MockStore) DeleteSeasonality(ctx context.Context, regionID int, month i
 	return args.Error(0)
 }
 
-func (m *MockStore) ListAllFutureStops(ctx context.Context) ([]model.Stop, error) {
+func (m *MockStore) ListAllFutureDays(ctx context.Context) ([]model.VoyageDay, error) {
 	args := m.Called()
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) ListStopsInWindow(ctx context.Context, days int) ([]model.Stop, error) {
+func (m *MockStore) ListDaysInWindow(ctx context.Context, days int) ([]model.VoyageDay, error) {
 	args := m.Called(days)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]model.Stop), args.Error(1)
+	return args.Get(0).([]model.VoyageDay), args.Error(1)
 }
 
-func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, stopID int64, alerts model.RawJSON) error {
-	args := m.Called(stopID, alerts)
+func (m *MockStore) UpsertSafetyAlerts(ctx context.Context, dayID int64, alerts model.RawJSON) error {
+	args := m.Called(dayID, alerts)
 	return args.Error(0)
 }
 
-func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, stopID int64, weather model.WeatherSummary) error {
-	args := m.Called(stopID, weather)
+func (m *MockStore) UpsertWeatherBriefing(ctx context.Context, dayID int64, weather model.WeatherSummary) error {
+	args := m.Called(dayID, weather)
 	return args.Error(0)
 }
 
@@ -365,8 +373,8 @@ func (m *MockStore) ListVoyageTracks(ctx context.Context, voyageID int64) ([]mod
 	return args.Get(0).([]model.VoyageTrack), args.Error(1)
 }
 
-func (m *MockStore) ListStopTracks(ctx context.Context, stopID int64) ([]model.VoyageTrack, error) {
-	args := m.Called(stopID)
+func (m *MockStore) ListDayTracks(ctx context.Context, dayID int64) ([]model.VoyageTrack, error) {
+	args := m.Called(dayID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -475,35 +483,35 @@ func TestGetVoyage(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestStopOperations(t *testing.T) {
+func TestDayOperations(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /voyages/{id}/stops", handler.ListStops)
-	mux.HandleFunc("POST /voyages/{id}/stops", handler.CreateStop)
+	mux.HandleFunc("GET /voyages/{id}/days", handler.ListDays)
+	mux.HandleFunc("POST /voyages/{id}/days", handler.CreateDay)
 
 	personID := int64(1)
 	voyageID := int64(1)
 
-	expectedStops := []model.Stop{{ID: 10, LocationName: "Stop 1", VoyageID: voyageID}}
+	expectedDays := []model.VoyageDay{{ID: 10, StartLocationName: "Day 1 Start", EndLocationName: "Day 1 End", VoyageID: voyageID}}
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-	mockStore.On("ListStops", voyageID, 50, 0).Return(expectedStops, nil)
+	mockStore.On("ListDays", voyageID, 50, 0).Return(expectedDays, nil)
 
-	reqList := httptest.NewRequest("GET", "/voyages/1/stops", nil)
+	reqList := httptest.NewRequest("GET", "/voyages/1/days", nil)
 	reqList = addPerson(reqList, personID)
 	wList := httptest.NewRecorder()
 	mux.ServeHTTP(wList, reqList)
 
 	assert.Equal(t, http.StatusOK, wList.Code)
 
-	body := `{"location_name": "New Stop", "latitude": 48.0, "longitude": -123.0, "target_date": "2025-07-02T00:00:00Z"}`
-	reqCreate := httptest.NewRequest("POST", "/voyages/1/stops", strings.NewReader(body))
+	body := `{"start_location_name": "Start Port", "start_latitude": 48.0, "start_longitude": -123.0, "end_location_name": "End Port", "end_latitude": 48.1, "end_longitude": -123.1, "target_date": "2025-07-02T00:00:00Z"}`
+	reqCreate := httptest.NewRequest("POST", "/voyages/1/days", strings.NewReader(body))
 	reqCreate = addPerson(reqCreate, personID)
 	wCreate := httptest.NewRecorder()
 
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-	mockStore.On("CreateStop", mock.MatchedBy(func(s *model.Stop) bool {
-		return s.LocationName == "New Stop" && s.VoyageID == 1
+	mockStore.On("CreateDay", mock.MatchedBy(func(d *model.VoyageDay) bool {
+		return d.StartLocationName == "Start Port" && d.EndLocationName == "End Port" && d.VoyageID == 1
 	})).Return(nil)
 
 	mux.ServeHTTP(wCreate, reqCreate)
@@ -586,36 +594,36 @@ func TestSharingOperations(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestUpdateDeleteStop(t *testing.T) {
+func TestUpdateDeleteDay(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /stops/{id}", handler.UpdateStop)
-	mux.HandleFunc("DELETE /stops/{id}", handler.DeleteStop)
+	mux.HandleFunc("PUT /days/{id}", handler.UpdateDay)
+	mux.HandleFunc("DELETE /days/{id}", handler.DeleteDay)
 
-	stopID := int64(100)
+	dayID := int64(100)
 	voyageID := int64(50)
 	personID := int64(1)
 
-	mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetDay", dayID).Return(&model.VoyageDay{ID: dayID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 
-	body := `{"location_name": "Updated Stop"}`
-	mockStore.On("UpdateStop", mock.MatchedBy(func(s *model.Stop) bool {
-		return s.ID == stopID && s.LocationName == "Updated Stop" && s.VoyageID == voyageID
+	body := `{"start_location_name": "Updated Day", "end_location_name": "Updated Day"}`
+	mockStore.On("UpdateDay", mock.MatchedBy(func(d *model.VoyageDay) bool {
+		return d.ID == dayID && d.EndLocationName == "Updated Day" && d.VoyageID == voyageID
 	})).Return(nil)
 
-	reqUpdate := httptest.NewRequest("PUT", "/stops/100", strings.NewReader(body))
+	reqUpdate := httptest.NewRequest("PUT", "/days/100", strings.NewReader(body))
 	reqUpdate = addPerson(reqUpdate, personID)
 	wUpdate := httptest.NewRecorder()
 	mux.ServeHTTP(wUpdate, reqUpdate)
 	assert.Equal(t, http.StatusOK, wUpdate.Code)
 
-	mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetDay", dayID).Return(&model.VoyageDay{ID: dayID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-	mockStore.On("DeleteStop", stopID).Return(nil)
+	mockStore.On("DeleteDay", dayID).Return(nil)
 
-	reqDelete := httptest.NewRequest("DELETE", "/stops/100", nil)
+	reqDelete := httptest.NewRequest("DELETE", "/days/100", nil)
 	reqDelete = addPerson(reqDelete, personID)
 	wDelete := httptest.NewRecorder()
 	mux.ServeHTTP(wDelete, reqDelete)
@@ -628,32 +636,32 @@ func TestResearchBriefing(t *testing.T) {
 	mockStore := new(MockStore)
 	handler := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /stops/{id}/research", handler.TriggerResearch)
-	mux.HandleFunc("GET /stops/{id}/briefing", handler.GetBriefing)
+	mux.HandleFunc("POST /days/{id}/research", handler.TriggerResearch)
+	mux.HandleFunc("GET /days/{id}/briefing", handler.GetBriefing)
 
-	stopID := int64(10)
+	dayID := int64(10)
 	voyageID := int64(5)
 	personID := int64(1)
 
-	mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetDay", dayID).Return(&model.VoyageDay{ID: dayID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
-	mockStore.On("ListStops", voyageID, 0, 0).Return([]model.Stop{}, nil).Maybe()
+	mockStore.On("ListDays", voyageID, 0, 0).Return([]model.VoyageDay{}, nil).Maybe()
 	mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{}, nil).Maybe()
-	mockStore.On("ListStopTracks", stopID).Return([]model.VoyageTrack{}, nil).Maybe()
+	mockStore.On("ListDayTracks", dayID).Return([]model.VoyageTrack{}, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("CreateBriefing", mock.Anything, mock.Anything).Return(nil).Maybe()
 
-	reqTrigger := httptest.NewRequest("POST", "/stops/10/research", nil)
+	reqTrigger := httptest.NewRequest("POST", "/days/10/research", nil)
 	reqTrigger = addPerson(reqTrigger, personID)
 	wTrigger := httptest.NewRecorder()
 	mux.ServeHTTP(wTrigger, reqTrigger)
 	assert.Equal(t, http.StatusAccepted, wTrigger.Code)
 
-	mockStore.On("GetBriefing", stopID).Return(&model.Briefing{ID: 1, StopID: stopID}, nil)
-	mockStore.On("GetStop", stopID).Return(&model.Stop{ID: stopID, VoyageID: voyageID}, nil)
+	mockStore.On("GetBriefing", dayID).Return(&model.Briefing{ID: 1, DayID: dayID}, nil)
+	mockStore.On("GetDay", dayID).Return(&model.VoyageDay{ID: dayID, VoyageID: voyageID}, nil)
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 
-	reqGet := httptest.NewRequest("GET", "/stops/10/briefing", nil)
+	reqGet := httptest.NewRequest("GET", "/days/10/briefing", nil)
 	reqGet = addPerson(reqGet, personID)
 	wGet := httptest.NewRecorder()
 	mux.ServeHTTP(wGet, reqGet)
@@ -694,17 +702,17 @@ func TestTriggerFullVoyageResearch(t *testing.T) {
 
 	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 
-	mockStore.On("ListStops", voyageID, 0, 0).Return([]model.Stop{
-		{ID: 10, LocationName: "Stop 1"},
-		{ID: 11, LocationName: "Stop 2"},
+	mockStore.On("ListDays", voyageID, 0, 0).Return([]model.VoyageDay{
+		{ID: 10, StartLocationName: "Stop 1", EndLocationName: "Stop 2"},
+		{ID: 11, StartLocationName: "Stop 2", EndLocationName: "Stop 3"},
 	}, nil)
 
-	mockStore.On("ListStops", mock.Anything, 0, 0).Return([]model.Stop{
-		{ID: 10, LocationName: "Stop 1"},
-		{ID: 11, LocationName: "Stop 2"},
+	mockStore.On("ListDays", mock.Anything, 0, 0).Return([]model.VoyageDay{
+		{ID: 10, StartLocationName: "Stop 1", EndLocationName: "Stop 2"},
+		{ID: 11, StartLocationName: "Stop 2", EndLocationName: "Stop 3"},
 	}, nil).Maybe()
 	mockStore.On("ListVoyageTracks", mock.Anything).Return([]model.VoyageTrack{}, nil).Maybe()
-	mockStore.On("ListStopTracks", mock.Anything).Return([]model.VoyageTrack{}, nil).Maybe()
+	mockStore.On("ListDayTracks", mock.Anything).Return([]model.VoyageTrack{}, nil).Maybe()
 	mockStore.On("GetBriefing", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetNearbyBriefing", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("GetVoyageGuide", mock.Anything).Return(nil, assert.AnError).Maybe()
@@ -839,7 +847,7 @@ func TestGetPilotReport(t *testing.T) {
 		mockStore.On("GetVoyageGuide", voyageID).Return(&model.VoyageGuide{Summary: "Test Guide"}, nil)
 		mockStore.On("ListVoyageRecommendations", voyageID).Return([]model.VoyageRecommendation{{Name: "Rec 1"}}, nil)
 		mockStore.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
-		mockStore.On("ListStops", voyageID, 100, 0).Return([]model.Stop{}, nil)
+		mockStore.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{}, nil)
 		mockStore.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
 			{ID: "trk-1", Name: "Leg 1", Debrief: model.RawJSON(debriefJSON)},
 		}, nil)
@@ -861,28 +869,27 @@ func TestGetPilotReport(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("Associates debrief with starting stop", func(t *testing.T) {
+	t.Run("Associates debrief with voyage day", func(t *testing.T) {
 		localMock := new(MockStore)
 		localHandler := handlers.New(localMock, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
 		localMux := http.NewServeMux()
 		localMux.HandleFunc("GET /api/v1/voyages/{id}/pilot_report", localHandler.GetPilotReport)
 
-		stop1 := model.Stop{ID: 10, LocationName: "Cowes"}
-		stop2 := model.Stop{ID: 11, LocationName: "Newtown"}
-		stop3 := model.Stop{ID: 12, LocationName: "Yarmouth"}
-		dest11 := int64(11)
-		dest12 := int64(12)
-		debrief1JSON := `{"track_id":"trk-1","track_name":"Full Voyage - Leg 1: Cowes to Newtown","voyage_stop_id":11}`
-		debrief2JSON := `{"track_id":"trk-2","track_name":"Full Voyage - Leg 2: Newtown to Yarmouth","voyage_stop_id":12}`
+		day1 := model.VoyageDay{ID: 10, StartLocationName: "Cowes", EndLocationName: "Newtown"}
+		day2 := model.VoyageDay{ID: 11, StartLocationName: "Newtown", EndLocationName: "Yarmouth"}
+		id10 := int64(10)
+		id11 := int64(11)
+		debrief1JSON := `{"track_id":"trk-1","track_name":"Full Voyage - Leg 1: Cowes to Newtown","voyage_day_id":10}`
+		debrief2JSON := `{"track_id":"trk-2","track_name":"Full Voyage - Leg 2: Newtown to Yarmouth","voyage_day_id":11}`
 
 		localMock.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 		localMock.On("GetVoyageGuide", voyageID).Return(&model.VoyageGuide{Summary: "Test Guide"}, nil)
 		localMock.On("ListVoyageRecommendations", voyageID).Return([]model.VoyageRecommendation{}, nil)
 		localMock.On("GetVoyageMap", voyageID).Return([]byte("fake-image"), nil)
-		localMock.On("ListStops", voyageID, 100, 0).Return([]model.Stop{stop1, stop2, stop3}, nil)
+		localMock.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{day1, day2}, nil)
 		localMock.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
-			{ID: "trk-1", Name: "Full Voyage - Leg 1: Cowes to Newtown", VoyageStopID: &dest11, Debrief: model.RawJSON(debrief1JSON)},
-			{ID: "trk-2", Name: "Full Voyage - Leg 2: Newtown to Yarmouth", VoyageStopID: &dest12, Debrief: model.RawJSON(debrief2JSON)},
+			{ID: "trk-1", Name: "Full Voyage - Leg 1: Cowes to Newtown", VoyageDayID: &id10, Debrief: model.RawJSON(debrief1JSON)},
+			{ID: "trk-2", Name: "Full Voyage - Leg 2: Newtown to Yarmouth", VoyageDayID: &id11, Debrief: model.RawJSON(debrief2JSON)},
 		}, nil)
 
 		req := httptest.NewRequest("GET", "/api/v1/voyages/123/pilot_report", nil)
@@ -895,10 +902,10 @@ func TestGetPilotReport(t *testing.T) {
 		var report model.PilotReport
 		json.NewDecoder(w.Body).Decode(&report)
 		assert.Equal(t, 2, len(report.Debriefs))
-		assert.NotNil(t, report.Debriefs[0].StartStopID)
-		assert.Equal(t, int64(10), *report.Debriefs[0].StartStopID)
-		assert.NotNil(t, report.Debriefs[1].StartStopID)
-		assert.Equal(t, int64(11), *report.Debriefs[1].StartStopID)
+		assert.NotNil(t, report.Debriefs[0].StartDayID)
+		assert.Equal(t, int64(10), *report.Debriefs[0].StartDayID)
+		assert.NotNil(t, report.Debriefs[1].StartDayID)
+		assert.Equal(t, int64(11), *report.Debriefs[1].StartDayID)
 		localMock.AssertExpectations(t)
 	})
 }

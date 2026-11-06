@@ -254,6 +254,73 @@
       </form>
     </div>
 
+    <!-- Voyage Day Modal (Start / End Leg & Day Type Editor) -->
+    <div id="modal-voyage-day" class="modal modal--floating hidden" role="dialog" aria-modal="false" aria-labelledby="modal-voyage-day-title">
+      <div id="modal-voyage-day-header" class="modal-form-header modal-form-header--draggable" title="Drag to move">
+        <div class="flex align-center gap-xs">
+          <span class="material-symbols-outlined modal-drag-grip" aria-hidden="true">drag_indicator</span>
+          <span id="modal-voyage-day-pill" class="modal-voyage-pill">VOYAGE DAY</span>
+        </div>
+        <button type="button" id="btn-cancel-voyage-day" class="modal-close-circle" aria-label="Close">✕</button>
+      </div>
+      <h2 id="modal-voyage-day-title" class="modal-form-title">Edit Voyage Day</h2>
+      <form id="form-voyage-day" class="modal-form-body">
+        <input type="hidden" id="voyage-day-id" name="id" />
+        <input type="hidden" id="voyage-day-date" name="target_date" />
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="voyage-day-type">Day Type</label>
+            <select id="voyage-day-type" name="day_type" class="form-select">
+              <option value="landfall">Landfall (A → B)</option>
+              <option value="day_trip">Day Trip (Start = End)</option>
+              <option value="lay_day">Lay Day / Rest in Port (Start = End)</option>
+              <option value="passage_point">Offshore Passage Point</option>
+            </select>
+          </div>
+          <div class="form-group flex align-end gap-xs">
+            <button type="button" id="btn-day-copy-prev" class="btn secondary btn-sm" title="Copy previous day's end location into Start">
+              <span class="material-symbols-outlined icon-align" aria-hidden="true">subdirectory_arrow_right</span>
+              From Prev End
+            </button>
+            <button type="button" id="btn-day-swap-locs" class="btn secondary btn-sm" title="Swap Start and End locations">
+              <span class="material-symbols-outlined icon-align" aria-hidden="true">swap_vert</span>
+              Swap
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="voyage-day-start-name">Start Location</label>
+          <input type="text" id="voyage-day-start-name" name="start_location_name" placeholder="Departure harbor or anchorage" required />
+          <input type="hidden" id="voyage-day-start-precise" name="start_precise_location" />
+          <div class="form-row mt-xs">
+            <input type="number" step="any" id="voyage-day-start-lat" name="start_latitude" placeholder="Start Lat" required />
+            <input type="number" step="any" id="voyage-day-start-lng" name="start_longitude" placeholder="Start Lng" required />
+          </div>
+        </div>
+
+        <div id="voyage-day-end-group" class="form-group">
+          <label for="voyage-day-end-name">End Location</label>
+          <input type="text" id="voyage-day-end-name" name="end_location_name" placeholder="Arrival harbor or anchorage" required />
+          <input type="hidden" id="voyage-day-end-precise" name="end_precise_location" />
+          <div class="form-row mt-xs">
+            <input type="number" step="any" id="voyage-day-end-lat" name="end_latitude" placeholder="End Lat" required />
+            <input type="number" step="any" id="voyage-day-end-lng" name="end_longitude" placeholder="End Lng" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="voyage-day-notes">Notes (Optional)</label>
+          <textarea id="voyage-day-notes" name="notes" rows="2" placeholder="Notes, ETD, or crew plan..."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-save-voyage-day" class="btn primary btn-flex-1">Save Voyage Day</button>
+        </div>
+      </form>
+    </div>
+
     <!-- Empty Voyage Prompt Modal -->
     <div id="modal-empty-voyage" class="modal hidden">
       <div class="flex flex-col align-center text-center p-md">

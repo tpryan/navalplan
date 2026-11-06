@@ -19,14 +19,12 @@ type route struct {
 func (s *Server) Register(r ...route) {
 	for _, route := range r {
 		var finalHandler http.Handler = route.Handler
-
 		switch route.AuthLevel {
 		case 1:
 			finalHandler = s.requireAuth(s.enforceCSRF(route.Handler))
 		case 2:
 			finalHandler = s.requireAuth(s.requireAdmin(s.enforceCSRF(route.Handler)))
 		}
-
 		finalHandler = s.staticCache(s.secureHeaders(finalHandler))
 		s.Mux.Handle(route.Verb+" "+route.Path, s.gzipMiddleware(finalHandler))
 	}
@@ -54,7 +52,7 @@ func (s *Server) Routes(staticPath string) {
 
 		// --- API Public ---
 		{http.MethodGet, "/api/v1/public/voyages/{token}", http.HandlerFunc(s.Handler.GetPublicVoyage), 0},
-		{http.MethodGet, "/api/v1/public/voyages/{token}/stops", http.HandlerFunc(s.Handler.GetPublicStops), 0},
+		{http.MethodGet, "/api/v1/public/voyages/{token}/days", http.HandlerFunc(s.Handler.GetPublicDays), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/guide", http.HandlerFunc(s.Handler.GetPublicVoyageGuide), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/track", http.HandlerFunc(s.Handler.GetPublicVoyageTracks), 0},
 		{http.MethodGet, "/api/v1/public/voyages/{token}/tracks", http.HandlerFunc(s.Handler.GetPublicVoyageTracks), 0},
@@ -88,14 +86,14 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/guide/snapshot", http.HandlerFunc(s.Handler.UploadVoyageSnapshot), 1},
 		{http.MethodGet, "/api/v1/voyages/{id}/map_image", http.HandlerFunc(s.Handler.GetVoyageMapImage), 0},
 
-		// Stops
-		{http.MethodGet, "/api/v1/voyages/{id}/stops", http.HandlerFunc(s.Handler.ListStops), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/stops", http.HandlerFunc(s.Handler.CreateStop), 1},
-		{http.MethodPut, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.UpdateStop), 1},
-		{http.MethodDelete, "/api/v1/stops/{id}", http.HandlerFunc(s.Handler.DeleteStop), 1},
-		{http.MethodPost, "/api/v1/stops/{id}/research", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerResearch)), 1},
-		{http.MethodGet, "/api/v1/stops/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
-		{http.MethodPost, "/api/v1/stops/{id}/lookout", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerLookoutAudit)), 1},
+		// Days
+		{http.MethodGet, "/api/v1/voyages/{id}/days", http.HandlerFunc(s.Handler.ListDays), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/days", http.HandlerFunc(s.Handler.CreateDay), 1},
+		{http.MethodPut, "/api/v1/days/{id}", http.HandlerFunc(s.Handler.UpdateDay), 1},
+		{http.MethodDelete, "/api/v1/days/{id}", http.HandlerFunc(s.Handler.DeleteDay), 1},
+		{http.MethodPost, "/api/v1/days/{id}/research", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerResearch)), 1},
+		{http.MethodGet, "/api/v1/days/{id}/briefing", http.HandlerFunc(s.Handler.GetBriefing), 1},
+		{http.MethodPost, "/api/v1/days/{id}/lookout", s.rateLimit(10, time.Minute)(http.HandlerFunc(s.Handler.TriggerLookoutAudit)), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/lookout", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.TriggerVoyageLookout)), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/weather", s.rateLimit(5, time.Minute)(http.HandlerFunc(s.Handler.UpdateVoyageWeather)), 1},
 
@@ -110,11 +108,10 @@ func (s *Server) Routes(staticPath string) {
 		{http.MethodPost, "/api/v1/voyages/{id}/tracks/{trackId}/debrief", http.HandlerFunc(s.Handler.DebriefVoyageTrack), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/track/debrief", http.HandlerFunc(s.Handler.DebriefAllVoyageTracks), 1},
 		{http.MethodPost, "/api/v1/voyages/{id}/tracks/debrief", http.HandlerFunc(s.Handler.DebriefAllVoyageTracks), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/track", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
-		{http.MethodPost, "/api/v1/voyages/{id}/stops/{stopId}/tracks", http.HandlerFunc(s.Handler.UploadStopTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/days/{dayId}/track", http.HandlerFunc(s.Handler.UploadDayTrack), 1},
+		{http.MethodPost, "/api/v1/voyages/{id}/days/{dayId}/tracks", http.HandlerFunc(s.Handler.UploadDayTrack), 1},
 
 		// --- Admin ---
-
 		{http.MethodGet, "/api/admin/users", http.HandlerFunc(s.Handler.ListUsers), 2},
 		{http.MethodPost, "/api/admin/invite", http.HandlerFunc(s.Handler.InviteUser), 2},
 		{http.MethodPost, "/api/admin/invite/bulk", http.HandlerFunc(s.Handler.BulkInviteUsers), 2},
@@ -161,7 +158,6 @@ func (s *Server) spaHandler(staticPath string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-
 		if strings.HasPrefix(r.URL.Path, "/voyages/") ||
 			strings.HasPrefix(r.URL.Path, "/shared/") ||
 			strings.HasPrefix(r.URL.Path, "/discover") ||
@@ -169,7 +165,6 @@ func (s *Server) spaHandler(staticPath string) http.HandlerFunc {
 			http.ServeFile(w, r, filepath.Join(staticPath, "index.html"))
 			return
 		}
-
 		fpath := filepath.Join(staticPath, filepath.Clean(r.URL.Path))
 		http.ServeFile(w, r, fpath)
 	}

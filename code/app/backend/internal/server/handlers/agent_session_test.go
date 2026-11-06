@@ -20,7 +20,7 @@ type sessionTrackingStore struct {
 	guides    []*model.VoyageGuide
 }
 
-func (s *sessionTrackingStore) ListStops(_ context.Context, _ int64, _, _ int) ([]model.Stop, error) {
+func (s *sessionTrackingStore) ListDays(_ context.Context, _ int64, _, _ int) ([]model.VoyageDay, error) {
 	return nil, nil
 }
 
@@ -62,7 +62,7 @@ func (s *sessionTrackingStore) UpsertSafetyAlerts(_ context.Context, _ int64, _ 
 	return nil
 }
 
-func (s *sessionTrackingStore) ListStopTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
+func (s *sessionTrackingStore) ListDayTracks(_ context.Context, _ int64) ([]model.VoyageTrack, error) {
 	return nil, nil
 }
 
@@ -98,7 +98,7 @@ func agentServerWithSessionFailure(t *testing.T) (srv *httptest.Server, runCalle
 	return srv, &called
 }
 
-func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
+func TestPerformDayResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 	agentSrv, runCalled := agentServerWithSessionFailure(t)
 	defer agentSrv.Close()
 
@@ -112,17 +112,20 @@ func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 		ResearchSem: make(chan struct{}, 10),
 	}
 
-	stop := &model.Stop{
-		ID:               1,
-		LocationName:     "Test Anchorage",
-		Latitude:         18.45,
-		Longitude:        -64.62,
-		TargetDate:       time.Now(),
-		SearchRadius:     5,
-		SearchRadiusUnit: "nm",
+	day := &model.VoyageDay{
+		ID:                1,
+		StartLocationName: "Test Anchorage",
+		StartLatitude:     18.45,
+		StartLongitude:    -64.62,
+		EndLocationName:   "Test Anchorage",
+		EndLatitude:       18.45,
+		EndLongitude:      -64.62,
+		TargetDate:        time.Now(),
+		SearchRadius:      5,
+		SearchRadiusUnit:  "nm",
 	}
 
-	h.performStopResearchLogic(stop, "")
+	h.performDayResearchLogic(day, "")
 
 	if *runCalled {
 		t.Error("expected /api/run to be skipped after session creation failure")
@@ -133,8 +136,8 @@ func TestPerformStopResearch_SessionFailure_SavesEmptyBriefing(t *testing.T) {
 	if len(store.briefings) != 1 {
 		t.Fatalf("expected 1 briefing saved, got %d", len(store.briefings))
 	}
-	if store.briefings[0].StopID != stop.ID {
-		t.Errorf("briefing StopID = %d, want %d", store.briefings[0].StopID, stop.ID)
+	if store.briefings[0].DayID != day.ID {
+		t.Errorf("briefing DayID = %d, want %d", store.briefings[0].DayID, day.ID)
 	}
 }
 

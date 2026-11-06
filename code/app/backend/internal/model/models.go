@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql/driver"
 	"errors"
+	"math"
 	"time"
 )
 
@@ -58,29 +59,79 @@ type Voyage struct {
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
-// Stop type constants distinguish stationary landfalls from at-sea passage points.
+// Day type constants distinguish landfall transits, passage points, lay days, and day trips.
 const (
-	StopTypeLandfall     = "landfall"      // anchorage, mooring, or dock
-	StopTypePassagePoint = "passage_point" // at-sea tracking position (extrapolated)
+	DayTypeLandfall     = "landfall"      // anchorage, mooring, or dock
+	DayTypePassagePoint = "passage_point" // at-sea tracking position (extrapolated)
+	DayTypeLayDay       = "lay_day"       // stationary rest/exploration day
+	DayTypeDayTrip      = "day_trip"      // same-day round trip (start == end)
 )
 
-// Stop represents a specific stop or waypoint within a voyage.
-type Stop struct {
-	ID               int64     `json:"id" db:"id"`
-	VoyageID         int64     `json:"voyage_id" db:"voyage_id"`
-	TargetDate       time.Time `json:"target_date" db:"target_date"`
-	StopType         string    `json:"stop_type" db:"stop_type"` // "landfall" or "passage_point"
-	LocationName     string    `json:"location_name" db:"location_name"`
-	PreciseLocation  string    `json:"precise_location" db:"precise_location"`
-	Latitude         float64   `json:"latitude" db:"latitude"`
-	Longitude        float64   `json:"longitude" db:"longitude"`
-	SearchRadius     int       `json:"search_radius" db:"search_radius"`
-	SearchRadiusUnit string    `json:"search_radius_unit" db:"search_radius_unit"`
-	Notes            string    `json:"notes" db:"notes"`
-	CreatedAt        time.Time `json:"created_at" db:"created_at"`
+// VoyageDay represents a daily leg within a voyage with a starting point and ending point.
+type VoyageDay struct {
+	ID                   int64     `json:"id" db:"id"`
+	VoyageID             int64     `json:"voyage_id" db:"voyage_id"`
+	TargetDate           time.Time `json:"target_date" db:"target_date"`
+	DayType              string    `json:"day_type" db:"day_type"`
+	StartLocationName    string    `json:"start_location_name" db:"start_location_name"`
+	StartPreciseLocation string    `json:"start_precise_location" db:"start_precise_location"`
+	StartLatitude        float64   `json:"start_latitude" db:"start_latitude"`
+	StartLongitude       float64   `json:"start_longitude" db:"start_longitude"`
+	EndLocationName      string    `json:"end_location_name" db:"end_location_name"`
+	EndPreciseLocation   string    `json:"end_precise_location" db:"end_precise_location"`
+	EndLatitude          float64   `json:"end_latitude" db:"end_latitude"`
+	EndLongitude         float64   `json:"end_longitude" db:"end_longitude"`
+	SearchRadius         int       `json:"search_radius" db:"search_radius"`
+	SearchRadiusUnit     string    `json:"search_radius_unit" db:"search_radius_unit"`
+	Notes                string    `json:"notes" db:"notes"`
+	CreatedAt            time.Time `json:"created_at" db:"created_at"`
 }
 
-// WeatherSummary holds structured weather forecast data for a stop.
+// DistanceNM returns the rhumb-line/great-circle distance in nautical miles from Start to End.
+func (d VoyageDay) DistanceNM() float64 {
+	if (d.StartLatitude == 0 && d.StartLongitude == 0) || (d.EndLatitude == 0 && d.EndLongitude == 0) {
+		return 0
+	}
+	const r = 3440.065
+	dLat := (d.EndLatitude - d.StartLatitude) * math.Pi / 180.0
+	dLon := (d.EndLongitude - d.StartLongitude) * math.Pi / 180.0
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(d.StartLatitude*math.Pi/180.0)*math.Cos(d.EndLatitude*math.Pi/180.0)*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return r * c
+}
+
+// BearingDeg returns the initial bearing in degrees [0, 360) from Start to End.
+func (d VoyageDay) BearingDeg() float64 {
+	lat1 := d.StartLatitude * math.Pi / 180.0
+	lon1 := d.StartLongitude * math.Pi / 180.0
+	lat2 := d.EndLatitude * math.Pi / 180.0
+	lon2 := d.EndLongitude * math.Pi / 180.0
+	dLon := lon2 - lon1
+	y := math.Sin(dLon) * math.Cos(lat2)
+	x := math.Cos(lat1)*math.Sin(lat2) - math.Sin(lat1)*math.Cos(lat2)*math.Cos(dLon)
+	brng := math.Atan2(y, x) * 180.0 / math.Pi
+	return math.Mod(brng+360.0, 360.0)
+}
+
+// IsStationary reports whether the day starts and ends at the same location (within 0.1 NM).
+func (d VoyageDay) IsStationary() bool {
+	if d.DayType == DayTypeLayDay || d.DayType == DayTypeDayTrip {
+		return d.DistanceNM() <= 0.1
+	}
+	return d.DistanceNM() <= 0.1
+}
+
+// PrimaryLocationName returns the destination location name (falling back to start location name).
+func (d VoyageDay) PrimaryLocationName() string {
+	if d.EndLocationName != "" {
+		return d.EndLocationName
+	}
+	return d.StartLocationName
+}
+
+// WeatherSummary holds structured weather forecast data for a voyage day.
 type WeatherSummary struct {
 	Summary          string    `json:"summary"`
 	Condition        string    `json:"condition"`
@@ -103,10 +154,10 @@ type WeatherSummary struct {
 	DebugDurationMs  int64     `json:"debug_duration_ms"`
 }
 
-// Briefing contains researched information about a stop, such as weather and tides.
+// Briefing contains researched information about a voyage day, such as weather and tides.
 type Briefing struct {
 	ID                    int64      `json:"id" db:"id"`
-	StopID                int64      `json:"stop_id" db:"stop_id"`
+	DayID                 int64      `json:"day_id" db:"day_id"`
 	WeatherSummary        RawJSON    `json:"weather_summary" db:"weather_summary"`
 	SunPhase              RawJSON    `json:"sun_phase" db:"sun_phase"`
 	Tides                 RawJSON    `json:"tides" db:"tides"`
@@ -267,7 +318,7 @@ const (
 type VoyageTrack struct {
 	ID                string     `json:"id" db:"id"`
 	VoyageID          int64      `json:"voyage_id" db:"voyage_id"`
-	VoyageStopID      *int64     `json:"voyage_stop_id,omitempty" db:"voyage_stop_id"`
+	VoyageDayID       *int64     `json:"voyage_day_id,omitempty" db:"voyage_day_id"`
 	Kind              string     `json:"kind" db:"kind"`
 	Name              string     `json:"name" db:"name"`
 	FileName          *string    `json:"file_name,omitempty" db:"file_name"`
@@ -289,11 +340,11 @@ type VoyageTrack struct {
 type TrackDebrief struct {
 	TrackID             string   `json:"track_id"`
 	TrackName           string   `json:"track_name"`
-	StopTitle           string   `json:"stop_title,omitempty"`
+	DayTitle            string   `json:"day_title,omitempty"`
 	PlannedTrackID      *string  `json:"planned_track_id,omitempty"`
 	PlannedTrackName    string   `json:"planned_track_name,omitempty"`
-	VoyageStopID        *int64   `json:"voyage_stop_id,omitempty"`
-	StartStopID         *int64   `json:"start_stop_id,omitempty"`
+	VoyageDayID         *int64   `json:"voyage_day_id,omitempty"`
+	StartDayID          *int64   `json:"start_day_id,omitempty"`
 	RecordedDistanceNM  float64  `json:"recorded_distance_nm"`
 	PlannedDistanceNM   float64  `json:"planned_distance_nm"`
 	DistanceDeltaNM     float64  `json:"distance_delta_nm"`
