@@ -79,7 +79,9 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 		h.broadcastProgress(sessionID, "weather", fmt.Sprintf("Refreshing weather forecast for %s", day.PrimaryLocationName()))
 		if ws, err := fetchWeatherForDay(ctx, *day); err == nil {
 			if err := h.DB.UpsertWeatherBriefing(ctx, day.ID, ws); err == nil {
-				briefing.WeatherSummary = ws
+				if wsBytes, err := json.Marshal(ws); err == nil {
+					briefing.WeatherSummary = model.RawJSON(wsBytes)
+				}
 			} else {
 				slog.WarnContext(ctx, "[lookout] Failed to save refreshed weather before audit", "day_id", day.ID, "error", err)
 			}
@@ -150,7 +152,9 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 				if b.WeatherLastUpdated == nil || time.Since(*b.WeatherLastUpdated) > time.Minute {
 					if ws, err := fetchWeatherForDay(ctx, dy); err == nil {
 						if err := h.DB.UpsertWeatherBriefing(ctx, dy.ID, ws); err == nil {
-							b.WeatherSummary = ws
+							if wsBytes, err := json.Marshal(ws); err == nil {
+								b.WeatherSummary = model.RawJSON(wsBytes)
+							}
 						}
 					}
 				}
