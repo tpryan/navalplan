@@ -845,6 +845,25 @@ export function groupColocatedStops(sortedStops, accents = ['coral', 'teal', 'vi
         }
     }
 
+    const firstDay = sortedStops[0];
+    const firstStart = firstDay ? getDayStartCoords(firstDay) : null;
+    if (firstStart && !isSameStartAndEnd(firstDay)) {
+        for (const g of groups) {
+            const dNM = nmBetween(g.position, firstStart);
+            if (dNM != null && dNM <= thresholdNM) {
+                g.includesTripStart = true;
+                g.startStop = firstDay;
+                g.position = { lat: firstStart.lat, lng: firstStart.lng };
+                for (const it of g.items) {
+                    if (it.stop?.id != null) {
+                        stopPositionMap.set(it.stop.id, g.position);
+                    }
+                }
+                break;
+            }
+        }
+    }
+
     return { groups, stopPositionMap };
 }
 

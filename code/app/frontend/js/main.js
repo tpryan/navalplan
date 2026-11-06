@@ -6122,13 +6122,18 @@ async function initMap() {
             const locLabel = getDayEndName(primaryStop);
             const nums = items.map(it => it.stopNumber);
             const accents = items.map(it => it.accent);
-            const isCombined = items.length > 1;
+            const pinNums = group.includesTripStart ? ['S', ...nums] : nums;
+            const pinAccents = group.includesTripStart ? ['teal', ...accents] : accents;
+            const isCombined = pinNums.length > 1;
 
             const pinEl = isCombined
                 ? MapPin({
-                    numbers: nums,
-                    accents,
-                    label: `Stops ${nums.join(' & ')}: ${locLabel}`
+                    numbers: pinNums,
+                    accents: pinAccents,
+                    isStartEnd: Boolean(group.includesTripStart),
+                    label: group.includesTripStart
+                        ? `Start & Stop ${nums.join(' & ')}: ${locLabel}`
+                        : `Stops ${nums.join(' & ')}: ${locLabel}`
                 })
                 : MapPin({
                     accent: accents[0],
@@ -6136,9 +6141,11 @@ async function initMap() {
                     label: `Stop ${nums[0]}: ${locLabel}`
                 });
 
-            const markerTitle = isCombined
-                ? `${locLabel} (Stops ${nums.join(' & ')})`
-                : `${locLabel} (Day ${nums[0]})`;
+            const markerTitle = group.includesTripStart
+                ? `${locLabel} (Start & Day ${nums.join(' & ')})`
+                : isCombined
+                    ? `${locLabel} (Stops ${nums.join(' & ')})`
+                    : `${locLabel} (Day ${nums[0]})`;
 
             const marker = new AdvancedMarkerElement({
                 map: map,
@@ -6153,12 +6160,20 @@ async function initMap() {
                 const ink = tokenColor('ink');
                 const surface = tokenColor('surface');
                 const muted = tokenColor('muted');
-                const stopSummary = items.map(it => {
+                const summaryParts = [];
+                if (group.includesTripStart && group.startStop) {
+                    const sDate = group.startStop.target_date
+                        ? new Date(group.startStop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                        : '';
+                    summaryParts.push(sDate ? `Start (${sDate})` : 'Start');
+                }
+                items.forEach(it => {
                     const dStr = it.stop.target_date
                         ? new Date(it.stop.target_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
                         : '';
-                    return dStr ? `Stop ${it.stopNumber} (${dStr})` : `Stop ${it.stopNumber}`;
-                }).join(' · ');
+                    summaryParts.push(dStr ? `Stop ${it.stopNumber} (${dStr})` : `Stop ${it.stopNumber}`);
+                });
+                const stopSummary = summaryParts.join(' · ');
                 activeInfoWindow = new InfoWindow({
                     content: `<div style="color:${ink};background:${surface};padding:6px 10px;border-radius:10px;font-family:system-ui,sans-serif;font-size:14px"><b>${locLabel}</b><br><span style="color:${muted}">${stopSummary}</span></div>`
                 });

@@ -114,14 +114,16 @@ export function getWindArrowSVG(deg, scale = 1, className = '') {
  * Used as content for Google Maps AdvancedMarkerElement.
  */
 export function accentDot(accent, size = 28, iconKey = '') {
+    const isStartEnd = iconKey === 'start_end';
+    const effectiveSize = isStartEnd ? Math.max(size, 44) : size;
     const dot = document.createElement('div');
     dot.style.cssText = [
-        `width:${size}px`,
-        `height:${size}px`,
-        'border-radius:50%',
+        `width:${effectiveSize}px`,
+        `height:${effectiveSize}px`,
+        isStartEnd ? 'border-radius:12px' : 'border-radius:50%',
         `background:var(--${accent})`,
-        'border:2.5px solid var(--surface)',
-        'box-shadow:0 2px 6px rgba(0,0,0,.3)',
+        isStartEnd ? 'border:3px solid var(--surface)' : 'border:2.5px solid var(--surface)',
+        isStartEnd ? 'box-shadow:0 3px 8px rgba(0,0,0,.4)' : 'box-shadow:0 2px 6px rgba(0,0,0,.3)',
         'cursor:pointer',
         'flex-shrink:0',
         'display:flex',
@@ -132,7 +134,8 @@ export function accentDot(accent, size = 28, iconKey = '') {
     if (iconName) {
         const span = document.createElement('span');
         span.className = 'material-symbols-outlined';
-        span.style.cssText = `font-size:${Math.round(size * 0.52)}px;color:#fff;line-height:1;pointer-events:none;user-select:none`;
+        const fontSize = isStartEnd ? Math.round(effectiveSize * 0.58) : Math.round(effectiveSize * 0.52);
+        span.style.cssText = `font-size:${fontSize}px;color:#fff;line-height:1;pointer-events:none;user-select:none`;
         span.setAttribute('aria-hidden', 'true');
         span.textContent = iconName;
         dot.appendChild(span);
