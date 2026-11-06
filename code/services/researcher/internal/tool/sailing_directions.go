@@ -187,7 +187,11 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 
 	topK := args.TopK
 	if topK <= 0 || topK > 10 {
-		topK = 5
+		if territory == "lnm" {
+			topK = 10
+		} else {
+			topK = 5
+		}
 	}
 
 	// If projectID is not configured (e.g. unit test or local mockup without GCP), return a helpful response.

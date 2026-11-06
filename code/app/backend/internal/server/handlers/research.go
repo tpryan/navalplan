@@ -375,10 +375,20 @@ func (h *Handler) performDayResearchLogic(day *model.VoyageDay, sessionID string
 	}
 
 	var stateWeather, stateTides, stateSun, statePlaces json.RawMessage
+	var stateLocalNotices, stateHydroCitations []string
 	onEvent := func(evt agent.AgentEvent) {
 		for _, p := range evt.Content.Parts {
 			if p.FunctionCall != nil && p.FunctionCall.Name != "" {
 				h.broadcastProgress(sessionID, "tool", toolProgressMessage(p.FunctionCall.Name, destName))
+			}
+			if p.FunctionResponse != nil && p.FunctionResponse.Name == "hydrographic_pilot" {
+				notices, cites := extractHydrographicPilotNotices(p.FunctionResponse.Response)
+				if len(notices) > 0 {
+					stateLocalNotices = append(stateLocalNotices, notices...)
+				}
+				if len(cites) > 0 {
+					stateHydroCitations = append(stateHydroCitations, cites...)
+				}
 			}
 		}
 		if len(evt.Actions.StateDelta) > 0 {
@@ -523,6 +533,10 @@ func (h *Handler) performDayResearchLogic(day *model.VoyageDay, sessionID string
 
 		newBytes, _ := json.Marshal(facilities)
 		output.Facilities = json.RawMessage(newBytes)
+	}
+
+	if len(stateLocalNotices) > 0 || len(stateHydroCitations) > 0 {
+		output.PilotNotes = mergePilotNotesLocalNotices(output.PilotNotes, stateLocalNotices, stateHydroCitations)
 	}
 
 	briefing := &model.Briefing{
@@ -881,4 +895,124 @@ func buildDayTransitAndTrackPrompt(day *model.VoyageDay, distNM, course float64,
 		b.WriteString("Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track (rather than only a straight-line course between start and end), and pass the planned route details to hydrographic_pilot.")
 	}
 	return b.String()
+}
+
+// extractHydrographicPilotNotices parses the tool response payload from
+// hydrographic_pilot (whether returned as a raw JSON string under "result" or
+// as a decoded map) and returns its local_notices and citations.
+func extractHydrographicPilotNotices(resp map[string]any) (notices []string, citations []string) {
+	if len(resp) == 0 {
+		return nil, nil
+	}
+	type hydroPayload struct {
+		LocalNotices []string `json:"local_notices"`
+		Citations    []string `json:"citations"`
+	}
+	if rawStr, ok := resp["result"].(string); ok && strings.TrimSpace(rawStr) != "" {
+		cleaned := cleanJSON(rawStr)
+		var hp hydroPayload
+		if err := json.Unmarshal([]byte(cleaned), &hp); err == nil {
+			return hp.LocalNotices, hp.Citations
+		}
+	}
+	if rawBytes, err := json.Marshal(resp); err == nil {
+		var hp hydroPayload
+		if err := json.Unmarshal(rawBytes, &hp); err == nil && (len(hp.LocalNotices) > 0 || len(hp.Citations) > 0) {
+			return hp.LocalNotices, hp.Citations
+		}
+	}
+	return nil, nil
+}
+
+// mergePilotNotesLocalNotices deterministically merges local_notices and
+// citations captured from hydrographic_pilot into output.PilotNotes so LNM
+// entries are never dropped if the LLM omits the local_notices field.
+func mergePilotNotesLocalNotices(pilotNotes json.RawMessage, notices []string, citations []string) json.RawMessage {
+	cleanNotices := make([]string, 0, len(notices))
+	seenN := make(map[string]bool)
+	for _, n := range notices {
+		trimmed := strings.TrimSpace(n)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if (strings.HasPrefix(lower, "none") || strings.HasPrefix(lower, "no active")) && len(trimmed) < 40 {
+			continue
+		}
+		if !seenN[lower] {
+			seenN[lower] = true
+			cleanNotices = append(cleanNotices, trimmed)
+		}
+	}
+	if len(cleanNotices) == 0 && len(citations) == 0 {
+		return pilotNotes
+	}
+
+	var obj map[string]any
+	if len(pilotNotes) > 0 {
+		_ = json.Unmarshal(pilotNotes, &obj)
+	}
+	if obj == nil {
+		obj = make(map[string]any)
+	}
+
+	if len(cleanNotices) > 0 {
+		var merged []string
+		seenMerged := make(map[string]bool)
+		if existing, ok := obj["local_notices"].([]any); ok {
+			for _, item := range existing {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					k := strings.ToLower(strings.TrimSpace(s))
+					if !seenMerged[k] {
+						seenMerged[k] = true
+						merged = append(merged, strings.TrimSpace(s))
+					}
+				}
+			}
+		}
+		for _, n := range cleanNotices {
+			k := strings.ToLower(n)
+			if !seenMerged[k] {
+				seenMerged[k] = true
+				merged = append(merged, n)
+			}
+		}
+		obj["local_notices"] = merged
+	}
+
+	if len(citations) > 0 {
+		var mergedSrc []string
+		seenSrc := make(map[string]bool)
+		if existing, ok := obj["sources"].([]any); ok {
+			for _, item := range existing {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					k := strings.ToLower(strings.TrimSpace(s))
+					if !seenSrc[k] {
+						seenSrc[k] = true
+						mergedSrc = append(mergedSrc, strings.TrimSpace(s))
+					}
+				}
+			}
+		}
+		for _, c := range citations {
+			trimmed := strings.TrimSpace(c)
+			if trimmed == "" {
+				continue
+			}
+			k := strings.ToLower(trimmed)
+			if !seenSrc[k] {
+				seenSrc[k] = true
+				mergedSrc = append(mergedSrc, trimmed)
+			}
+		}
+		if len(mergedSrc) > 0 {
+			obj["sources"] = mergedSrc
+		}
+	}
+
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return pilotNotes
+	}
+	return json.RawMessage(out)
 }

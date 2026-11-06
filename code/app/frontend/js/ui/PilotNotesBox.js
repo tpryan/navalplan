@@ -169,11 +169,76 @@ function formatCardParagraphsHTML(text) {
   return segments.map(seg => `<p class="pilot-note-card__para">${esc(seg)}</p>`).join('');
 }
 
-function formatLocalNoticesHTML(localNotices) {
-  if (!localNotices) return '';
-  const items = Array.isArray(localNotices)
-    ? localNotices.map(s => String(s || '').trim()).filter(Boolean)
-    : String(localNotices).split(/\s+·\s+|\n+/).map(s => s.trim()).filter(Boolean);
+const LNM_SENTENCE_RE = /\b(lnm|local\s+notice\s+to\s+mariners|notice\s+to\s+mariners|uscg|coast\s+guard|discrepanc|extinguished|off[\s-]station|missing\s+buoy|unlit\s+(?:buoy|daybeacon|beacon|light|aid)|daybeacon|light\s+list|dredg(?:ing|e)|shoal(?:ing)?|temporary\s+(?:buoy|closure|bridge|restriction|safety\s+zone)|safety\s+zone|security\s+zone|marine\s+event|submerged\s+(?:wreck|obstruction))\b/i;
+
+function resolveLocalNotices(data, safetyAlerts = null) {
+  if (!data || typeof data !== 'object') return [];
+  const seen = new Set();
+  const out = [];
+  const pushItem = (raw) => {
+    const clean = String(raw || '').trim();
+    if (!clean) return;
+    if (/^(none|n\/a|no\s+active\s+local\s+notices)/i.test(clean) && clean.length < 45) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(clean);
+  };
+
+  const direct = data.local_notices || data.lnm || data.notices_to_mariners;
+  if (Array.isArray(direct)) {
+    direct.forEach(pushItem);
+  } else if (typeof direct === 'string' && direct.trim()) {
+    direct.split(/\s+·\s+|\n+/).forEach(pushItem);
+  }
+
+  const sources = Array.isArray(data.sources) ? data.sources : (Array.isArray(data.references) ? data.references : []);
+  const hasLNMSource = sources.some(s => /\b(Local\s+Notice\s+to\s+Mariners|LNM|Light\s+List)\b/i.test(String(s || '')));
+
+  const candidateFields = [
+    data.departure_and_arrival_timing?.night_entry_and_aids_warning,
+    data.regulations_and_hazards || data.regulations || data.hazards,
+    data.approach_and_channels || data.approach || data.channels,
+    data.overview || data.summary,
+  ];
+
+  for (const field of candidateFields) {
+    if (!field) continue;
+    const text = Array.isArray(field) ? field.join('\n') : String(field);
+    const segments = text
+      .split(/\s+·\s+|\n+|(?<=[.!?])\s+(?=[A-Z0-9"'])/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    for (const seg of segments) {
+      if (LNM_SENTENCE_RE.test(seg)) {
+        pushItem(seg);
+      }
+    }
+  }
+
+  if (out.length === 0 && hasLNMSource) {
+    const fallbackText = data.departure_and_arrival_timing?.night_entry_and_aids_warning || data.regulations_and_hazards || '';
+    if (fallbackText) {
+      String(fallbackText).split(/\s+·\s+|\n+/).forEach(pushItem);
+    }
+  }
+
+  if (Array.isArray(safetyAlerts)) {
+    for (const a of safetyAlerts) {
+      const msg = String(a?.message || '').trim();
+      if (msg && /\b(lnm|local\s+notice\s+to\s+mariners|notice\s+to\s+mariners|extinguished|off[\s-]station|discrepanc|dredg)\b/i.test(msg)) {
+        pushItem(msg);
+      }
+    }
+  }
+
+  return out;
+}
+
+function formatLocalNoticesHTML(data, safetyAlerts = null) {
+  const items = Array.isArray(data) || typeof data === 'string'
+    ? resolveLocalNotices({ local_notices: data }, safetyAlerts)
+    : resolveLocalNotices(data, safetyAlerts);
   if (items.length === 0) return '';
   return items.map(item => `<p class="pilot-note-card__para">${esc(item)}</p>`).join('');
 }
@@ -181,9 +246,10 @@ function formatLocalNoticesHTML(localNotices) {
 /**
  * PilotNotesBox — creates a DOM section element containing structured pilotage notes.
  * @param {object|string} pilotNotes
+ * @param {Array<object>} [safetyAlerts]
  * @returns {HTMLElement|null}
  */
-export function PilotNotesBox(pilotNotes) {
+export function PilotNotesBox(pilotNotes, safetyAlerts = null) {
   const data = normalizePilotNotes(pilotNotes);
   if (!data) return null;
 
@@ -236,7 +302,7 @@ export function PilotNotesBox(pilotNotes) {
     grid.appendChild(card);
   };
 
-  addCardHTML('campaign', 'Local Notices to Mariners (LNM)', formatLocalNoticesHTML(data.local_notices || data.lnm));
+  addCardHTML('campaign', 'Local Notices to Mariners (LNM)', formatLocalNoticesHTML(data, safetyAlerts));
   addCardHTML('schedule', 'Departure & Arrival Timing', formatTimingHTML(data.departure_and_arrival_timing));
   addCardHTML('straighten', 'Approaches & Channels', formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels));
   addCardHTML('anchor', 'Anchorages & Moorings', formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings));
@@ -261,9 +327,10 @@ export function PilotNotesBox(pilotNotes) {
 /**
  * renderPilotNotesHTML — returns an HTML string for static report rendering.
  * @param {object|string} pilotNotes
+ * @param {Array<object>} [safetyAlerts]
  * @returns {string}
  */
-export function renderPilotNotesHTML(pilotNotes) {
+export function renderPilotNotesHTML(pilotNotes, safetyAlerts = null) {
   const data = normalizePilotNotes(pilotNotes);
   if (!data) return '';
 
@@ -279,7 +346,7 @@ export function renderPilotNotesHTML(pilotNotes) {
   }
 
   const overview = data.overview || data.summary || data.description || '';
-  const lnmHtml = formatLocalNoticesHTML(data.local_notices || data.lnm);
+  const lnmHtml = formatLocalNoticesHTML(data, safetyAlerts);
   const timingHtml = formatTimingHTML(data.departure_and_arrival_timing);
   const approachHtml = formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels || '');
   const anchoragesHtml = formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings || '');

@@ -4968,7 +4968,7 @@ async function showBriefing(briefing, doPushState = true, options = {}) {
 
     // ── Pilotage & Harbor Guidance ────────────────────────────────────────────
     if (briefing.pilot_notes) {
-        const pilotBox = PilotNotesBox(briefing.pilot_notes);
+        const pilotBox = PilotNotesBox(briefing.pilot_notes, briefing.safety_alerts);
         if (pilotBox) {
             sections.appendChild(pilotBox);
         }
@@ -8910,7 +8910,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             // Pilot Notes / Sailing Directions
             if (b.pilot_notes) {
-                const pilotHtml = renderPilotNotesHTML(b.pilot_notes);
+                const pilotHtml = renderPilotNotesHTML(b.pilot_notes, b.safety_alerts);
                 if (pilotHtml) {
                     html += `<div class="np-pilot-notes-wrap" data-report-cats="all navigation">${pilotHtml}</div>`;
                 }
