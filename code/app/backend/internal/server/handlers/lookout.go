@@ -303,6 +303,8 @@ func (h *Handler) performLookoutAuditLogic(day *model.VoyageDay, briefing *model
 		}
 	}
 
+	alerts = ensurePilotNoteLNMAlerts(alerts, briefing.PilotNotes)
+
 	if distNM > 0 {
 		rows := buildTravelTable(distNM, briefing.SunPhase)
 		planMsg := fmt.Sprintf("Travel Plan: %.1f NM to %s", distNM, destName)
@@ -625,6 +627,9 @@ func buildLookoutPrompt(day *model.VoyageDay, briefing *model.Briefing, distNM, 
 	if len(routeWaypoints) > 0 && routeWaypoints[0] != "" {
 		routeWaypointsInfo = fmt.Sprintf("\n%s\n", strings.TrimSpace(routeWaypoints[0]))
 	}
+	if len(briefing.PilotNotes) > 0 && string(briefing.PilotNotes) != "null" && string(briefing.PilotNotes) != "{}" {
+		routeWaypointsInfo += fmt.Sprintf("\nPilot Notes & Local Notices to Mariners (surface any valid local_notices as navigation alerts):\n%s\n", strings.TrimSpace(string(briefing.PilotNotes)))
+	}
 
 	return fmt.Sprintf(`Analyze the following voyage day data, planned passage route (if provided), and official hydrographic publications for maritime safety concerns, hazards along the route, and local recommendations. When an intended planned route is provided, evaluate safety, tidal streams, and adverse weather against the route's specific headings and waypoints. Return a JSON array of alerts.
 
@@ -807,4 +812,59 @@ func normalizeLookoutAlertCategory(cat string) string {
 	default:
 		return "navigation"
 	}
+}
+
+// ensurePilotNoteLNMAlerts guarantees that any valid Local Notice to Mariners (LNM)
+// entries stored in briefing.PilotNotes.local_notices are surfaced as navigation
+// safety alerts if the LLM did not already emit them.
+func ensurePilotNoteLNMAlerts(alerts []map[string]any, pilotNotesRaw []byte) []map[string]any {
+	if len(pilotNotesRaw) == 0 {
+		return alerts
+	}
+	var pn struct {
+		LocalNotices []string `json:"local_notices"`
+	}
+	if err := json.Unmarshal(pilotNotesRaw, &pn); err != nil || len(pn.LocalNotices) == 0 {
+		return alerts
+	}
+
+	var existingText strings.Builder
+	for _, a := range alerts {
+		if msg, ok := a["message"].(string); ok {
+			existingText.WriteString(strings.ToLower(msg))
+			existingText.WriteByte(' ')
+		}
+	}
+	combinedExisting := existingText.String()
+
+	for _, rawNotice := range pn.LocalNotices {
+		notice := strings.TrimSpace(rawNotice)
+		if notice == "" {
+			continue
+		}
+		lower := strings.ToLower(notice)
+		if strings.Contains(lower, "none") && len(notice) < 25 {
+			continue
+		}
+		// Check if already covered by checking a distinctive substring
+		checkSnippet := lower
+		if len(checkSnippet) > 32 {
+			checkSnippet = checkSnippet[:32]
+		}
+		if checkSnippet != "" && strings.Contains(combinedExisting, checkSnippet) {
+			continue
+		}
+		msg := notice
+		if !strings.HasPrefix(strings.ToUpper(msg), "LNM") && !strings.Contains(lower, "notice to mariners") {
+			msg = "LNM: " + msg
+		}
+		alerts = append(alerts, map[string]any{
+			"severity": "warning",
+			"category": "navigation",
+			"message":  msg,
+			"action":   "Verify current status in the latest USCG Local Notice to Mariners before transiting.",
+			"icon":     "warning",
+		})
+	}
+	return alerts
 }

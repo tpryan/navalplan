@@ -6244,10 +6244,11 @@ async function initMap() {
                     const locLabel = getDayEndName(group.primaryStop);
                     const stopNums = group.items.map(it => it.stopNumber);
                     const titleSuffix = stopNums.length > 1 ? ` (Stops ${stopNums.join(' & ')})` : '';
+                    const isWidePin = Boolean(group.includesTripStart || group.items.length > 1);
                     const clusterMarker = new AdvancedMarkerElement({
                         map: null, // visibility managed by applyFacilityClustering()
                         position: pos,
-                        content: facilityClusterBubble(combinedTotalCount),
+                        content: facilityClusterBubble(combinedTotalCount, isWidePin),
                         title: `${combinedTotalCount} facilities near ${locLabel}${titleSuffix}`,
                         zIndex: 106,
                     });
@@ -6286,17 +6287,18 @@ async function initMap() {
 }
   
 // Builds a round cluster bubble showing a stop's facility count.
-function facilityClusterBubble(count) {
+function facilityClusterBubble(count, isWidePin = false) {
     const d = document.createElement('div');
     d.textContent = String(count);
+    const offset = isWidePin ? 'translate(34px,-34px)' : 'translate(22px,-20px)';
     d.style.cssText = [
         'width:32px', 'height:32px', 'box-sizing:border-box',
         'border-radius:50%', 'background:var(--ink2)', 'color:#fff',
         'border:2.5px solid var(--surface)', 'box-shadow:0 2px 6px rgba(0,0,0,.3)',
         'font:600 13px/32px system-ui,sans-serif', 'text-align:center',
         'cursor:pointer', 'user-select:none',
-        // Shift the bubble up-and-right of its anchor so it clears the stop flag.
-        'transform:translate(22px,-20px)',
+        // Shift the bubble up-and-right of its anchor so it clears the stop flag/pill.
+        `transform:${offset}`,
     ].join(';');
     return d;
 }

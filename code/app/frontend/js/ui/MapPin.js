@@ -60,11 +60,11 @@ export function MapPin({ accent = 'coral', accents, n, numbers, isStartEnd = fal
                 fill="none" stroke="var(--surface, #fff)" stroke-width="2.2"/>
         </g>
         <rect x="6" y="7" width="40" height="22" rx="7" fill="var(--surface, #fff)"/>
-        <g transform="translate(10, 11)">
+        <g transform="translate(8, 11)">
           <path d="M1.5 0.5 V13.5" stroke="var(--pin)" stroke-width="1.8" stroke-linecap="round"/>
-          <path d="M2.2 1 H10.5 L8.2 4.5 L10.5 8 H2.2 Z" fill="var(--pin)"/>
+          <path d="M2.2 1 H9.5 L7.5 4.5 L9.5 8 H2.2 Z" fill="var(--pin)"/>
         </g>
-        <text x="32" y="22" text-anchor="middle" font-size="${fontSize}" font-weight="800"
+        <text x="30" y="22" text-anchor="middle" font-size="${fontSize}" font-weight="800"
               fill="var(--ink, #1e293b)" font-family="var(--font)">${badgeText}</text>
       </svg>`;
     return wrap;

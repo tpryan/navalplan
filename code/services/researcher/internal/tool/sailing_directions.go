@@ -218,6 +218,7 @@ func (p *SailingDirectionsProvider) QuerySailingDirections(ctx agent.Context, ar
 		addCorpus(p.ngaCorpus)
 	case "us":
 		addCorpus(p.coastPilotCorpus)
+		addCorpus(p.lnmCorpus)
 	case "lnm":
 		addCorpus(p.lnmCorpus)
 	default:

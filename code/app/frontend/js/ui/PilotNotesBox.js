@@ -169,6 +169,15 @@ function formatCardParagraphsHTML(text) {
   return segments.map(seg => `<p class="pilot-note-card__para">${esc(seg)}</p>`).join('');
 }
 
+function formatLocalNoticesHTML(localNotices) {
+  if (!localNotices) return '';
+  const items = Array.isArray(localNotices)
+    ? localNotices.map(s => String(s || '').trim()).filter(Boolean)
+    : String(localNotices).split(/\s+·\s+|\n+/).map(s => s.trim()).filter(Boolean);
+  if (items.length === 0) return '';
+  return items.map(item => `<p class="pilot-note-card__para">${esc(item)}</p>`).join('');
+}
+
 /**
  * PilotNotesBox — creates a DOM section element containing structured pilotage notes.
  * @param {object|string} pilotNotes
@@ -227,6 +236,7 @@ export function PilotNotesBox(pilotNotes) {
     grid.appendChild(card);
   };
 
+  addCardHTML('campaign', 'Local Notices to Mariners (LNM)', formatLocalNoticesHTML(data.local_notices || data.lnm));
   addCardHTML('schedule', 'Departure & Arrival Timing', formatTimingHTML(data.departure_and_arrival_timing));
   addCardHTML('straighten', 'Approaches & Channels', formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels));
   addCardHTML('anchor', 'Anchorages & Moorings', formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings));
@@ -269,6 +279,7 @@ export function renderPilotNotesHTML(pilotNotes) {
   }
 
   const overview = data.overview || data.summary || data.description || '';
+  const lnmHtml = formatLocalNoticesHTML(data.local_notices || data.lnm);
   const timingHtml = formatTimingHTML(data.departure_and_arrival_timing);
   const approachHtml = formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels || '');
   const anchoragesHtml = formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings || '');
@@ -281,6 +292,17 @@ export function renderPilotNotesHTML(pilotNotes) {
   }
 
   const subCards = [];
+  if (lnmHtml) {
+    subCards.push(`
+      <div class="pilot-note-card">
+        <div class="pilot-note-card__header">
+          <span class="material-symbols-outlined pilot-note-card__icon">campaign</span>
+          <strong>Local Notices to Mariners (LNM)</strong>
+        </div>
+        <div class="pilot-note-card__content">${lnmHtml}</div>
+      </div>
+    `);
+  }
   if (timingHtml) {
     subCards.push(`
       <div class="pilot-note-card">

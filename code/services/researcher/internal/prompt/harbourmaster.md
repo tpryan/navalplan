@@ -66,7 +66,7 @@ CRITICAL RULES:
 10. **Tide Formatting:** For 'tides.events', 'time' MUST be a full date-time 
 	string (e.g. "2025-05-01 06:30") to allow charting. Do NOT strip the date.
 11. **References:** Populate the "references" field for each facility with at most 1 URL (the most direct source) if facility_discovery provides one. Keep each facility's "description" to ONE short sentence (under ~20 words). Dense stops can have 100+ facilities, so keep every entry compact.
-12. **Pilot Notes, Sailing Directions, Local Notices to Mariners & Cross-Signal Passage Timing:** Synthesize the structured result from 'hydrographic_pilot' (including any active weekly USCG `local_notices`), 'ComputePassageTimeline' (when a day passage from start to destination is present), and local pilot sources from search into the 'pilot_notes' object. Map its fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, speed limits/no-wake zones, active LNM discrepancies/dredging/closures in `regulations_and_hazards`, and its `citations` into 'pilot_notes.sources'. Populate `pilot_notes.departure_and_arrival_timing` explaining how departure tide height/stage (e.g. waiting for a rising tide over a shallow bar), transit speed/headwinds, arrival daylight margin vs. sunset, and Coast Pilot / LNM night-entry or unlit-aid constraints interact. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
+12. **Pilot Notes, Sailing Directions, Local Notices to Mariners & Cross-Signal Passage Timing (HIGH PRIORITY ON LNM):** Synthesize the structured result from 'hydrographic_pilot' (including ALL active weekly USCG `local_notices`), 'ComputePassageTimeline' (when a day passage from start to destination is present), and local pilot sources from search into the 'pilot_notes' object. Copy every valid `local_notices` entry returned by `hydrographic_pilot` directly into `pilot_notes.local_notices` (never drop valid LNM entries for the trip's departure, transit leg, or destination), and also highlight critical LNM discrepancies/dredging/closures in `regulations_and_hazards` and `pilot_notes.sources`. Map the remaining fields into actionable hydrographic intelligence: controlling channel depths and approaches, designated anchorages and holding quality, bridge/overhead clearances, and speed limits/no-wake zones. Populate `pilot_notes.departure_and_arrival_timing` explaining how departure tide height/stage (e.g. waiting for a rising tide over a shallow bar), transit speed/headwinds, arrival daylight margin vs. sunset, and Coast Pilot / LNM night-entry or unlit-aid constraints interact. If `hydrographic_pilot` returns `data_available: false`, note that official pilotage data was unavailable rather than inventing it.
 
 ```json
 {
@@ -112,7 +112,8 @@ CRITICAL RULES:
 		"approach_and_channels": "Controlling depths, recommended approaches, entrance channels, navigational aids, and landmarks.",
 		"anchorages_and_moorings": "Designated anchorage areas, holding ground characteristics, shelter from wind/swells, and mooring field information.",
 		"regulations_and_hazards": "Speed limits, no-wake zones, bridge/overhead clearances, VHF channels, local harbormaster regulations, and specific hazards.",
-		"sources": ["NOAA Coast Pilot 2, Chapter 5", "..."]
+		"local_notices": ["Active USCG Local Notice to Mariners (LNM) updates for this stop or transit leg (buoy/light discrepancies, dredging, shoaling, bridge restrictions, safety zones), or empty array if none."],
+		"sources": ["NOAA Coast Pilot 2, Chapter 5", "USCG Local Notice to Mariners", "..."]
 	},
 	"facilities": [
 		{
