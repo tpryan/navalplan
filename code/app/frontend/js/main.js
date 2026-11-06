@@ -5243,9 +5243,20 @@ async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
         if (progressES) { progressES.close(); progressES = null; }
         btn.disabled = false;
         btn.innerHTML = originalHTML;
-        // Fetch fresh briefings and update the page
+        // Fetch fresh briefings, update cache + sidebar chips, and re-render the report with fresh weather + alerts
         const briefings = await Promise.all(sortedStops.map(s => API.getBriefing(s.id).catch(() => null)));
-        refreshSafetyOverview(reportContent, sortedStops, briefings);
+        briefings.forEach(b => {
+            if (b && (b.day_id ?? b.stop_id) != null) {
+                briefingCache.set(b.day_id ?? b.stop_id, b);
+            }
+        });
+        renderItinerary();
+        const activeFilter = parseReportFilterFromLocation(window.location, false);
+        await handleShowReport(false, false, activeFilter);
+        const updatedReportContent = document.getElementById('report-content');
+        if (updatedReportContent) {
+            refreshSafetyOverview(updatedReportContent, sortedStops, briefings);
+        }
     };
 
     // Safety-net timeout (5 min) in case SSE drops
@@ -5414,6 +5425,7 @@ async function runLookoutAudit(oldBriefing, btn) {
                     btn.disabled = false;
                     btn.innerHTML = originalLabel;
                     briefingCache.set(b.day_id ?? b.stop_id, b);
+                    renderItinerary();
                     showBriefing(b, false);
                 }
             } catch (ignore) { }

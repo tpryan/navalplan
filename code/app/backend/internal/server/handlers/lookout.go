@@ -75,7 +75,19 @@ func (h *Handler) TriggerLookoutAudit(w http.ResponseWriter, r *http.Request) {
 		h.ResearchSem <- struct{}{}
 		defer func() { <-h.ResearchSem }()
 
-		allDays, _ := h.DB.ListDays(context.Background(), day.VoyageID, 0, 0)
+		ctx := context.Background()
+		h.broadcastProgress(sessionID, "weather", fmt.Sprintf("Refreshing weather forecast for %s", day.PrimaryLocationName()))
+		if ws, err := fetchWeatherForDay(ctx, *day); err == nil {
+			if err := h.DB.UpsertWeatherBriefing(ctx, day.ID, ws); err == nil {
+				briefing.WeatherSummary = ws
+			} else {
+				slog.WarnContext(ctx, "[lookout] Failed to save refreshed weather before audit", "day_id", day.ID, "error", err)
+			}
+		} else {
+			slog.WarnContext(ctx, "[lookout] Failed to refresh weather before audit", "day_id", day.ID, "error", err)
+		}
+
+		allDays, _ := h.DB.ListDays(ctx, day.VoyageID, 0, 0)
 		sort.Slice(allDays, func(i, j int) bool { return allDays[i].TargetDate.Before(allDays[j].TargetDate) })
 		h.performLookoutAuditLogic(day, briefing, allDays, sessionID)
 	}()
@@ -134,6 +146,14 @@ func (h *Handler) TriggerVoyageLookout(w http.ResponseWriter, r *http.Request) {
 				defer h.releaseJob(jk)
 				h.ResearchSem <- struct{}{}
 				defer func() { <-h.ResearchSem }()
+
+				if b.WeatherLastUpdated == nil || time.Since(*b.WeatherLastUpdated) > time.Minute {
+					if ws, err := fetchWeatherForDay(ctx, dy); err == nil {
+						if err := h.DB.UpsertWeatherBriefing(ctx, dy.ID, ws); err == nil {
+							b.WeatherSummary = ws
+						}
+					}
+				}
 				h.performLookoutAuditLogic(&dy, b, days, sessionID)
 			}(d, briefing, dayJobKey)
 		}
