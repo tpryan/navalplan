@@ -7,10 +7,10 @@ import { MapPin } from './ui/MapPin.js';
 import { DataTile } from './ui/DataTile.js';
 import { Stepper } from './ui/Stepper.js';
 import { ScoreRing } from './ui/ScoreRing.js';
-import { LookoutBox, normalizeLookoutIcon } from './ui/LookoutBox.js';
+import { LookoutBox, normalizeLookoutIcon, deduplicateLookoutAlerts } from './ui/LookoutBox.js';
 import { PilotNotesBox, renderPilotNotesHTML } from './ui/PilotNotesBox.js';
 
-import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM, groupColocatedStops, findNearbyJoinTargetStop, getDayStartCoords, getDayEndCoords, getDayStartName, getDayEndName, isSameStartAndEnd, isDayStartOnly } from './utils.js';
+import { announce, displayLocationName, ensureRecommendationsArray, esc, renderReferences, isDayTrip, formatVoyageDateRange, getDebriefStopTitle, generateDebriefsHTML, calculateTimeVariance, isWithinTrackingWindow, classifyFacilityReportCats, formatFacilityLinkLabel, buildStaticMapTrackPathsParam, assignTrackColors, classifyAlertReportCat, parseReportFilterFromLocation, buildReportFilterSearch, applyReportFilterToDOM, groupColocatedStops, findNearbyJoinTargetStop, getDayStartCoords, getDayEndCoords, getDayStartName, getDayEndName, isSameStartAndEnd, isDayStartOnly } from './utils.js';
 import { MARKER_ACCENTS, MARKER_ICONS, markerAccent, tokenColor, markerColor, accentDot, getIconForWeather, directionToDegrees, getWindScale, getWindArrowSVG } from './tokens.js';
 import { hashString, smoothPolygon, chaikin, getCirclePolygon, nmBetween } from './geometry.js';
 import { getRadarSweepClass } from './animations/RadarSweep.js';
@@ -5338,7 +5338,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
             <span class="np-safety-overview__date">${dateStr}</span>`;
         list.appendChild(stopHeader);
 
-        briefing.safety_alerts.forEach(a => {
+        deduplicateLookoutAlerts(briefing.safety_alerts).forEach(a => {
             const alertEl = document.createElement('div');
             alertEl.className = `lookout-alert lookout-alert--${a.severity || 'info'}`;
             const alertCats = classifyAlertReportCat(a);
@@ -6582,6 +6582,7 @@ async function renderTrackPolylines() {
 
     const { Polyline } = await importLibrary("maps");
     const hud = document.getElementById('track-hover-hud');
+    const colorMap = assignTrackColors(currentTracks);
 
     for (const track of currentTracks) {
         const rawGeo = track.simplified_geojson || track.geojson;
@@ -6598,26 +6599,53 @@ async function renderTrackPolylines() {
         // GeoJSON coordinate order is [longitude, latitude]
         const pathCoords = coords.map(pt => ({ lat: pt[1], lng: pt[0] }));
         const isPlanned = track.kind === 'planned';
+        const strokeColor = colorMap.get(track) || (isPlanned ? '#00B4D8' : '#FF6B35');
 
         let polyline;
         if (isPlanned) {
             polyline = new Polyline({
                 path: pathCoords,
                 geodesic: true,
-                strokeColor: '#00B4D8',
+                strokeColor,
                 strokeOpacity: 0,
                 icons: [{
-                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor: '#00B4D8', scale: 3 },
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeColor, scale: 3 },
                     offset: '0',
                     repeat: '16px'
                 }],
                 map: showPlannedTracks ? map : null
             });
+
+            if (hud) {
+                polyline.addListener('mousemove', (e) => {
+                    const mapDiv = document.getElementById('map-container');
+                    if (!mapDiv) return;
+                    const rect = mapDiv.getBoundingClientRect();
+                    const x = e.domEvent.clientX - rect.left;
+                    const y = e.domEvent.clientY - rect.top;
+                    hud.style.left = `${x + 12}px`;
+                    hud.style.top = `${y + 12}px`;
+
+                    let info = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeTrackHtml(strokeColor)};margin-right:6px;"></span>${escapeTrackHtml(track.name || track.file_name || 'Planned Route')}`;
+                    if (track.distance_nm != null) {
+                        info += ` | Dist: ${track.distance_nm.toFixed(1)} NM`;
+                    }
+                    if (track.duration_interval) {
+                        info += ` | Est: ${escapeTrackHtml(track.duration_interval)}`;
+                    }
+                    hud.innerHTML = info;
+                    hud.classList.remove('hidden');
+                });
+
+                polyline.addListener('mouseout', () => {
+                    hud.classList.add('hidden');
+                });
+            }
         } else {
             polyline = new Polyline({
                 path: pathCoords,
                 geodesic: true,
-                strokeColor: '#FF6B35',
+                strokeColor,
                 strokeOpacity: 0.85,
                 strokeWeight: 4,
                 map: showRecordedTracks ? map : null
@@ -6633,7 +6661,7 @@ async function renderTrackPolylines() {
                     hud.style.left = `${x + 12}px`;
                     hud.style.top = `${y + 12}px`;
 
-                    let info = `${escapeTrackHtml(track.name || 'Recorded Track')}`;
+                    let info = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeTrackHtml(strokeColor)};margin-right:6px;"></span>${escapeTrackHtml(track.name || 'Recorded Track')}`;
                     if (track.avg_speed_kts != null) {
                         info += ` | Avg: ${track.avg_speed_kts.toFixed(1)} kts`;
                     }
@@ -6657,7 +6685,7 @@ async function renderTrackPolylines() {
             openTracksModal();
         });
 
-        trackPolylines.push({ id: track.id, kind: track.kind, polyline });
+        trackPolylines.push({ id: track.id, kind: track.kind, color: strokeColor, polyline });
     }
 }
 
@@ -6718,11 +6746,24 @@ function renderTracksList() {
     }
 
     if (countBadge) countBadge.textContent = `${currentTracks.length} track${currentTracks.length === 1 ? '' : 's'}`;
-    const hasPlanned = currentTracks.some(t => t.kind === 'planned');
-    const hasActual = currentTracks.some(t => t.kind !== 'planned');
-    const hasDebriefable = hasPlanned && hasActual;
+    const plannedTracks = currentTracks.filter(t => t.kind === 'planned');
+    const actualTracks = currentTracks.filter(t => t.kind === 'recorded' || t.kind === 'actual' || t.kind !== 'planned');
+    const hasPlanned = plannedTracks.length > 0;
+    const hasActual = actualTracks.length > 0;
+    const hasDebriefable = (hasPlanned && hasActual) || plannedTracks.length >= 2;
+    let debriefBtnIcon = 'analytics';
+    let debriefBtnLabel = 'Debrief';
+    if (!hasActual && plannedTracks.length >= 2) {
+        debriefBtnIcon = 'alt_route';
+        debriefBtnLabel = 'Compare Plans';
+    } else if (hasPlanned && hasActual && plannedTracks.length >= 2) {
+        debriefBtnIcon = 'alt_route';
+        debriefBtnLabel = 'Debrief & Compare';
+    }
+    const renderDebriefBtnContent = () => `<span class="material-symbols-outlined icon-align font-sm">${debriefBtnIcon}</span> ${debriefBtnLabel}`;
     if (debriefAllBtn) {
         if (hasDebriefable) {
+            debriefAllBtn.innerHTML = renderDebriefBtnContent();
             debriefAllBtn.classList.remove('hidden');
         } else {
             debriefAllBtn.classList.add('hidden');
@@ -6744,26 +6785,34 @@ function renderTracksList() {
                 showNotification('Debrief Error', err.message || 'Failed to debrief tracks');
             } finally {
                 debriefAllBtn.disabled = false;
-                debriefAllBtn.innerHTML = '<span class="material-symbols-outlined icon-align font-sm">analytics</span> Debrief';
+                debriefAllBtn.innerHTML = renderDebriefBtnContent();
             }
         };
     }
 
+    const trackColorMap = assignTrackColors(currentTracks);
     let html = '<div class="flex flex-col gap-sm">';
-    currentTracks.forEach(t => {
+    currentTracks.forEach((t, idx) => {
         const isPlanned = t.kind === 'planned';
         const badgeClass = isPlanned ? 'track-badge-planned' : 'track-badge-recorded';
+        const tColor = trackColorMap.get(t) || trackColorMap.get(idx) || (isPlanned ? '#00B4D8' : '#FF6B35');
         const distStr = t.distance_nm != null ? `${t.distance_nm.toFixed(1)} NM` : '--';
         const durationStr = t.duration_interval || '--';
         const avgSpeedStr = t.avg_speed_kts != null ? `${t.avg_speed_kts.toFixed(1)} kts` : '--';
         const maxSpeedStr = t.max_speed_kts != null ? `${t.max_speed_kts.toFixed(1)} kts` : '--';
+        const displayName = t.name || t.file_name || 'Unnamed Track';
 
         html += `
         <div class="card p-sm border flex flex-col gap-xs track-item" data-track-id="${t.id}">
           <div class="flex justify-between align-center">
-            <div class="flex align-center gap-xs">
+            <div class="flex align-center gap-xs track-name-wrap">
+              <span class="track-color-swatch" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeTrackHtml(tColor)};flex-shrink:0;" aria-hidden="true"></span>
               <span class="track-badge ${badgeClass}">${t.kind}</span>
-              <strong>${escapeTrackHtml(t.name || 'Unnamed Track')}</strong>
+              <strong class="track-name-label" data-track-id="${t.id}">${escapeTrackHtml(displayName)}</strong>
+              <input type="text" class="track-name-input hidden" data-track-id="${t.id}" value="${escapeTrackHtml(displayName)}" aria-label="Track Name" />
+              <button type="button" class="btn-icon p-xs btn-rename-track" data-track-id="${t.id}" title="Rename Track" aria-label="Rename Track">
+                <span class="material-symbols-outlined font-sm">edit</span>
+              </button>
             </div>
             <div class="flex gap-xs">
               <button class="btn-icon p-xs text-danger btn-track-delete" data-track-id="${t.id}" title="Delete Track">
@@ -6781,6 +6830,82 @@ function renderTracksList() {
     });
     html += '</div>';
     container.innerHTML = html;
+
+    // Wire up inline rename controls
+    container.querySelectorAll('.track-item').forEach(itemEl => {
+        const trackId = itemEl.dataset.trackId;
+        const labelEl = itemEl.querySelector('.track-name-label');
+        const inputEl = itemEl.querySelector('.track-name-input');
+        const renameBtn = itemEl.querySelector('.btn-rename-track');
+        if (!labelEl || !inputEl || !renameBtn) return;
+
+        let isSaving = false;
+        const startEditing = () => {
+            const tr = currentTracks.find(x => String(x.id) === String(trackId));
+            inputEl.value = tr ? (tr.name || tr.file_name || 'Unnamed Track') : labelEl.textContent;
+            labelEl.classList.add('hidden');
+            inputEl.classList.remove('hidden');
+            inputEl.focus();
+            inputEl.select();
+        };
+
+        const cancelEditing = () => {
+            inputEl.classList.add('hidden');
+            labelEl.classList.remove('hidden');
+        };
+
+        const commitRename = async () => {
+            if (isSaving || inputEl.classList.contains('hidden')) return;
+            const newName = inputEl.value.trim();
+            const tr = currentTracks.find(x => String(x.id) === String(trackId));
+            const currentName = tr ? (tr.name || tr.file_name || 'Unnamed Track') : labelEl.textContent.trim();
+            if (!newName || newName === currentName) {
+                cancelEditing();
+                return;
+            }
+            if (!currentVoyage) {
+                cancelEditing();
+                return;
+            }
+            isSaving = true;
+            inputEl.disabled = true;
+            try {
+                await API.updateVoyageTrack(currentVoyage.id, trackId, { name: newName });
+                if (tr) tr.name = newName;
+                renderTracksList();
+                await renderTrackPolylines();
+                showNotification('Track Updated', `Renamed track to "${newName}".`);
+            } catch (err) {
+                isSaving = false;
+                inputEl.disabled = false;
+                cancelEditing();
+                showNotification('Rename Error', err.message || 'Failed to rename track');
+            }
+        };
+
+        renameBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (inputEl.classList.contains('hidden')) {
+                startEditing();
+            } else {
+                commitRename();
+            }
+        });
+
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commitRename();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEditing();
+            }
+        });
+
+        inputEl.addEventListener('blur', () => {
+            commitRename();
+        });
+    });
 
     // Wire up delete buttons
     container.querySelectorAll('.btn-track-delete').forEach(btn => {
@@ -6809,7 +6934,7 @@ function renderTracksList() {
 
     // Check if any track has debrief data already (only if debriefable)
     if (hasDebriefable) {
-        const tracksWithDebrief = currentTracks.filter(t => t.debrief != null && (t.debrief.planned_track_id || t.debrief.planned_track_name));
+        const tracksWithDebrief = currentTracks.filter(t => t.debrief != null && (t.debrief.planned_track_id || t.debrief.planned_track_name || t.debrief.mode === 'comparison' || (Array.isArray(t.debrief.candidate_tracks) && t.debrief.candidate_tracks.length >= 2)));
         if (tracksWithDebrief.length > 0) {
             renderDebriefCard(tracksWithDebrief.map(t => t.debrief));
         } else {
@@ -6823,7 +6948,11 @@ function renderTracksList() {
 function renderDebriefCard(debrief) {
     const container = document.getElementById('debrief-container');
     if (!container) return;
-    const html = generateDebriefsHTML(debrief, typeof currentStops !== 'undefined' ? currentStops : null);
+    const html = generateDebriefsHTML(
+        debrief,
+        typeof currentStops !== 'undefined' ? currentStops : null,
+        typeof currentTracks !== 'undefined' ? currentTracks : null
+    );
     if (!html) {
         container.classList.add('hidden');
         return;
@@ -8730,7 +8859,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
     }
 
     // ── Daily Itinerary sections ──────────────────────────────────────────────
-    const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => d && (d.planned_track_id || d.planned_track_name));
+    const allDebriefs = (Array.isArray(debriefs) ? debriefs : []).filter(d => d && (d.planned_track_id || d.planned_track_name || d.mode === 'comparison' || (Array.isArray(d.candidate_tracks) && d.candidate_tracks.length >= 2)));
     const stopDebriefsMap = new Map(); // stopIndex -> [debriefs]
     const assignedDebriefs = new Set();
 
@@ -8772,7 +8901,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             if (assignedDebriefs.has(d) || sId == null) return;
             let sIdx = sortedStops.findIndex(s => String(s.id) === String(sId));
             if (sIdx >= 0) {
-                if (!sortedStops[sIdx].start_location_name && sIdx === sortedStops.length - 1 && sortedStops.length > 1) {
+                if (isDayStartOnly(sortedStops[sIdx]) && sIdx === sortedStops.length - 1 && sortedStops.length > 1) {
                     sIdx = sIdx - 1;
                 }
                 if (!stopDebriefsMap.has(sIdx)) stopDebriefsMap.set(sIdx, []);
@@ -8786,7 +8915,7 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
             const vId = d.voyage_day_id ?? d.voyage_stop_id;
             if (assignedDebriefs.has(d) || vId == null) return;
             let sIdx = sortedStops.findIndex(s => String(s.id) === String(vId));
-            if (sIdx > 0 && !sortedStops[sIdx].start_location_name && (sIdx === sortedStops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
+            if (sIdx > 0 && isDayStartOnly(sortedStops[sIdx]) && (sIdx === sortedStops.length - 1 || !stopDebriefsMap.has(sIdx - 1))) {
                 sIdx = sIdx - 1;
             }
             if (sIdx >= 0 && sIdx < sortedStops.length) {
@@ -8898,7 +9027,8 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             // Safety alerts (Moved after tides)
             if (Array.isArray(b.safety_alerts) && b.safety_alerts.length > 0) {
-                const alertsHtml = b.safety_alerts.map(alertToHTML).join('');
+                const dedupedSafetyAlerts = deduplicateLookoutAlerts(b.safety_alerts);
+                const alertsHtml = dedupedSafetyAlerts.map(alertToHTML).join('');
                 html += `<div class="lookout-box" data-report-cats="all navigation weather" style="margin:16px 0">
                     <div class="lookout-header">
                         <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
@@ -8910,9 +9040,33 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             // Pilot Notes / Sailing Directions
             if (b.pilot_notes) {
-                const pilotHtml = renderPilotNotesHTML(b.pilot_notes, b.safety_alerts);
+                const pilotHtml = renderPilotNotesHTML(b.pilot_notes, deduplicateLookoutAlerts(b.safety_alerts));
                 if (pilotHtml) {
                     html += `<div class="np-pilot-notes-wrap" data-report-cats="all navigation">${pilotHtml}</div>`;
+                }
+            }
+
+            const isComparisonDebrief = d => d && (d.mode === 'comparison' || (Array.isArray(d.candidate_tracks) && d.candidate_tracks.length >= 2));
+            const stopComparisons = stopDebriefs.filter(isComparisonDebrief);
+            const stopActualDebriefs = stopDebriefs.filter(d => d && !isComparisonDebrief(d));
+
+            // Route Comparison & Recommendation (in Navigation section)
+            if (stopComparisons.length > 0) {
+                stopComparisons.forEach(d => {
+                    if (d && typeof d === 'object' && d.start_day_id == null && d.start_stop_id == null && stop.id != null) {
+                        d.start_day_id = stop.id;
+                        d.start_stop_id = stop.id;
+                    }
+                });
+                const compHtml = generateDebriefsHTML(stopComparisons, sortedStops);
+                if (compHtml) {
+                    const compTitle = `Route Comparison & Recommendation — Leg ${legNum}`;
+                    html += `
+                        <div class="np-report-stop-debrief np-report-route-comparison" data-report-cats="all navigation">
+                            <span class="np-facilities-header">${compTitle}</span>
+                            ${compHtml}
+                        </div>
+                    `;
                 }
             }
 
@@ -8953,14 +9107,14 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 html += `</div>`;
             }
 
-            if (stopDebriefs.length > 0) {
-                stopDebriefs.forEach(d => {
+            if (stopActualDebriefs.length > 0) {
+                stopActualDebriefs.forEach(d => {
                     if (d && typeof d === 'object' && d.start_day_id == null && d.start_stop_id == null && stop.id != null) {
                         d.start_day_id = stop.id;
                         d.start_stop_id = stop.id;
                     }
                 });
-                const stopDebriefHtml = generateDebriefsHTML(stopDebriefs, sortedStops);
+                const stopDebriefHtml = generateDebriefsHTML(stopActualDebriefs, sortedStops);
                 if (stopDebriefHtml) {
                     const debriefTitle = `Passage Tactical Debrief — Leg ${legNum}`;
                     html += `
@@ -8974,6 +9128,16 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
 
             html += `</div>`;
         });
+    } else if (allDebriefs.length > 0) {
+        const compHtml = generateDebriefsHTML(allDebriefs, sortedStops);
+        if (compHtml) {
+            html += `
+                <div class="np-report-stop-debrief np-report-route-comparison" data-report-cats="all navigation">
+                    <span class="np-facilities-header">Route Comparison & Recommendation</span>
+                    ${compHtml}
+                </div>
+            `;
+        }
     }
 
     html += `<footer class="np-report-footer"><p>Generated by NavalPlan</p></footer>`;

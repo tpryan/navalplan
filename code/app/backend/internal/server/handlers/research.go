@@ -893,6 +893,9 @@ func buildDayTransitAndTrackPrompt(day *model.VoyageDay, distNM, course float64,
 		}
 		fmt.Fprintf(&b, "Planned Track for this leg:\n%s\n", strings.TrimSpace(plannedRouteInfo))
 		b.WriteString("Compare the course, segment headings, waypoints, hazards, wind/tides/currents, and pilotage guidance against this planned track (rather than only a straight-line course between start and end), and pass the planned route details to hydrographic_pilot.")
+		if strings.Contains(plannedRouteInfo, "Candidate Planned Route") {
+			b.WriteString(" Multiple candidate planned routes are present: instruct harbourmaster and hydrographic_pilot to evaluate all candidate routes against wind angles, wave exposure, tidal currents/gates, daylight margins, and hydrographic hazards, and populate pilot_notes.route_comparison with the comparison and recommended route.")
+		}
 	}
 	return b.String()
 }

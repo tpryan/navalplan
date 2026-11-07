@@ -68,3 +68,12 @@ func (s *Server) Middleware(h http.Handler) http.Handler {
 	h = s.sanitizePathMiddleware(h)
 	return h
 }
+
+// trackUpdateRouteDefinitions returns the PATCH routes for renaming voyage tracks
+// (registered in RegisterRoutes in routes.go).
+func (s *Server) trackUpdateRouteDefinitions() []route {
+	return []route{
+		{http.MethodPatch, "/api/v1/voyages/{id}/track/{trackId}", http.HandlerFunc(s.Handler.UpdateVoyageTrack), 1},
+		{http.MethodPatch, "/api/v1/voyages/{id}/tracks/{trackId}", http.HandlerFunc(s.Handler.UpdateVoyageTrack), 1},
+	}
+}

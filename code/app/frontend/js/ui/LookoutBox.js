@@ -101,13 +101,93 @@ export function normalizeLookoutIcon(icon) {
   return iconMap[clean] || clean;
 }
 
+const LNM_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'through', 'into', 'under', 'are', 'all',
+  'lnm', 'uscg', 'local', 'notice', 'mariners', 'verify', 'current', 'status',
+  'latest', 'before', 'transiting', 'reported', 'operations', 'san', 'francisco',
+  'bay', 'california', 'united', 'states', 'aton', 'discrepancies',
+]);
+
+function extractAlertTokens(text) {
+  const words = String(text || '').toLowerCase().split(/[^a-z0-9]+/);
+  const seen = new Set();
+  const out = [];
+  for (const w of words) {
+    if (!w) continue;
+    const hasDigit = /\d/.test(w);
+    if ((!hasDigit && w.length < 4) || LNM_STOP_WORDS.has(w) || seen.has(w)) continue;
+    seen.add(w);
+    out.push(w);
+  }
+  return out;
+}
+
+function alertTokensOverlap(tokensA, tokensB) {
+  if (!tokensA.length || !tokensB.length) return false;
+  const setB = new Set(tokensB);
+  let shared = 0;
+  for (const t of tokensA) {
+    if (setB.has(t)) shared++;
+  }
+  if (shared >= 4) return true;
+  const minLen = Math.min(tokensA.length, tokensB.length);
+  return minLen > 0 && shared / minLen >= 0.5;
+}
+
+/**
+ * Deduplicates Safety Lookout alerts (collapsing paraphrased/raw LNM duplicates).
+ * @param {Array} alerts
+ * @returns {Array}
+ */
+export function deduplicateLookoutAlerts(alerts) {
+  if (!Array.isArray(alerts) || alerts.length <= 1) return alerts || [];
+  const out = [];
+  const outTokens = [];
+  for (const a of alerts) {
+    if (!a) continue;
+    const msg = String(a.message || '').trim();
+    const act = String(a.action || '').trim();
+    const lowerMsg = msg.toLowerCase();
+    const isLNM = lowerMsg.startsWith('lnm:') || lowerMsg.includes('local notice to mariners');
+    const tokens = extractAlertTokens(`${msg} ${act}`);
+    let dupIdx = -1;
+    for (let i = 0; i < out.length; i++) {
+      const exMsg = String(out[i].message || '').trim().toLowerCase();
+      if (exMsg === lowerMsg) {
+        dupIdx = i;
+        break;
+      }
+      const exIsLNM = exMsg.startsWith('lnm:') || exMsg.includes('local notice to mariners');
+      if (isLNM && exIsLNM && alertTokensOverlap(tokens, outTokens[i])) {
+        dupIdx = i;
+        break;
+      }
+    }
+    if (dupIdx >= 0) {
+      const exAct = String(out[dupIdx].action || '').toLowerCase();
+      if (
+        exAct.includes('verify current status in the latest uscg local notice') &&
+        !act.toLowerCase().includes('verify current status in the latest uscg local notice')
+      ) {
+        out[dupIdx] = a;
+        outTokens[dupIdx] = tokens;
+      }
+      continue;
+    }
+    out.push(a);
+    outTokens.push(tokens);
+  }
+  return out;
+}
+
 /**
  * LookoutBox — renders a list of maritime safety alerts from the Lookout agent.
  * @param {Array} alerts - array of {severity, category, message, action, icon}
  * @returns {HTMLElement|null} section element, or null if no alerts
  */
 export function LookoutBox(alerts) {
-  if (!alerts || alerts.length === 0) return null;
+  const deduped = deduplicateLookoutAlerts(alerts);
+  if (!deduped || deduped.length === 0) return null;
 
   const section = document.createElement('section');
   section.className = 'lookout-box';
@@ -122,7 +202,7 @@ export function LookoutBox(alerts) {
   const list = document.createElement('div');
   list.className = 'lookout-alert-list';
 
-  alerts.forEach(alert => {
+  deduped.forEach(alert => {
     const item = document.createElement('div');
     const hasTravelTable = Array.isArray(alert.travel_table) && alert.travel_table.length > 0;
     item.className = `lookout-alert ${hasTravelTable ? 'lookout-alert--travel' : `lookout-alert--${alert.severity || 'info'}`}`;

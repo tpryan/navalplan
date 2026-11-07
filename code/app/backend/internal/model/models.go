@@ -336,28 +336,46 @@ type VoyageTrack struct {
 	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 }
 
+// PlannedTrackCandidate represents one candidate route in a multi-plan comparison.
+type PlannedTrackCandidate struct {
+	TrackID           string   `json:"track_id"`
+	Name              string   `json:"name"`
+	DistanceNM        float64  `json:"distance_nm"`
+	EstimatedDuration string   `json:"estimated_duration,omitempty"`
+	DominantHeading   *float64 `json:"dominant_heading_deg,omitempty"`
+	DominantCardinal  string   `json:"dominant_cardinal,omitempty"`
+	WindAngleSummary  string   `json:"wind_angle_summary,omitempty"`
+	TidalSummary      string   `json:"tidal_summary,omitempty"`
+	AlongRouteProfile []string `json:"along_route_profile,omitempty"`
+}
+
 // TrackDebrief encapsulates comparative analysis metrics and AI observations.
 type TrackDebrief struct {
-	TrackID             string   `json:"track_id"`
-	TrackName           string   `json:"track_name"`
-	DayTitle            string   `json:"day_title,omitempty"`
-	PlannedTrackID      *string  `json:"planned_track_id,omitempty"`
-	PlannedTrackName    string   `json:"planned_track_name,omitempty"`
-	VoyageDayID         *int64   `json:"voyage_day_id,omitempty"`
-	StartDayID          *int64   `json:"start_day_id,omitempty"`
-	RecordedDistanceNM  float64  `json:"recorded_distance_nm"`
-	PlannedDistanceNM   float64  `json:"planned_distance_nm"`
-	DistanceDeltaNM     float64  `json:"distance_delta_nm"`
-	DistanceVariancePct float64  `json:"distance_variance_pct"`
-	RecordedDuration    string   `json:"recorded_duration"`
-	PlannedDuration     string   `json:"planned_duration"`
-	DurationDelta       string   `json:"duration_delta,omitempty"`
-	DurationVariancePct *float64 `json:"duration_variance_pct,omitempty"`
-	AvgSpeedKts         float64  `json:"avg_speed_kts"`
-	MaxSpeedKts         float64  `json:"max_speed_kts"`
-	Summary             string   `json:"summary"`
-	Conclusions         string   `json:"conclusions,omitempty"`
-	TackingEfficiency   string   `json:"tacking_efficiency"`
-	WeatherImpact       string   `json:"weather_impact"`
-	Observations        []string `json:"observations"`
+	Mode                 string                  `json:"mode,omitempty"`
+	TrackID              string                  `json:"track_id"`
+	TrackName            string                  `json:"track_name"`
+	DayTitle             string                  `json:"day_title,omitempty"`
+	PlannedTrackID       *string                 `json:"planned_track_id,omitempty"`
+	PlannedTrackName     string                  `json:"planned_track_name,omitempty"`
+	RecommendedTrackID   *string                 `json:"recommended_track_id,omitempty"`
+	RecommendedTrackName string                  `json:"recommended_track_name,omitempty"`
+	CandidateTracks      []PlannedTrackCandidate `json:"candidate_tracks,omitempty"`
+	VoyageDayID          *int64                  `json:"voyage_day_id,omitempty"`
+	StartDayID           *int64                  `json:"start_day_id,omitempty"`
+	RecordedDistanceNM   float64                 `json:"recorded_distance_nm"`
+	PlannedDistanceNM    float64                 `json:"planned_distance_nm"`
+	DistanceDeltaNM      float64                 `json:"distance_delta_nm"`
+	DistanceVariancePct  float64                 `json:"distance_variance_pct"`
+	RecordedDuration     string                  `json:"recorded_duration"`
+	PlannedDuration      string                  `json:"planned_duration"`
+	DurationDelta        string                  `json:"duration_delta,omitempty"`
+	DurationVariancePct  *float64                `json:"duration_variance_pct,omitempty"`
+	AvgSpeedKts          float64                 `json:"avg_speed_kts"`
+	MaxSpeedKts          float64                 `json:"max_speed_kts"`
+	Summary              string                  `json:"summary"`
+	Conclusions          string                  `json:"conclusions,omitempty"`
+	TackingEfficiency    string                  `json:"tacking_efficiency"`
+	WeatherImpact        string                  `json:"weather_impact"`
+	TidalAnalysis        string                  `json:"tidal_analysis,omitempty"`
+	Observations         []string                `json:"observations"`
 }

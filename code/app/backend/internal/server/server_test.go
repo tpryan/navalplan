@@ -397,6 +397,11 @@ func (m *MockStore) UpdateVoyageTrackDebrief(ctx context.Context, id string, deb
 	return args.Error(0)
 }
 
+func (m *MockStore) UpdateVoyageTrackName(ctx context.Context, id string, name string) error {
+	args := m.Called(id, name)
+	return args.Error(0)
+}
+
 func TestServerHealth(t *testing.T) {
 	mockStore := new(MockStore)
 	cfg := &config.Config{

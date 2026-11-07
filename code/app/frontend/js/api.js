@@ -547,6 +547,19 @@ export const API = {
     return true;
   },
 
+  async updateVoyageTrack(voyageId, trackId, { name }) {
+    const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track/${trackId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update track');
+    }
+    return res.json();
+  },
+
   async debriefVoyageTrack(voyageId, trackId) {
     const res = await apiFetch(`${API_BASE}/voyages/${voyageId}/track/${trackId}/debrief`, {
       method: 'POST',

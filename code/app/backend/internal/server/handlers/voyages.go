@@ -474,24 +474,7 @@ func (h *Handler) GetPilotReport(w http.ResponseWriter, r *http.Request) {
 	var debriefs []*model.TrackDebrief
 	if tracks, err := h.DB.ListVoyageTracks(r.Context(), id); err == nil {
 		days, _ := h.DB.ListDays(r.Context(), id, 100, 0)
-		for _, t := range tracks {
-			if len(t.Debrief) > 0 && string(t.Debrief) != "null" {
-				var d model.TrackDebrief
-				if err := json.Unmarshal(t.Debrief, &d); err == nil {
-					if d.TrackName == "" && t.Name != "" {
-						d.TrackName = t.Name
-					}
-					if d.TrackID == "" && t.ID != "" {
-						d.TrackID = t.ID
-					}
-					if d.VoyageDayID == nil && t.VoyageDayID != nil {
-						d.VoyageDayID = t.VoyageDayID
-					}
-					ResolveDebriefDay(&d, &t, days)
-					debriefs = append(debriefs, &d)
-				}
-			}
-		}
+		debriefs = h.collectVoyageReportDebriefs(r.Context(), tracks, days)
 	}
 
 	report := model.PilotReport{

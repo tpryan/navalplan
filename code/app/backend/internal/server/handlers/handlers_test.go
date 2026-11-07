@@ -391,6 +391,11 @@ func (m *MockStore) UpdateVoyageTrackDebrief(ctx context.Context, id string, deb
 	return args.Error(0)
 }
 
+func (m *MockStore) UpdateVoyageTrackName(ctx context.Context, id string, name string) error {
+	args := m.Called(id, name)
+	return args.Error(0)
+}
+
 var _ handlers.DBStore = (*MockStore)(nil)
 
 func addPerson(req *http.Request, id int64) *http.Request {

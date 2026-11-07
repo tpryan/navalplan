@@ -6,6 +6,8 @@ import {
   classifyFacilityReportCats,
   formatFacilityLinkLabel,
   buildStaticMapTrackPathsParam,
+  assignTrackColors,
+  expandAcronymsFirstUse,
   classifyAlertReportCat,
   parseReportFilterFromLocation,
   buildReportFilterSearch,
@@ -1037,6 +1039,90 @@ describe('GPX Track UI & Rendering', () => {
       applyReportFilterToDOM(root, { day: 'all' });
       expect(stop1.classList.contains('np-report-stop--hidden-day')).toBe(false);
       expect(stop2.classList.contains('np-report-stop--hidden-day')).toBe(false);
+    });
+
+    it('renders multi-plan route comparison cards in generateDebriefsHTML', () => {
+      const comparisonDebrief = {
+        mode: 'comparison',
+        track_id: 'plan-a',
+        track_name: 'Plan A Inside Passage',
+        day_title: 'Cowes to Yarmouth',
+        recommended_track_id: 'plan-a',
+        recommended_track_name: 'Plan A Inside Passage',
+        candidate_tracks: [
+          {
+            track_id: 'plan-a',
+            name: 'Plan A Inside Passage',
+            distance_nm: 14.2,
+            estimated_duration: '2h 22m',
+            dominant_heading_deg: 255,
+            dominant_cardinal: 'WSW',
+            wind_angle_summary: 'Close reach in 16 kt SW breeze'
+          },
+          {
+            track_id: 'plan-b',
+            name: 'Plan B Outside Channel',
+            distance_nm: 18.8,
+            estimated_duration: '3h 08m',
+            dominant_heading_deg: 230,
+            dominant_cardinal: 'SW',
+            wind_angle_summary: 'Headwind beat into 16 kt SW breeze'
+          }
+        ],
+        summary: 'Plan A Inside Passage is recommended with a shorter 14.2 NM transit and better wind angle.',
+        conclusions: 'Plan B requires beating directly into a 16 kt SW breeze with 4.6 NM extra distance.',
+        tacking_efficiency: 'Plan A maintains a single-tack reach while Plan B requires multiple tacks.',
+        weather_impact: 'SW 16 kt winds and 3 ft chop favor the sheltered inside corridor.',
+        tidal_analysis: 'Favorable west-going ebb current of 1.5 kts improves VMG between 09:00 and 12:00, and VMG stays positive until slack water.',
+        observations: [
+          'Depart 09:00 to carry the fair ebb through the inside passage.',
+          'Monitor depth over the inner bar if departing near low water.'
+        ]
+      };
+
+      const html = generateDebriefsHTML([comparisonDebrief]);
+      expect(html).toContain('Route Comparison: Cowes to Yarmouth');
+      expect(html).toContain('Recommended Plan: <strong>Plan A Inside Passage</strong>');
+      expect(html).toContain('Plan A Inside Passage');
+      expect(html).toContain('Plan B Outside Channel');
+      expect(html).toContain('14.2 NM');
+      expect(html).toContain('18.8 NM');
+      expect(html).toContain('Tidal & Current Analysis:');
+      expect(html).toContain('velocity made good (VMG) between 09:00 and 12:00, and VMG stays positive');
+    });
+
+    it('assigns distinct colors to multiple routes in the same time period and expands acronyms on first use', () => {
+      const tracks = [
+        {
+          id: 'plan-1',
+          name: 'Plan A - Leg 1: Cowes to Yarmouth',
+          kind: 'planned',
+          voyage_day_id: 10,
+          simplified_geojson: { type: 'Feature', geometry: { coordinates: [[-1.30, 50.76], [-1.50, 50.70]] } }
+        },
+        {
+          id: 'plan-2',
+          name: 'Plan B - Leg 1: Cowes to Yarmouth',
+          kind: 'planned',
+          voyage_day_id: 10,
+          simplified_geojson: { type: 'Feature', geometry: { coordinates: [[-1.30, 50.76], [-1.42, 50.68], [-1.50, 50.70]] } }
+        }
+      ];
+
+      const colorMap = assignTrackColors(tracks);
+      expect(colorMap.get('plan-1')).toBe('#00B4D8');
+      expect(colorMap.get('plan-2')).toBe('#A855F7');
+      expect(colorMap.get('plan-1')).not.toBe(colorMap.get('plan-2'));
+
+      const staticPaths = buildStaticMapTrackPathsParam(tracks);
+      expect(staticPaths).toContain('color:0x00B4D8d9');
+      expect(staticPaths).toContain('color:0xA855F7d9');
+
+      const seen = new Set();
+      const first = expandAcronymsFirstUse('North route improves VMG and reduces XTE.', seen);
+      const second = expandAcronymsFirstUse('Later VMG and XTE remain steady.', seen);
+      expect(first).toBe('North route improves velocity made good (VMG) and reduces cross-track error (XTE).');
+      expect(second).toBe('Later VMG and XTE remain steady.');
     });
   });
 });

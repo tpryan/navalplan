@@ -125,6 +125,38 @@ func ParseGPX(data []byte, preferredKind string) ([]ParsedTrack, error) {
 	return tracks, nil
 }
 
+// IsGenericTrackName reports whether a track name is empty or a generic default
+// placeholder such as "Track 1", "Route 1", "Waypoints Route", or "Untitled".
+func IsGenericTrackName(name string) bool {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	switch lower {
+	case "waypoints route", "untitled", "track", "route":
+		return true
+	}
+	for _, prefix := range []string{"track ", "route "} {
+		if strings.HasPrefix(lower, prefix) {
+			rest := strings.TrimSpace(lower[len(prefix):])
+			if rest != "" {
+				allDigits := true
+				for _, r := range rest {
+					if r < '0' || r > '9' {
+						allDigits = false
+						break
+					}
+				}
+				if allDigits {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 type trackMetrics struct {
 	totalDist        float64
 	maxSpeed         float64

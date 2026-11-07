@@ -85,3 +85,10 @@ func (db *DB) UpdateVoyageTrackDebrief(ctx context.Context, id string, debrief m
 	_, err := db.ExecContext(ctx, query, id, debrief)
 	return err
 }
+
+// UpdateVoyageTrackName updates the display name for a track.
+func (db *DB) UpdateVoyageTrackName(ctx context.Context, id string, name string) error {
+	query := `UPDATE voyage_track SET name = $2, updated_at = NOW() WHERE id = $1`
+	_, err := db.ExecContext(ctx, query, id, name)
+	return err
+}

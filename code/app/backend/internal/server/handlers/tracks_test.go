@@ -220,7 +220,7 @@ func TestDebriefVoyageTrack(t *testing.T) {
 		verifyDebrief  func(t *testing.T, d *model.TrackDebrief)
 	}{
 		{
-			name: "rejects debriefing planned track directly",
+			name: "rejects debriefing planned track directly when only one planned track exists",
 			setupMock: func(m *MockStore) {
 				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
 				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
@@ -229,8 +229,68 @@ func TestDebriefVoyageTrack(t *testing.T) {
 					Kind:     "planned",
 					Name:     "Planned Route",
 				}, nil)
+				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+					{
+						ID:       trackID,
+						VoyageID: voyageID,
+						Kind:     "planned",
+						Name:     "Planned Route",
+					},
+				}, nil)
+				m.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{}, nil)
 			},
 			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "compares multiple planned routes when debriefing a planned track with >= 2 candidate plans",
+			setupMock: func(m *MockStore) {
+				distA := 11.2
+				distB := 15.8
+				m.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+				m.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+					ID:          trackID,
+					VoyageID:    voyageID,
+					VoyageDayID: &dayID,
+					Kind:        "planned",
+					Name:        "Plan A Inside",
+					DistanceNM:  &distA,
+				}, nil)
+				m.On("ListVoyageTracks", voyageID).Return([]model.VoyageTrack{
+					{
+						ID:          trackID,
+						VoyageID:    voyageID,
+						VoyageDayID: &dayID,
+						Kind:        "planned",
+						Name:        "Plan A Inside",
+						DistanceNM:  &distA,
+					},
+					{
+						ID:          "plan-2",
+						VoyageID:    voyageID,
+						VoyageDayID: &dayID,
+						Kind:        "planned",
+						Name:        "Plan B Outside",
+						DistanceNM:  &distB,
+					},
+				}, nil)
+				m.On("ListDays", voyageID, 100, 0).Return([]model.VoyageDay{
+					{ID: dayID, VoyageID: voyageID, StartLocationName: "Cowes", EndLocationName: "Yarmouth"},
+				}, nil)
+				m.On("GetBriefing", dayID).Return((*model.Briefing)(nil), errors.New("no briefing"))
+				m.On("UpdateVoyageTrackDebrief", mock.AnythingOfType("string"), mock.AnythingOfType("model.RawJSON")).Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			verifyDebrief: func(t *testing.T, d *model.TrackDebrief) {
+				if d.Mode != "comparison" {
+					t.Errorf("Mode = %q, want 'comparison'", d.Mode)
+				}
+				if len(d.CandidateTracks) != 2 {
+					t.Errorf("CandidateTracks len = %d, want 2", len(d.CandidateTracks))
+				}
+				if d.RecommendedTrackName == "" {
+					t.Errorf("expected non-empty RecommendedTrackName")
+				}
+			},
 		},
 		{
 			name: "successfully pairs recorded track with planned track and generates conclusions",
@@ -781,4 +841,41 @@ func TestParseDurationMinutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateVoyageTrack(t *testing.T) {
+	personID := int64(1)
+	voyageID := int64(10)
+	trackID := "track-uuid-rename"
+
+	mockStore := new(MockStore)
+	mockStore.On("GetVoyage", voyageID).Return(&model.Voyage{ID: voyageID, PersonID: personID}, nil)
+	mockStore.On("GetVoyageTrack", trackID).Return(&model.VoyageTrack{
+		ID:       trackID,
+		VoyageID: voyageID,
+		Kind:     "planned",
+		Name:     "Original GPX Name",
+	}, nil)
+	mockStore.On("UpdateVoyageTrackName", trackID, "North Channel Option A").Return(nil)
+
+	h := handlers.New(mockStore, "test_content", "http://test-agent", &agent.StaticResolver{BaseURL: "http://test-agent"})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/voyages/10/track/"+trackID, strings.NewReader(`{"name":"  North Channel Option A  "}`))
+	req.SetPathValue("id", "10")
+	req.SetPathValue("trackId", trackID)
+	req = addPerson(req, personID)
+
+	rr := httptest.NewRecorder()
+	h.UpdateVoyageTrack(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("UpdateVoyageTrack status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var updated model.VoyageTrack
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if updated.Name != "North Channel Option A" {
+		t.Errorf("updated.Name = %q, want %q", updated.Name, "North Channel Option A")
+	}
+	mockStore.AssertExpectations(t)
 }

@@ -335,12 +335,116 @@ export function calculateTimeVariance(recDur, planDur) {
     return { pct, pctStr, diffMins, deltaStr };
 }
 
+const NAUTICAL_ACRONYM_DEFS = [
+    { acronym: 'VMG', full: 'velocity made good (VMG)', wordRe: /\bVMG\b/, definedRe: /velocity\s+made\s+good\s*\(VMG\)/i },
+    { acronym: 'TWA', full: 'true wind angle (TWA)', wordRe: /\bTWA\b/, definedRe: /true\s+wind\s+angle\s*\(TWA\)/i },
+    { acronym: 'TWS', full: 'true wind speed (TWS)', wordRe: /\bTWS\b/, definedRe: /true\s+wind\s+speed\s*\(TWS\)/i },
+    { acronym: 'AWA', full: 'apparent wind angle (AWA)', wordRe: /\bAWA\b/, definedRe: /apparent\s+wind\s+angle\s*\(AWA\)/i },
+    { acronym: 'AWS', full: 'apparent wind speed (AWS)', wordRe: /\bAWS\b/, definedRe: /apparent\s+wind\s+speed\s*\(AWS\)/i },
+    { acronym: 'SOG', full: 'speed over ground (SOG)', wordRe: /\bSOG\b/, definedRe: /speed\s+over\s+ground\s*\(SOG\)/i },
+    { acronym: 'COG', full: 'course over ground (COG)', wordRe: /\bCOG\b/, definedRe: /course\s+over\s+ground\s*\(COG\)/i },
+    { acronym: 'XTE', full: 'cross-track error (XTE)', wordRe: /\bXTE\b/, definedRe: /cross[- ]track\s+error\s*\(XTE\)/i },
+    { acronym: 'ETA', full: 'estimated time of arrival (ETA)', wordRe: /\bETA\b/, definedRe: /estimated\s+time\s+of\s+arrival\s*\(ETA\)/i },
+    { acronym: 'ETD', full: 'estimated time of departure (ETD)', wordRe: /\bETD\b/, definedRe: /estimated\s+time\s+of\s+departure\s*\(ETD\)/i },
+    { acronym: 'LNM', full: 'Local Notice to Mariners (LNM)', wordRe: /\bLNM\b/, definedRe: /local\s+notices?\s+to\s+mariners\s*\(LNM\)/i },
+];
+
 /**
- * Generates formatted HTML for passage debrief cards with grouped metrics:
- * Row 1: Actual Dist | Planned Dist | Variance
- * Row 2: Actual Time | Planned Time | Variance
- * Row 3: Avg Speed | Max Speed
+ * Expands nautical acronyms (e.g. VMG -> "velocity made good (VMG)") the first time
+ * they appear across a shared `seen` Set of strings.
  *
+ * @param {string} text
+ * @param {Set<string>} [seen]
+ * @returns {string}
+ */
+export function expandAcronymsFirstUse(text, seen = new Set()) {
+    if (!text || typeof text !== 'string') return text || '';
+    let out = text;
+    for (const def of NAUTICAL_ACRONYM_DEFS) {
+        if (def.definedRe.test(out)) {
+            seen.add(def.acronym);
+            continue;
+        }
+        if (seen.has(def.acronym)) continue;
+        if (def.wordRe.test(out)) {
+            out = out.replace(def.wordRe, def.full);
+            seen.add(def.acronym);
+        }
+    }
+    return out;
+}
+
+export const PLANNED_ROUTE_PALETTE = [
+    '#00B4D8', // Cyan
+    '#A855F7', // Purple
+    '#10B981', // Emerald
+    '#F59E0B', // Amber
+    '#EC4899', // Pink
+    '#3B82F6', // Blue
+];
+
+export const RECORDED_ROUTE_PALETTE = [
+    '#FF6B35', // Orange
+    '#E11D48', // Rose
+    '#8B5CF6', // Violet
+    '#14B8A6', // Teal
+    '#D97706', // Amber-Dark
+];
+
+function getTrackPeriodKey(track) {
+    if (!track || typeof track !== 'object') return 'voyage';
+    const dayId = track.voyage_day_id ?? track.voyage_stop_id ?? track.start_day_id;
+    if (dayId != null && dayId !== '') {
+        return `day:${dayId}`;
+    }
+    const nameStr = String(track.name || '');
+    const legMatch = nameStr.match(/\bLeg\s*#?\s*(\d+)\b/i);
+    if (legMatch) {
+        return `leg:${legMatch[1]}`;
+    }
+    if (track.start_time) {
+        const dStr = String(track.start_time).slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+            return `date:${dStr}`;
+        }
+    }
+    return 'voyage';
+}
+
+/**
+ * Assigns distinct colors to tracks that cover the same time period / leg.
+ * Returns a Map from track identifier (or track object reference / index) to hex color.
+ *
+ * @param {Array<Object>} tracks
+ * @returns {Map<any, string>}
+ */
+export function assignTrackColors(tracks) {
+    const colorMap = new Map();
+    if (!Array.isArray(tracks) || tracks.length === 0) return colorMap;
+
+    const periodCounters = new Map();
+    tracks.forEach((track, idx) => {
+        if (!track) return;
+        const isPlanned = track.kind === 'planned';
+        const palette = isPlanned ? PLANNED_ROUTE_PALETTE : RECORDED_ROUTE_PALETTE;
+        const periodKey = `${isPlanned ? 'planned' : 'recorded'}:${getTrackPeriodKey(track)}`;
+        const slot = periodCounters.get(periodKey) || 0;
+        periodCounters.set(periodKey, slot + 1);
+        const color = palette[slot % palette.length];
+        if (track.id != null) {
+            colorMap.set(String(track.id), color);
+        }
+        if (track.name) {
+            colorMap.set(`name:${String(track.name).trim().toLowerCase()}`, color);
+        }
+        colorMap.set(track, color);
+        colorMap.set(idx, color);
+    });
+
+    return colorMap;
+}
+
+/**
  * @param {Object|Array|string} debrief
  * @param {Array} [stopsContext]
  * @param {Array} [tracksContext]
@@ -352,6 +456,8 @@ export function generateDebriefsHTML(debrief, stopsContext = null, tracksContext
     }
 
     const debriefs = Array.isArray(debrief) ? debrief : [debrief];
+    const resolvedTracks = tracksContext || (typeof currentTracks !== 'undefined' ? currentTracks : null);
+    const trackColorMap = assignTrackColors(resolvedTracks || []);
     let html = '';
 
     debriefs.forEach((item, index) => {
@@ -360,6 +466,258 @@ export function generateDebriefsHTML(debrief, stopsContext = null, tracksContext
             try { parsed = JSON.parse(item); } catch (e) { parsed = { summary: item }; }
         }
         if (!parsed) return;
+
+        const isComparison = parsed.mode === 'comparison' || (Array.isArray(parsed.candidate_tracks) && parsed.candidate_tracks.length >= 2);
+
+        const stopTitle = getDebriefStopTitle(
+            parsed,
+            stopsContext || (typeof currentStops !== 'undefined' ? currentStops : null),
+            resolvedTracks
+        );
+
+        if (isComparison) {
+            const seenAcronyms = new Set();
+            const allRawTexts = [
+                parsed.summary,
+                parsed.conclusions,
+                parsed.tacking_efficiency,
+                parsed.weather_impact,
+                parsed.tidal_analysis,
+                ...(Array.isArray(parsed.candidate_tracks) ? parsed.candidate_tracks.map(c => c?.wind_angle_summary) : []),
+                ...(Array.isArray(parsed.observations) ? parsed.observations : []),
+            ].filter(Boolean);
+            for (const rawText of allRawTexts) {
+                for (const def of NAUTICAL_ACRONYM_DEFS) {
+                    if (def.definedRe.test(String(rawText))) {
+                        seenAcronyms.add(def.acronym);
+                    }
+                }
+            }
+
+            const compTitle = stopTitle
+                ? `Route Comparison: ${esc(stopTitle)}`
+                : `Route Comparison: ${esc(parsed.day_title || parsed.track_name || 'Planned Routes')}`;
+
+            const recName = parsed.recommended_track_name ? String(parsed.recommended_track_name).trim() : '';
+            const rawCandidates = Array.isArray(parsed.candidate_tracks) ? parsed.candidate_tracks : [];
+            const extractTrackEndpointsCoords = tr => {
+                if (!tr) return null;
+                let geo = tr.simplified_geojson || tr.geojson;
+                if (!geo) return null;
+                try {
+                    if (typeof geo === 'string') geo = JSON.parse(geo);
+                } catch {
+                    return null;
+                }
+                const coords = geo && geo.type === 'LineString' && Array.isArray(geo.coordinates)
+                    ? geo.coordinates
+                    : (geo && geo.geometry && Array.isArray(geo.geometry.coordinates) ? geo.geometry.coordinates : null);
+                if (!coords || coords.length < 2) return null;
+                const s = coords[0];
+                const e = coords[coords.length - 1];
+                if (!Array.isArray(s) || !Array.isArray(e) || s.length < 2 || e.length < 2) return null;
+                return { startLat: Number(s[1]), startLng: Number(s[0]), endLat: Number(e[1]), endLng: Number(e[0]) };
+            };
+            const haversineNM = (lat1, lon1, lat2, lon2) => {
+                const toRad = d => (d * Math.PI) / 180;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+                return 3440.065 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            };
+            const trackEndpointsById = new Map();
+            const trackEndpointsByName = new Map();
+            if (Array.isArray(resolvedTracks)) {
+                resolvedTracks.forEach(tr => {
+                    const ep = extractTrackEndpointsCoords(tr);
+                    if (!ep) return;
+                    if (tr.id != null) trackEndpointsById.set(String(tr.id), ep);
+                    const n = String(tr.name || tr.file_name || '').trim().toLowerCase();
+                    if (n) trackEndpointsByName.set(n, ep);
+                });
+            }
+            const getCandEndpoints = c => {
+                if (!c) return null;
+                const cId = c.track_id || c.id;
+                if (cId != null && trackEndpointsById.has(String(cId))) return trackEndpointsById.get(String(cId));
+                const cName = String(c.name || c.track_name || '').trim().toLowerCase();
+                if (cName && trackEndpointsByName.has(cName)) return trackEndpointsByName.get(cName);
+                return null;
+            };
+            // Determine reference start/end endpoints when candidates have geometry in `tracks`
+            let refEndpoints = null;
+            const candEndpointList = rawCandidates.map(c => ({ c, ep: getCandEndpoints(c) })).filter(x => x.ep != null);
+            if (candEndpointList.length >= 2) {
+                for (let i = 0; i < candEndpointList.length; i++) {
+                    const epA = candEndpointList[i].ep;
+                    let overlapCount = 0;
+                    for (let j = 0; j < candEndpointList.length; j++) {
+                        const epB = candEndpointList[j].ep;
+                        if (haversineNM(epA.startLat, epA.startLng, epB.startLat, epB.startLng) <= 5.0 &&
+                            haversineNM(epA.endLat, epA.endLng, epB.endLat, epB.endLng) <= 5.0) {
+                            overlapCount++;
+                        }
+                    }
+                    if (overlapCount >= 2) {
+                        refEndpoints = epA;
+                        break;
+                    }
+                }
+            }
+            const seenCandSigs = new Set();
+            const candidates = rawCandidates.filter(c => {
+                if (!c) return false;
+                const rawName = String(c.name || c.track_name || '').trim();
+                if (refEndpoints) {
+                    const ep = getCandEndpoints(c);
+                    if (ep && (
+                        haversineNM(refEndpoints.startLat, refEndpoints.startLng, ep.startLat, ep.startLng) > 5.0 ||
+                        haversineNM(refEndpoints.endLat, refEndpoints.endLng, ep.endLat, ep.endLng) > 5.0
+                    )) {
+                        return false;
+                    }
+                }
+                const cName = rawName.toLowerCase();
+                const distKey = c.distance_nm != null ? Number(c.distance_nm).toFixed(1) : '';
+                const hdgKey = c.dominant_heading_deg != null ? String(Math.round(Number(c.dominant_heading_deg))) : '';
+                const sig = `${cName}|${distKey}|${hdgKey}`;
+                if (seenCandSigs.has(sig)) return false;
+                seenCandSigs.add(sig);
+                return true;
+            });
+            if (candidates.length < 2) {
+                return;
+            }
+            const summaryText = expandAcronymsFirstUse(parsed.summary || 'Route comparison complete.', seenAcronyms);
+
+            let candidatesHtml = '';
+            if (candidates.length > 0) {
+                let recAssigned = false;
+                const candidateRows = candidates.map((c, cIdx) => {
+                    if (!c) return '';
+                    const cName = c.name || c.track_name || 'Candidate Route';
+                    const cId = c.track_id || c.id;
+                    const cColor = (cId && trackColorMap.get(String(cId))) ||
+                        trackColorMap.get(`name:${String(cName).trim().toLowerCase()}`) ||
+                        PLANNED_ROUTE_PALETTE[cIdx % PLANNED_ROUTE_PALETTE.length];
+                    const matchesRec = Boolean(
+                        c.recommended ||
+                        (parsed.recommended_track_id && cId && String(cId) === String(parsed.recommended_track_id)) ||
+                        (!parsed.recommended_track_id && recName && String(cName).trim().toLowerCase() === recName.toLowerCase()) ||
+                        (recName && String(cName).trim().toLowerCase() === recName.toLowerCase())
+                    );
+                    const isRec = matchesRec && !recAssigned;
+                    if (isRec) {
+                        recAssigned = true;
+                    }
+                    const distStr = c.distance_nm != null ? `${Number(c.distance_nm).toFixed(1)} NM` : '--';
+                    const durStr = c.estimated_duration || c.duration_interval || '--';
+                    let headingStr = '';
+                    if (c.dominant_cardinal && c.dominant_heading_deg != null) {
+                        headingStr = `${c.dominant_cardinal} (${Math.round(Number(c.dominant_heading_deg))}°)`;
+                    } else if (c.dominant_cardinal) {
+                        headingStr = String(c.dominant_cardinal);
+                    } else if (c.dominant_heading_deg != null) {
+                        headingStr = `${Math.round(Number(c.dominant_heading_deg))}°`;
+                    }
+                    const windSummary = c.wind_angle_summary
+                        ? expandAcronymsFirstUse(String(c.wind_angle_summary), seenAcronyms)
+                        : '';
+                    const tidalSummary = c.tidal_summary
+                        ? expandAcronymsFirstUse(String(c.tidal_summary), seenAcronyms)
+                        : '';
+                    const profileLines = Array.isArray(c.along_route_profile)
+                        ? c.along_route_profile.map(line => expandAcronymsFirstUse(String(line), seenAcronyms)).filter(Boolean)
+                        : [];
+
+                    return `
+                      <div class="debrief-candidate-row card p-xs border mb-2xs ${isRec ? 'debrief-candidate-recommended' : ''}">
+                        <div class="flex justify-between align-center">
+                          <div class="flex align-center gap-xs">
+                            <span class="track-color-swatch" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(cColor)};flex-shrink:0;" aria-hidden="true"></span>
+                            <strong class="candidate-name">${esc(cName)}</strong>
+                            ${isRec ? `<span class="track-badge track-badge-planned candidate-rec-badge">Recommended</span>` : ''}
+                          </div>
+                          <div class="font-xs text-gray flex gap-sm">
+                            <span>Dist: <strong>${esc(distStr)}</strong></span>
+                            <span>Est. Time: <strong>${esc(durStr)}</strong></span>
+                            ${headingStr ? `<span>Course: <strong>${esc(headingStr)}</strong></span>` : ''}
+                          </div>
+                        </div>
+                        ${windSummary ? `<div class="font-xs text-gray mt-2xs">Wind / Angles: ${esc(windSummary)}</div>` : ''}
+                        ${tidalSummary ? `<div class="font-xs text-gray mt-2xs">Tide &amp; Current Along Route: ${esc(tidalSummary)}</div>` : ''}
+                        ${profileLines.length > 0 ? `<div class="font-xs text-gray mt-2xs debrief-along-route-profile">${profileLines.map(l => `<div>• ${esc(l)}</div>`).join('')}</div>` : ''}
+                      </div>
+                    `;
+                }).join('');
+
+                candidatesHtml = `
+                  <div class="debrief-candidates-list mt-xs mb-sm">
+                    ${candidateRows}
+                  </div>
+                `;
+            }
+
+            const conclusionsText = parsed.conclusions ? expandAcronymsFirstUse(String(parsed.conclusions), seenAcronyms) : '';
+            const tackingText = parsed.tacking_efficiency ? expandAcronymsFirstUse(String(parsed.tacking_efficiency), seenAcronyms) : '';
+            const weatherText = parsed.weather_impact ? expandAcronymsFirstUse(String(parsed.weather_impact), seenAcronyms) : '';
+            const tidalText = parsed.tidal_analysis ? expandAcronymsFirstUse(String(parsed.tidal_analysis), seenAcronyms) : '';
+
+            let obsHtml = '';
+            if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
+                obsHtml = `
+                  <div class="debrief-observations mt-sm">
+                    <h5 class="m-0 mb-xs">Tactical Pilot Takeaways:</h5>
+                    <ul class="m-0 pl-md">
+                      ${parsed.observations.map(o => `<li>${esc(expandAcronymsFirstUse(String(o), seenAcronyms))}</li>`).join('')}
+                    </ul>
+                  </div>
+                `;
+            }
+
+            html += `
+              <div class="debrief-card debrief-card--comparison ${index > 0 ? 'mt-md' : ''}">
+                <div class="flex justify-between align-center debrief-header">
+                  <h4 class="m-0 flex align-center gap-xs debrief-title">
+                    <span class="material-symbols-outlined text-brand-medium">alt_route</span>
+                    <span class="debrief-title-text">${compTitle}</span>
+                  </h4>
+                  <span class="debrief-date text-gray">${new Date().toLocaleDateString()}</span>
+                </div>
+                ${recName ? `
+                  <div class="debrief-pair-badge">
+                    <span class="material-symbols-outlined font-xs">recommend</span>
+                    Recommended Plan: <strong>${esc(recName)}</strong>
+                  </div>
+                ` : ''}
+                <p class="debrief-summary mt-xs mb-sm">${esc(summaryText)}</p>
+                ${candidatesHtml}
+                ${conclusionsText ? `
+                  <div class="debrief-conclusions mt-xs mb-xs">
+                    <strong>Comparison Conclusions & Recommendation:</strong>
+                    <p class="m-0 mt-2xs">${esc(conclusionsText)}</p>
+                  </div>
+                ` : ''}
+                ${tackingText ? `
+                  <p class="debrief-section-text tack-eff mt-xs mb-2xs">
+                    <strong>Course & Wind Angles:</strong> ${esc(tackingText)}
+                  </p>
+                ` : ''}
+                ${weatherText ? `
+                  <p class="debrief-section-text weather-impact mt-2xs mb-xs">
+                    <strong>Weather Impact:</strong> ${esc(weatherText)}
+                  </p>
+                ` : ''}
+                ${tidalText ? `
+                  <p class="debrief-section-text tidal-analysis mt-2xs mb-xs">
+                    <strong>Tidal & Current Analysis:</strong> ${esc(tidalText)}
+                  </p>
+                ` : ''}
+                ${obsHtml}
+              </div>
+            `;
+            return;
+        }
 
         let obsHtml = '';
         if (Array.isArray(parsed.observations) && parsed.observations.length > 0) {
@@ -372,12 +730,6 @@ export function generateDebriefsHTML(debrief, stopsContext = null, tracksContext
               </div>
             `;
         }
-
-        const stopTitle = getDebriefStopTitle(
-            parsed,
-            stopsContext || (typeof currentStops !== 'undefined' ? currentStops : null),
-            tracksContext || (typeof currentTracks !== 'undefined' ? currentTracks : null)
-        );
 
         const title = stopTitle
             ? `Passage Debrief: ${esc(stopTitle)}`
@@ -507,6 +859,11 @@ export function generateDebriefsHTML(debrief, stopsContext = null, tracksContext
                 <strong>Weather Impact:</strong> ${esc(parsed.weather_impact)}
               </p>
             ` : ''}
+            ${parsed.tidal_analysis ? `
+              <p class="debrief-section-text tidal-analysis mt-2xs mb-xs">
+                <strong>Tidal & Current Analysis:</strong> ${esc(parsed.tidal_analysis)}
+              </p>
+            ` : ''}
             ${obsHtml}
           </div>
         `;
@@ -580,8 +937,9 @@ export function formatFacilityLinkLabel(url) {
 export function buildStaticMapTrackPathsParam(tracks, maxPointsPerTrack = 50) {
     if (!Array.isArray(tracks) || tracks.length === 0) return '';
     let param = '';
+    const colorMap = assignTrackColors(tracks);
 
-    tracks.forEach(track => {
+    tracks.forEach((track, idx) => {
         if (!track) return;
         const rawGeo = track.simplified_geojson || track.geojson;
         if (!rawGeo) return;
@@ -614,7 +972,10 @@ export function buildStaticMapTrackPathsParam(tracks, maxPointsPerTrack = 50) {
         if (!pointsStr || !pointsStr.includes('|')) return;
 
         const isPlanned = track.kind === 'planned';
-        const style = isPlanned ? 'color:0x00B4D8d9|weight:3' : 'color:0xFF6B35e6|weight:4';
+        const hexColor = (colorMap.get(track) || colorMap.get(idx) || (isPlanned ? '#00B4D8' : '#FF6B35')).replace(/^#/, '');
+        const alpha = isPlanned ? 'd9' : 'e6';
+        const weight = isPlanned ? 3 : 4;
+        const style = `color:0x${hexColor}${alpha}|weight:${weight}`;
         param += `&path=${style}|${pointsStr}`;
     });
 

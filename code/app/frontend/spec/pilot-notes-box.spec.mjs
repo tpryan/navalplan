@@ -110,16 +110,44 @@ describe('renderPilotNotesHTML string renderer', () => {
   it('links pilotage source citations to Coast Pilot PDFs, eCFR sections, and search fallbacks', () => {
     const pilotNotes = {
       overview: 'Severn River approach.',
+      local_notices: ['lnm11452026: Dredging operations in San Francisco Bay'],
       sources: [
         'NOAA Coast Pilot 3, Chapter 13',
+        'NOAA Coast Pilot 7, Chapter 7, p. 284',
+        'USCG District 11 Local Notice to Mariners',
         '33 CFR § 110.159',
         'Annapolis City Code Title 15.10'
       ]
     };
 
     const html = renderPilotNotesHTML(pilotNotes);
-    expect(html).toContain('href="https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp3/CPB3_WEB.pdf"');
+    expect(html).toContain('href="https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp3/CPB3_WEB.pdf#search=Chapter%2013"');
+    expect(html).toContain('href="https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp7/CPB7_WEB.pdf#page=284"');
+    expect(html).toContain('href="https://www.navcen.uscg.gov/sites/default/files/pdf/lnms/lnm11452026.pdf"');
+    expect(html).toContain('Week 45 (Nov 2, 2026)');
     expect(html).toContain('href="https://www.ecfr.gov/current/title-33/section-110.159"');
     expect(html).toContain('href="https://www.google.com/search?q=Annapolis%20City%20Code%20Title%2015.10"');
+  });
+
+  it('renders Route Comparison & Recommendation card for structured and string route_comparison', () => {
+    const pilotNotes = {
+      overview: 'Solent westbound transit.',
+      route_comparison: {
+        recommended_route: 'North Channel Plan A',
+        summary: 'North Channel offers 1.8 kts favorable ebb and lee shelter from SW 22 kt winds.',
+        wind_and_wave_comparison: 'South Route faces 5 ft wind-against-tide chop near Hurst Spit.',
+        tidal_and_current_comparison: 'Depart 09:00 BST to carry the fair ebb through North Channel.'
+      }
+    };
+
+    const domEl = PilotNotesBox(pilotNotes);
+    expect(domEl.innerHTML).toContain('Route Comparison &amp; Recommendation');
+    expect(domEl.innerHTML).toContain('Recommended Route: North Channel Plan A');
+    expect(domEl.innerHTML).toContain('North Channel offers 1.8 kts favorable ebb');
+
+    const html = renderPilotNotesHTML(pilotNotes);
+    expect(html).toContain('Route Comparison & Recommendation');
+    expect(html).toContain('<strong>Recommended Route: North Channel Plan A</strong>');
+    expect(html).toContain('South Route faces 5 ft wind-against-tide chop near Hurst Spit.');
   });
 });

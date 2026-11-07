@@ -2731,6 +2731,69 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
     color: var(--ink2);
 }
 
+/* LNM: elevated full-width banner card — time-sensitive safety info */
+.pilot-note-card--lnm {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 14px 16px;
+    background: color-mix(in oklab, var(--amber) 7%, var(--surface));
+    border-color: color-mix(in oklab, var(--amber) 32%, var(--hair));
+    border-left: 3px solid var(--amber);
+}
+
+.pilot-note-card--lnm .pilot-note-card__header {
+    flex: 0 0 180px;
+    align-items: flex-start;
+    padding-top: 1px;
+    color: var(--amber);
+    line-height: 1.35;
+}
+
+.pilot-note-card--lnm .pilot-note-card__icon {
+    color: var(--amber);
+}
+
+.pilot-note-card--lnm .pilot-note-card__content {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: block;
+    columns: 2;
+    column-gap: 28px;
+}
+
+.pilot-note-card--lnm .pilot-note-card__content > * {
+    break-inside: avoid;
+    margin-bottom: 8px;
+}
+
+.pilot-note-card--lnm .pilot-note-card__content > *:last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 1150px) {
+    .pilot-note-card--lnm .pilot-note-card__header {
+        flex-basis: 150px;
+    }
+}
+
+@media (max-width: 840px) {
+    .pilot-note-card--lnm {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .pilot-note-card--lnm .pilot-note-card__header {
+        flex: 0 0 auto;
+        align-items: center;
+    }
+
+    .pilot-note-card--lnm .pilot-note-card__content {
+        columns: 1;
+    }
+}
+
 .pilot-notes-sources {
     margin-top: 6px;
     font-size: 11px;

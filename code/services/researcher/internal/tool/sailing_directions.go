@@ -128,12 +128,23 @@ type retrieveContextsRequest struct {
 	} `json:"query"`
 }
 
+type ragChunkPageSpan struct {
+	FirstPage int `json:"firstPage"`
+	LastPage  int `json:"lastPage"`
+}
+
+type ragChunkInfo struct {
+	PageSpan *ragChunkPageSpan `json:"pageSpan,omitempty"`
+}
+
 type ragContextChunk struct {
-	SourceURI         string  `json:"sourceUri"`
-	SourceDisplayName string  `json:"sourceDisplayName"`
-	Text              string  `json:"text"`
-	Score             float64 `json:"score,omitempty"`
-	Distance          float64 `json:"distance,omitempty"`
+	SourceURI         string            `json:"sourceUri"`
+	SourceDisplayName string            `json:"sourceDisplayName"`
+	Text              string            `json:"text"`
+	Score             float64           `json:"score,omitempty"`
+	Distance          float64           `json:"distance,omitempty"`
+	PageSpan          *ragChunkPageSpan `json:"pageSpan,omitempty"`
+	Chunk             *ragChunkInfo     `json:"chunk,omitempty"`
 }
 
 type retrieveContextsResponse struct {
@@ -486,6 +497,87 @@ func formatCorpusResource(projectID, location, corpusID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/ragCorpora/%s", projectID, location, corpusID)
 }
 
+// isoWeekStartDate returns the Monday date of the given ISO year and week.
+func isoWeekStartDate(year, week int) time.Time {
+	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+	weekday := int(jan4.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	week1Monday := jan4.AddDate(0, 0, -(weekday - 1))
+	return week1Monday.AddDate(0, 0, (week-1)*7)
+}
+
+func enrichRagSourceCitation(rawName, rawURI string, firstPage int) string {
+	candidate := strings.TrimSpace(rawName)
+	if candidate == "" {
+		candidate = strings.TrimSpace(rawURI)
+	}
+	lower := strings.ToLower(candidate)
+
+	// 1. USCG Weekly Local Notice to Mariners: lnm<dist><week><year>.pdf (e.g., lnm11452026.pdf, lnm08g452026.pdf)
+	if idx := strings.Index(lower, "lnm"); idx >= 0 {
+		rest := lower[idx+3:]
+		rest = strings.TrimSuffix(rest, ".pdf")
+		if idxSlash := strings.IndexAny(rest, "/\\"); idxSlash >= 0 {
+			rest = rest[:idxSlash]
+		}
+		if len(rest) >= 8 {
+			yearStr := rest[len(rest)-4:]
+			weekStr := rest[len(rest)-6 : len(rest)-4]
+			distCode := rest[:len(rest)-6]
+			var year, week int
+			if _, errY := fmt.Sscanf(yearStr, "%d", &year); errY == nil {
+				if _, errW := fmt.Sscanf(weekStr, "%d", &week); errW == nil && year >= 2020 && year <= 2100 && week >= 1 && week <= 53 {
+					distNum := strings.TrimLeft(distCode, "0")
+					distLabel := fmt.Sprintf("USCG District %s", strings.ToUpper(distNum))
+					switch distCode {
+					case "08g", "8g":
+						distLabel = "USCG District 8 (Gulf)"
+					case "08r", "8r":
+						distLabel = "USCG District 8 (Western Rivers)"
+					}
+					pubDate := isoWeekStartDate(year, week).Format("Jan 2, 2006")
+					pdfFile := fmt.Sprintf("lnm%s%02d%04d.pdf", distCode, week, year)
+					pdfURL := fmt.Sprintf("https://www.navcen.uscg.gov/sites/default/files/pdf/lnms/%s", pdfFile)
+					if firstPage > 0 {
+						pdfURL = fmt.Sprintf("%s#page=%d", pdfURL, firstPage)
+						return fmt.Sprintf("%s Local Notice to Mariners, Week %d (%s), p. %d (%s)", distLabel, week, pubDate, firstPage, pdfURL)
+					}
+					return fmt.Sprintf("%s Local Notice to Mariners, Week %d (%s) (%s)", distLabel, week, pubDate, pdfURL)
+				}
+			}
+		}
+	}
+
+	// 2. NOAA Coast Pilot: CPB<vol>_WEB.pdf
+	if idx := strings.Index(lower, "cpb"); idx >= 0 {
+		rest := lower[idx+3:]
+		volDigits := ""
+		for _, r := range rest {
+			if r >= '0' && r <= '9' {
+				volDigits += string(r)
+			} else {
+				break
+			}
+		}
+		var vol int
+		if _, err := fmt.Sscanf(volDigits, "%d", &vol); err == nil && vol >= 1 && vol <= 10 {
+			pdfURL := fmt.Sprintf("https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp%d/CPB%d_WEB.pdf", vol, vol)
+			if firstPage > 0 {
+				pdfURL = fmt.Sprintf("%s#page=%d", pdfURL, firstPage)
+				return fmt.Sprintf("NOAA Coast Pilot %d, p. %d (%s)", vol, firstPage, pdfURL)
+			}
+			return fmt.Sprintf("NOAA Coast Pilot %d (%s)", vol, pdfURL)
+		}
+	}
+
+	if candidate == "" {
+		return "Official Nautical Publication"
+	}
+	return candidate
+}
+
 func formatRagChunks(items []ragContextChunk) (string, int, []string) {
 	if len(items) == 0 {
 		return "No relevant hydrographic pilot contexts found for the query.", 0, nil
@@ -494,13 +586,13 @@ func formatRagChunks(items []ragContextChunk) (string, int, []string) {
 	var sources []string
 	var sb strings.Builder
 	for i, item := range items {
-		sourceName := item.SourceDisplayName
-		if sourceName == "" {
-			sourceName = item.SourceURI
+		firstPage := 0
+		if item.PageSpan != nil && item.PageSpan.FirstPage > 0 {
+			firstPage = item.PageSpan.FirstPage
+		} else if item.Chunk != nil && item.Chunk.PageSpan != nil && item.Chunk.PageSpan.FirstPage > 0 {
+			firstPage = item.Chunk.PageSpan.FirstPage
 		}
-		if sourceName == "" {
-			sourceName = "Official Nautical Publication"
-		}
+		sourceName := enrichRagSourceCitation(item.SourceDisplayName, item.SourceURI, firstPage)
 		sources = append(sources, sourceName)
 
 		if i > 0 {

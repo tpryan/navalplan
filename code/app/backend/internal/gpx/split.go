@@ -2,6 +2,7 @@ package gpx
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"app/internal/model"
@@ -81,7 +82,13 @@ func SplitTrackByDays(master ParsedTrack, days []model.VoyageDay) []LegResult {
 			toName = "End"
 		}
 		dayID := day.ID
-		legName := fmt.Sprintf("%s - Leg %d: %s to %s", master.Name, i+1, fromName, toName)
+		masterName := strings.TrimSpace(master.Name)
+		var legName string
+		if masterName == "" || IsGenericTrackName(masterName) || strings.HasPrefix(strings.ToLower(masterName), "leg ") {
+			legName = fmt.Sprintf("Leg %d: %s to %s", i+1, fromName, toName)
+		} else {
+			legName = fmt.Sprintf("%s - Leg %d: %s to %s", masterName, i+1, fromName, toName)
+		}
 		legTrack := buildParsedTrack(legName, master.Kind, legPoints)
 		legs = append(legs, LegResult{
 			DayID: &dayID,

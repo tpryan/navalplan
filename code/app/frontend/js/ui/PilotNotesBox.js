@@ -1,4 +1,4 @@
-import { esc } from '../utils.js';
+import { esc, expandAcronymsFirstUse } from '../utils.js';
 
 /**
  * Normalizes pilot_notes data from object, JSON string, or markdown string.
@@ -60,14 +60,85 @@ export function formatTimingHTML(timing) {
   return '';
 }
 
+function isoWeekStartDateUTC(year, week) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4.getTime() - (dayOfWeek - 1) * 86400000);
+  return new Date(week1Monday.getTime() + (week - 1) * 7 * 86400000);
+}
+
+function formatShortDateUTC(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return '';
+  return dateObj.toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function extractCoastPilotDeepFragment(text) {
+  const s = String(text || '');
+  const pageMatch = s.match(/\b(?:pp?\.?|pages?)\s*(\d{1,4})\b/i);
+  if (pageMatch) {
+    return `#page=${pageMatch[1]}`;
+  }
+  const chapMatch = s.match(/\b(Chapter\s+\d{1,2})\b/i);
+  if (chapMatch) {
+    return `#search=${encodeURIComponent(chapMatch[1])}`;
+  }
+  const parenTopic = s.match(/\(([^()]{3,40})\)/);
+  if (parenTopic && !/^https?:\/\//i.test(parenTopic[1])) {
+    return `#search=${encodeURIComponent(parenTopic[1].trim())}`;
+  }
+  return '';
+}
+
+function extractLNMDateHintFromData(data, safetyAlerts = null) {
+  const texts = [];
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.local_notices)) texts.push(...data.local_notices);
+    else if (typeof data.local_notices === 'string') texts.push(data.local_notices);
+    if (Array.isArray(data.sources)) texts.push(...data.sources.map(s => (typeof s === 'string' ? s : s?.label || s?.title || '')));
+  }
+  if (Array.isArray(safetyAlerts)) {
+    safetyAlerts.forEach(a => {
+      if (a?.message) texts.push(String(a.message));
+    });
+  }
+  for (const raw of texts) {
+    const str = String(raw || '');
+    const lnmFile = str.match(/\blnm(\d{2}|08[gr])(\d{2})(20\d{2})\b/i);
+    if (lnmFile) {
+      const wk = parseInt(lnmFile[2], 10);
+      const yr = parseInt(lnmFile[3], 10);
+      const dt = formatShortDateUTC(isoWeekStartDateUTC(yr, wk));
+      return { distCode: lnmFile[1].toLowerCase(), week: wk, year: yr, dateLabel: `Week ${wk} (${dt})` };
+    }
+    const wkMatch = str.match(/\bWeek\s*(\d{1,2})\s*(?:\(([^)]+)\)|[,\s/-]+(20\d{2}))/i);
+    if (wkMatch) {
+      const wk = parseInt(wkMatch[1], 10);
+      if (wkMatch[2]) {
+        return { week: wk, dateLabel: `Week ${wk} (${wkMatch[2].trim()})` };
+      }
+      const yr = parseInt(wkMatch[3], 10);
+      const dt = formatShortDateUTC(isoWeekStartDateUTC(yr, wk));
+      return { week: wk, year: yr, dateLabel: `Week ${wk} (${dt})` };
+    }
+  }
+  return null;
+}
+
 /**
  * Resolves a pilotage source citation string or object to an authoritative URL
- * (NOAA Coast Pilot PDF, eCFR section/part, NGA Sailing Directions, USCG NavCen, or Google Search fallback).
+ * (NOAA Coast Pilot PDF with #page/#search deep link, eCFR section/part,
+ * NGA Sailing Directions, USCG NAVCEN LNM weekly PDF / district page with date, or Google Search fallback).
  *
  * @param {string|object} source
+ * @param {{ dateLabel?: string, distCode?: string, week?: number, year?: number }|null} [lnmHint]
  * @returns {{ label: string, url: string }|null}
  */
-export function resolvePilotSourceLink(source) {
+export function resolvePilotSourceLink(source, lnmHint = null) {
   if (!source) return null;
 
   if (typeof source === 'object') {
@@ -77,8 +148,7 @@ export function resolvePilotSourceLink(source) {
     if (rawUrl && /^https?:\/\//i.test(String(rawUrl).trim())) {
       return { label: String(rawLabel).trim(), url: String(rawUrl).trim() };
     }
-    const resolved = resolvePilotSourceLink(String(rawLabel));
-    return resolved;
+    return resolvePilotSourceLink(String(rawLabel), lnmHint);
   }
 
   const sStr = String(source).trim();
@@ -90,20 +160,24 @@ export function resolvePilotSourceLink(source) {
 
   const embeddedUrlMatch = sStr.match(/^(.*?)\s*\((https?:\/\/[^\s)]+)\)\s*$/i);
   if (embeddedUrlMatch) {
-    return {
-      label: embeddedUrlMatch[1].trim() || embeddedUrlMatch[2],
-      url: embeddedUrlMatch[2],
-    };
+    let label = embeddedUrlMatch[1].trim() || embeddedUrlMatch[2];
+    let url = embeddedUrlMatch[2];
+    if (/CPB\d+_WEB\.pdf$/i.test(url)) {
+      url += extractCoastPilotDeepFragment(label);
+    }
+    return { label, url };
   }
 
-  // 1. NOAA Coast Pilot (Volumes 1-10)
+  // 1. NOAA Coast Pilot (Volumes 1-10) — deep link with #page=N or #search=Chapter%20N
   const cpMatch = sStr.match(/\b(?:NOAA\s+)?Coast\s+Pilot\s*(?:Vol(?:ume)?\.?\s*)?(\d{1,2})\b/i);
   if (cpMatch) {
     const vol = parseInt(cpMatch[1], 10);
     if (vol >= 1 && vol <= 10) {
+      const baseUrl = `https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp${vol}/CPB${vol}_WEB.pdf`;
+      const fragment = extractCoastPilotDeepFragment(sStr);
       return {
         label: sStr,
-        url: `https://nauticalcharts.noaa.gov/publications/coast-pilot/files/cp${vol}/CPB${vol}_WEB.pdf`,
+        url: `${baseUrl}${fragment}`,
       };
     }
   }
@@ -136,23 +210,99 @@ export function resolvePilotSourceLink(source) {
     };
   }
 
-  // 4. USCG Light List / Local Notice to Mariners
+  // 4. Direct USCG LNM filename (e.g. "lnm11452026.pdf" or citation containing lnm11452026)
+  const lnmFileMatch = sStr.match(/\blnm(\d{2}|08[gr])(\d{2})(20\d{2})(?:\.pdf)?\b/i);
+  if (lnmFileMatch) {
+    const distCode = lnmFileMatch[1].toLowerCase();
+    const week = parseInt(lnmFileMatch[2], 10);
+    const year = parseInt(lnmFileMatch[3], 10);
+    const distNum = distCode.replace(/^0+/, '').replace(/[gr]$/i, '');
+    const pubDate = formatShortDateUTC(isoWeekStartDateUTC(year, week));
+    const pageMatch = sStr.match(/\b(?:pp?\.?|pages?)\s*(\d{1,4})\b/i);
+    const pageFrag = pageMatch ? `#page=${pageMatch[1]}` : '';
+    const pdfUrl = `https://www.navcen.uscg.gov/sites/default/files/pdf/lnms/lnm${distCode}${String(week).padStart(2, '0')}${year}.pdf${pageFrag}`;
+    const label = /^lnm\d/i.test(sStr)
+      ? `USCG District ${distNum} Local Notice to Mariners — Week ${week} (${pubDate})`
+      : (/\b(20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(sStr) ? sStr : `${sStr} — Week ${week} (${pubDate})`);
+    return { label, url: pdfUrl };
+  }
+
+  // 5. USCG Light List / Local Notice to Mariners
   if (/\b(?:USCG\s+)?(?:Light\s+List|Local\s+Notice\s+to\s+Mariners|LNM)\b/i.test(sStr)) {
+    if (/\bLight\s+List\b/i.test(sStr) && !/\b(?:Local\s+Notice\s+to\s+Mariners|LNM)\b/i.test(sStr)) {
+      return {
+        label: sStr,
+        url: 'https://www.navcen.uscg.gov/light-lists',
+      };
+    }
+
+    const distMatch = sStr.match(/\b(?:District|Dist\.?|D)\s*(\d{1,2})\s*(?:\((Gulf|Western\s+Rivers)\)|([gr]))?\b/i);
+    const wkYearMatch = sStr.match(/\b(?:Week|Wk\.?|LNM)\s*(\d{1,2})[,\s/-]+(20\d{2})\b/i);
+    const pageMatch = sStr.match(/\b(?:pp?\.?|pages?)\s*(\d{1,4})\b/i);
+    const pageFrag = pageMatch ? `#page=${pageMatch[1]}` : '';
+
+    if (distMatch) {
+      const distNum = parseInt(distMatch[1], 10);
+      const subText = `${distMatch[2] || ''}${distMatch[3] || ''}`.toLowerCase();
+      let subdistrict = 'n';
+      let distPfx = String(distNum).padStart(2, '0');
+      if (distNum === 8) {
+        if (subText.startsWith('r') || subText.includes('river')) {
+          subdistrict = 'r';
+          distPfx = '08r';
+        } else {
+          subdistrict = 'g';
+          distPfx = '08g';
+        }
+      }
+
+      const weekNum = wkYearMatch ? parseInt(wkYearMatch[1], 10) : (lnmHint?.week || 0);
+      const yearNum = wkYearMatch ? parseInt(wkYearMatch[2], 10) : (lnmHint?.year || 0);
+
+      let label = sStr;
+      const hasDateInLabel = /\b(20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|week\s*\d+)\b/i.test(label);
+      if (weekNum >= 1 && weekNum <= 53 && yearNum >= 2020) {
+        const pubDate = formatShortDateUTC(isoWeekStartDateUTC(yearNum, weekNum));
+        if (!hasDateInLabel && pubDate) {
+          label = `${label} — Week ${weekNum} (${pubDate})`;
+        } else if (wkYearMatch && pubDate && !/\([A-Za-z]{3}\s+\d{1,2},\s+20\d{2}\)/.test(label)) {
+          label = `${label} (${pubDate})`;
+        }
+        return {
+          label,
+          url: `https://www.navcen.uscg.gov/sites/default/files/pdf/lnms/lnm${distPfx}${String(weekNum).padStart(2, '0')}${yearNum}.pdf${pageFrag}`,
+        };
+      }
+
+      if (!hasDateInLabel && lnmHint?.dateLabel) {
+        label = `${label} — ${lnmHint.dateLabel}`;
+      }
+      return {
+        label,
+        url: `https://www.navcen.uscg.gov/local-notices-to-mariners?district=${distNum}+0&subdistrict=${subdistrict}`,
+      };
+    }
+
+    let label = sStr;
+    const hasDateInLabel = /\b(20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|week\s*\d+)\b/i.test(label);
+    if (!hasDateInLabel && lnmHint?.dateLabel) {
+      label = `${label} — ${lnmHint.dateLabel}`;
+    }
     return {
-      label: sStr,
-      url: 'https://www.navcen.uscg.gov/',
+      label,
+      url: 'https://www.navcen.uscg.gov/local-notices-to-mariners-by-cg-district',
     };
   }
 
-  // 5. Fallback: search query link for municipal/harbor codes and other named publications
+  // 6. Fallback: search query link for municipal/harbor codes and other named publications
   return {
     label: sStr,
     url: `https://www.google.com/search?q=${encodeURIComponent(sStr)}`,
   };
 }
 
-function renderPilotSourceTagHTML(source) {
-  const resolved = resolvePilotSourceLink(source);
+function renderPilotSourceTagHTML(source, lnmHint = null) {
+  const resolved = resolvePilotSourceLink(source, lnmHint);
   if (!resolved) return '';
   return `<a href="${esc(resolved.url)}" target="_blank" rel="noopener noreferrer" class="pilot-source-tag pilot-source-tag--link ref-anchor">${esc(resolved.label)}</a>`;
 }
@@ -243,6 +393,88 @@ function formatLocalNoticesHTML(data, safetyAlerts = null) {
   return items.map(item => `<p class="pilot-note-card__para">${esc(item)}</p>`).join('');
 }
 
+export function formatRouteComparisonHTML(routeComp) {
+  if (!routeComp) return '';
+  const paragraphs = [];
+  const seenAcronyms = new Set();
+
+  if (Array.isArray(routeComp)) {
+    routeComp.forEach(item => {
+      const clean = expandAcronymsFirstUse(String(item || '').trim(), seenAcronyms);
+      if (!clean) return;
+      if (/^recommended\s+(route|plan):/i.test(clean)) {
+        paragraphs.push(`<p class="pilot-note-card__lead"><strong>${esc(clean)}</strong></p>`);
+      } else {
+        paragraphs.push(`<p class="pilot-note-card__para">${esc(clean)}</p>`);
+      }
+    });
+    return paragraphs.join('');
+  }
+
+  if (typeof routeComp === 'object') {
+    const rec = routeComp.recommended_route || routeComp.recommended_plan || routeComp.recommended_track_name;
+    if (rec) {
+      paragraphs.push(
+        `<p class="pilot-note-card__lead"><strong>Recommended Route: ${esc(String(rec))}</strong></p>`
+      );
+    }
+    const orderedKeys = [
+      'summary',
+      'wind_and_wave_comparison',
+      'tidal_and_current_comparison',
+      'hazards_comparison',
+      'conclusions',
+    ];
+    const usedKeys = new Set(['recommended_route', 'recommended_plan', 'recommended_track_name', ...orderedKeys]);
+    for (const key of orderedKeys) {
+      if (routeComp[key]) {
+        const expanded = expandAcronymsFirstUse(String(routeComp[key]), seenAcronyms);
+        paragraphs.push(`<p class="pilot-note-card__para">${esc(expanded)}</p>`);
+      }
+    }
+    for (const [k, v] of Object.entries(routeComp)) {
+      if (usedKeys.has(k) || !v) continue;
+      if (typeof v === 'string') {
+        const expanded = expandAcronymsFirstUse(v, seenAcronyms);
+        paragraphs.push(`<p class="pilot-note-card__para">${esc(expanded)}</p>`);
+      } else if (Array.isArray(v)) {
+        v.forEach(entry => {
+          if (typeof entry === 'string' && entry.trim()) {
+            const expanded = expandAcronymsFirstUse(entry.trim(), seenAcronyms);
+            paragraphs.push(`<p class="pilot-note-card__para">${esc(expanded)}</p>`);
+          } else if (entry && typeof entry === 'object' && entry.name) {
+            const dist = entry.distance_nm != null ? ` (${Number(entry.distance_nm).toFixed(1)} NM)` : '';
+            const rawSummary = entry.summary || entry.wind_angle_summary || '';
+            const summary = rawSummary ? expandAcronymsFirstUse(String(rawSummary), seenAcronyms) : '';
+            paragraphs.push(
+              `<p class="pilot-note-card__para"><strong>${esc(String(entry.name))}${esc(dist)}</strong>${summary ? ': ' + esc(summary) : ''}</p>`
+            );
+          }
+        });
+      }
+    }
+    return paragraphs.join('');
+  }
+
+  if (typeof routeComp === 'string') {
+    const segments = routeComp
+      .split(/\s+·\s+|\n+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    segments.forEach(seg => {
+      const expanded = expandAcronymsFirstUse(seg, seenAcronyms);
+      if (/^recommended\s+(route|plan):/i.test(expanded)) {
+        paragraphs.push(`<p class="pilot-note-card__lead"><strong>${esc(expanded)}</strong></p>`);
+      } else {
+        paragraphs.push(`<p class="pilot-note-card__para">${esc(expanded)}</p>`);
+      }
+    });
+    return paragraphs.join('');
+  }
+
+  return '';
+}
+
 /**
  * PilotNotesBox — creates a DOM section element containing structured pilotage notes.
  * @param {object|string} pilotNotes
@@ -284,10 +516,10 @@ export function PilotNotesBox(pilotNotes, safetyAlerts = null) {
   const grid = document.createElement('div');
   grid.className = 'pilot-notes-grid';
 
-  const addCardHTML = (iconName, title, bodyHtml) => {
+  const addCardHTML = (iconName, title, bodyHtml, modifier = '') => {
     if (!bodyHtml) return;
     const card = document.createElement('div');
-    card.className = 'pilot-note-card';
+    card.className = modifier ? `pilot-note-card ${modifier}` : 'pilot-note-card';
 
     const head = document.createElement('div');
     head.className = 'pilot-note-card__header';
@@ -302,7 +534,8 @@ export function PilotNotesBox(pilotNotes, safetyAlerts = null) {
     grid.appendChild(card);
   };
 
-  addCardHTML('campaign', 'Local Notices to Mariners (LNM)', formatLocalNoticesHTML(data, safetyAlerts));
+  addCardHTML('campaign', 'Local Notices to Mariners (LNM)', formatLocalNoticesHTML(data, safetyAlerts), 'pilot-note-card--lnm');
+  addCardHTML('alt_route', 'Route Comparison & Recommendation', formatRouteComparisonHTML(data.route_comparison));
   addCardHTML('schedule', 'Departure & Arrival Timing', formatTimingHTML(data.departure_and_arrival_timing));
   addCardHTML('straighten', 'Approaches & Channels', formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels));
   addCardHTML('anchor', 'Anchorages & Moorings', formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings));
@@ -347,6 +580,7 @@ export function renderPilotNotesHTML(pilotNotes, safetyAlerts = null) {
 
   const overview = data.overview || data.summary || data.description || '';
   const lnmHtml = formatLocalNoticesHTML(data, safetyAlerts);
+  const routeCompHtml = formatRouteComparisonHTML(data.route_comparison);
   const timingHtml = formatTimingHTML(data.departure_and_arrival_timing);
   const approachHtml = formatCardParagraphsHTML(data.approach_and_channels || data.approach || data.channels || '');
   const anchoragesHtml = formatCardParagraphsHTML(data.anchorages_and_moorings || data.anchorages || data.moorings || '');
@@ -361,12 +595,23 @@ export function renderPilotNotesHTML(pilotNotes, safetyAlerts = null) {
   const subCards = [];
   if (lnmHtml) {
     subCards.push(`
-      <div class="pilot-note-card">
+      <div class="pilot-note-card pilot-note-card--lnm">
         <div class="pilot-note-card__header">
           <span class="material-symbols-outlined pilot-note-card__icon">campaign</span>
           <strong>Local Notices to Mariners (LNM)</strong>
         </div>
         <div class="pilot-note-card__content">${lnmHtml}</div>
+      </div>
+    `);
+  }
+  if (routeCompHtml) {
+    subCards.push(`
+      <div class="pilot-note-card">
+        <div class="pilot-note-card__header">
+          <span class="material-symbols-outlined pilot-note-card__icon">alt_route</span>
+          <strong>Route Comparison & Recommendation</strong>
+        </div>
+        <div class="pilot-note-card__content">${routeCompHtml}</div>
       </div>
     `);
   }
@@ -420,10 +665,11 @@ export function renderPilotNotesHTML(pilotNotes, safetyAlerts = null) {
   }
 
   if (sources.length > 0) {
+    const lnmHint = extractLNMDateHintFromData(data, safetyAlerts);
     itemsHtml += `
       <div class="pilot-notes-sources">
         <span class="pilot-notes-sources__label">Sources:</span>
-        ${sources.map(renderPilotSourceTagHTML).filter(Boolean).join(' ')}
+        ${sources.map(s => renderPilotSourceTagHTML(s, lnmHint)).filter(Boolean).join(' ')}
       </div>
     `;
   }

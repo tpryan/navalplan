@@ -98,6 +98,7 @@ type DBStore interface {
 	ListDayTracks(ctx context.Context, dayID int64) ([]model.VoyageTrack, error)
 	DeleteVoyageTrack(ctx context.Context, id string) error
 	UpdateVoyageTrackDebrief(ctx context.Context, id string, debrief model.RawJSON) error
+	UpdateVoyageTrackName(ctx context.Context, id string, name string) error
 }
 
 var _ DBStore = (*store.DB)(nil)

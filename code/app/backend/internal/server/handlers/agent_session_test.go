@@ -86,6 +86,10 @@ func (s *sessionTrackingStore) UpdateVoyageTrackDebrief(_ context.Context, _ str
 	return nil
 }
 
+func (s *sessionTrackingStore) UpdateVoyageTrackName(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func agentServerWithSessionFailure(t *testing.T) (srv *httptest.Server, runCalled *bool) {
 	t.Helper()
 	called := false

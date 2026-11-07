@@ -261,9 +261,14 @@ func (h *Handler) performLookoutAuditLogic(day *model.VoyageDay, briefing *model
 	}
 
 	var plannedRouteInfo string
-	matchedPlannedTrack := h.findPlannedTrackForDay(ctx, day, dayPosition)
-	if matchedPlannedTrack != nil {
-		plannedRouteInfo, distNM = formatPlannedRouteForLookout(matchedPlannedTrack, distNM)
+	matchedPlannedTracks := h.findPlannedTracksForDay(ctx, day, dayPosition)
+	var matchedPlannedTrack *model.VoyageTrack
+	if len(matchedPlannedTracks) > 0 {
+		matchedPlannedTrack = &matchedPlannedTracks[0]
+		plannedRouteInfo, distNM = formatPlannedRoutesForLookout(matchedPlannedTracks, distNM)
+		if alongEnv := formatAlongRouteEnvForLookout(matchedPlannedTracks, briefing); alongEnv != "" {
+			plannedRouteInfo = strings.TrimSpace(plannedRouteInfo) + "\n\n" + alongEnv + "\n"
+		}
 	}
 
 	prompt := buildLookoutPrompt(day, briefing, distNM, course, hasCourse, dayPosition, totalDays, plannedRouteInfo)
@@ -383,6 +388,14 @@ func bearingToCardinal(deg float64) string {
 }
 
 func (h *Handler) findPlannedTrackForDay(ctx context.Context, day *model.VoyageDay, dayPosition int) *model.VoyageTrack {
+	matched := h.findPlannedTracksForDay(ctx, day, dayPosition)
+	if len(matched) == 0 {
+		return nil
+	}
+	return &matched[0]
+}
+
+func (h *Handler) findPlannedTracksForDay(ctx context.Context, day *model.VoyageDay, dayPosition int) []model.VoyageTrack {
 	if day == nil {
 		return nil
 	}
@@ -413,46 +426,209 @@ func (h *Handler) findPlannedTrackForDay(ctx context.Context, day *model.VoyageD
 		return nil
 	}
 
-	// 1. Direct match on day ID
-	for i := range plannedTracks {
-		if plannedTracks[i].VoyageDayID != nil && *plannedTracks[i].VoyageDayID == day.ID {
-			return &plannedTracks[i]
+	hasSplitLegs := false
+	for _, tr := range plannedTracks {
+		if tr.VoyageDayID != nil || extractLegNumber(tr.Name) > 0 {
+			hasSplitLegs = true
+			break
 		}
 	}
 
-	// 2. Match on Leg number in track name (e.g. "Leg 1")
-	for i := range plannedTracks {
-		if legNum := extractLegNumber(plannedTracks[i].Name); legNum == dayPosition {
-			return &plannedTracks[i]
+	candidateTracks := make([]model.VoyageTrack, 0, len(plannedTracks))
+	for _, tr := range plannedTracks {
+		if hasSplitLegs && isRedundantUnsplitMasterTrack(tr, plannedTracks, day) {
+			continue
 		}
+		candidateTracks = append(candidateTracks, tr)
 	}
 
-	// 3. Match on start & end endpoint proximity (within 3 NM)
-	if (day.StartLatitude != 0 || day.StartLongitude != 0) && (day.EndLatitude != 0 || day.EndLongitude != 0) {
-		for i := range plannedTracks {
-			startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(&plannedTracks[i])
+	if len(candidateTracks) == 0 {
+		return nil
+	}
+
+	hasDayCoords := (day.StartLatitude != 0 || day.StartLongitude != 0) && (day.EndLatitude != 0 || day.EndLongitude != 0)
+	var matched []model.VoyageTrack
+	seenIDs := make(map[string]bool)
+	seenSigs := make(map[string]bool)
+	addMatch := func(tr model.VoyageTrack) {
+		if tr.ID != "" {
+			if seenIDs[tr.ID] {
+				return
+			}
+			seenIDs[tr.ID] = true
+		}
+		sig := plannedTrackGeometrySignature(&tr)
+		if sig != "" {
+			if seenSigs[sig] {
+				return
+			}
+			seenSigs[sig] = true
+		}
+		matched = append(matched, tr)
+	}
+
+	for i := range candidateTracks {
+		tr := candidateTracks[i]
+		// (a) Direct match on day ID
+		if day.ID != 0 && tr.VoyageDayID != nil && *tr.VoyageDayID == day.ID {
+			addMatch(tr)
+			continue
+		}
+		// Skip tracks explicitly bound to a different day ID
+		if day.ID != 0 && tr.VoyageDayID != nil && *tr.VoyageDayID != day.ID {
+			continue
+		}
+
+		// (b) Match on Leg number in track name (e.g. "Leg 1" or "Plan A - Leg 1")
+		legNum := extractLegNumber(tr.Name)
+		if legNum > 0 {
+			if legNum == dayPosition {
+				addMatch(tr)
+			}
+			continue
+		}
+
+		// (c) Match on start & end endpoint proximity (within 3.0 NM)
+		if hasDayCoords {
+			startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(&tr)
 			if ok {
 				dStart := lookoutHaversineNM(startLat, startLng, day.StartLatitude, day.StartLongitude)
 				dEnd := lookoutHaversineNM(endLat, endLng, day.EndLatitude, day.EndLongitude)
 				if dStart <= 3.0 && dEnd <= 3.0 {
-					return &plannedTracks[i]
+					addMatch(tr)
 				}
 			}
 		}
 	}
 
+	if len(matched) > 0 {
+		return matched
+	}
+
+	if hasSplitLegs {
+		return nil
+	}
+
 	// 4. If exactly 1 planned track and Day 1
-	if len(plannedTracks) == 1 && dayPosition == 1 {
-		return &plannedTracks[0]
+	if len(candidateTracks) == 1 && dayPosition == 1 {
+		return []model.VoyageTrack{candidateTracks[0]}
 	}
 
 	// 5. Sequential index fallback
 	legIdx := dayPosition - 1
-	if legIdx >= 0 && legIdx < len(plannedTracks) {
-		return &plannedTracks[legIdx]
+	if legIdx >= 0 && legIdx < len(candidateTracks) {
+		return []model.VoyageTrack{candidateTracks[legIdx]}
 	}
 
 	return nil
+}
+
+func isRedundantUnsplitMasterTrack(tr model.VoyageTrack, allPlanned []model.VoyageTrack, day *model.VoyageDay) bool {
+	if tr.VoyageDayID != nil || extractLegNumber(tr.Name) > 0 {
+		return false
+	}
+	trName := strings.ToLower(strings.TrimSpace(tr.Name))
+	for _, other := range allPlanned {
+		if other.ID == tr.ID && tr.ID != "" {
+			continue
+		}
+		if other.VoyageDayID == nil && extractLegNumber(other.Name) == 0 {
+			continue
+		}
+		if tr.FileName != nil && *tr.FileName != "" && other.FileName != nil && *other.FileName == *tr.FileName {
+			return true
+		}
+		otherName := strings.ToLower(strings.TrimSpace(other.Name))
+		if trName != "" && strings.HasPrefix(otherName, trName+" - leg ") {
+			return true
+		}
+	}
+	if trName == "" || trName == "waypoints route" || trName == "untitled" ||
+		strings.HasPrefix(trName, "track ") || strings.HasPrefix(trName, "route ") ||
+		strings.Contains(trName, "master") || strings.Contains(trName, "whole") ||
+		strings.Contains(trName, "full") || strings.Contains(trName, "voyage") {
+		return true
+	}
+	if day == nil || (day.StartLatitude == 0 && day.StartLongitude == 0) || (day.EndLatitude == 0 && day.EndLongitude == 0) {
+		return true
+	}
+	startLat, startLng, endLat, endLng, ok := extractTrackEndpoints(&tr)
+	if !ok {
+		return true
+	}
+	dStart := lookoutHaversineNM(startLat, startLng, day.StartLatitude, day.StartLongitude)
+	dEnd := lookoutHaversineNM(endLat, endLng, day.EndLatitude, day.EndLongitude)
+	if dStart > 3.0 || dEnd > 3.0 {
+		return true
+	}
+	if tr.DistanceNM != nil && *tr.DistanceNM > 0 {
+		for _, other := range allPlanned {
+			if (other.VoyageDayID != nil && *other.VoyageDayID == day.ID) || extractLegNumber(other.Name) > 0 {
+				if other.DistanceNM != nil && *other.DistanceNM > 0 && *tr.DistanceNM > *other.DistanceNM*1.8 {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func formatPlannedRoutesForLookout(tracks []model.VoyageTrack, fallbackDist float64) (string, float64) {
+	if len(tracks) == 0 {
+		return "", fallbackDist
+	}
+	if len(tracks) == 1 {
+		return formatPlannedRouteForLookout(&tracks[0], fallbackDist)
+	}
+
+	var sb strings.Builder
+	primaryDist := fallbackDist
+	havePrimaryDist := false
+
+	sb.WriteString(fmt.Sprintf("Multiple Candidate Planned Routes (%d options available for this leg):\n\n", len(tracks)))
+	for i := range tracks {
+		tr := &tracks[i]
+		routeBlock, routeDist := formatPlannedRouteForLookout(tr, fallbackDist)
+		if !havePrimaryDist && routeDist > 0 {
+			primaryDist = routeDist
+			havePrimaryDist = true
+		}
+		routeName := strings.TrimSpace(tr.Name)
+		if routeName == "" {
+			routeName = fmt.Sprintf("Plan %d", i+1)
+		}
+		sb.WriteString(fmt.Sprintf("=== Candidate Planned Route %d of %d: %s ===\n", i+1, len(tracks), routeName))
+		if routeBlock != "" {
+			sb.WriteString(routeBlock)
+		} else if routeDist > 0 {
+			sb.WriteString(fmt.Sprintf("Intended Planned Route: %q (Distance: %.1f NM)\n", routeName, routeDist))
+		}
+		if routeDist > 0 {
+			sb.WriteString(fmt.Sprintf("Travel Time Table for %q (%.1f NM):\n", routeName, routeDist))
+			for _, kt := range []float64{5, 6, 7, 8} {
+				hours := routeDist / kt
+				h := int(hours)
+				m := int(math.Round((hours - float64(h)) * 60))
+				if m == 60 {
+					h++
+					m = 0
+				}
+				sb.WriteString(fmt.Sprintf("  * %.0f kts: %dh %02dm\n", kt, h, m))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("Multi-Plan Comparison Instructions:\n")
+	sb.WriteString("Compare all candidate planned routes above against:\n")
+	sb.WriteString("  - Wind angles (true/apparent wind relative to each route's segment bearings)\n")
+	sb.WriteString("  - Wave exposure, swell alignment, and open-water fetch vs. sheltered waters\n")
+	sb.WriteString("  - Tidal currents, slack water windows, and tidal gates along each corridor\n")
+	sb.WriteString("  - Daylight margin and arrival time before sunset based on each route's travel time table\n")
+	sb.WriteString("  - Hydrographic hazards, shoals, narrow passes, bridges, and Local Notices to Mariners\n")
+	sb.WriteString("Explicitly name each candidate route and recommend the safer or more favorable route for the forecasted conditions.\n")
+
+	return sb.String(), primaryDist
 }
 
 func formatPlannedRouteForLookout(tr *model.VoyageTrack, fallbackDist float64) (string, float64) {
@@ -814,26 +990,97 @@ func normalizeLookoutAlertCategory(cat string) string {
 	}
 }
 
+var lnmStopWords = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true, "from": true,
+	"through": true, "into": true, "under": true, "are": true, "all": true,
+	"lnm": true, "uscg": true, "local": true, "notice": true, "mariners": true,
+	"verify": true, "current": true, "status": true, "latest": true,
+	"before": true, "transiting": true, "reported": true, "operations": true,
+	"san": true, "francisco": true, "bay": true, "california": true,
+	"united": true, "states": true, "aton": true, "discrepancies": true,
+}
+
+func extractLNMContentTokens(text string) []string {
+	lower := strings.ToLower(text)
+	var tokenBuf strings.Builder
+	var tokens []string
+	seen := make(map[string]bool)
+	flush := func() {
+		if tokenBuf.Len() == 0 {
+			return
+		}
+		tok := tokenBuf.String()
+		tokenBuf.Reset()
+		hasDigit := false
+		for _, r := range tok {
+			if r >= '0' && r <= '9' {
+				hasDigit = true
+				break
+			}
+		}
+		if (!hasDigit && len(tok) < 4) || lnmStopWords[tok] || seen[tok] {
+			return
+		}
+		seen[tok] = true
+		tokens = append(tokens, tok)
+	}
+	for _, r := range lower {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			tokenBuf.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return tokens
+}
+
+func lnmTokensOverlap(tokensA, tokensB []string) bool {
+	if len(tokensA) == 0 || len(tokensB) == 0 {
+		return false
+	}
+	setB := make(map[string]bool, len(tokensB))
+	for _, t := range tokensB {
+		setB[t] = true
+	}
+	shared := 0
+	for _, t := range tokensA {
+		if setB[t] {
+			shared++
+		}
+	}
+	if shared >= 4 {
+		return true
+	}
+	minLen := len(tokensA)
+	if len(tokensB) < minLen {
+		minLen = len(tokensB)
+	}
+	return minLen > 0 && float64(shared)/float64(minLen) >= 0.5
+}
+
 // ensurePilotNoteLNMAlerts guarantees that any valid Local Notice to Mariners (LNM)
 // entries stored in briefing.PilotNotes.local_notices are surfaced as navigation
 // safety alerts if the LLM did not already emit them.
 func ensurePilotNoteLNMAlerts(alerts []map[string]any, pilotNotesRaw []byte) []map[string]any {
 	if len(pilotNotesRaw) == 0 {
-		return alerts
+		return deduplicateLookoutAlerts(alerts)
 	}
 	var pn struct {
 		LocalNotices []string `json:"local_notices"`
 	}
 	if err := json.Unmarshal(pilotNotesRaw, &pn); err != nil || len(pn.LocalNotices) == 0 {
-		return alerts
+		return deduplicateLookoutAlerts(alerts)
 	}
 
 	var existingText strings.Builder
+	var existingTokenSets [][]string
 	for _, a := range alerts {
-		if msg, ok := a["message"].(string); ok {
-			existingText.WriteString(strings.ToLower(msg))
-			existingText.WriteByte(' ')
-		}
+		msg, _ := a["message"].(string)
+		act, _ := a["action"].(string)
+		existingText.WriteString(strings.ToLower(msg))
+		existingText.WriteByte(' ')
+		existingTokenSets = append(existingTokenSets, extractLNMContentTokens(msg+" "+act))
 	}
 	combinedExisting := existingText.String()
 
@@ -846,12 +1093,23 @@ func ensurePilotNoteLNMAlerts(alerts []map[string]any, pilotNotesRaw []byte) []m
 		if strings.Contains(lower, "none") && len(notice) < 25 {
 			continue
 		}
-		// Check if already covered by checking a distinctive substring
+		// Check if already covered by checking a distinctive substring or token overlap
 		checkSnippet := lower
 		if len(checkSnippet) > 32 {
 			checkSnippet = checkSnippet[:32]
 		}
 		if checkSnippet != "" && strings.Contains(combinedExisting, checkSnippet) {
+			continue
+		}
+		noticeTokens := extractLNMContentTokens(notice)
+		alreadyCovered := false
+		for _, exTokens := range existingTokenSets {
+			if lnmTokensOverlap(noticeTokens, exTokens) {
+				alreadyCovered = true
+				break
+			}
+		}
+		if alreadyCovered {
 			continue
 		}
 		msg := notice
@@ -865,6 +1123,48 @@ func ensurePilotNoteLNMAlerts(alerts []map[string]any, pilotNotesRaw []byte) []m
 			"action":   "Verify current status in the latest USCG Local Notice to Mariners before transiting.",
 			"icon":     "warning",
 		})
+		existingTokenSets = append(existingTokenSets, noticeTokens)
 	}
-	return alerts
+	return deduplicateLookoutAlerts(alerts)
+}
+
+func deduplicateLookoutAlerts(alerts []map[string]any) []map[string]any {
+	if len(alerts) <= 1 {
+		return alerts
+	}
+	var out []map[string]any
+	var outTokens [][]string
+	for _, a := range alerts {
+		msg, _ := a["message"].(string)
+		act, _ := a["action"].(string)
+		lowerMsg := strings.ToLower(strings.TrimSpace(msg))
+		isLNM := strings.HasPrefix(lowerMsg, "lnm:") || strings.Contains(lowerMsg, "local notice to mariners")
+		tokens := extractLNMContentTokens(msg + " " + act)
+		dupIdx := -1
+		for i, exTokens := range outTokens {
+			exMsg, _ := out[i]["message"].(string)
+			exLower := strings.ToLower(strings.TrimSpace(exMsg))
+			if exLower == lowerMsg {
+				dupIdx = i
+				break
+			}
+			exIsLNM := strings.HasPrefix(exLower, "lnm:") || strings.Contains(exLower, "local notice to mariners")
+			if isLNM && exIsLNM && lnmTokensOverlap(tokens, exTokens) {
+				dupIdx = i
+				break
+			}
+		}
+		if dupIdx >= 0 {
+			exAct, _ := out[dupIdx]["action"].(string)
+			if strings.Contains(strings.ToLower(exAct), "verify current status in the latest uscg local notice") &&
+				!strings.Contains(strings.ToLower(act), "verify current status in the latest uscg local notice") {
+				out[dupIdx] = a
+				outTokens[dupIdx] = tokens
+			}
+			continue
+		}
+		out = append(out, a)
+		outTokens = append(outTokens, tokens)
+	}
+	return out
 }

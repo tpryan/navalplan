@@ -73,7 +73,24 @@ func TestSplitTrackByDays(t *testing.T) {
 				if legs[1].DayID == nil || *legs[1].DayID != 11 {
 					t.Errorf("Leg 2 DayID = %v, want 11", legs[1].DayID)
 				}
+				wantLeg1Name := "Full Solent Voyage - Leg 1: Cowes to Newtown"
+				if legs[0].Track.Name != wantLeg1Name {
+					t.Errorf("Leg 1 Name = %q, want %q", legs[0].Track.Name, wantLeg1Name)
+				}
+				wantLeg2Name := "Full Solent Voyage - Leg 2: Newtown to Yarmouth"
+				if legs[1].Track.Name != wantLeg2Name {
+					t.Errorf("Leg 2 Name = %q, want %q", legs[1].Track.Name, wantLeg2Name)
+				}
 			}
 		})
+	}
+}
+
+func TestIsGenericTrackName(t *testing.T) {
+	if !IsGenericTrackName("") || !IsGenericTrackName("Track 1") || !IsGenericTrackName("Route 2") || !IsGenericTrackName("Untitled") {
+		t.Errorf("expected generic track names to return true")
+	}
+	if IsGenericTrackName("Inside Passage Option A") {
+		t.Errorf("expected custom track name to return false")
 	}
 }
