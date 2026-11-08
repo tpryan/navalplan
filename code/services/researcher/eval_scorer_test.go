@@ -139,6 +139,17 @@ func TestScoreLookoutOutput(t *testing.T) {
 	if _, d, f := scoreLookoutOutput(dangerJSON, "calm"); d != 0 || len(f) == 0 {
 		t.Errorf("expected calm mode to fail when danger weather alert is emitted")
 	}
+	// lookout.md mandates surfacing every valid USCG Local Notice to Mariners
+	// entry as a navigation warning, so calm mode must tolerate LNM-sourced
+	// warnings while still rejecting invented navigation alarm.
+	lnmJSON := `[{"severity":"warning","category":"navigation","message":"LNM: Oak Bluffs North Breakwater Light 2 (LLNR 15460) is temporarily unlit per USCG Local Notice to Mariners.","action":"Use caution on night approach to the harbor entrance.","icon":"warning"}]`
+	if s, d, f := scoreLookoutOutput(lnmJSON, "calm"); s < 100 || d < 100 || len(f) > 0 {
+		t.Errorf("scoreLookoutOutput(calm LNM warning) = (%.1f, %.1f, %v), want pass", s, d, f)
+	}
+	ungroundedNavJSON := `[{"severity":"warning","category":"navigation","message":"Shoaling may be present near the harbor entrance.","action":"Proceed with caution.","icon":"water"}]`
+	if _, d, f := scoreLookoutOutput(ungroundedNavJSON, "calm"); d != 0 || len(f) == 0 {
+		t.Errorf("expected calm mode to fail on a navigation warning with no LNM grounding")
+	}
 	cascadeJSON := `[{"severity":"warning","category":"navigation","message":"Low tide at 08:30 AM over the 6 ft sill delays departure to 10:30 AM, and 17 kt headwinds on 115 deg push arrival past sunset at Menemsha with unlit inner buoys.","action":"Depart before low water or divert before dark.","icon":"wb_twilight"}]`
 	if s, d, f := scoreLookoutOutput(cascadeJSON, "cascade"); s < 100 || d < 100 || len(f) > 0 {
 		t.Errorf("scoreLookoutOutput(cascade) = (%.1f, %.1f, %v)", s, d, f)
