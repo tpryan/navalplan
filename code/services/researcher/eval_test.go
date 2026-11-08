@@ -549,6 +549,15 @@ func scoreSpecialistOutput(raw string, expectedBases, expectedStops []string) (f
 	return schemaScore, domainScore, failures
 }
 
+// isLNMSourcedAlert reports whether an alert is grounded in a USCG Local Notice
+// to Mariners entry rather than invented by the model. lookout.md requires every
+// valid LNM entry to be surfaced as a navigation alert with "LNM: ..." in the
+// message and "USCG Local Notice to Mariners" cited.
+func isLNMSourcedAlert(a map[string]any) bool {
+	text := strings.ToLower(fmt.Sprint(a["message"]) + " " + fmt.Sprint(a["action"]) + " " + fmt.Sprint(a["source"]))
+	return strings.Contains(text, "local notice to mariners") || strings.Contains(text, "lnm")
+}
+
 func scoreLookoutOutput(raw string, mode string) (float64, float64, []string) {
 	cleaned := extractJSONPayload(raw)
 	var alerts []map[string]any
@@ -593,13 +602,26 @@ func scoreLookoutOutput(raw string, mode string) (float64, float64, []string) {
 		return schemaScore, 100.0, failures
 
 	case "calm":
+		// Calm conditions with no onward leg must not produce condition-driven
+		// alarm (weather, tides, or fabricated navigation hazards). Official
+		// USCG Local Notice to Mariners discrepancies are exempt: lookout.md
+		// mandates surfacing every valid LNM entry as a navigation warning, and
+		// an unlit aid at the stop itself is real, sourced safety intel rather
+		// than invented alarm.
 		for _, a := range alerts {
 			sev := fmt.Sprint(a["severity"])
 			cat := fmt.Sprint(a["category"])
-			if (sev == "danger" || sev == "warning") && (cat == "weather" || cat == "tides" || cat == "navigation") {
-				failures = append(failures, fmt.Sprintf("unexpected %s alert in calm conditions with no onward leg: %v", sev, a["message"]))
-				return schemaScore, 0.0, failures
+			if sev != "danger" && sev != "warning" {
+				continue
 			}
+			if cat != "weather" && cat != "tides" && cat != "navigation" {
+				continue
+			}
+			if sev == "warning" && cat == "navigation" && isLNMSourcedAlert(a) {
+				continue
+			}
+			failures = append(failures, fmt.Sprintf("unexpected %s alert in calm conditions with no onward leg: %v", sev, a["message"]))
+			return schemaScore, 0.0, failures
 		}
 		return schemaScore, 100.0, failures
 
