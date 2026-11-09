@@ -168,43 +168,30 @@ func fetchWeatherForDay(ctx context.Context, day model.VoyageDay) (model.Weather
 		ws.HourlyWindDir[i] = degreesToCompass(float64(deg))
 	}
 
-	marineOpts := openmeteogo.NewOptionsBuilder().
-		Marine(true).
-		Latitude(lat).
-		Longitude(lng).
-		Start(day.TargetDate).
-		End(day.TargetDate.AddDate(0, 0, 1)).
-		DailyMetrics(openmeteogo.Metrics{
-			openmeteogo.WaveHeightMax,
-			openmeteogo.WaveDirectionDominant,
-			openmeteogo.WavePeriodMax,
-		}).
-		HourlyMetrics(openmeteogo.Metrics{
-			openmeteogo.WaveHeight,
-			openmeteogo.WavePeriod,
-			openmeteogo.WaveDirection,
-		}).
-		Build()
-
-	marine, err := client.Get(marineOpts)
-	if err != nil {
-		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "day_id", day.ID, "error", err)
-	} else if len(marine.Daily.WaveHeightMax) > 0 {
-		ws.WaveHeightFt = marine.Daily.WaveHeightMax[0] * metersToFeet
-		if len(marine.Daily.WaveDirectionDominant) > 0 {
-			ws.WaveDirection = marine.Daily.WaveDirectionDominant[0]
+	marine, marineErr := fetchMarineWaves(ctx, lat, lng, day.TargetDate)
+	switch {
+	case marineErr != nil:
+		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "day_id", day.ID, "error", marineErr)
+	case marine == nil:
+		// The request succeeded but every value came back null, so this
+		// position sits outside the wave model's domain. Flag it instead of
+		// leaving zeroed fields that read as a flat calm.
+		ws.WaveDataUnavailable = true
+		slog.InfoContext(ctx, "[weather] No wave model coverage at position, skipping wave data",
+			"day_id", day.ID, "lat", lat, "lng", lng)
+	default:
+		if v, ok := firstValue(marine.Daily.WaveHeightMax, metersToFeet); ok {
+			ws.WaveHeightFt = v
 		}
-		if len(marine.Daily.WavePeriodMax) > 0 {
-			ws.WavePeriod = marine.Daily.WavePeriodMax[0]
+		if v, ok := firstValue(marine.Daily.WaveDirectionDominant, 1); ok {
+			ws.WaveDirection = v
 		}
-		if len(marine.Hourly.WaveHeight) > 0 {
-			ws.HourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))
-			for i, h := range marine.Hourly.WaveHeight {
-				ws.HourlyWaveHeight[i] = h * metersToFeet
-			}
+		if v, ok := firstValue(marine.Daily.WavePeriodMax, 1); ok {
+			ws.WavePeriod = v
 		}
-		ws.HourlyWavePeriod = marine.Hourly.WavePeriod
-		ws.HourlyWaveDir = marine.Hourly.WaveDirection
+		ws.HourlyWaveHeight = toFloats(marine.Hourly.WaveHeight, metersToFeet)
+		ws.HourlyWavePeriod = toFloats(marine.Hourly.WavePeriod, 1)
+		ws.HourlyWaveDir = toFloats(marine.Hourly.WaveDirection, 1)
 		slog.DebugContext(ctx, "[weather] Wave data fetched", "day_id", day.ID, "wave_height_ft", ws.WaveHeightFt)
 	}
 

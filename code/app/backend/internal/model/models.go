@@ -151,7 +151,13 @@ type WeatherSummary struct {
 	WaveHeightFt     float64   `json:"wave_height_ft"`
 	WaveDirection    float64   `json:"wave_direction"`
 	WavePeriod       float64   `json:"wave_period"`
-	DebugDurationMs  int64     `json:"debug_duration_ms"`
+	// WaveDataUnavailable marks a position outside the wave model's domain,
+	// where the API answers with nulls rather than readings. It distinguishes
+	// "no coverage here" from a genuine flat calm, which otherwise look
+	// identical once nulls decode to 0. Omitted when false so briefings stored
+	// before this field existed keep their current meaning.
+	WaveDataUnavailable bool  `json:"wave_data_unavailable,omitempty"`
+	DebugDurationMs     int64 `json:"debug_duration_ms"`
 }
 
 // Briefing contains researched information about a voyage day, such as weather and tides.
