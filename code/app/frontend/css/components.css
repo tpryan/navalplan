@@ -2593,49 +2593,6 @@ body:has(#modal-report:not(.hidden)) #track-layer-controls {
     min-width: 44px;
 }
 
-/* Stop header rows inside the Safety Overview */
-.np-safety-overview__stop-header {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    margin: 10px 0 4px 0;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--hair);
-}
-.np-safety-overview__stop-header:first-child {
-    margin-top: 0;
-}
-.np-safety-overview__day {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-}
-.np-safety-overview__name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--on-surface);
-}
-.np-safety-overview__date {
-    font-size: 12px;
-    color: var(--muted);
-    margin-left: auto;
-}
-.np-safety-overview__updated {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 12px 0 0 0;
-    font-size: 11px;
-    font-style: italic;
-    color: var(--muted);
-    opacity: 0.8;
-}
-.np-safety-overview__updated .material-symbols-outlined {
-    font-size: 14px;
-}
-
 /* ── Pilotage & Sailing Directions Box ──────────────────────────────────── */
 .pilot-notes-section {
     margin-top: 16px;

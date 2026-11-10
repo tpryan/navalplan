@@ -5292,7 +5292,7 @@ async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
         await handleShowReport(false, false, activeFilter);
         const updatedReportContent = document.getElementById('report-content');
         if (updatedReportContent) {
-            refreshSafetyOverview(updatedReportContent, sortedStops, briefings);
+            refreshSafetyAlerts(updatedReportContent, sortedStops, briefings);
         }
     };
 
@@ -5336,8 +5336,11 @@ async function runVoyageLookout(voyage, sortedStops, reportContent, btn) {
     }
 }
 
-function refreshSafetyOverview(reportContent, sortedStops, briefings) {
-    // Remove any existing safety overview
+function refreshSafetyAlerts(reportContent, sortedStops, briefings) {
+    // The report-wide Safety Overview block was dropped from the render path:
+    // it repeated what the per-stop cards already show. This path used to
+    // rebuild it after an audit, putting it straight back. Clear any stale
+    // copy, then refresh the alerts inside each day card.
     const existing = reportContent.querySelector('#np-safety-overview');
     if (existing) existing.remove();
 
@@ -5350,70 +5353,7 @@ function refreshSafetyOverview(reportContent, sortedStops, briefings) {
         return;
     }
 
-    const box = document.createElement('div');
-    box.className = 'lookout-box np-safety-overview np-report-item--non-sailing';
-    box.id = 'np-safety-overview';
-    box.setAttribute('data-report-cats', 'all navigation weather');
-    box.setAttribute('data-report-scope', 'overview');
-
-    const header = document.createElement('div');
-    header.className = 'lookout-header';
-    header.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">visibility</span><h3>Safety Overview</h3>';
-    box.appendChild(header);
-
-    const list = document.createElement('div');
-    list.className = 'lookout-alert-list';
-
-    stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
-        const dateStr = new Date(stop.target_date).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
-        const stopName = getDayEndName(stop).split(',')[0].trim();
-
-        const stopHeader = document.createElement('div');
-        stopHeader.className = 'np-safety-overview__stop-header';
-        stopHeader.innerHTML = `<span class="np-safety-overview__day">Day ${idx + 1}</span>
-            <span class="np-safety-overview__name">${DOMPurify.sanitize(stopName)}</span>
-            <span class="np-safety-overview__date">${dateStr}</span>`;
-        list.appendChild(stopHeader);
-
-        deduplicateLookoutAlerts(briefing.safety_alerts).forEach(a => {
-            const alertEl = document.createElement('div');
-            alertEl.className = `lookout-alert lookout-alert--${a.severity || 'info'}`;
-            const alertCats = classifyAlertReportCat(a);
-            alertEl.setAttribute('data-alert-cat', alertCats);
-            alertEl.setAttribute('data-report-cats', alertCats);
-            alertEl.innerHTML = `<span class="material-symbols-outlined lookout-alert__icon" aria-hidden="true">${DOMPurify.sanitize(normalizeLookoutIcon(a.icon))}</span>
-                <div class="lookout-alert__text">
-                    <span class="lookout-alert__msg">${DOMPurify.sanitize(a.message || '')}</span>
-                    ${a.action ? `<span class="lookout-alert__action">${DOMPurify.sanitize(a.action)}</span>` : ''}
-                </div>`;
-            list.appendChild(alertEl);
-        });
-    });
-
-    box.appendChild(list);
-
-    const oldestAudit = stopsWithAlerts
-        .map(({ briefing }) => briefing.safety_alerts_updated_at)
-        .filter(Boolean)
-        .map(t => new Date(t))
-        .sort((a, b) => a - b)[0];
-    if (oldestAudit) {
-        const updated = document.createElement('p');
-        updated.className = 'np-safety-overview__updated';
-        updated.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">update</span> Audited ${oldestAudit.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
-        box.appendChild(updated);
-    }
-
-    // Insert after the day-grid section (find it by the section label before it)
-    const dayGridEl = reportContent.querySelector('.np-day-grid, .np-day-grid--fill');
-    if (dayGridEl && dayGridEl.parentNode) {
-        dayGridEl.parentNode.insertBefore(box, dayGridEl.nextSibling);
-    } else {
-        // Fallback: prepend to report
-        reportContent.insertBefore(box, reportContent.firstChild);
-    }
-
-    // Also update per-stop alerts in the report
+    // Update per-stop alerts in the report
     stopsWithAlerts.forEach(({ stop, briefing, idx }) => {
         const stopSection = reportContent.querySelectorAll('.np-report-stop')[idx];
         if (!stopSection) return;
