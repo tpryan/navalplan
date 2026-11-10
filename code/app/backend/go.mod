@@ -14,7 +14,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/paulmach/orb v0.12.0
 	github.com/stretchr/testify v1.11.1
-	github.com/tpryan/openmeteogo v1.2.0
+	github.com/tpryan/openmeteogo/v2 v2.0.0
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
 	go.opentelemetry.io/otel v1.45.0

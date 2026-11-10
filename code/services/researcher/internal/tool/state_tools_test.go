@@ -9,11 +9,15 @@ import (
 	"cloud.google.com/go/maps/places/apiv1/placespb"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/tpryan/noaago"
-	"github.com/tpryan/openmeteogo"
+	"github.com/tpryan/openmeteogo/v2"
 	"google.golang.org/genproto/googleapis/type/latlng"
 	"google.golang.org/genproto/googleapis/type/localized_text"
 	"googlemaps.github.io/maps"
 )
+
+// f64ptr returns a pointer to v. Marine fields are []*float64 so that a null
+// from the API stays distinguishable from a real zero reading.
+func f64ptr(v float64) *float64 { return &v }
 
 type mockTZClient struct{}
 
@@ -43,9 +47,11 @@ func TestStateBackedTools(t *testing.T) {
 						WindGusts10mMax:          []float64{24},
 						WindDirection10mDominant: []int{225},
 						PrecipitationSum:         []float64{0.12},
-						WaveHeightMax:            []float64{1.2},
-						WaveDirectionDominant:    []float64{210},
-						WavePeriodMax:            []float64{7},
+						DailyMarine: openmeteogo.DailyMarine{
+							WaveHeightMax:         []*float64{f64ptr(1.2)},
+							WaveDirectionDominant: []*float64{f64ptr(210)},
+							WavePeriodMax:         []*float64{f64ptr(7)},
+						},
 					},
 					Hourly: openmeteogo.Hourly{
 						WindSpeed10m:     []float64{8, 8, 9, 10, 10, 11, 12, 14, 15, 16, 17, 18, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 8},

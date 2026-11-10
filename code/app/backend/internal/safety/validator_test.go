@@ -47,6 +47,32 @@ func TestEvaluate_Calm(t *testing.T) {
 	}
 }
 
+func TestEvaluate_WaveDataUnavailable(t *testing.T) {
+	// A position outside the wave model's domain reports nulls, which decode to
+	// zeros. Those zeros must not be read as a flat calm: wave checks are
+	// skipped, while wind checks still apply.
+	weather := []byte(`{"wind_speed_kt":36,"wave_height_ft":0,"hourly_wave_height":[0,0,0],"wave_data_unavailable":true}`)
+	got := Evaluate(weather, nil)
+	for _, a := range got {
+		if a.Icon == "waves" {
+			t.Errorf("expected no sea-state alert without wave coverage, got %+v", a)
+		}
+	}
+	if sevSet(got)["danger"] < 1 {
+		t.Errorf("expected the 36 kt wind danger alert to still fire, got %+v", got)
+	}
+}
+
+func TestEvaluate_WaveDataUnavailableSuppressesSteepSeas(t *testing.T) {
+	// Same steep-seas inputs as the case below, but flagged as uncovered: the
+	// readings are absent rather than real, so no danger should be raised.
+	weather := []byte(`{"wind_speed_kt":10,"hourly_wave_height":[8,11],"hourly_wave_period":[12,9],"wave_data_unavailable":true}`)
+	got := Evaluate(weather, nil)
+	if sevSet(got)["danger"] != 0 {
+		t.Errorf("expected no danger alerts without wave coverage, got %+v", got)
+	}
+}
+
 func TestEvaluate_SteepSeas(t *testing.T) {
 	// Wave height 11 ft on a 9s period -> steep-seas danger (plus wave warning).
 	weather := []byte(`{"wind_speed_kt":10,"hourly_wave_height":[8,11],"hourly_wave_period":[12,9]}`)

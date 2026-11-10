@@ -10,12 +10,13 @@ require (
 	github.com/a2aproject/a2a-go v0.3.15
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v1.0.0
+	github.com/google/jsonschema-go v0.4.3
 	github.com/googleapis/gax-go/v2 v2.23.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/tpryan/niwago v0.0.0-20260419055912-9f1a7b7a9763
 	github.com/tpryan/noaago v1.0.0
-	github.com/tpryan/openmeteogo v1.2.0
+	github.com/tpryan/openmeteogo/v2 v2.0.0
 	github.com/tpryan/uktidal v0.1.0
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
@@ -53,7 +54,6 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

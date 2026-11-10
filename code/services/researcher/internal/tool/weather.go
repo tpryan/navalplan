@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tpryan/openmeteogo"
+	"github.com/tpryan/openmeteogo/v2"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -46,9 +46,13 @@ type WeatherResult struct {
 	WaveHeight       float64   `json:"wave_height"`
 	WaveDirection    float64   `json:"wave_direction"`
 	WavePeriod       float64   `json:"wave_period"`
-	Digest           string    `json:"digest,omitempty"`
-	SummaryDigest    string    `json:"summary_digest,omitempty"`
-	DebugDurationMS  int64     `json:"debug_duration_ms"`
+	// WaveDataUnavailable marks a position outside the wave model's domain,
+	// where the API returns nulls rather than readings. Without it the zeros
+	// above are indistinguishable from a genuine flat calm.
+	WaveDataUnavailable bool   `json:"wave_data_unavailable,omitempty"`
+	Digest              string `json:"digest,omitempty"`
+	SummaryDigest       string `json:"summary_digest,omitempty"`
+	DebugDurationMS     int64  `json:"debug_duration_ms"`
 }
 
 // WeatherClient defines the interface for the Open-Meteo API client.
@@ -244,16 +248,22 @@ func (wp *WeatherProvider) buildMarineOptions(lat, lng float64, date time.Time) 
 }
 
 func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherData, marineErr error, isHistorical bool) WeatherResult {
+	// The marine wave model is a global ocean model. At a position outside its
+	// water mask it answers 200 with nulls throughout, which must stay
+	// distinguishable from a real flat calm rather than decoding to zeros.
 	var waveHeight, waveDir, wavePeriod float64
-	if marineErr == nil && marine != nil && marine.Daily.Time != nil && len(marine.Daily.Time) > 0 {
-		if len(marine.Daily.WaveHeightMax) > 0 {
-			waveHeight = marine.Daily.WaveHeightMax[0] * metersToFeet
+	waveDataUnavailable := false
+	if marineErr == nil && marine != nil && len(marine.Daily.Time) > 0 {
+		waveDataUnavailable = !openmeteogo.HasAny(marine.Daily.WaveHeightMax) &&
+			!openmeteogo.HasAny(marine.Hourly.WaveHeight)
+		if v, ok := openmeteogo.Value(marine.Daily.WaveHeightMax); ok {
+			waveHeight = v * metersToFeet
 		}
-		if len(marine.Daily.WaveDirectionDominant) > 0 {
-			waveDir = marine.Daily.WaveDirectionDominant[0]
+		if v, ok := openmeteogo.Value(marine.Daily.WaveDirectionDominant); ok {
+			waveDir = v
 		}
-		if len(marine.Daily.WavePeriodMax) > 0 {
-			wavePeriod = marine.Daily.WavePeriodMax[0]
+		if v, ok := openmeteogo.Value(marine.Daily.WavePeriodMax); ok {
+			wavePeriod = v
 		}
 	}
 
@@ -301,38 +311,39 @@ func (wp *WeatherProvider) processResults(weather, marine *openmeteogo.WeatherDa
 	}
 
 	var hourlyWaveHeight, hourlyWaveDir, hourlyWavePeriod []float64
-	if marineErr == nil && marine != nil && marine.Hourly.Time != nil && len(marine.Hourly.Time) > 0 {
-		hourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))
-		for i, h := range marine.Hourly.WaveHeight {
-			hourlyWaveHeight[i] = h * metersToFeet
+	if marineErr == nil && marine != nil && len(marine.Hourly.Time) > 0 && !waveDataUnavailable {
+		hourlyWaveHeight = openmeteogo.Floats(marine.Hourly.WaveHeight)
+		for i := range hourlyWaveHeight {
+			hourlyWaveHeight[i] *= metersToFeet
 		}
-		hourlyWaveDir = marine.Hourly.WaveDirection
-		hourlyWavePeriod = marine.Hourly.WavePeriod
+		hourlyWaveDir = openmeteogo.Floats(marine.Hourly.WaveDirection)
+		hourlyWavePeriod = openmeteogo.Floats(marine.Hourly.WavePeriod)
 	}
 
 	return WeatherResult{
-		Date:             weather.Daily.Time[0],
-		Condition:        condition,
-		ForecastType:     forecastType,
-		MaxTemp:          maxTemp,
-		MinTemp:          minTemp,
-		MaxWindKts:       maxWind,
-		MaxGustsKts:      maxGusts,
-		WindDirDeg:       windDir,
-		WindDirection:    DegreesToDirection(float64(windDir)),
-		HourlyWind:       hourlyWind,
-		HourlyWindDir:    hourlyWindDir,
-		HourlyConditions: hourlyConditions,
-		HourlyTemp:       weather.Hourly.Temperature2m,
-		HourlyGusts:      weather.Hourly.WindGusts10m,
-		HourlyPrecip:     weather.Hourly.Precipitation,
-		HourlyWaveHeight: hourlyWaveHeight,
-		HourlyWaveDir:    hourlyWaveDir,
-		HourlyWavePeriod: hourlyWavePeriod,
-		PrecipTotal:      precip,
-		WaveHeight:       waveHeight,
-		WaveDirection:    waveDir,
-		WavePeriod:       wavePeriod,
+		Date:                weather.Daily.Time[0],
+		Condition:           condition,
+		ForecastType:        forecastType,
+		MaxTemp:             maxTemp,
+		MinTemp:             minTemp,
+		MaxWindKts:          maxWind,
+		MaxGustsKts:         maxGusts,
+		WindDirDeg:          windDir,
+		WindDirection:       DegreesToDirection(float64(windDir)),
+		HourlyWind:          hourlyWind,
+		HourlyWindDir:       hourlyWindDir,
+		HourlyConditions:    hourlyConditions,
+		HourlyTemp:          weather.Hourly.Temperature2m,
+		HourlyGusts:         weather.Hourly.WindGusts10m,
+		HourlyPrecip:        weather.Hourly.Precipitation,
+		HourlyWaveHeight:    hourlyWaveHeight,
+		HourlyWaveDir:       hourlyWaveDir,
+		HourlyWavePeriod:    hourlyWavePeriod,
+		PrecipTotal:         precip,
+		WaveHeight:          waveHeight,
+		WaveDirection:       waveDir,
+		WavePeriod:          wavePeriod,
+		WaveDataUnavailable: waveDataUnavailable,
 	}
 }
 

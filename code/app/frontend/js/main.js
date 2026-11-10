@@ -4821,7 +4821,44 @@ async function showBriefing(briefing, doPushState = true, options = {}) {
         if (weather.temp_max_f || weather.temp_min_f) {
             wxTiles.appendChild(DataTile({ label: 'Temp', value: `${Math.round(weather.temp_max_f)}°F`, sub: `Low ${Math.round(weather.temp_min_f)}°F`, icon: 'thermometer', accent: 'amber' }));
         }
-        if (weather.wave_height_ft > 0) {
+        // A day runs between two positions whose sea state can differ, so show
+        // each end. On a stationary day the backend sends only start_waves.
+        const wavePoints = [];
+        if (weather.start_waves) {
+            wavePoints.push([weather.end_waves ? 'Waves (start)' : 'Waves', weather.start_waves]);
+        }
+        if (weather.end_waves) {
+            wavePoints.push([weather.start_waves ? 'Waves (end)' : 'Waves', weather.end_waves]);
+        }
+        if (wavePoints.length) {
+            for (const [label, wp] of wavePoints) {
+                if (wp.unavailable) {
+                    // Outside the wave model's domain. Say so rather than
+                    // showing 0 ft, which would read as a flat calm.
+                    wxTiles.appendChild(DataTile({
+                        label, value: 'No data', sub: 'Outside wave model',
+                        icon: 'waves', accent: 'muted'
+                    }));
+                } else {
+                    const waveCompass = degreesToCompass(wp.direction);
+                    wxTiles.appendChild(DataTile({
+                        label,
+                        value: `${(wp.height_ft || 0).toFixed(1)} ft`,
+                        sub: `${waveCompass} ${wp.period ? Math.round(wp.period) + 's' : ''}`.trim(),
+                        icon: 'waves', accent: 'teal'
+                    }));
+                }
+            }
+        } else if (weather.wave_data_unavailable) {
+            // Briefing stored before per-endpoint waves existed.
+            wxTiles.appendChild(DataTile({
+                label: 'Waves',
+                value: 'No data',
+                sub: 'Outside wave model',
+                icon: 'waves',
+                accent: 'muted'
+            }));
+        } else if (weather.wave_height_ft > 0) {
             const waveCompass = degreesToCompass(weather.wave_direction);
             wxTiles.appendChild(DataTile({ 
                 label: 'Waves', 
@@ -8992,7 +9029,24 @@ function generateReportHTML(voyage, stops, briefings, guide, recommendations, ha
                 if (!isInvalidVal(w.condition)) html += `<div class="np-weather-tile" style="--accent:var(--sky)"><div class="np-weather-tile__label">Conditions</div><div class="np-weather-tile__value">${w.condition}</div></div>`;
                 if (w.temp_max_f) html += `<div class="np-weather-tile" style="--accent:var(--amber)"><div class="np-weather-tile__label">Temp</div><div class="np-weather-tile__value">${Math.round(w.temp_max_f)}°F</div></div>`;
                 if (w.wind_speed_kt) html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Wind</div><div class="np-weather-tile__value">${w.wind_speed_kt} kt</div></div>`;
-                if (w.wave_height_ft) {
+                // Each end of the day is reported separately; a stationary day
+                // sends only start_waves.
+                const reportWavePoints = [];
+                if (w.start_waves) reportWavePoints.push([w.end_waves ? 'Waves (start)' : 'Waves', w.start_waves]);
+                if (w.end_waves) reportWavePoints.push([w.start_waves ? 'Waves (end)' : 'Waves', w.end_waves]);
+                if (reportWavePoints.length) {
+                    for (const [label, wp] of reportWavePoints) {
+                        if (wp.unavailable) {
+                            html += `<div class="np-weather-tile" style="--accent:var(--muted)"><div class="np-weather-tile__label">${label}</div><div class="np-weather-tile__value">No data</div><div class="np-weather-tile__sub">Outside wave model</div></div>`;
+                        } else {
+                            const waveCompass = degreesToCompass(wp.direction);
+                            const waveSub = `${waveCompass} ${wp.period ? Math.round(wp.period) + 's' : ''}`.trim();
+                            html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">${label}</div><div class="np-weather-tile__value">${(wp.height_ft || 0).toFixed(1)} ft</div><div class="np-weather-tile__sub">${waveSub}</div></div>`;
+                        }
+                    }
+                } else if (w.wave_data_unavailable) {
+                    html += `<div class="np-weather-tile" style="--accent:var(--muted)"><div class="np-weather-tile__label">Waves</div><div class="np-weather-tile__value">No data</div><div class="np-weather-tile__sub">Outside wave model</div></div>`;
+                } else if (w.wave_height_ft) {
                     const waveCompass = degreesToCompass(w.wave_direction);
                     const waveSub = `${waveCompass} ${w.wave_period ? Math.round(w.wave_period) + 's' : ''}`.trim();
                     html += `<div class="np-weather-tile" style="--accent:var(--teal)"><div class="np-weather-tile__label">Waves</div><div class="np-weather-tile__value">${w.wave_height_ft.toFixed(1)} ft</div><div class="np-weather-tile__sub">${waveSub}</div></div>`;

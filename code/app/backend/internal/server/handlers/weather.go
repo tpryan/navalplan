@@ -11,11 +11,101 @@ import (
 
 	"app/internal/model"
 
-	"github.com/tpryan/openmeteogo"
+	"github.com/tpryan/openmeteogo/v2"
 )
 
 const forecastWindowDays = 16
 const metersToFeet = 3.28084
+
+// scaleFloats multiplies every entry in place and returns the slice. Used to
+// convert the metres the marine API reports into the feet stored on
+// WeatherSummary.
+func scaleFloats(vals []float64, scale float64) []float64 {
+	for i := range vals {
+		vals[i] *= scale
+	}
+	return vals
+}
+
+// fetchWavePoint retrieves the sea state at a single position. It returns nil
+// when the request itself failed, which is unknown rather than absent, and a
+// WavePoint with Unavailable set when the API answered but the position lies
+// outside the wave model's domain.
+func fetchWavePoint(ctx context.Context, client *openmeteogo.Client, lat, lng float64, date time.Time, name string, dayID int64) *model.WavePoint {
+	opts := openmeteogo.NewOptionsBuilder().
+		Marine(true).
+		Latitude(lat).
+		Longitude(lng).
+		Start(date).
+		End(date.AddDate(0, 0, 1)).
+		DailyMetrics(openmeteogo.Metrics{
+			openmeteogo.WaveHeightMax,
+			openmeteogo.WaveDirectionDominant,
+			openmeteogo.WavePeriodMax,
+		}).
+		HourlyMetrics(openmeteogo.Metrics{
+			openmeteogo.WaveHeight,
+			openmeteogo.WavePeriod,
+			openmeteogo.WaveDirection,
+		}).
+		Build()
+
+	marine, err := client.Get(opts)
+	if err != nil {
+		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data",
+			"day_id", dayID, "location", name, "error", err)
+		return nil
+	}
+
+	point := &model.WavePoint{LocationName: name}
+	if marine == nil || (!openmeteogo.HasAny(marine.Daily.WaveHeightMax) && !openmeteogo.HasAny(marine.Hourly.WaveHeight)) {
+		// Answered, but null throughout: outside the model's water mask.
+		point.Unavailable = true
+		slog.InfoContext(ctx, "[weather] No wave model coverage at position",
+			"day_id", dayID, "location", name, "lat", lat, "lng", lng)
+		return point
+	}
+
+	if v, ok := openmeteogo.Value(marine.Daily.WaveHeightMax); ok {
+		point.HeightFt = v * metersToFeet
+	}
+	if v, ok := openmeteogo.Value(marine.Daily.WaveDirectionDominant); ok {
+		point.Direction = v
+	}
+	if v, ok := openmeteogo.Value(marine.Daily.WavePeriodMax); ok {
+		point.Period = v
+	}
+	point.HourlyHeight = scaleFloats(openmeteogo.Floats(marine.Hourly.WaveHeight), metersToFeet)
+	point.HourlyPeriod = openmeteogo.Floats(marine.Hourly.WavePeriod)
+	point.HourlyDir = openmeteogo.Floats(marine.Hourly.WaveDirection)
+	return point
+}
+
+// applyRepresentativeWaves collapses the per-endpoint wave data into the flat
+// summary fields, preferring the endpoint with the heavier sea so a single
+// number stays conservative for a passage. WaveDataUnavailable is set only
+// when no endpoint had coverage, so a day that departs into real swell still
+// reports it even when the destination lies outside the model.
+func applyRepresentativeWaves(ws *model.WeatherSummary) {
+	representative := ws.StartWaves
+	if ws.EndWaves != nil && !ws.EndWaves.Unavailable {
+		if representative == nil || representative.Unavailable || ws.EndWaves.HeightFt > representative.HeightFt {
+			representative = ws.EndWaves
+		}
+	}
+	if representative != nil && !representative.Unavailable {
+		ws.WaveHeightFt = representative.HeightFt
+		ws.WaveDirection = representative.Direction
+		ws.WavePeriod = representative.Period
+		ws.HourlyWaveHeight = representative.HourlyHeight
+		ws.HourlyWavePeriod = representative.HourlyPeriod
+		ws.HourlyWaveDir = representative.HourlyDir
+	}
+
+	startMissing := ws.StartWaves == nil || ws.StartWaves.Unavailable
+	endMissing := ws.EndWaves == nil || ws.EndWaves.Unavailable
+	ws.WaveDataUnavailable = startMissing && endMissing
+}
 
 func degreesToCompass(deg float64) string {
 	dirs := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
@@ -168,45 +258,16 @@ func fetchWeatherForDay(ctx context.Context, day model.VoyageDay) (model.Weather
 		ws.HourlyWindDir[i] = degreesToCompass(float64(deg))
 	}
 
-	marineOpts := openmeteogo.NewOptionsBuilder().
-		Marine(true).
-		Latitude(lat).
-		Longitude(lng).
-		Start(day.TargetDate).
-		End(day.TargetDate.AddDate(0, 0, 1)).
-		DailyMetrics(openmeteogo.Metrics{
-			openmeteogo.WaveHeightMax,
-			openmeteogo.WaveDirectionDominant,
-			openmeteogo.WavePeriodMax,
-		}).
-		HourlyMetrics(openmeteogo.Metrics{
-			openmeteogo.WaveHeight,
-			openmeteogo.WavePeriod,
-			openmeteogo.WaveDirection,
-		}).
-		Build()
-
-	marine, err := client.Get(marineOpts)
-	if err != nil {
-		slog.WarnContext(ctx, "[weather] Marine API unreachable, skipping wave data", "day_id", day.ID, "error", err)
-	} else if len(marine.Daily.WaveHeightMax) > 0 {
-		ws.WaveHeightFt = marine.Daily.WaveHeightMax[0] * metersToFeet
-		if len(marine.Daily.WaveDirectionDominant) > 0 {
-			ws.WaveDirection = marine.Daily.WaveDirectionDominant[0]
-		}
-		if len(marine.Daily.WavePeriodMax) > 0 {
-			ws.WavePeriod = marine.Daily.WavePeriodMax[0]
-		}
-		if len(marine.Hourly.WaveHeight) > 0 {
-			ws.HourlyWaveHeight = make([]float64, len(marine.Hourly.WaveHeight))
-			for i, h := range marine.Hourly.WaveHeight {
-				ws.HourlyWaveHeight[i] = h * metersToFeet
-			}
-		}
-		ws.HourlyWavePeriod = marine.Hourly.WavePeriod
-		ws.HourlyWaveDir = marine.Hourly.WaveDirection
-		slog.DebugContext(ctx, "[weather] Wave data fetched", "day_id", day.ID, "wave_height_ft", ws.WaveHeightFt)
+	// A day runs between two positions, and the sea state at each can differ
+	// sharply: a passage may leave an exposed coast for an estuary the wave
+	// model does not cover at all. Fetch both ends rather than the
+	// destination alone.
+	ws.StartWaves = fetchWavePoint(ctx, client, day.StartLatitude, day.StartLongitude, day.TargetDate, day.StartLocationName, day.ID)
+	if lat != day.StartLatitude || lng != day.StartLongitude {
+		ws.EndWaves = fetchWavePoint(ctx, client, lat, lng, day.TargetDate, day.EndLocationName, day.ID)
 	}
+
+	applyRepresentativeWaves(&ws)
 
 	ws.DebugDurationMs = time.Since(start).Milliseconds()
 	slog.InfoContext(ctx, "[weather] Day weather complete", "day_id", day.ID, "source", source, "duration_ms", ws.DebugDurationMs)

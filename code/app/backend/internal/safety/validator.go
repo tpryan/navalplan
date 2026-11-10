@@ -98,7 +98,9 @@ func Evaluate(weatherJSON, tidesJSON []byte) []Alert {
 		})
 	}
 
-	// Peak wave height (feet).
+	// Peak wave height (feet). Skipped entirely where the wave model has no
+	// coverage: those readings are absent, not calm, and treating them as 0 ft
+	// would silently suppress every sea-state alert for the stop.
 	peakWave := w.WaveHeightFt
 	for _, v := range w.HourlyWaveHeight {
 		if v > peakWave {
@@ -106,6 +108,8 @@ func Evaluate(weatherJSON, tidesJSON []byte) []Alert {
 		}
 	}
 	switch {
+	case w.WaveDataUnavailable:
+		// No sea-state judgement is possible here.
 	case peakWave > waveDangerFt:
 		alerts = append(alerts, Alert{
 			Severity: "danger", Category: "weather", Icon: "waves",
@@ -268,6 +272,9 @@ func EvaluateHeadings(weatherJSON []byte, directBearingDeg, directDistNM float64
 // steepSeas reports whether any forecast hour (or the summary) pairs a wave
 // height above waveSteepHeightFt with a period at or below waveSteepPeriodSecs.
 func steepSeas(w model.WeatherSummary) bool {
+	if w.WaveDataUnavailable {
+		return false
+	}
 	n := len(w.HourlyWaveHeight)
 	if n > len(w.HourlyWavePeriod) {
 		n = len(w.HourlyWavePeriod)
@@ -293,6 +300,11 @@ func suddenDeterioration(w model.WeatherSummary) (string, bool) {
 				return fmt.Sprintf("Sudden severe wind deterioration: winds escalate from %.0f knots (safe) to %.0f knots (danger) within %d hours.", w.HourlyWind[i], w.HourlyWind[j], j-i), true
 			}
 		}
+	}
+	// The wind half above still applies without wave coverage; only the
+	// sea-state half depends on readings this position does not have.
+	if w.WaveDataUnavailable {
+		return "", false
 	}
 	for i := 0; i < len(w.HourlyWaveHeight); i++ {
 		if w.HourlyWaveHeight[i] >= waveWarningFt {
@@ -403,6 +415,9 @@ func windDirectionShift(w model.WeatherSummary) (string, bool) {
 // windWaveOpposition checks whether wind direction and wave direction are opposed
 // (135° to 225° difference) while wind > 15 kts and wave height >= 3 ft.
 func windWaveOpposition(w model.WeatherSummary) (string, bool) {
+	if w.WaveDataUnavailable {
+		return "", false
+	}
 	n := len(w.HourlyWindDir)
 	if len(w.HourlyWaveDir) < n {
 		n = len(w.HourlyWaveDir)

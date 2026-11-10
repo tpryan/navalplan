@@ -170,8 +170,8 @@ github.com/tpryan/niwago v0.0.0-20260419055912-9f1a7b7a9763 h1:XL5ko7CMvL6N4J1oT
 github.com/tpryan/niwago v0.0.0-20260419055912-9f1a7b7a9763/go.mod h1:e7MgljikIchlSidCxyzcNIs6WNY9SgmRsSOmy3/n9iM=
 github.com/tpryan/noaago v1.0.0 h1:br/sNvApxI1ZJX5xWwH2fyDCt+vtcznh4BWAyOIo0Wk=
 github.com/tpryan/noaago v1.0.0/go.mod h1:GfVZd1+tppjxJEJ+34aWz75SOH+9u8rcf1E8EAdKIYo=
-github.com/tpryan/openmeteogo v1.2.0 h1:2E3K6zrFG7KLV0oZ+ao12xPJlw+4YW3nUjeDrfcag1M=
-github.com/tpryan/openmeteogo v1.2.0/go.mod h1:dcfp4213T3YOQNC3yhmGVu946z3oag64h5N/aCui++o=
+github.com/tpryan/openmeteogo/v2 v2.0.0 h1:MR8K5Tg6Yw75KATJpP/ROOQNIEGi08p++qAFxRgNO90=
+github.com/tpryan/openmeteogo/v2 v2.0.0/go.mod h1:9MctILJyxlkVjyyPQq1dJcg4nSbdRZEJJzzFCmQNi+Y=
 github.com/tpryan/uktidal v0.1.0 h1:7J2nDHVc8ZNJHpj7NNHC66OmHd5RnK8GEdc2bIOqCjc=
 github.com/tpryan/uktidal v0.1.0/go.mod h1:63Xx9KdUBkpAGT9HpDybFoB3PcYjGqxkin6YW8LVhZQ=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=
