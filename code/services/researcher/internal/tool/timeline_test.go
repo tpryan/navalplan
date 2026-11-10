@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tpryan/noaago"
-	"github.com/tpryan/openmeteogo"
+	"github.com/tpryan/openmeteogo/v2"
 )
 
 func TestComputePassageTimeline(t *testing.T) {

@@ -148,16 +148,42 @@ type WeatherSummary struct {
 	HourlyWaveHeight []float64 `json:"hourly_wave_height,omitempty"`
 	HourlyWavePeriod []float64 `json:"hourly_wave_period,omitempty"`
 	HourlyWaveDir    []float64 `json:"hourly_wave_dir,omitempty"`
-	WaveHeightFt     float64   `json:"wave_height_ft"`
-	WaveDirection    float64   `json:"wave_direction"`
-	WavePeriod       float64   `json:"wave_period"`
+	// The flat wave fields below describe the day as a whole, taken from
+	// whichever endpoint has the heavier sea so a single number stays
+	// conservative. Per-endpoint detail lives in StartWaves / EndWaves.
+	WaveHeightFt  float64 `json:"wave_height_ft"`
+	WaveDirection float64 `json:"wave_direction"`
+	WavePeriod    float64 `json:"wave_period"`
 	// WaveDataUnavailable marks a position outside the wave model's domain,
 	// where the API answers with nulls rather than readings. It distinguishes
 	// "no coverage here" from a genuine flat calm, which otherwise look
-	// identical once nulls decode to 0. Omitted when false so briefings stored
-	// before this field existed keep their current meaning.
-	WaveDataUnavailable bool  `json:"wave_data_unavailable,omitempty"`
-	DebugDurationMs     int64 `json:"debug_duration_ms"`
+	// identical once nulls decode to 0. Set only when NEITHER endpoint has
+	// coverage. Omitted when false so briefings stored before this field
+	// existed keep their current meaning.
+	WaveDataUnavailable bool `json:"wave_data_unavailable,omitempty"`
+	// StartWaves and EndWaves carry the conditions at each end of the day. A
+	// passage can leave an exposed coast for a sheltered estuary the model
+	// does not cover, so the two ends are reported separately rather than
+	// collapsed. Both are nil on briefings written before they existed; on a
+	// stationary day EndWaves is nil and StartWaves describes the single
+	// position.
+	StartWaves      *WavePoint `json:"start_waves,omitempty"`
+	EndWaves        *WavePoint `json:"end_waves,omitempty"`
+	DebugDurationMs int64      `json:"debug_duration_ms"`
+}
+
+// WavePoint holds the sea state at one end of a voyage day.
+type WavePoint struct {
+	LocationName string    `json:"location_name,omitempty"`
+	HeightFt     float64   `json:"height_ft"`
+	Direction    float64   `json:"direction"`
+	Period       float64   `json:"period"`
+	HourlyHeight []float64 `json:"hourly_height,omitempty"`
+	HourlyPeriod []float64 `json:"hourly_period,omitempty"`
+	HourlyDir    []float64 `json:"hourly_dir,omitempty"`
+	// Unavailable marks this position as outside the wave model's domain.
+	// Its zeros are absence of data, not a flat calm.
+	Unavailable bool `json:"unavailable,omitempty"`
 }
 
 // Briefing contains researched information about a voyage day, such as weather and tides.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tpryan/openmeteogo"
+	"github.com/tpryan/openmeteogo/v2"
 )
 
 // mockWeatherClient is a mock implementation of the WeatherClient interface.
@@ -70,6 +70,16 @@ func TestGetWeatherForecast(t *testing.T) {
 		return res
 	}
 
+	// Marine series are []*float64 so a null stays distinguishable from a real
+	// zero reading.
+	makeHourlyPtr := func(val float64) []*float64 {
+		res := make([]*float64, 24)
+		for i := range res {
+			res[i] = f64ptr(val)
+		}
+		return res
+	}
+
 	tests := []struct {
 		name       string
 		args       WeatherArgs
@@ -94,9 +104,11 @@ func TestGetWeatherForecast(t *testing.T) {
 						WindGusts10mMax:          []float64{20.0},
 						WindDirection10mDominant: []int{90},
 						PrecipitationSum:         []float64{0.1},
-						WaveHeightMax:            []float64{1.5},
-						WaveDirectionDominant:    []float64{180.0},
-						WavePeriodMax:            []float64{8.0},
+						DailyMarine: openmeteogo.DailyMarine{
+							WaveHeightMax:         []*float64{f64ptr(1.5)},
+							WaveDirectionDominant: []*float64{f64ptr(180.0)},
+							WavePeriodMax:         []*float64{f64ptr(8.0)},
+						},
 					},
 					Hourly: openmeteogo.Hourly{
 						WindSpeed10m:     makeHourly(12.0),
@@ -105,7 +117,9 @@ func TestGetWeatherForecast(t *testing.T) {
 						Temperature2m:    makeHourly(70.0),
 						WindGusts10m:     makeHourly(16.0),
 						Precipitation:    makeHourly(0.0),
-						WaveHeight:       makeHourly(1.5),
+						HourlyMarine: openmeteogo.HourlyMarine{
+							WaveHeight: makeHourlyPtr(1.5),
+						},
 					},
 				}, nil
 			},
